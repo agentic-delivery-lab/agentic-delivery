@@ -1,0 +1,46 @@
+name: adr-quality
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - AGENTS.md
+      - .agents/skills/**
+      - .github/ISSUE_TEMPLATE/architecture-decision.yml
+      - .github/workflows/adr-quality.yml
+      - docs/decisions/**
+      - scripts/validate-adrs.sh
+      - tests/adr/**
+  push:
+    branches: [main]
+    paths:
+      - AGENTS.md
+      - .agents/skills/**
+      - .github/ISSUE_TEMPLATE/architecture-decision.yml
+      - .github/workflows/adr-quality.yml
+      - docs/decisions/**
+      - scripts/validate-adrs.sh
+      - tests/adr/**
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    # This job executes checked-in validation code from PRs, so isolate it from
+    # the dedicated self-hosted runner used by the smoke-test workflow.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Validate ADR structure
+        shell: bash
+        run: ./scripts/validate-adrs.sh "$GITHUB_WORKSPACE"
+
+      - name: Run ADR validator tests
+        shell: bash
+        run: ./tests/adr/test_validate_adrs.sh
