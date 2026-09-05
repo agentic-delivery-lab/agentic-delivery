@@ -7,9 +7,13 @@ on:
       - AGENTS.md
       - .agents/skills/**
       - .github/ISSUE_TEMPLATE/architecture-decision.yml
+      - .github/workflows/adr-approval-signal.yml
+      - .github/workflows/adr-accept-on-approval.yml
       - .github/workflows/adr-quality.yml
       - .markdownlint-cli2.jsonc
       - docs/decisions/**
+      - scripts/accept-adr-on-approval.sh
+      - scripts/accept-proposed-adr.sh
       - scripts/validate-adrs.sh
       - tests/adr/**
   push:
@@ -18,9 +22,13 @@ on:
       - AGENTS.md
       - .agents/skills/**
       - .github/ISSUE_TEMPLATE/architecture-decision.yml
+      - .github/workflows/adr-approval-signal.yml
+      - .github/workflows/adr-accept-on-approval.yml
       - .github/workflows/adr-quality.yml
       - .markdownlint-cli2.jsonc
       - docs/decisions/**
+      - scripts/accept-adr-on-approval.sh
+      - scripts/accept-proposed-adr.sh
       - scripts/validate-adrs.sh
       - tests/adr/**
 
@@ -29,9 +37,14 @@ permissions:
 
 jobs:
   validate:
-    # This job executes checked-in validation code from PRs, so isolate it from
-    # the dedicated self-hosted runner used by the smoke-test workflow.
-    runs-on: ubuntu-latest
+    # The repository is private and this job executes checked-in validation
+    # code on the dedicated runner. Fork PRs are intentionally excluded from
+    # this trust boundary; do not broaden this condition without a hosted-runner
+    # fallback.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 5
     steps:
       - name: Check out repository
@@ -59,6 +72,8 @@ jobs:
           ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) }'
           .github/ISSUE_TEMPLATE/architecture-decision.yml
           .github/workflows/adr-quality.yml
+          .github/workflows/adr-approval-signal.yml
+          .github/workflows/adr-accept-on-approval.yml
           .agents/skills/architecture-decision/agents/openai.yaml
 
       - name: Run ADR validator tests
