@@ -1,0 +1,102 @@
+name: Architecture decision
+description: Start a traceable investigation for an architecturally significant choice.
+title: "ADR: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for a choice whose rationale should remain discoverable in the repository.
+        The issue is the assignment brief; a reviewed MADR record will be created only when the decision meets the criteria in `docs/decisions/README.md`.
+
+        Do not include passwords, API keys, personal data or other secrets.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and problem
+      description: What is changing, what problem must be solved, and why is a decision needed now?
+      placeholder: Describe the current situation and the decision question.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and affected areas
+      description: Which components, teams, interfaces, data or operational concerns could this affect?
+      placeholder: List the systems, modules, teams or users in scope.
+    validations:
+      required: true
+
+  - type: textarea
+    id: drivers
+    attributes:
+      label: Decision drivers and constraints
+      description: What qualities, constraints, deadlines or non-negotiable requirements should guide the choice?
+      placeholder: Include security, privacy, reliability, performance, cost, compatibility or compliance drivers where relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: options
+    attributes:
+      label: Known options
+      description: Which viable approaches have been identified so far? Include a short trade-off for each when possible.
+      placeholder: |
+        - Option A — benefits and drawbacks
+        - Option B — benefits and drawbacks
+    validations:
+      required: true
+
+  - type: dropdown
+    id: significance
+    attributes:
+      label: Why might this need an ADR?
+      description: Select every signal that applies. The final ADR decision remains subject to review.
+      multiple: true
+      options:
+        - Costly or risky to reverse
+        - Affects multiple components, teams or future changes
+        - Establishes a public interface, data model or ownership boundary
+        - Changes security, privacy, availability, performance or deployment posture
+        - Introduces or changes a repository-wide standard or important dependency
+        - Rationale is likely to be revisited and needs durable traceability
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Reversibility and impact
+      description: How difficult would it be to undo this choice, and what is the cost of choosing incorrectly?
+      placeholder: Describe migration, compatibility, operational or user impact.
+    validations:
+      required: true
+
+  - type: textarea
+    id: owner_timeline
+    attributes:
+      label: Decision owner and desired date
+      description: Who makes or coordinates the decision, and by when is a decision needed?
+      placeholder: Name or GitHub handle; include a date or explain why there is no fixed date.
+    validations:
+      required: true
+
+  - type: textarea
+    id: related_links
+    attributes:
+      label: Related work and evidence
+      description: Link relevant issues, pull requests, experiments, documentation or measurements.
+      placeholder: Add one link per line, or write "None yet".
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: acknowledgement
+    attributes:
+      label: Submission checks
+      options:
+        - label: I have not included secrets or unnecessary personal data.
+          required: true
+        - label: I understand that an agent may draft only a `proposed` ADR; a human must approve it before acceptance or merge.
+          required: true
