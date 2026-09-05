@@ -2,7 +2,7 @@
 
 Bron: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1). Het inhoudelijke plan staat in [`tasks/plan.md`](plan.md).
 
-Status: taken 1–5 zijn lokaal geïmplementeerd en geverifieerd op `feature/adr-workflow`; taak 6 wacht op menselijke ADR-goedkeuring en de merge van de pull request.
+Status: taken 1–5 zijn lokaal geïmplementeerd en geverifieerd op `feature/adr-workflow`; Codex-autodiscovery is gecontroleerd; PR-CI en taak 6 wachten op menselijke ADR-goedkeuring en merge.
 
 ## Taak 1: Stel ADR-0001 op als besluitvoorstel ✅
 
