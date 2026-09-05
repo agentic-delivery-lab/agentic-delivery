@@ -79,3 +79,7 @@ jobs:
       - name: Run ADR validator tests
         shell: bash
         run: ./tests/adr/test_validate_adrs.sh
+
+      - name: Check architecture decision skill intake contract
+        shell: bash
+        run: ./tests/adr/test_architecture_decision_skill.sh

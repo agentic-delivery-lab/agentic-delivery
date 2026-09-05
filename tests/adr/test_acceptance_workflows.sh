@@ -23,6 +23,8 @@ grep -Fq 'actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09' "$ACCEPT_WO
 grep -Fq 'persist-credentials: false' "$ACCEPT_WORKFLOW"
 grep -Fq './scripts/accept-adr-on-approval.sh' "$ACCEPT_WORKFLOW"
 
+grep -Fq './tests/adr/test_architecture_decision_skill.sh' "$QUALITY_WORKFLOW"
+
 grep -Fq 'runs-on: [self-hosted, linux, x64, omarchy]' "$QUALITY_WORKFLOW"
 grep -Fq 'head.repo.full_name == github.repository' "$QUALITY_WORKFLOW"
 

@@ -11,7 +11,7 @@ decision-makers: Sjef Jenniskens
 
 Issue [#1](https://github.com/sjefsharp/agentic-delivery/issues/1) asks how this repository should capture architectural decisions and how ChatGPT and Codex CLI should participate in that process. The repository has no existing ADR convention, documentation index, or agent-specific workflow to preserve.
 
-We need a process that keeps the reason for a decision discoverable after the implementation has changed, gives a human an explicit acceptance point, and is practical for both contributors and coding agents. The process must distinguish a durable decision from the issue that requested an investigation and must leave an auditable path from request to accepted record.
+We need a process that keeps the reason for a decision discoverable after the implementation has changed, gives a human an explicit acceptance point, and is practical for both contributors and coding agents. The process must distinguish a durable decision from the issue that requested an investigation and must leave an auditable path from request to accepted record. An agent may sometimes receive a valid architecture request without an issue, so the intake must establish that audit record without guessing, duplicating or publishing unreviewed prompt content.
 
 ## Decision Drivers
 
@@ -54,7 +54,7 @@ Architectural decisions will be stored as Markdown files named `NNNN-title-with-
 
 The workflow is:
 
-1. Open a GitHub Issue as the assignment brief and capture the context, drivers, constraints, options and owner.
+1. Use a GitHub Issue as the assignment brief and capture the context, drivers, constraints, options and owner. If none is supplied, search existing issues read-only and present a candidate for confirmation; if no suitable issue exists, preview an issue-form-compliant issue and require explicit confirmation before creating it. An inaccessible issue is never replaced, and an incomplete issue pauses for focused questions.
 2. Check the criteria in the index. If a decision is architecturally significant, create one ADR in a pull request with status `proposed`.
 3. Link the issue, ADR and pull request in both directions. Record research and rejected alternatives in the ADR rather than replacing the issue history.
 4. A human reviewer explicitly approves the rationale and consequences. An unprivileged `pull_request_review` signal then starts the trusted `workflow_run` workflow, which rechecks the approval and changes exactly one proposed ADR to `accepted`.
@@ -63,7 +63,7 @@ The workflow is:
 
 The lifecycle is `proposed` → `accepted` → `deprecated` or `superseded by ADR-NNNN`. A rejected proposal remains available in its pull request history; if it is retained as a file, its status must state `rejected` and explain why.
 
-For agent support, root `AGENTS.md` will contain only a short routing rule and a link to the canonical process. The repository skill will contain the actionable workflow: retrieve/read the source issue, test the criteria, produce a complete `proposed` ADR, link the artifacts, and stop at the human approval boundary. `codex exec`, MCP and GitHub Actions may prepare or validate artifacts; only the trusted post-approval workflow may perform the mechanical status transition, and no agent may accept an ADR or close an issue directly.
+For agent support, root `AGENTS.md` will contain only a short routing rule and a link to the canonical process. The repository skill will contain the actionable workflow: establish the source issue through the guarded intake, retrieve/read it, test the criteria, produce a complete `proposed` ADR, link the artifacts, and stop at the human approval boundary. `codex exec`, MCP and GitHub Actions may prepare or validate artifacts; only the trusted post-approval workflow may perform the mechanical status transition, and no agent may accept an ADR or close an issue directly.
 
 ### Consequences
 
@@ -73,7 +73,9 @@ For agent support, root `AGENTS.md` will contain only a short routing rule and a
 - Good, because repository skills are discoverable by Codex CLI and use the same skill format that ChatGPT can invoke or import.
 - Good, because an approval changes the status automatically while the privileged workflow uses only default-branch code and API checks.
 - Good, because the deterministic quality workflow runs on the existing self-hosted runner and leaves a clear seam for a later Codex CLI step.
+- Good, because guarded intake preserves a source issue without silently creating duplicates or publishing unreviewed prompt context.
 - Bad, because a global sequence can require coordination when two branches add ADRs concurrently.
+- Bad, because a missing issue requires a preview/confirmation step before the agent can continue.
 - Bad, because the status update is a code-modifying commit and branch protection that dismisses stale reviews may require a second approval.
 - Bad, because self-hosted validation requires a trusted private-repository runner; fork pull requests are not accepted automatically.
 - Bad, because ChatGPT repository-skill discovery must be verified in the target ChatGPT surface; Codex CLI auto-discovery is the guaranteed local path.
@@ -85,6 +87,7 @@ For agent support, root `AGENTS.md` will contain only a short routing rule and a
 - A positive trigger test must produce a `proposed` ADR; a local and reversible change must not produce one; and an agent must stop before acceptance.
 - Pull-request checks must reject missing required sections, invalid status values, duplicate ADR numbers and missing source-issue links.
 - The acceptance helper and API orchestration tests must cover a valid approval, retries, forks, stale/no approval and ambiguous multi-ADR pull requests.
+- The architecture skill must cover no issue supplied, confirmed issue reuse, inaccessible issues, incomplete issues, duplicate checks and explicit confirmation before issue creation.
 
 ## Pros and Cons of the Options
 

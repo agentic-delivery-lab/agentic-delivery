@@ -4,7 +4,7 @@
 
 Issue [#1](https://github.com/sjefsharp/agentic-delivery/issues/1) wordt gebruikt als opdrachtbrief voor het eerste architectuurbesluit: hoe deze repository architectuurbesluiten initieert, onderzoekt, beoordeelt, vastlegt en later vervangt. De voorgestelde richting is een lichte MADR 4.0-conventie in `docs/decisions/`, met GitHub Issues voor aanleiding en discussie, pull requests voor review en acceptatie, en een repository-skill plus `AGENTS.md` voor herhaalbare uitvoering door ChatGPT en Codex CLI.
 
-Dit plan implementeert nog geen geaccepteerd besluit. ADR-0001 begint als voorstel en wordt pas `accepted` nadat een menselijke reviewer de gekozen werkwijze en consequenties heeft goedgekeurd; de statuswijziging zelf wordt daarna mechanisch door een vertrouwde GitHub Actions-workflow uitgevoerd.
+Dit plan implementeert nog geen geaccepteerd besluit. ADR-0001 begint als voorstel en wordt pas `accepted` nadat een menselijke reviewer de gekozen werkwijze en consequenties heeft goedgekeurd; de statuswijziging zelf wordt daarna mechanisch door een vertrouwde GitHub Actions-workflow uitgevoerd. Als een agent zonder bronissue wordt aangeroepen, gebruikt hij eerst de guarded intake: read-only zoeken, een kandidaat laten bevestigen of een issue-preview laten bevestigen voordat er iets wordt gepubliceerd.
 
 ## Onderzoeksbasis
 
@@ -22,7 +22,7 @@ Dit plan implementeert nog geen geaccepteerd besluit. ADR-0001 begint als voorst
 
 - **Canonieke opslag:** `docs/decisions/` met globale, oplopende viercijferige nummers. De map is menselijk vindbaar, dicht bij toekomstige documentatie en ondersteund door de MADR-conventie.
 - **Formaat:** een project-specifieke MADR 4.0-template. Verplicht zijn status, datum, bronissue, context/probleem, decision drivers, overwogen opties, decision outcome, consequenties en confirmation. Rollen zoals decision-makers, consulted en informed blijven beschikbaar wanneer relevant.
-- **Scheiding van verantwoordelijkheden:** het issue is de opdrachtbrief en audit trail van aanleiding/discussie; het ADR is het blijvende, version-controlled besluit; de pull request is de formele review- en acceptatiegrens.
+- **Scheiding van verantwoordelijkheden:** het issue is de opdrachtbrief en audit trail van aanleiding/discussie; het ADR is het blijvende, version-controlled besluit; de pull request is de formele review- en acceptatiegrens. Ontbreekt het issue, dan wordt het alleen via de guarded intake vastgesteld of aangemaakt.
 - **Lifecycle:** `proposed` → `accepted` → optioneel `deprecated` of `superseded by ADR-NNNN`. Records worden nooit verwijderd of inhoudelijk herschreven om een nieuw besluit te simuleren; vervanging gebeurt met een nieuw ADR en wederzijdse verwijzingen.
 - **Agent-harness:** een korte regel in root-`AGENTS.md` laat agents eerst de ADR-criteria toetsen. `.agents/skills/architecture-decision/SKILL.md` bevat de volledige workflow, grenzen en gewenste output. Eventuele scripts komen pas in beeld als deterministische nummering of validatie niet betrouwbaar met eenvoudige repositorychecks kan worden afgedwongen.
 - **Automatisering:** een `pull_request_review`-signaal zonder rechten start na een succesvolle review een `workflow_run` vanaf de default branch. Die vertrouwde workflow controleert de actuele review, commit en gewijzigde ADR via de GitHub API en zet alleen een voorgestelde ADR op `accepted`. `codex exec`, MCP en de kwaliteitworkflow blijven voorbereidend/controlerend; geen agent accepteert rechtstreeks.
@@ -43,7 +43,7 @@ Geen ADR is nodig voor lokale, eenvoudig omkeerbare implementatiedetails, reguli
 ## Beoogde workflow
 
 ```text
-GitHub issue (opdrachtbrief)
+GitHub issue (opdrachtbrief; bestaand of na bevestigde intake aangemaakt)
     → criteria toetsen en onderzoek uitvoeren
     → ADR met status proposed in pull request
     → menselijke review en expliciete keuze
@@ -79,7 +79,7 @@ Issue #1
 ### Fase 2: Intake en agent-harness
 
 - [x] Taak 3: Maak een GitHub-issueformulier voor nieuwe architectuurvraagstukken.
-- [x] Taak 4: Voeg de ADR-routeringsregel en repository-skill voor ChatGPT/Codex toe.
+- [x] Taak 4: Voeg de ADR-routeringsregel en repository-skill voor ChatGPT/Codex toe, inclusief guarded source-issue intake.
 
 ### Checkpoint: end-to-end workflow
 
@@ -114,6 +114,7 @@ Issue #1
 | Procesinformatie raakt gedupliceerd en loopt uiteen | Hoog | Maak `docs/decisions/README.md` canoniek; laat `AGENTS.md`, issueformulier en skill ernaar verwijzen. |
 | Een agent presenteert een voorstel als geaccepteerd besluit | Hoog | Vereis startstatus `proposed`, menselijke reviewer en laat alleen de trusted post-approval workflow de mechanische statuswijziging doen. |
 | Issue en ADR raken losgekoppeld | Middel | Maak bronissue verplicht in template en ADR-link verplicht in issue/PR. |
+| Automatische issue-intake maakt duplicaten of publiceert promptinhoud | Hoog | Zoek read-only, toon preview, vraag expliciete bevestiging, herhaal de duplicate-check en vervang ontoegankelijke issues nooit. |
 | ChatGPT en Codex laden repositorycontext verschillend | Middel | Gebruik het gedeelde skillformaat, verifieer Codex-autodiscovery apart en documenteer hoe de skill in ChatGPT wordt toegevoegd/aangeroepen. |
 | Validatie wordt afhankelijk van ongepinde of onbetrouwbare tooling | Laag | Pin externe CI-actions/dependencies en houd project-specifieke checks klein en lokaal uitvoerbaar. |
 | Statuscommit maakt een review stale | Middel | Documenteer dit bij de lifecycle en stem branch-protectioninstellingen af; een nieuwe review is dan de expliciete bevestiging van de statuscommit. |
@@ -125,5 +126,6 @@ Issue #1
 - ✅ De lifecycle blijft `proposed` in de PR, menselijke approval, automatische statuswijziging naar `accepted`, daarna merge en issue-sluiting via een closing keyword.
 - ✅ De ADR-quality-check draait op de bestaande self-hosted runner; fork-pull-requests worden vanwege de trust boundary niet automatisch op die runner uitgevoerd.
 - ✅ De repository-skill volstaat voor ChatGPT/Codex; bredere distributie als plugin volgt pas bij hergebruik buiten deze repository.
+- ✅ Zonder bronissue gebruikt de skill guarded intake: read-only zoeken, kandidaat/preview bevestigen, geen vervanging bij ontoegankelijkheid en stoppen bij ontbrekende context.
 
 Open aandachtspunt voor de repository-instellingen: een status-only commit kan bestaande approvals stale maken wanneer branch protection dat voor iedere commit doet. In dat geval is een tweede approval de bedoelde bevestiging van de laatste statuscommit.

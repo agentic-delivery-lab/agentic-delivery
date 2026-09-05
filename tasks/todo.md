@@ -2,7 +2,7 @@
 
 Bron: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1). Het inhoudelijke plan staat in [`tasks/plan.md`](plan.md).
 
-Status: taken 1–5 en de feedbackverwerking zijn lokaal geïmplementeerd en geverifieerd op `feature/adr-workflow`; de statusworkflow wacht op aanwezigheid op `main` en een menselijke approval; taak 6 wacht op menselijke ADR-goedkeuring en merge.
+Status: taken 1–5 en de feedbackverwerking (inclusief guarded source-issue intake) zijn lokaal geïmplementeerd en geverifieerd op `feature/adr-workflow`; de statusworkflow wacht op aanwezigheid op `main` en een menselijke approval; taak 6 wacht op menselijke ADR-goedkeuring en merge.
 
 ## Taak 1: Stel ADR-0001 op als besluitvoorstel ✅
 
@@ -87,18 +87,19 @@ Status: taken 1–5 en de feedbackverwerking zijn lokaal geïmplementeerd en gev
 
 ## Taak 4: Integreer de ADR-workflow in het agent-harness ✅
 
-**Beschrijving:** Voeg minimale rootinstructies en één gerichte repository-skill toe. `AGENTS.md` routeert architectuursignificante keuzes naar de skill; de skill haalt het bronissue op, toetst criteria, onderzoekt opties, maakt alleen een `proposed` ADR en bewaakt de menselijke acceptatiegrens.
+**Beschrijving:** Voeg minimale rootinstructies en één gerichte repository-skill toe. `AGENTS.md` routeert architectuursignificante keuzes naar de skill; de skill stelt via guarded intake een bronissue vast, toetst criteria, onderzoekt opties, maakt alleen een `proposed` ADR en bewaakt de menselijke acceptatiegrens.
 
 **Acceptatiecriteria:**
 
 - [ ] `AGENTS.md` bevat een korte triggerregel en verwijst naar de canonieke ADR-documentatie, zonder die te dupliceren.
-- [ ] De skill heeft expliciete positieve/negatieve triggers, invoer, stappen, output, stopcondities en vereist een GitHub-bronissue.
+- [ ] De skill heeft expliciete positieve/negatieve triggers, invoer, stappen, output, stopcondities en guarded intake voor een GitHub-bronissue.
 - [ ] Codex ontdekt de skill vanaf de repositoryroot en de skill is als gedeeld skillformaat bruikbaar in ChatGPT.
 
 **Verificatie:**
 
 - [ ] Positieve proefprompt: een kostbare cross-cutting keuze activeert de workflow en levert `proposed` op.
 - [ ] Negatieve proefprompt: een lokale, omkeerbare keuze maakt geen ADR.
+- [ ] Intakeproef: geen issue leidt tot read-only zoeken en bevestiging vóór creatie; ontoegankelijk/incompleet stopt veilig.
 - [ ] Grensproef: de agent accepteert of sluit niets zonder menselijke instructie.
 
 **Afhankelijkheden:** Taken 2 en 3.

@@ -6,6 +6,15 @@ This directory is the canonical, version-controlled log of architectural decisio
 
 Start with a GitHub Issue as the assignment brief. Include the problem, scope, decision drivers, constraints, known options, reversibility/impact, owner and desired decision date. Link the issue from the eventual ADR and pull request.
 
+If an agent receives an architecture request without an issue, it must use guarded intake before drafting:
+
+- Search existing issues read-only and present a likely candidate for confirmation; never guess the repository or silently choose an unrelated issue.
+- If no suitable issue exists, preview a safe title and an issue body matching the [issue form](../../.github/ISSUE_TEMPLATE/architecture-decision.yml), then require explicit confirmation before creating it. Re-check for duplicates immediately before creation.
+- If a candidate is inaccessible, stop and request an accessible link or permission; do not create a replacement issue.
+- If the issue is readable but incomplete, ask focused questions as issue comments only when that communication is explicitly authorized, then stop until the answers are available.
+
+Do not publish raw prompt context, secrets or unnecessary personal data in an issue.
+
 Copy [`adr-template.md`](adr-template.md) to the next filename in the global sequence:
 
 ```text

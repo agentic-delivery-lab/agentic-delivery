@@ -1,7 +1,7 @@
 interface:
   display_name: "Architecture Decision"
-  short_description: "Draft traceable ADRs from GitHub issues"
-  default_prompt: "Use $architecture-decision to evaluate this GitHub issue and draft a proposed ADR."
+  short_description: "Draft traceable ADRs with guarded issue intake"
+  default_prompt: "Use $architecture-decision to evaluate this architecture decision; if no source issue exists, follow the guarded intake before drafting a proposed ADR."
 
 policy:
   allow_implicit_invocation: true
