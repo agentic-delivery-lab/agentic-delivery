@@ -2,7 +2,9 @@
 
 Bron: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1). Het inhoudelijke plan staat in [`tasks/plan.md`](plan.md).
 
-## Taak 1: Stel ADR-0001 op als besluitvoorstel
+Status: taken 1–5 zijn lokaal geïmplementeerd en geverifieerd op `feature/adr-workflow`; taak 6 wacht op menselijke ADR-goedkeuring en de merge van de pull request.
+
+## Taak 1: Stel ADR-0001 op als besluitvoorstel ✅
 
 **Beschrijving:** Maak het eerste MADR-record waarin de repository besluit over locatie, formaat, lifecycle, GitHub-audit trail en agentische ondersteuning. Start met status `proposed`; issue #1 is de opdrachtbrief en primaire bronverwijzing.
 
@@ -26,7 +28,7 @@ Bron: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1).
 
 **Geschatte omvang:** Klein (1 bestand).
 
-## Taak 2: Leg de ADR-conventie en template vast
+## Taak 2: Leg de ADR-conventie en template vast ✅
 
 **Beschrijving:** Maak de canonieke beslissingenindex en een afgeslankte MADR 4.0-template. Leg nummering, verplichte velden, statusovergangen, superseding-regels, issue/PR-koppeling, criteria en verantwoordelijkheden op één plek vast.
 
@@ -58,7 +60,7 @@ Bron: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1).
 - [ ] De voorkeursrichting is expliciet goedgekeurd voordat afgeleide harnessbestanden worden vastgezet.
 - [ ] Alle Markdown is intern consistent en links naar issue #1 en MADR werken.
 
-## Taak 3: Voeg een architectuurbesluit-issueformulier toe
+## Taak 3: Voeg een architectuurbesluit-issueformulier toe ✅
 
 **Beschrijving:** Maak een GitHub Issue Form dat als opdrachtbrief dient en de informatie verzamelt die nodig is om een ADR-voorstel te onderzoeken, zonder de uitkomst vooraf vast te leggen.
 
@@ -83,7 +85,7 @@ Bron: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1).
 
 **Geschatte omvang:** Klein (2 bestanden).
 
-## Taak 4: Integreer de ADR-workflow in het agent-harness
+## Taak 4: Integreer de ADR-workflow in het agent-harness ✅
 
 **Beschrijving:** Voeg minimale rootinstructies en één gerichte repository-skill toe. `AGENTS.md` routeert architectuursignificante keuzes naar de skill; de skill haalt het bronissue op, toetst criteria, onderzoekt opties, maakt alleen een `proposed` ADR en bewaakt de menselijke acceptatiegrens.
 
@@ -115,7 +117,7 @@ Bron: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1).
 - [ ] Human-in-the-loop-acceptatie is aantoonbaar afgedwongen.
 - [ ] Terminologie en criteria zijn gelijk in index, issueformulier, `AGENTS.md` en skill.
 
-## Taak 5: Automatiseer ADR-kwaliteitscontroles
+## Taak 5: Automatiseer ADR-kwaliteitscontroles ✅
 
 **Beschrijving:** Voeg kleine, lokaal uitvoerbare controles en een pull-requestworkflow toe voor Markdownstijl, bestandsnaam/nummering, toegestane status, verplichte secties en bronissue. Pin externe actions of dependencies en volg bewust de runnerconventie van de repository.
 

@@ -53,6 +53,14 @@ jobs:
             docs/decisions/*.md
             .agents/skills/**/*.md
 
+      - name: Parse YAML configuration
+        shell: bash
+        run: >-
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) }'
+          .github/ISSUE_TEMPLATE/architecture-decision.yml
+          .github/workflows/adr-quality.yml
+          .agents/skills/architecture-decision/agents/openai.yaml
+
       - name: Run ADR validator tests
         shell: bash
         run: ./tests/adr/test_validate_adrs.sh
