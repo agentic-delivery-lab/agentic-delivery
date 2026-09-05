@@ -8,6 +8,7 @@ on:
 # The privileged step only uses the trusted workflow and scripts from the
 # default branch. It does not check out or execute pull-request contents.
 permissions:
+  actions: read
   contents: write
   pull-requests: read
 
