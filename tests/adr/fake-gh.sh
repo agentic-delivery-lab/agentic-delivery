@@ -41,10 +41,16 @@ case "$method:$endpoint_without_query" in
     printf '%s\n' '{"default_branch":"main"}'
     ;;
   GET:repos/owner/repo/pulls/7)
+    pull_request_call_count=$(($(cat "${FAKE_GH_PR_CALLS:-/dev/null}" 2>/dev/null || printf '0') + 1))
+    printf '%s\n' "$pull_request_call_count" >"${FAKE_GH_PR_CALLS:-/dev/null}"
+    head_sha=head-sha
+    if [[ "$scenario" == head-changed && "$pull_request_call_count" -gt 1 ]]; then
+      head_sha=new-head-sha
+    fi
     if [[ "$scenario" == fork ]]; then
-      printf '%s\n' '{"state":"open","base":{"ref":"main"},"head":{"ref":"feature/adr","sha":"head-sha","repo":{"full_name":"other/repo"}},"user":{"login":"author"}}'
+      printf '%s\n' "{\"state\":\"open\",\"base\":{\"ref\":\"main\"},\"head\":{\"ref\":\"feature/adr\",\"sha\":\"$head_sha\",\"repo\":{\"full_name\":\"other/repo\"}},\"user\":{\"login\":\"author\"}}"
     else
-      printf '%s\n' '{"state":"open","base":{"ref":"main"},"head":{"ref":"feature/adr","sha":"head-sha","repo":{"full_name":"owner/repo"}},"user":{"login":"author"}}'
+      printf '%s\n' "{\"state\":\"open\",\"base\":{\"ref\":\"main\"},\"head\":{\"ref\":\"feature/adr\",\"sha\":\"$head_sha\",\"repo\":{\"full_name\":\"owner/repo\"}},\"user\":{\"login\":\"author\"}}"
     fi
     ;;
   GET:repos/owner/repo/pulls/7/reviews)

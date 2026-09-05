@@ -22,6 +22,10 @@ if ! [[ "$repository" =~ ^[^/[:space:]]+/[^/[:space:]]+$ ]]; then
   printf 'ADR acceptance: invalid repository name: %s\n' "$repository" >&2
   exit 2
 fi
+if ! [[ "$WORKFLOW_RUN_ID" =~ ^[0-9]+$ ]]; then
+  printf 'ADR acceptance: invalid workflow run id: %s\n' "$WORKFLOW_RUN_ID" >&2
+  exit 2
+fi
 
 workflow_run_json=$(gh api "repos/$repository/actions/runs/$WORKFLOW_RUN_ID")
 workflow_event=$(jq -r '.event // empty' <<<"$workflow_run_json")
@@ -123,8 +127,8 @@ fi
 current_pull_request_json=$(gh api "repos/$repository/pulls/$pull_request_number")
 current_head_sha=$(jq -r '.head.sha // empty' <<<"$current_pull_request_json")
 if [[ "$current_head_sha" != "$head_sha" ]]; then
-  printf 'ADR acceptance: pull request #%s changed during processing; waiting for a fresh review\n' "$pull_request_number" >&2
-  exit 1
+  printf 'ADR acceptance: pull request #%s changed during processing; waiting for a fresh review\n' "$pull_request_number"
+  exit 0
 fi
 
 updated_content=$(base64 -w0 "$updated_file")

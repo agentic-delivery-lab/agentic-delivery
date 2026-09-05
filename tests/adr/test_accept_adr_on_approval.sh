@@ -34,6 +34,7 @@ run_case() {
     FAKE_GH_SCENARIO="$scenario" \
     FAKE_GH_ADR_FILE="$fixture/adr.md" \
     FAKE_GH_CALLS="$fixture/calls" \
+    FAKE_GH_PR_CALLS="$fixture/pr-calls" \
     "$ORCHESTRATOR" >/dev/null 2>&1
   result=$?
   set -e
@@ -64,6 +65,14 @@ rm -rf -- "$fixture"
 fixture=$(run_case stale 0)
 if grep -Fq -- '--method PUT' "$fixture/calls"; then
   echo 'stale approval case must not update an ADR' >&2
+  exit 1
+fi
+pass_count=$((pass_count + 1))
+rm -rf -- "$fixture"
+
+fixture=$(run_case head-changed 0)
+if grep -Fq -- '--method PUT' "$fixture/calls"; then
+  echo 'head-changed case must not update an ADR' >&2
   exit 1
 fi
 pass_count=$((pass_count + 1))
