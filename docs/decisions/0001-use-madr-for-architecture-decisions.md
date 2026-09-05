@@ -19,6 +19,8 @@ We need a process that keeps the reason for a decision discoverable after the im
 - Make the format readable in GitHub and straightforward for agents to parse and produce.
 - Preserve the issue as an audit trail for the request, evidence and discussion.
 - Require human review before a proposed decision becomes accepted.
+- Minimize manual status edits after an approval without giving pull-request code write access.
+- Reuse the existing self-hosted runner so a later Codex CLI workflow can replace the deterministic check.
 - Avoid a runtime dependency or a heavyweight service for a small repository.
 - Make the workflow reusable from both ChatGPT and Codex CLI.
 
@@ -27,6 +29,14 @@ We need a process that keeps the reason for a decision discoverable after the im
 ### MADR records in `docs/decisions/` with an issue and pull request
 
 Use Markdown Architectural Decision Records with a global four-digit sequence. A GitHub Issue is the source brief, a pull request contains the proposed record, and a human review changes its status to `accepted` before merge. A concise root `AGENTS.md` routes relevant work to a repository skill under `.agents/skills/architecture-decision/`.
+
+### MADR records with a direct privileged review workflow
+
+Use a `pull_request_review` workflow that receives the approval event and immediately writes `status: accepted` with a write-capable token. This is compact and also works while the workflow is first introduced, but the workflow definition is part of the reviewed pull-request revision and could therefore alter privileged behavior.
+
+### MADR records with an unprivileged signal and trusted `workflow_run`
+
+Use a review workflow with no permissions or checkout to signal an eligible approval. A separate `workflow_run` workflow, which GitHub loads from the default branch, rechecks the pull request and review through the API and performs the status-only commit on the existing self-hosted runner. This adds one small workflow boundary and intentionally applies after the automation is present on the default branch, but keeps write access away from pull-request-controlled code.
 
 ### ADR tooling with a separate generated or managed store
 
@@ -38,7 +48,7 @@ Keep the decision, discussion and status in issues and add a short instruction t
 
 ## Decision Outcome
 
-Chosen option: **MADR records in `docs/decisions/` with an issue and pull request**.
+Chosen option: **MADR records in `docs/decisions/` with an issue and pull request, plus a two-stage approval workflow**.
 
 Architectural decisions will be stored as Markdown files named `NNNN-title-with-dashes.md`, starting at `0001` and using one global sequence. Each record follows the project template in [`adr-template.md`](adr-template.md) and contains a required source-issue link. The index in [`README.md`](README.md) is the canonical process description.
 
@@ -47,13 +57,13 @@ The workflow is:
 1. Open a GitHub Issue as the assignment brief and capture the context, drivers, constraints, options and owner.
 2. Check the criteria in the index. If a decision is architecturally significant, create one ADR in a pull request with status `proposed`.
 3. Link the issue, ADR and pull request in both directions. Record research and rejected alternatives in the ADR rather than replacing the issue history.
-4. A human reviewer explicitly approves the rationale and consequences. Only then may the status change to `accepted` and the pull request merge.
-5. Close the source issue through the merged pull request and keep the accepted ADR as the durable record.
+4. A human reviewer explicitly approves the rationale and consequences. An unprivileged `pull_request_review` signal then starts the trusted `workflow_run` workflow, which rechecks the approval and changes exactly one proposed ADR to `accepted`.
+5. Merge the pull request under the repository's review rules. Use a closing keyword such as `Closes #NNN` so GitHub closes the source issue on merge and keep the accepted ADR as the durable record.
 6. If the decision changes, create a new numbered ADR with status `accepted` or `proposed` as appropriate and mark the old record `superseded by ADR-NNNN`. Never delete the old record.
 
 The lifecycle is `proposed` → `accepted` → `deprecated` or `superseded by ADR-NNNN`. A rejected proposal remains available in its pull request history; if it is retained as a file, its status must state `rejected` and explain why.
 
-For agent support, root `AGENTS.md` will contain only a short routing rule and a link to the canonical process. The repository skill will contain the actionable workflow: retrieve/read the source issue, test the criteria, produce a complete `proposed` ADR, link the artifacts, and stop at the human approval boundary. `codex exec`, MCP and GitHub Actions may be used later to prepare or validate artifacts, but none may accept an ADR or close an issue without explicit human direction.
+For agent support, root `AGENTS.md` will contain only a short routing rule and a link to the canonical process. The repository skill will contain the actionable workflow: retrieve/read the source issue, test the criteria, produce a complete `proposed` ADR, link the artifacts, and stop at the human approval boundary. `codex exec`, MCP and GitHub Actions may prepare or validate artifacts; only the trusted post-approval workflow may perform the mechanical status transition, and no agent may accept an ADR or close an issue directly.
 
 ### Consequences
 
@@ -61,16 +71,20 @@ For agent support, root `AGENTS.md` will contain only a short routing rule and a
 - Good, because the issue, pull request and ADR provide separate but linked records for request, review and durable rationale.
 - Good, because MADR's context/options/outcome/consequences structure supports concise human review and structured agent output.
 - Good, because repository skills are discoverable by Codex CLI and use the same skill format that ChatGPT can invoke or import.
+- Good, because an approval changes the status automatically while the privileged workflow uses only default-branch code and API checks.
+- Good, because the deterministic quality workflow runs on the existing self-hosted runner and leaves a clear seam for a later Codex CLI step.
 - Bad, because a global sequence can require coordination when two branches add ADRs concurrently.
-- Bad, because acceptance remains a deliberate human step and therefore cannot be fully automated.
+- Bad, because the status update is a code-modifying commit and branch protection that dismisses stale reviews may require a second approval.
+- Bad, because self-hosted validation requires a trusted private-repository runner; fork pull requests are not accepted automatically.
 - Bad, because ChatGPT repository-skill discovery must be verified in the target ChatGPT surface; Codex CLI auto-discovery is the guaranteed local path.
 
 ### Confirmation
 
-- This record is created as `proposed` from issue #1 and is not considered accepted until a human review changes its status in the implementation pull request.
+- This record is created as `proposed` from issue #1 and is not considered accepted until a human review approves the implementation and the trusted workflow changes its status.
 - The implementation must add the index, template, issue form, `AGENTS.md` routing rule, repository skill and structural checks described in the linked plan.
 - A positive trigger test must produce a `proposed` ADR; a local and reversible change must not produce one; and an agent must stop before acceptance.
 - Pull-request checks must reject missing required sections, invalid status values, duplicate ADR numbers and missing source-issue links.
+- The acceptance helper and API orchestration tests must cover a valid approval, retries, forks, stale/no approval and ambiguous multi-ADR pull requests.
 
 ## Pros and Cons of the Options
 
@@ -80,6 +94,17 @@ For agent support, root `AGENTS.md` will contain only a short routing rule and a
 - Good, because the repository remains self-contained and reviewable without a service.
 - Good, because the issue-to-PR-to-ADR chain gives a clear audit trail.
 - Neutral, because numbering is simple but must be checked for concurrent additions.
+
+### MADR records with a direct privileged review workflow
+
+- Good, because the status can be changed during the same pull request review event.
+- Bad, because a pull request can modify the workflow definition that receives the write-capable event.
+
+### MADR records with an unprivileged signal and trusted `workflow_run`
+
+- Good, because the privileged workflow and mutation script come from the default branch and never execute pull-request code.
+- Good, because the signal has no token permissions and fork approvals are ignored.
+- Bad, because this automation becomes active for new proposals only after the workflow has been merged to the default branch.
 
 ### ADR tooling with a separate generated or managed store
 

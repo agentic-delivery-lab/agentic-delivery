@@ -2,7 +2,7 @@
 
 Bron: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1). Het inhoudelijke plan staat in [`tasks/plan.md`](plan.md).
 
-Status: taken 1–5 zijn lokaal geïmplementeerd en geverifieerd op `feature/adr-workflow`; Codex-autodiscovery en PR #2-CI zijn groen; taak 6 wacht op menselijke ADR-goedkeuring en merge.
+Status: taken 1–5 en de feedbackverwerking zijn lokaal geïmplementeerd en geverifieerd op `feature/adr-workflow`; de statusworkflow wacht op aanwezigheid op `main` en een menselijke approval; taak 6 wacht op menselijke ADR-goedkeuring en merge.
 
 ## Taak 1: Stel ADR-0001 op als besluitvoorstel ✅
 
@@ -119,19 +119,20 @@ Status: taken 1–5 zijn lokaal geïmplementeerd en geverifieerd op `feature/adr
 
 ## Taak 5: Automatiseer ADR-kwaliteitscontroles ✅
 
-**Beschrijving:** Voeg kleine, lokaal uitvoerbare controles en een pull-requestworkflow toe voor Markdownstijl, bestandsnaam/nummering, toegestane status, verplichte secties en bronissue. Pin externe actions of dependencies en volg bewust de runnerconventie van de repository.
+**Beschrijving:** Voeg kleine, lokaal uitvoerbare controles en een pull-requestworkflow toe voor Markdownstijl, bestandsnaam/nummering, toegestane status, verplichte secties en bronissue. Pin externe actions of dependencies en voer de workflow uit op de bestaande self-hosted runner, met een expliciete fork-trustgrens.
 
 **Acceptatiecriteria:**
 
 - [ ] CI weigert een foutieve ADR-naam, dubbele nummering, ontbrekende verplichte sectie of ongeldige status.
 - [ ] Dezelfde controles zijn lokaal met één gedocumenteerd commando uit te voeren.
-- [ ] De workflow gebruikt alleen minimaal benodigde GitHub-permissies en gepinde externe dependencies.
+- [ ] De workflow gebruikt alleen minimaal benodigde GitHub-permissies, gepinde externe dependencies en de bestaande runnerlabels.
 
 **Verificatie:**
 
 - [ ] Geldige ADR-fixture slaagt en gerichte ongeldige fixtures falen met bruikbare meldingen.
 - [ ] De Markdown- en YAML-controles slagen op alle nieuwe bestanden.
 - [ ] De GitHub Actions-workflow slaagt op een pull request.
+- [ ] De statusmutatie- en review-orkestratietests dekken geldige approval, retry, stale/no approval, forks en meerdere ADR's.
 
 **Afhankelijkheden:** Taken 2 en 4.
 
@@ -146,13 +147,14 @@ Status: taken 1–5 zijn lokaal geïmplementeerd en geverifieerd op `feature/adr
 
 ## Taak 6: Accepteer ADR-0001 en sluit de audit trail
 
-**Beschrijving:** Verwerk reviewfeedback, wijzig ADR-0001 pas na expliciete goedkeuring naar `accepted`, merge de pull request en sluit issue #1 via de PR. Leg de daadwerkelijke confirmationchecks vast.
+**Beschrijving:** Verwerk reviewfeedback, laat na expliciete goedkeuring de trusted `workflow_run` de status van ADR-0001 naar `accepted` zetten, merge de pull request en sluit issue #1 via de closing keyword in de PR. Leg de daadwerkelijke confirmationchecks vast.
 
 **Acceptatiecriteria:**
 
 - [ ] ADR-0001 heeft status `accepted`, een besluitdatum en een verwijzing naar issue #1 en de review-PR.
-- [ ] Issue #1 verwijst naar het geaccepteerde ADR en is door de merge traceerbaar gesloten.
+- [ ] Issue #1 verwijst naar het geaccepteerde ADR en is door de merge traceerbaar gesloten (`Closes #1`).
 - [ ] Alle in ADR-0001 beloofde templates, instructies, skill en controles zijn aanwezig en groen.
+- [ ] De approval-automatisering is vanaf `main` geactiveerd en heeft geen pull-requestcode uitgevoerd met schrijfrechten.
 
 **Verificatie:**
 

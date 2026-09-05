@@ -31,15 +31,23 @@ Do not create an ADR for a local, easily reversible implementation detail, an or
 1. The source issue is the assignment brief and discussion history.
 2. The ADR pull request starts with status `proposed` and records the research, options and recommendation.
 3. A human reviewer checks the rationale, consequences and confirmation criteria.
-4. After explicit approval, change the status to `accepted` and merge the pull request.
-5. Close the source issue with links to the accepted ADR and merged pull request.
+4. After an explicit approval, the trusted ADR workflow changes the status to `accepted`; merge remains gated by the repository's review rules.
+5. Use a closing keyword such as `Closes #NNN` in the pull request so GitHub closes the source issue when the pull request merges.
 6. For a changed decision, create a new record and mark the prior one `superseded by ADR-NNNN` or `deprecated`; never erase the historical record.
 
 The allowed statuses are `proposed`, `accepted`, `rejected`, `deprecated` and `superseded by ADR-NNNN`. `rejected` is for a documented proposal that will not be adopted; a rejected proposal may remain only when its rationale is useful to the history.
 
+## Automated acceptance
+
+The [`adr-approval-signal.yml`](../../.github/workflows/adr-approval-signal.yml) workflow listens for submitted pull-request reviews but has no permissions, secrets or repository checkout. Only an eligible approval on a same-repository pull request targeting the default branch produces a successful signal.
+
+The [`adr-accept-on-approval.yml`](../../.github/workflows/adr-accept-on-approval.yml) workflow runs from the trusted default branch after that signal. On the existing self-hosted runner it rechecks the current pull request, review, head commit and changed files through the GitHub API, then changes exactly one `docs/decisions/NNNN-*.md` record from `proposed` to `accepted`. The update is idempotent and refuses forks, stale approvals, ambiguous ADR changes and non-proposed statuses. It does not execute pull-request code.
+
+The status update is a code-modifying commit. If branch protection dismisses stale approvals for every new commit, the reviewer may need to approve the resulting status-only commit again; configure the repository review rule with that consequence in mind.
+
 ## Agent workflow
 
-The root [`AGENTS.md`](../../AGENTS.md) should route agents here and to the repository skill at [`.agents/skills/architecture-decision/SKILL.md`](../../.agents/skills/architecture-decision/SKILL.md). The skill may research and draft a complete `proposed` record, but it must not accept an ADR, merge a pull request or close an issue without explicit human authorization.
+The root [`AGENTS.md`](../../AGENTS.md) should route agents here and to the repository skill at [`.agents/skills/architecture-decision/SKILL.md`](../../.agents/skills/architecture-decision/SKILL.md). The skill may research and draft a complete `proposed` record, but it must not accept an ADR, merge a pull request or close an issue without explicit human authorization. The workflow above is the only automated status transition, and it is triggered by GitHub's recorded human approval rather than by an agent.
 
 ## Records
 
