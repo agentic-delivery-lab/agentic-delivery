@@ -96,6 +96,7 @@ For agent support, root `AGENTS.md` will contain only a short routing rule and a
 ## More Information
 
 - Assignment brief: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1)
+- Review and implementation: [pull request #2](https://github.com/sjefsharp/agentic-delivery/pull/2)
 - Format reference: [MADR](https://adr.github.io/madr/)
 - Agent instruction loading: [OpenAI Docs — AGENTS.md](https://developers.openai.com/codex/guides/agents-md)
 - Reusable workflows: [OpenAI Docs — Build skills](https://developers.openai.com/codex/skills)
