@@ -76,22 +76,22 @@ For agent support, root `AGENTS.md` will contain only a short routing rule and a
 
 ### MADR records in `docs/decisions/` with an issue and pull request
 
-* Good, because it follows MADR's documented Markdown and naming conventions.
-* Good, because the repository remains self-contained and reviewable without a service.
-* Good, because the issue-to-PR-to-ADR chain gives a clear audit trail.
-* Neutral, because numbering is simple but must be checked for concurrent additions.
+- Good, because it follows MADR's documented Markdown and naming conventions.
+- Good, because the repository remains self-contained and reviewable without a service.
+- Good, because the issue-to-PR-to-ADR chain gives a clear audit trail.
+- Neutral, because numbering is simple but must be checked for concurrent additions.
 
 ### ADR tooling with a separate generated or managed store
 
-* Good, because a tool could automate scaffolding and numbering.
-* Bad, because it introduces an additional dependency and operational decision before it is needed.
-* Bad, because hosted or generated output can drift from the Git history unless carefully maintained.
+- Good, because a tool could automate scaffolding and numbering.
+- Bad, because it introduces an additional dependency and operational decision before it is needed.
+- Bad, because hosted or generated output can drift from the Git history unless carefully maintained.
 
 ### GitHub Issues only, with agent instructions in `AGENTS.md`
 
-* Good, because issue discussion and permissions already exist.
-* Bad, because durable rationale is harder to discover and compare in a list of operational issues.
-* Bad, because `AGENTS.md` would become a process manual rather than concise repository guidance.
+- Good, because issue discussion and permissions already exist.
+- Bad, because durable rationale is harder to discover and compare in a list of operational issues.
+- Bad, because `AGENTS.md` would become a process manual rather than concise repository guidance.
 
 ## More Information
 
