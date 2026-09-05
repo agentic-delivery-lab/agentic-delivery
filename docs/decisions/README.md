@@ -8,8 +8,8 @@ Start with a GitHub Issue as the assignment brief. Include the problem, scope, d
 
 If an agent receives an architecture request without an issue, it must use guarded intake before drafting:
 
-- Search existing issues read-only and present a likely candidate for confirmation; never guess the repository or silently choose an unrelated issue.
-- If no suitable issue exists, preview a safe title and an issue body matching the [issue form](../../.github/ISSUE_TEMPLATE/architecture-decision.yml), then require explicit confirmation before creating it. Re-check for duplicates immediately before creation.
+- Search existing issues read-only and present a likely candidate for confirmation; never guess the repository or silently choose an unrelated issue. If the search fails because of tooling, authentication or connectivity, stop and report the failure rather than treating it as no match.
+- If no suitable issue exists, first confirm that the available context fills the required fields. If it does not, ask the missing questions and stop; do not publish a partial issue. Otherwise preview a safe title and an issue body matching the [issue form](../../.github/ISSUE_TEMPLATE/architecture-decision.yml), then require explicit confirmation before creating it. Re-check for duplicates immediately before creation.
 - If a candidate is inaccessible, stop and request an accessible link or permission; do not create a replacement issue.
 - If the issue is readable but incomplete, ask focused questions as issue comments only when that communication is explicitly authorized, then stop until the answers are available.
 

@@ -99,7 +99,7 @@ Status: taken 1–5 en de feedbackverwerking (inclusief guarded source-issue int
 
 - [ ] Positieve proefprompt: een kostbare cross-cutting keuze activeert de workflow en levert `proposed` op.
 - [ ] Negatieve proefprompt: een lokale, omkeerbare keuze maakt geen ADR.
-- [ ] Intakeproef: geen issue leidt tot read-only zoeken en bevestiging vóór creatie; ontoegankelijk/incompleet stopt veilig.
+- [ ] Intakeproef: geen issue leidt tot read-only zoeken en bevestiging vóór creatie; zoekfouten, ontbrekende context en ontoegankelijk/incompleet stoppen veilig.
 - [ ] Grensproef: de agent accepteert of sluit niets zonder menselijke instructie.
 
 **Afhankelijkheden:** Taken 2 en 3.

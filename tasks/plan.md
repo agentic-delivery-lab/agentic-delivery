@@ -4,7 +4,7 @@
 
 Issue [#1](https://github.com/sjefsharp/agentic-delivery/issues/1) wordt gebruikt als opdrachtbrief voor het eerste architectuurbesluit: hoe deze repository architectuurbesluiten initieert, onderzoekt, beoordeelt, vastlegt en later vervangt. De voorgestelde richting is een lichte MADR 4.0-conventie in `docs/decisions/`, met GitHub Issues voor aanleiding en discussie, pull requests voor review en acceptatie, en een repository-skill plus `AGENTS.md` voor herhaalbare uitvoering door ChatGPT en Codex CLI.
 
-Dit plan implementeert nog geen geaccepteerd besluit. ADR-0001 begint als voorstel en wordt pas `accepted` nadat een menselijke reviewer de gekozen werkwijze en consequenties heeft goedgekeurd; de statuswijziging zelf wordt daarna mechanisch door een vertrouwde GitHub Actions-workflow uitgevoerd. Als een agent zonder bronissue wordt aangeroepen, gebruikt hij eerst de guarded intake: read-only zoeken, een kandidaat laten bevestigen of een issue-preview laten bevestigen voordat er iets wordt gepubliceerd.
+Dit plan implementeert nog geen geaccepteerd besluit. ADR-0001 begint als voorstel en wordt pas `accepted` nadat een menselijke reviewer de gekozen werkwijze en consequenties heeft goedgekeurd; de statuswijziging zelf wordt daarna mechanisch door een vertrouwde GitHub Actions-workflow uitgevoerd. Als een agent zonder bronissue wordt aangeroepen, gebruikt hij eerst de guarded intake: read-only zoeken, zoekfouten rapporteren, een kandidaat laten bevestigen of een issue-preview laten bevestigen voordat er iets wordt gepubliceerd.
 
 ## Onderzoeksbasis
 
@@ -114,7 +114,7 @@ Issue #1
 | Procesinformatie raakt gedupliceerd en loopt uiteen | Hoog | Maak `docs/decisions/README.md` canoniek; laat `AGENTS.md`, issueformulier en skill ernaar verwijzen. |
 | Een agent presenteert een voorstel als geaccepteerd besluit | Hoog | Vereis startstatus `proposed`, menselijke reviewer en laat alleen de trusted post-approval workflow de mechanische statuswijziging doen. |
 | Issue en ADR raken losgekoppeld | Middel | Maak bronissue verplicht in template en ADR-link verplicht in issue/PR. |
-| Automatische issue-intake maakt duplicaten of publiceert promptinhoud | Hoog | Zoek read-only, toon preview, vraag expliciete bevestiging, herhaal de duplicate-check en vervang ontoegankelijke issues nooit. |
+| Automatische issue-intake maakt duplicaten, maskeert zoekfouten of publiceert promptinhoud | Hoog | Zoek read-only, stop bij tooling/auth/connectivity-fouten, controleer verplichte context, toon preview, vraag expliciete bevestiging, herhaal de duplicate-check en vervang ontoegankelijke issues nooit. |
 | ChatGPT en Codex laden repositorycontext verschillend | Middel | Gebruik het gedeelde skillformaat, verifieer Codex-autodiscovery apart en documenteer hoe de skill in ChatGPT wordt toegevoegd/aangeroepen. |
 | Validatie wordt afhankelijk van ongepinde of onbetrouwbare tooling | Laag | Pin externe CI-actions/dependencies en houd project-specifieke checks klein en lokaal uitvoerbaar. |
 | Statuscommit maakt een review stale | Middel | Documenteer dit bij de lifecycle en stem branch-protectioninstellingen af; een nieuwe review is dan de expliciete bevestiging van de statuscommit. |
@@ -126,6 +126,6 @@ Issue #1
 - ✅ De lifecycle blijft `proposed` in de PR, menselijke approval, automatische statuswijziging naar `accepted`, daarna merge en issue-sluiting via een closing keyword.
 - ✅ De ADR-quality-check draait op de bestaande self-hosted runner; fork-pull-requests worden vanwege de trust boundary niet automatisch op die runner uitgevoerd.
 - ✅ De repository-skill volstaat voor ChatGPT/Codex; bredere distributie als plugin volgt pas bij hergebruik buiten deze repository.
-- ✅ Zonder bronissue gebruikt de skill guarded intake: read-only zoeken, kandidaat/preview bevestigen, geen vervanging bij ontoegankelijkheid en stoppen bij ontbrekende context.
+- ✅ Zonder bronissue gebruikt de skill guarded intake: read-only zoeken, zoekfouten rapporteren, kandidaat/preview bevestigen, geen vervanging bij ontoegankelijkheid en stoppen bij ontbrekende context.
 
 Open aandachtspunt voor de repository-instellingen: een status-only commit kan bestaande approvals stale maken wanneer branch protection dat voor iedere commit doet. In dat geval is een tweede approval de bedoelde bevestiging van de laatste statuscommit.
