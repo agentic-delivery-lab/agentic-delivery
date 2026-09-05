@@ -46,4 +46,3 @@ The root [`AGENTS.md`](../../AGENTS.md) should route agents here and to the repo
 | Number | Decision | Status | Source |
 | --- | --- | --- | --- |
 | [0001](0001-use-madr-for-architecture-decisions.md) | Use MADR and GitHub Issues for architectural decisions | Proposed | [Issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1) |
-

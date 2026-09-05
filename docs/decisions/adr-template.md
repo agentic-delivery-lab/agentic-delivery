@@ -53,4 +53,3 @@ Describe how implementation or compliance with this decision will be reviewed or
 ## More Information
 
 Record related ADRs, implementation links, review decisions, revisit conditions and the date or signal that should trigger reconsideration.
-

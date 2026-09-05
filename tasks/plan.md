@@ -117,4 +117,3 @@ Issue #1
 - Moeten voorgestelde ADR's al op `main` mogen bestaan, of blijft `proposed` uitsluitend in een open pull request? Aanbevolen voor deze repository: uitsluitend in de PR en bij acceptatie vóór merge naar `accepted` wijzigen.
 - Moet de ADR-quality-workflow op de bestaande self-hosted runner draaien of op een GitHub-hosted runner? De bestaande conventie wijst naar self-hosted; beschikbaarheid en trust boundaries moeten vóór implementatie worden bevestigd.
 - Is ChatGPT-gebruik beperkt tot de desktop-app/projectworkspace, of moet de skill later als plugin worden verpakt voor bredere distributie? Aanbevolen eerste stap: repository-skill, plugin pas bij hergebruik buiten deze repository.
-

@@ -101,4 +101,3 @@ For agent support, root `AGENTS.md` will contain only a short routing rule and a
 - Reusable workflows: [OpenAI Docs — Build skills](https://developers.openai.com/codex/skills)
 - Non-interactive automation: [OpenAI Docs — Codex CLI developer commands](https://developers.openai.com/codex/cli/reference)
 - Implementation checklist: [`tasks/todo.md`](../../tasks/todo.md)
-
