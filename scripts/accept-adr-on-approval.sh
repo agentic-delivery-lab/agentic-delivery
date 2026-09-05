@@ -32,8 +32,12 @@ if [[ "$workflow_event" != 'pull_request_review' || "$workflow_conclusion" != 's
 fi
 
 mapfile -t pull_request_numbers < <(jq -r '.pull_requests[]?.number // empty' <<<"$workflow_run_json")
-if [[ ${#pull_request_numbers[@]} -ne 1 || ! "${pull_request_numbers[0]}" =~ ^[0-9]+$ ]]; then
+if [[ ${#pull_request_numbers[@]} -ne 1 ]]; then
   printf 'ADR acceptance: expected one pull request in workflow run %s\n' "$WORKFLOW_RUN_ID" >&2
+  exit 1
+fi
+if ! [[ "${pull_request_numbers[0]}" =~ ^[0-9]+$ ]]; then
+  printf 'ADR acceptance: workflow run %s contains an invalid pull request number\n' "$WORKFLOW_RUN_ID" >&2
   exit 1
 fi
 pull_request_number=${pull_request_numbers[0]}

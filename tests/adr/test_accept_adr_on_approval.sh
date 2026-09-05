@@ -61,6 +61,14 @@ fi
 pass_count=$((pass_count + 1))
 rm -rf -- "$fixture"
 
+fixture=$(run_case stale 0)
+if grep -Fq -- '--method PUT' "$fixture/calls"; then
+  echo 'stale approval case must not update an ADR' >&2
+  exit 1
+fi
+pass_count=$((pass_count + 1))
+rm -rf -- "$fixture"
+
 fixture=$(run_case fork 0)
 if grep -Fq -- '--method PUT' "$fixture/calls"; then
   echo 'fork case must not update an ADR' >&2
@@ -80,6 +88,14 @@ rm -rf -- "$fixture"
 fixture=$(run_case multiple 1)
 if grep -Fq -- '--method PUT' "$fixture/calls"; then
   echo 'multiple ADR case must not update an ambiguous record' >&2
+  exit 1
+fi
+fail_count=$((fail_count + 1))
+rm -rf -- "$fixture"
+
+fixture=$(run_case no-pr 1)
+if grep -Fq -- '--method PUT' "$fixture/calls"; then
+  echo 'missing PR case must not update an ADR' >&2
   exit 1
 fi
 fail_count=$((fail_count + 1))

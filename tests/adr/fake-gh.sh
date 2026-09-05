@@ -31,7 +31,11 @@ scenario=${FAKE_GH_SCENARIO:-success}
 
 case "$method:$endpoint_without_query" in
   GET:repos/owner/repo/actions/runs/42)
-    printf '%s\n' '{"event":"pull_request_review","conclusion":"success","pull_requests":[{"number":7}]}'
+    if [[ "$scenario" == no-pr ]]; then
+      printf '%s\n' '{"event":"pull_request_review","conclusion":"success","pull_requests":[]}'
+    else
+      printf '%s\n' '{"event":"pull_request_review","conclusion":"success","pull_requests":[{"number":7}]}'
+    fi
     ;;
   GET:repos/owner/repo)
     printf '%s\n' '{"default_branch":"main"}'
@@ -46,6 +50,8 @@ case "$method:$endpoint_without_query" in
   GET:repos/owner/repo/pulls/7/reviews)
     if [[ "$scenario" == no-approval ]]; then
       printf '%s\n' '[[]]'
+    elif [[ "$scenario" == stale ]]; then
+      printf '%s\n' '[[{"state":"APPROVED","commit_id":"old-sha","submitted_at":"2026-09-06T00:00:00Z","user":{"login":"reviewer"}}]]'
     else
       printf '%s\n' '[[{"state":"APPROVED","commit_id":"head-sha","submitted_at":"2026-09-06T00:00:00Z","user":{"login":"reviewer"}}]]'
     fi
