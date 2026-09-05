@@ -1,0 +1,28 @@
+name: self-hosted-runner-smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, x64, omarchy]
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Verify dedicated runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_OS" = "Linux"
+          test "$RUNNER_ARCH" = "X64"
+          test "$(id -un)" = "github-runner"
+          test -n "$RUNNER_NAME"
+          test -n "$GITHUB_WORKSPACE"
+          printf 'runner=%s\n' "$RUNNER_NAME"
+          printf 'user=%s\n' "$(id -un)"
+          printf 'workspace=%s\n' "$GITHUB_WORKSPACE"
