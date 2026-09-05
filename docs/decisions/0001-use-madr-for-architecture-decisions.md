@@ -126,4 +126,7 @@ For agent support, root `AGENTS.md` will contain only a short routing rule and a
 - Agent instruction loading: [OpenAI Docs — AGENTS.md](https://developers.openai.com/codex/guides/agents-md)
 - Reusable workflows: [OpenAI Docs — Build skills](https://developers.openai.com/codex/skills)
 - Non-interactive automation: [OpenAI Docs — Codex CLI developer commands](https://developers.openai.com/codex/cli/reference)
+- Approval event and `workflow_run` behavior: [GitHub Actions events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
+- Privileged workflow guidance: [GitHub Actions secure use reference](https://docs.github.com/en/actions/reference/security/secure-use)
+- Review freshness trade-off: [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
 - Implementation checklist: [`tasks/todo.md`](../../tasks/todo.md)

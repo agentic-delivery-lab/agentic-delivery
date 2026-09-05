@@ -13,6 +13,9 @@ Dit plan implementeert nog geen geaccepteerd besluit. ADR-0001 begint als voorst
 - [OpenAI Docs over AGENTS.md](https://developers.openai.com/codex/guides/agents-md) beschrijven `AGENTS.md` als hiërarchische, altijd geladen repository-instructies. Daarom hoort daar alleen de korte ADR-routeringsregel en niet het volledige proces thuis.
 - [OpenAI Docs over skills](https://developers.openai.com/codex/skills) positioneren skills als herbruikbare workflows met progressieve contextlading. Codex ontdekt repository-skills onder `.agents/skills`; hetzelfde skillformaat is bruikbaar door ChatGPT en Codex.
 - [OpenAI Docs over de Codex CLI](https://developers.openai.com/codex/cli/reference) beschrijven `codex exec` als stabiele niet-interactieve primitive, met JSONL en output-schema's voor eventuele latere automatisering.
+- [GitHub Actions events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows) documenteren `pull_request_review` voor approvals en `workflow_run` als privileged vervolg dat vanaf de default branch kan draaien.
+- De [GitHub secure-use reference](https://docs.github.com/en/actions/reference/security/secure-use) waarschuwt ervoor om in privileged `workflow_run`-workflows geen onbetrouwbare PR-code uit te checken.
+- De [GitHub protected-branchesdocumentatie](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches) beschrijft het effect van stale approvals na nieuwe commits.
 - Bij aanvang bevatte de repository alleen `.github/workflows/self-hosted-runner-smoke.yml`; er was dus geen bestaande documentatie-, ADR-, nummerings- of agentconventie om over te nemen.
 
 ## Voorgestelde architectuurkeuzes voor ADR-0001
