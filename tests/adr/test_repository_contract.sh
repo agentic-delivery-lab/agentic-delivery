@@ -6,6 +6,7 @@ REPO_ROOT=$(cd "$TEST_DIR/../.." && pwd)
 DECISIONS_DIR="$REPO_ROOT/docs/decisions"
 SMOKE_WORKFLOW="$REPO_ROOT/.github/workflows/self-hosted-runner-smoke.yml"
 ISSUE_TEMPLATE="$REPO_ROOT/.github/ISSUE_TEMPLATE/architecture-decision.yml"
+AGENTS_FILE="$REPO_ROOT/AGENTS.md"
 
 assert_file() {
   local path=$1
@@ -27,9 +28,13 @@ assert_contains() {
 assert_file "$DECISIONS_DIR/README.md"
 assert_file "$DECISIONS_DIR/adr-template.md"
 assert_file "$ISSUE_TEMPLATE"
+assert_file "$AGENTS_FILE"
 assert_contains 'The template intentionally lives beside README.md and the numbered records' "$DECISIONS_DIR/README.md"
 assert_contains 'main' "$DECISIONS_DIR/README.md"
 assert_contains 'sub-issue' "$DECISIONS_DIR/README.md"
+assert_contains 'Closes #' "$DECISIONS_DIR/README.md"
+assert_contains 'Approval alone does not close' "$DECISIONS_DIR/README.md"
+assert_contains 'Closes #' "$AGENTS_FILE"
 for label in adr:needed adr:proposed adr:removal adr:rejected; do
   assert_contains "$label" "$DECISIONS_DIR/README.md"
 done

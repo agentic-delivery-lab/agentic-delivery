@@ -48,9 +48,10 @@ The process is:
 3. If the need appears during implementation, create or update the issue or sub-issue before adding the ADR to the feature branch.
 4. For a new decision, add the ADR file in the feature branch. For a changed decision, remove the affected ADR in the feature branch. Update related agent primitives, README files and Markdown in that same branch when required.
 5. The branch-local addition or removal is valid for the current branch only. Agents use it as provisional context there, while agents on other branches use only ADR files present on `main` as official context.
-6. Merge only through protected `main` after the required pull-request approval and checks succeed. A merged addition is accepted by presence on `main`; a merged removal removes the decision from official context.
-7. Update the relevant issue after the merge with the action, pull request and commit links, then close the ADR-tracking issue. Keep a broader parent issue open when it still contains implementation work.
-8. If a proposal is rejected, do not merge it. Record the reason in the issue, apply the rejection label and close the ADR-tracking issue. The closed pull request and Git history retain the rejected proposal without adding it to `main`.
+6. Open or update a pull request linking the relevant issue or sub-issue. Put the ADR-tracking issue in the PR body with a closing reference such as `Closes #123`; use `Refs #123` for a broader parent issue that must remain open. Approval alone does not close the issue.
+7. Merge only through protected `main` after the required pull-request approval and checks succeed. A merged addition is accepted by presence on `main`; a merged removal removes the decision from official context.
+8. Update the relevant issue after the merge with the action, pull request and commit links. A `Closes #123` reference closes the ADR-tracking issue at merge; otherwise close it explicitly. Keep a broader parent issue open when it still contains implementation work.
+9. If a proposal is rejected, do not merge it. Record the reason in the issue, apply the rejection label and close the ADR-tracking issue. The closed pull request and Git history retain the rejected proposal without adding it to `main`.
 
 ADR files do not contain a lifecycle status in their YAML frontmatter. The presence or absence of the file on `main` is the official state. No GitHub Action is responsible for accepting or deleting an ADR.
 

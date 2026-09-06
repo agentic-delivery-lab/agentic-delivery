@@ -30,9 +30,9 @@ If no source issue is supplied, search existing issues read-only and present a l
 3. Create a feature branch. Add a new ADR or remove an existing ADR in that branch.
 4. Add or update related agent primitives, README files and Markdown in the same branch when the ADR change affects them.
 5. Add `adr:proposed`; also add `adr:removal` for a deletion.
-6. Open a pull request linking the issue and describe the ADR addition or removal.
+6. Open or update a pull request linking the issue and describe the ADR addition or removal. Put the ADR-tracking issue or sub-issue in the PR body with a closing reference such as `Closes #123`. Use a non-closing reference such as `Refs #123` when a broader parent issue must remain open. Approval alone does not close the issue.
 7. Merge only through a protected `main` branch after the required pull-request approval and checks succeed.
-8. After merge, update the issue with the action and links. Close the ADR-tracking issue; keep a broader parent issue open when other work remains.
+8. After merge, update the issue with the action and links. GitHub closes the issue referenced by `Closes #123` at merge; otherwise close the ADR-tracking issue explicitly. Keep a broader parent issue open when other work remains.
 
 The repository does not use an acceptance workflow. A merged addition is accepted because it is present on `main`; a merged deletion removes the decision from the official context. Branch protection must prevent direct pushes and bypasses if this rule is to be enforced.
 

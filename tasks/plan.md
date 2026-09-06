@@ -13,6 +13,7 @@ ADR’s bevatten geen lifecycle-status in YAML-frontmatter. Een goedgekeurde PR 
 - Gebruik `main` als enige bron voor officiële ADR-context.
 - Laat branch-lokale ADR-toevoegingen en -verwijderingen gelden als voorlopige context voor die branch.
 - Gebruik een normaal issue of sub-issue als opdrachtbrief en audit trail.
+- Koppel de ADR-tracking issue of sub-issue in de PR met `Closes #<nummer>`; gebruik `Refs #<nummer>` voor een bredere parent die open moet blijven. Approval alleen sluit het issue niet.
 - Gebruik labels alleen voor triage: `adr:needed`, `adr:proposed`, `adr:removal` en `adr:rejected`.
 - Gebruik geen `adr:accepted`-label; een bestand op `main` is de geaccepteerde toestand.
 
@@ -34,6 +35,7 @@ ADR’s bevatten geen lifecycle-status in YAML-frontmatter. Een goedgekeurde PR 
 - Agentinstructies onderscheiden officiële `main`-context van branch-lokale context.
 - Oude acceptance-workflows en statusmutatiescripts bestaan niet meer.
 - Een toevoeging of verwijdering wordt pas repository-breed effectief na merge naar `main`.
+- Een ADR-PR bevat een sluitingsreferentie naar het ADR-tracking issue; het issue sluit pas bij merge.
 - Issue #1 wordt na de actie bijgewerkt en na succesvolle merge gesloten wanneer het een zelfstandig ADR-tracking issue is.
 - Alle lokale kwaliteitstests slagen.
 
