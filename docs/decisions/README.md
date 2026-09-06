@@ -80,3 +80,4 @@ The template intentionally lives beside README.md and the numbered records so co
 | Number | Decision | Source | Review/implementation |
 | --- | --- | --- | --- |
 | [0001](0001-use-madr-for-architecture-decisions.md) | Use MADR and GitHub Issues for architectural decisions | [Issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1) | [PR #2](https://github.com/sjefsharp/agentic-delivery/pull/2) |
+| [0002](0002-use-plain-language-for-human-agent-communication.md) | Use plain language for human-agent communication | [Issue #3](https://github.com/sjefsharp/agentic-delivery/issues/3) | Review pull request pending |
