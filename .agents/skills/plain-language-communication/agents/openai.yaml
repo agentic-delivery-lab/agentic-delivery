@@ -1,0 +1,7 @@
+interface:
+  display_name: "Plain-language communication"
+  short_description: "Write clear Dutch and plain English"
+  default_prompt: "Use $plain-language-communication to draft or review clear human-agent communication or repository documentation."
+
+policy:
+  allow_implicit_invocation: true
