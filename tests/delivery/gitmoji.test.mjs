@@ -7,6 +7,7 @@ import { validateGitmojiMessage } from '../../scripts/validate-gitmoji.mjs';
 test('accepts valid Conventional Commit Gitmoji messages and merges', () => {
   for (const message of [
     'feat: ✨ add context-aware delivery checks',
+    'chore(deps): 📦 adopt dependencies',
     'fix(parser)!: :bug: repair commit parsing',
     'docs: 📝 update the guide\n\nExplain the migration path.',
     'Merge pull request #6 from example/feature',

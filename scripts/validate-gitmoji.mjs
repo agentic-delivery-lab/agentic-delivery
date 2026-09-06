@@ -5,7 +5,10 @@ import { gitmojis } from 'gitmojis';
 
 const mergeSubject = /^Merge(?: pull request| branch)\b/;
 const conventionalHeader = /^[a-z]+(?:\([^()\n]+\))?!?: (.+)$/;
-const officialEmoji = new Set(gitmojis.map(({ emoji }) => emoji));
+// Some terminals and commit editors omit the optional emoji variation
+// selector. Compare the catalogue and input after removing that selector so
+// the same visible Gitmoji is accepted in either Unicode representation.
+const officialEmoji = new Set(gitmojis.map(({ emoji }) => emoji.replace(/\uFE0F/g, '')));
 const officialCode = new Set(gitmojis.map(({ code }) => code));
 
 export class GitmojiValidationError extends Error {
@@ -32,7 +35,8 @@ export function validateGitmojiMessage(input) {
   const token = tokenMatch?.[1];
   const description = tokenMatch?.[2]?.trim();
 
-  if (!token || (!officialEmoji.has(token) && !officialCode.has(token))) {
+  const normalizedToken = token?.replace(/\uFE0F/g, '');
+  if (!token || (!officialEmoji.has(normalizedToken) && !officialCode.has(token))) {
     throw new GitmojiValidationError(
       `expected an official Gitmoji Unicode character or shortcode immediately after the prefix, got ${token ?? '<missing>'}`,
     );
