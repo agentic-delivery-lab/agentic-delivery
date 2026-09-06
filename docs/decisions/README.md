@@ -81,4 +81,4 @@ The template intentionally lives beside README.md and the numbered records. Ever
 | --- | --- | --- | --- |
 | [0001](0001-use-madr-for-architecture-decisions.md) | Use MADR and GitHub Issues for architectural decisions | [Issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1) | [PR #2](https://github.com/sjefsharp/agentic-delivery/pull/2) |
 | [0002](0002-use-plain-language-for-human-agent-communication.md) | Use plain language for human-agent communication | [Issue #3](https://github.com/sjefsharp/agentic-delivery/issues/3) | [PR #4](https://github.com/sjefsharp/agentic-delivery/pull/4) |
-| [0003](0003-use-context-scoped-ubiquitous-language.md) | Use context-scoped ubiquitous language | [Issue #5](https://github.com/sjefsharp/agentic-delivery/issues/5) | Proposed in the issue #5 feature branch |
+| [0003](0003-use-context-scoped-ubiquitous-language.md) | Use context-scoped ubiquitous language | [Issue #5](https://github.com/sjefsharp/agentic-delivery/issues/5) | [PR #6](https://github.com/sjefsharp/agentic-delivery/pull/6) |

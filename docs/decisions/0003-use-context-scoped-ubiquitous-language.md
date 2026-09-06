@@ -86,6 +86,7 @@ A validator checks the register's structure and references. Contract tests check
 ## More Information
 
 - Assignment brief: [GitHub issue #5](https://github.com/sjefsharp/agentic-delivery/issues/5)
+- Implementation and review: [pull request #6](https://github.com/sjefsharp/agentic-delivery/pull/6)
 - Domain model and change process: [`docs/domain/README.md`](../domain/README.md)
 - Canonical register: [`docs/domain/ubiquitous-language.yml`](../domain/ubiquitous-language.yml)
 - Source: [Eric Evans, *Domain-Driven Design Reference* (2015)](https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf), especially Bounded Context, Ubiquitous Language and Continuous Integration
