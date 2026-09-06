@@ -30,7 +30,9 @@ assert_file "$ISSUE_TEMPLATE"
 assert_contains 'The template intentionally lives beside README.md and the numbered records' "$DECISIONS_DIR/README.md"
 assert_contains 'main' "$DECISIONS_DIR/README.md"
 assert_contains 'sub-issue' "$DECISIONS_DIR/README.md"
-assert_contains 'adr:rejected' "$DECISIONS_DIR/README.md"
+for label in adr:needed adr:proposed adr:removal adr:rejected; do
+  assert_contains "$label" "$DECISIONS_DIR/README.md"
+done
 assert_contains 'Do not add an `adr:accepted` label' "$DECISIONS_DIR/README.md"
 assert_contains 'ADR operation' "$ISSUE_TEMPLATE"
 assert_contains 'Create or update an ADR' "$ISSUE_TEMPLATE"
