@@ -59,7 +59,7 @@ The decision follows [Conventional Commits 1.0.0](https://www.conventionalcommit
 
 - `commitlint.config.mjs` contains the Conventional Commit configuration.
 - `scripts/validate-gitmoji.mjs` validates Unicode and shortcode forms against the pinned catalogue.
-- `scripts/validate-commit-range.sh` validates a supplied base/head range and returns documented exit codes.
+- `scripts/validate-commit-range.mjs` validates a supplied base/head range and returns documented exit codes.
 - Tests cover valid scopes, breaking markers, Unicode and shortcodes, malformed prefixes, unknown Gitmoji values and merge commits.
 - The workflow validates the pull-request title and the complete non-merge commit range.
 - Reviewers assess whether type, Gitmoji and description match the change's meaning.

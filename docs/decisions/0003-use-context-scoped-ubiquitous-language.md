@@ -54,7 +54,7 @@ A validator checks the register's structure and references. Contract tests check
 
 ### Confirmation
 
-- `docs/domain/ubiquitous-language.yml` safely parses and passes `scripts/validate-domain-language.rb`.
+- `docs/domain/ubiquitous-language.yml` safely parses and passes `scripts/validate-domain-language.mjs`.
 - Validator tests cover valid data, invalid YAML, missing fields, duplicate contexts and terms, unknown context references, empty definitions and conflicting `avoid` values.
 - Contract tests connect `AGENTS.md`, the domain documentation, the skill and metadata, the issue form and the quality workflow.
 - The quality workflow parses YAML, runs the domain-language validator and runs the domain contract tests.

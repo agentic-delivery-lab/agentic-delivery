@@ -16,13 +16,13 @@ For an architectural choice, read [`docs/decisions/README.md`](../../../docs/dec
 ## Work from the trunk
 
 - Keep `main` deployable and use a short-lived feature branch for each change.
-- Branch from the current `main`; keep the branch's pull-request head separate from `main`, which is the protected base. Use `npm run branch:start -- <type> <issue-number> <summary>` from a clean, synchronized `main` so the supported path verifies an open source issue before creating an issue-linked branch. Names use `<type>/issue-<number>-<lowercase-kebab-case-summary>`. Never open a pull request with `main` as its head.
+- Branch from the current `main`; keep the branch's pull-request head separate from `main`, which is the protected base. Use `pnpm branch:start <type> <issue-number> <summary>` from a clean, synchronized `main` so the supported path verifies an open source issue before creating an issue-linked branch. Names use `<type>/issue-<number>-<lowercase-kebab-case-summary>`. Never open a pull request with `main` as its head.
 - Finish a feature branch within two calendar days when practical. Integrate through a review pull request as soon as the change is complete.
 - Do not create `develop`, permanent feature or permanent release branches for ordinary work. Use a feature flag when incomplete work must be integrated early.
 - A coding agent may prepare, push and update a branch or review pull request, but it must not merge the pull request, bypass protection or close the source issue without explicit human authorization.
 - The repository's chosen merge method is a merge commit. Do not use squash, rebase or auto-merge for this workflow. Delete a merged feature branch after a human has completed the merge.
 
-The branch starter rejects a closed, missing or unreadable source issue and rejects a pull request number even when it is open. Use `npm run lint:branch -- <branch-name>` for a candidate that already exists. CI repeats the branch syntax and open-issue checks when an internal pull request is opened or updated. A raw Git branch command can bypass the local helper, but it cannot pass the pull-request check with an invalid name or source issue.
+The branch starter rejects a closed, missing or unreadable source issue and rejects a pull request number even when it is open. Use `pnpm lint:branch <branch-name>` for a candidate that already exists. CI repeats the branch syntax and open-issue checks when an internal pull request is opened or updated. A raw Git branch command can bypass the local helper, but it cannot pass the pull-request check with an invalid name or source issue.
 
 ## Write commit and pull-request titles
 

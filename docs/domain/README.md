@@ -27,7 +27,7 @@ An `avoid` entry names wording that can hide or confuse the intended meaning. It
 
 ## Enforcement boundary
 
-`scripts/validate-domain-language.rb` checks the structure of the canonical register. CI also checks that the register, this documentation, agent instructions and the reusable skill remain linked. These checks can detect malformed data, duplicate names and broken references.
+`scripts/validate-domain-language.mjs` checks the structure of the canonical register. CI also checks that the register, this documentation, agent instructions and the reusable skill remain linked. These checks can detect malformed data, duplicate names and broken references.
 
 Automation cannot prove that prose or code expresses the intended model. Agents and human reviewers must check semantic consistency, ambiguity and context. The repository deliberately does not scan all text for forbidden words.
 

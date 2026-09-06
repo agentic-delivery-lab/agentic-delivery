@@ -45,7 +45,7 @@ The changelog follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1
 
 ### Confirmation
 
-- `scripts/validate-changelog.rb` checks the root file's required heading, section order, dates, SemVer headings and allowed categories.
+- `scripts/validate-changelog.mjs` checks the root file's required heading, section order, dates, SemVer headings and allowed categories.
 - Tests cover valid Unreleased content, duplicate or missing sections, invalid categories, dates, versions and ordering.
 - CI runs the validator and parses the Markdown and related configuration.
 - Reviewers decide whether each entry belongs in the changelog and accurately describes impact.

@@ -13,9 +13,9 @@ informed: None
 Issue [#12](https://github.com/sjefsharp/agentic-delivery/issues/12) asks the
 repository to adopt pnpm, reject dependency releases younger than 48 hours,
 and make repository-owned validation tooling portable across Windows, macOS
-and Linux. The current implementation uses npm, one npm lockfile, Bash test
-drivers, five Bash scripts and two Ruby validators. Its quality workflows also
-install and audit through npm.
+and Linux. Before this proposal, the repository used npm, one npm lockfile,
+Bash test drivers, five Bash scripts and two Ruby validators. Its quality
+workflows also installed and audited through npm.
 
 The affected bounded context is `agentic-delivery-governance`. The relevant
 registered terms are `source issue`, `ADR tracking issue`, `architecture

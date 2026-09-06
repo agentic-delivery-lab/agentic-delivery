@@ -100,16 +100,18 @@ const isMainModule = process.argv[1]
   && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isMainModule) {
-  if (process.argv.length !== 5) {
+  const args = process.argv.slice(2);
+  if (args[0] === '--') args.shift();
+  if (args.length !== 3) {
     process.stderr.write(`Usage: ${path.basename(process.argv[1])} <type> <issue-number> <summary>\n`);
     process.exitCode = 2;
   } else {
     try {
       const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
       const branchName = await startIssueBranch({
-        branchType: process.argv[2],
-        issueNumber: process.argv[3],
-        summary: process.argv[4],
+        branchType: args[0],
+        issueNumber: args[1],
+        summary: args[2],
         repositoryRoot: path.resolve(scriptDirectory, '..'),
       });
       process.stdout.write(`Created and switched to ${branchName}.\n`);

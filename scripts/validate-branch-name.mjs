@@ -24,12 +24,14 @@ const isMainModule = process.argv[1]
   && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isMainModule) {
-  if (process.argv.length !== 3) {
+  const args = process.argv.slice(2);
+  if (args[0] === '--') args.shift();
+  if (args.length !== 1) {
     process.stderr.write(`Usage: ${path.basename(process.argv[1])} <branch-name>\n`);
     process.exitCode = 2;
   } else {
     try {
-      validateBranchName(process.argv[2]);
+      validateBranchName(args[0]);
     } catch (error) {
       process.stderr.write(`${error.message}\n`);
       process.exitCode = error.exitCode ?? 1;

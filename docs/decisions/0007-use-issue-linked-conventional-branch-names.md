@@ -43,7 +43,7 @@ Allowed types are `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refact
 
 The source issue check accepts only an open GitHub Issue in this repository. A GitHub sub-issue is valid when it is open. A pull request number, closed issue, missing issue, API error or authentication error is rejected. The local branch starter performs this check before `git switch -c`; CI repeats it for every internal pull request. The branch validator rejects `main`, which is the protected trunk rather than a change branch.
 
-The repository cannot intercept a contributor who invokes raw `git switch -c` directly. The supported `npm run branch:start -- <type> <issue-number> <summary>` command prevents that error before branch creation, while the pull-request check prevents an invalid branch from entering the review workflow.
+The repository cannot intercept a contributor who invokes raw `git switch -c` directly. The supported `pnpm branch:start <type> <issue-number> <summary>` command prevents that error before branch creation, while the pull-request check prevents an invalid branch from entering the review workflow.
 
 ### Consequences
 
@@ -57,9 +57,9 @@ The repository cannot intercept a contributor who invokes raw `git switch -c` di
 
 ### Confirmation
 
-- `scripts/validate-branch-name.sh` checks the local name grammar.
-- `scripts/validate-source-issue.sh` checks repository, URL type and open state through GitHub CLI locally and the GitHub REST API in Actions.
-- `scripts/start-issue-branch.sh` requires a clean, synchronized `main` and runs both validators before creating a branch.
+- `scripts/validate-branch-name.mjs` checks the local name grammar.
+- `scripts/validate-source-issue.mjs` checks repository, URL type and open state through GitHub CLI locally and the GitHub REST API in Actions.
+- `scripts/start-issue-branch.mjs` requires a clean, synchronized `main` and runs both validators before creating a branch.
 - Delivery tests cover valid names, malformed names, open and closed issues, pull request numbers, API failures and branch-creation guardrails.
 - `delivery-quality.yml` validates the pull-request head branch before installing dependencies.
 - Human reviewers confirm that the type, summary and source issue describe the same change.

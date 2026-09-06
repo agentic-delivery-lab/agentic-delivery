@@ -58,11 +58,12 @@ export async function validateCommitRange({
   base,
   head,
   repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
+  toolingRoot = repositoryRoot,
   pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
   runInputImpl = runInput,
 } = {}) {
-  const configPath = path.join(repositoryRoot, 'commitlint.config.mjs');
-  const gitmojiValidator = path.join(repositoryRoot, 'scripts', 'validate-gitmoji.mjs');
+  const configPath = path.join(toolingRoot, 'commitlint.config.mjs');
+  const gitmojiValidator = path.join(toolingRoot, 'scripts', 'validate-gitmoji.mjs');
   if (!(await isFile(configPath)) || !(await isFile(gitmojiValidator))) {
     throw new CommitRangeValidationError('Commit range check: required tooling is not installed or configured', 2);
   }
@@ -106,7 +107,7 @@ export async function validateCommitRange({
       pnpmCommand,
       ['exec', 'commitlint', '--config', configPath],
       message,
-      { cwd: repositoryRoot, env: process.env },
+      { cwd: toolingRoot, env: process.env },
     );
     if (commitlint.error?.code === 'ENOENT') {
       throw new CommitRangeValidationError('Commit range check: required tooling is not installed or configured', 2);
@@ -119,7 +120,7 @@ export async function validateCommitRange({
       process.execPath,
       [gitmojiValidator],
       message,
-      { cwd: repositoryRoot, env: process.env },
+      { cwd: toolingRoot, env: process.env },
     );
     if (gitmoji.error) {
       throw new CommitRangeValidationError('Commit range check: required tooling is not installed or configured', 2);
@@ -136,12 +137,14 @@ const isMainModule = process.argv[1]
   && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isMainModule) {
-  if (process.argv.length !== 4) {
+  const args = process.argv.slice(2);
+  if (args[0] === '--') args.shift();
+  if (args.length !== 2) {
     process.stderr.write(`Usage: ${path.basename(process.argv[1])} <base commit> <head commit>\n`);
     process.exitCode = 2;
   } else {
     try {
-      await validateCommitRange({ base: process.argv[2], head: process.argv[3] });
+      await validateCommitRange({ base: args[0], head: args[1] });
       process.stdout.write('Commit range check passed.\n');
     } catch (error) {
       process.stderr.write(`${error.message}\n`);
