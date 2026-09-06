@@ -47,12 +47,12 @@ test('validates Conventional Commit and Gitmoji rules across a commit range', as
   const base = (await git(root, ['rev-parse', 'HEAD'])).stdout.trim();
   await commitFile(root, 'valid.txt', 'feat(core): ✨ add a valid change');
   const validHead = (await git(root, ['rev-parse', 'HEAD'])).stdout.trim();
-  await validateCommitRange({ base, head: validHead, repositoryRoot: root });
+  await validateCommitRange({ base, head: validHead, repositoryRoot: root, toolingRoot: repositoryRoot });
 
   await commitFile(root, 'invalid.txt', 'fix: repair a change without a gitmoji');
   const invalidHead = (await git(root, ['rev-parse', 'HEAD'])).stdout.trim();
   await assert.rejects(
-    validateCommitRange({ base, head: invalidHead, repositoryRoot: root }),
+    validateCommitRange({ base, head: invalidHead, repositoryRoot: root, toolingRoot: repositoryRoot }),
     (error) => error.exitCode === 1 && /Gitmoji validation failed/.test(error.message),
   );
 });
@@ -66,8 +66,8 @@ test('ignores merge commits and supports the all-zero base', async (t) => {
   await git(root, ['switch', '--quiet', 'main']);
   await git(root, ['merge', '--quiet', '--no-ff', 'side-branch', '-m', "Merge branch 'side-branch' into main"]);
   const mergeHead = (await git(root, ['rev-parse', 'HEAD'])).stdout.trim();
-  await validateCommitRange({ base, head: mergeHead, repositoryRoot: root });
-  await validateCommitRange({ base: '0'.repeat(40), head: mergeHead, repositoryRoot: root });
+  await validateCommitRange({ base, head: mergeHead, repositoryRoot: root, toolingRoot: repositoryRoot });
+  await validateCommitRange({ base: '0'.repeat(40), head: mergeHead, repositoryRoot: root, toolingRoot: repositoryRoot });
 });
 
 test('preserves invalid range and usage exit code 2', async (t) => {
@@ -79,7 +79,7 @@ test('preserves invalid range and usage exit code 2', async (t) => {
     { base: 'not-a-commit', head },
     { base: head, head: 'HEAD^' },
   ]) {
-    await assert.rejects(validateCommitRange({ ...options, repositoryRoot: root }), (error) => error.exitCode === 2);
+    await assert.rejects(validateCommitRange({ ...options, repositoryRoot: root, toolingRoot: repositoryRoot }), (error) => error.exitCode === 2);
   }
   const usage = await runNodeScript(validator, [head], { cwd: repositoryRoot });
   assert.equal(usage.status, 2);
