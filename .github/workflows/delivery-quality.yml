@@ -84,6 +84,7 @@ jobs:
           globs: |
             **/*.md
             !node_modules/**/*.md
+            !tests/**/fixtures/**/*.md
 
       - name: Parse YAML configuration
         shell: bash
