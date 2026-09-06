@@ -83,3 +83,11 @@ jobs:
       - name: Check architecture decision skill intake contract
         shell: bash
         run: ./tests/adr/test_architecture_decision_skill.sh
+
+      - name: Check workflow security contracts
+        shell: bash
+        run: ./tests/adr/test_acceptance_workflows.sh
+
+      - name: Check repository contracts
+        shell: bash
+        run: ./tests/adr/test_repository_contract.sh

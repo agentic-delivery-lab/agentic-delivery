@@ -26,7 +26,7 @@ Dit plan implementeert nog geen geaccepteerd besluit. ADR-0001 begint als voorst
 - **Lifecycle:** `proposed` → `accepted` → optioneel `deprecated` of `superseded by ADR-NNNN`. Records worden nooit verwijderd of inhoudelijk herschreven om een nieuw besluit te simuleren; vervanging gebeurt met een nieuw ADR en wederzijdse verwijzingen.
 - **Agent-harness:** een korte regel in root-`AGENTS.md` laat agents eerst de ADR-criteria toetsen. `.agents/skills/architecture-decision/SKILL.md` bevat de volledige workflow, grenzen en gewenste output. Eventuele scripts komen pas in beeld als deterministische nummering of validatie niet betrouwbaar met eenvoudige repositorychecks kan worden afgedwongen.
 - **Automatisering:** een `pull_request_review`-signaal zonder rechten start na een succesvolle review een `workflow_run` vanaf de default branch. Die vertrouwde workflow controleert de actuele review, commit en gewijzigde ADR via de GitHub API en zet alleen een voorgestelde ADR op `accepted`. `codex exec`, MCP en de kwaliteitworkflow blijven voorbereidend/controlerend; geen agent accepteert rechtstreeks.
-- **Runner:** de ADR-kwaliteitsworkflow en de vertrouwde statusworkflow draaien op de bestaande labels `[self-hosted, linux, x64, omarchy]`. Omdat deze checks repositorycode uitvoeren, worden fork-pull-requests niet automatisch op deze trust boundary uitgevoerd.
+- **Runner:** de ADR-kwaliteitsworkflow en de vertrouwde statusworkflow draaien op de bestaande labels `[self-hosted, linux, x64, omarchy]`. Omdat deze checks repositorycode uitvoeren, worden fork-pull-requests niet automatisch op deze trust boundary uitgevoerd. De bestaande `workflow_dispatch`-smoketest blijft behouden als onafhankelijke runner-canary en gebruikt dezelfde gepinde checkout-action.
 
 ## Criteria voor het voorstellen van een ADR
 
@@ -104,7 +104,7 @@ Issue #1
 - **Acceptatieautomatisering:** test de pure statusmutatie en API-orkestratie met positieve, idempotente en afwijzende fixtures; controleer dat de privileged workflow geen PR-code checkout.
 - **Agentgedrag:** start Codex vanuit de repositoryroot, laat het de geladen instructiebronnen benoemen en voer zowel een positieve als negatieve triggerprompt uit.
 - **Proces:** doorloop issue #1 → voorstel-PR → expliciete acceptatie → merge/sluiting en controleer alle kruisverwijzingen.
-- **Regressie:** laat de bestaande self-hosted-runner-smoketest ongemoeid en bevestig dat de nieuwe workflow dezelfde runnerconventie bewust volgt of expliciet motiveert waarom niet.
+- **Regressie:** behoud de bestaande self-hosted-runner-smoketest als handmatig te starten canary, controleer de gepinde checkout-action en bevestig dat de nieuwe workflows dezelfde runnerconventie bewust volgen.
 
 ## Risico's en mitigaties
 
@@ -119,6 +119,7 @@ Issue #1
 | Validatie wordt afhankelijk van ongepinde of onbetrouwbare tooling | Laag | Pin externe CI-actions/dependencies en houd project-specifieke checks klein en lokaal uitvoerbaar. |
 | Statuscommit maakt een review stale | Middel | Documenteer dit bij de lifecycle en stem branch-protectioninstellingen af; een nieuwe review is dan de expliciete bevestiging van de statuscommit. |
 | PR-code krijgt toegang tot de status-token | Hoog | Scheid het review-signaal van `workflow_run`, checkout alleen de default branch en accepteer alleen same-repository PR's. |
+| Runner-canary wijkt af of gebruikt een mutable action-tag | Middel | Behoud de handmatige smoke-workflow, gebruik dezelfde runnerlabels en pin de checkout-action op een commit. |
 
 ## Beantwoorde reviewpunten
 
@@ -127,5 +128,6 @@ Issue #1
 - ✅ De ADR-quality-check draait op de bestaande self-hosted runner; fork-pull-requests worden vanwege de trust boundary niet automatisch op die runner uitgevoerd.
 - ✅ De repository-skill volstaat voor ChatGPT/Codex; bredere distributie als plugin volgt pas bij hergebruik buiten deze repository.
 - ✅ Zonder bronissue gebruikt de skill guarded intake: read-only zoeken, zoekfouten rapporteren, kandidaat/preview bevestigen, geen vervanging bij ontoegankelijkheid en stoppen bij ontbrekende context.
+- ✅ `adr-template.md` blijft bewust naast `README.md` en de genummerde records; de bestaande self-hosted-runner-smoketest blijft behouden als onafhankelijke, handmatige canary.
 
 Open aandachtspunt voor de repository-instellingen: een status-only commit kan bestaande approvals stale maken wanneer branch protection dat voor iedere commit doet. In dat geval is een tweede approval de bedoelde bevestiging van de laatste statuscommit.

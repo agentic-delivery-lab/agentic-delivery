@@ -50,7 +50,7 @@ Keep the decision, discussion and status in issues and add a short instruction t
 
 Chosen option: **MADR records in `docs/decisions/` with an issue and pull request, plus a two-stage approval workflow**.
 
-Architectural decisions will be stored as Markdown files named `NNNN-title-with-dashes.md`, starting at `0001` and using one global sequence. Each record follows the project template in [`adr-template.md`](adr-template.md) and contains a required source-issue link. The index in [`README.md`](README.md) is the canonical process description.
+Architectural decisions will be stored as Markdown files named `NNNN-title-with-dashes.md`, starting at `0001` and using one global sequence. Each record follows the project template in [`adr-template.md`](adr-template.md) and contains a required source-issue link. The template intentionally lives beside the index and numbered records so contributors and agents have one stable, canonical path without a second templates tree. The index in [`README.md`](README.md) is the canonical process description.
 
 The workflow is:
 
@@ -72,7 +72,7 @@ For agent support, root `AGENTS.md` will contain only a short routing rule and a
 - Good, because MADR's context/options/outcome/consequences structure supports concise human review and structured agent output.
 - Good, because repository skills are discoverable by Codex CLI and use the same skill format that ChatGPT can invoke or import.
 - Good, because an approval changes the status automatically while the privileged workflow uses only default-branch code and API checks.
-- Good, because the deterministic quality workflow runs on the existing self-hosted runner and leaves a clear seam for a later Codex CLI step.
+- Good, because the deterministic quality workflow runs on the existing self-hosted runner and leaves a clear seam for a later Codex CLI step; the existing manual runner smoke workflow remains an independent canary for that trust boundary.
 - Good, because guarded intake preserves a source issue without silently creating duplicates, masking GitHub failures or publishing unreviewed prompt context.
 - Bad, because a global sequence can require coordination when two branches add ADRs concurrently.
 - Bad, because a missing issue requires a preview/confirmation step and sufficient context before the agent can continue.

@@ -6,6 +6,8 @@ This directory is the canonical, version-controlled log of architectural decisio
 
 Start with a GitHub Issue as the assignment brief. Include the problem, scope, decision drivers, constraints, known options, reversibility/impact, owner and desired decision date. Link the issue from the eventual ADR and pull request.
 
+The template intentionally lives beside README.md and the numbered records. It remains unnumbered so the canonical process and template links stay stable while the validator distinguishes it from ADR records.
+
 If an agent receives an architecture request without an issue, it must use guarded intake before drafting:
 
 - Search existing issues read-only and present a likely candidate for confirmation; never guess the repository or silently choose an unrelated issue. If the search fails because of tooling, authentication or connectivity, stop and report the failure rather than treating it as no match.

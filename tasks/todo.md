@@ -2,7 +2,7 @@
 
 Bron: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1). Het inhoudelijke plan staat in [`tasks/plan.md`](plan.md).
 
-Status: taken 1–5 en de feedbackverwerking (inclusief guarded source-issue intake) zijn lokaal geïmplementeerd en geverifieerd op `feature/adr-workflow`; de statusworkflow wacht op aanwezigheid op `main` en een menselijke approval; taak 6 wacht op menselijke ADR-goedkeuring en merge.
+Status: taken 1–5 en de feedbackverwerking (inclusief guarded source-issue intake, template-rationale en runner-canary-verdict) zijn lokaal geïmplementeerd en geverifieerd op `feature/adr-workflow`; de statusworkflow wacht op aanwezigheid op `main` en een menselijke approval; taak 6 wacht op menselijke ADR-goedkeuring en merge.
 
 ## Taak 1: Stel ADR-0001 op als besluitvoorstel ✅
 
@@ -100,6 +100,7 @@ Status: taken 1–5 en de feedbackverwerking (inclusief guarded source-issue int
 - [ ] Positieve proefprompt: een kostbare cross-cutting keuze activeert de workflow en levert `proposed` op.
 - [ ] Negatieve proefprompt: een lokale, omkeerbare keuze maakt geen ADR.
 - [ ] Intakeproef: geen issue leidt tot read-only zoeken en bevestiging vóór creatie; zoekfouten, ontbrekende context en ontoegankelijk/incompleet stoppen veilig.
+- [ ] Contractproef: template staat naast de index en de bestaande runner-smoketest blijft handmatig uitvoerbaar met een gepinde action.
 - [ ] Grensproef: de agent accepteert of sluit niets zonder menselijke instructie.
 
 **Afhankelijkheden:** Taken 2 en 3.
