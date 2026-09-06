@@ -54,7 +54,8 @@ new_fixture() {
 run_status() {
   local status
   set +e
-  (cd "$1" && PATH="$FAKE_BIN:$PATH" ./scripts/start-issue-branch.sh "${@:2}") >/dev/null 2>&1
+  (cd "$1" && env -u GITHUB_ACTIONS -u GH_TOKEN -u GITHUB_REPOSITORY \
+    PATH="$FAKE_BIN:$PATH" ./scripts/start-issue-branch.sh "${@:2}") >/dev/null 2>&1
   status=$?
   set -e
   printf '%s\n' "$status"

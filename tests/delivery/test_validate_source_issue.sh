@@ -54,7 +54,8 @@ chmod +x "$FAKE_BIN/curl"
 run_status() {
   local status
   set +e
-  PATH="$FAKE_BIN:$PATH" "$VALIDATOR" "$@" >/dev/null 2>&1
+  env -u GITHUB_ACTIONS -u GH_TOKEN -u GITHUB_REPOSITORY \
+    PATH="$FAKE_BIN:$PATH" "$VALIDATOR" "$@" >/dev/null 2>&1
   status=$?
   set -e
   printf '%s\n' "$status"
