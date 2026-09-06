@@ -61,7 +61,7 @@ assert_contains 'source issue is open' "$REPO_ROOT/.github/pull_request_template
 assert_contains 'issues/7' "$REPO_ROOT/docs/decisions/0004-use-trunk-based-delivery.md"
 assert_contains '0007-use-issue-linked-conventional-branch-names.md' "$REPO_ROOT/docs/decisions/README.md"
 
-for record in 0004-use-trunk-based-delivery.md 0005-use-conventional-commits-with-gitmoji.md 0006-curate-a-changelog.md; do
+for record in 0004-use-trunk-based-delivery.md 0005-use-conventional-commits-with-gitmoji.md 0006-curate-a-changelog.md 0007-use-issue-linked-conventional-branch-names.md; do
   assert_contains "($record)" "$REPO_ROOT/docs/decisions/README.md"
 done
 
