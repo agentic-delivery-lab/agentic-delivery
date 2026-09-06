@@ -26,6 +26,8 @@
 
 - Use `$delivery-workflow` for changes that affect branches, commit history, pull requests, releases or `CHANGELOG.md`. The skill is implicitly available.
 - Keep `main` deployable. Work on a short-lived feature branch and make that branch the review pull-request head; `main` is the protected base. Never create a pull request from `main`.
+- Start supported work from a clean, synchronized `main` with `npm run branch:start -- <type> <issue-number> <summary>`. The command requires an open source issue in this repository and creates a branch with an issue-linked branch name in the form `<type>/issue-<number>-<lowercase-kebab-case-summary>`.
+- Use `npm run lint:branch -- <branch-name>` to check an existing candidate. The pull-request head and its source issue are checked again by CI; a closed issue, pull request number or unreadable issue is invalid.
 - Prefer completing a feature branch within two calendar days. Do not create `develop` or permanent feature/release branches for ordinary work. Use a feature flag when incomplete work must be integrated early.
 - Use merge commits for this repository. Do not use squash, rebase or auto-merge. A coding agent must not merge a pull request, bypass protection or close its source issue without explicit human authorization.
 - Write commit messages and pull-request titles as Conventional Commits with a Gitmoji immediately after the prefix, for example `feat(delivery): ✨ establish trunk-based delivery`. The official Unicode emoji or Gitmoji shortcode is allowed. Validate all non-merge commits and the pull-request title; historical commits are not rewritten.
