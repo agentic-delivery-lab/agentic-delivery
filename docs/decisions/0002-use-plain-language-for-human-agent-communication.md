@@ -91,5 +91,5 @@ ISO 24495-1 is used as the text-quality lens. ISO 9241-210 is used as the design
 - Plain-language source: [ISO 24495-1:2023](https://www.iso.org/standard/78907.html)
 - Human-centred design source: [ISO 9241-210:2019](https://www.iso.org/standard/77520.html)
 - Public summary of the four plain-language principles: [International Plain Language Federation](https://www.iplfederation.org/iso-standard/)
-- Implementation: the review pull request for this branch will be linked here before review.
+- Implementation and review: [pull request #4](https://github.com/sjefsharp/agentic-delivery/pull/4)
 - Revisit this decision if the source standards change, user feedback shows repeated language errors or the repository adopts a different primary documentation language.
