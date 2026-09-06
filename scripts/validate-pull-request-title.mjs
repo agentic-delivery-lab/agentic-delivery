@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
-import { access, stat } from 'node:fs/promises';
-import { constants } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 

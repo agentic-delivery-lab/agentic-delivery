@@ -70,7 +70,7 @@ export async function validateAdrs(repositoryRoot = process.cwd()) {
   }
 
   const records = (await readdir(decisionsDirectory, { withFileTypes: true }))
-    .filter((entry) => entry.isFile() && /^\d{4}-.+\.md$/.test(entry.name))
+    .filter((entry) => entry.isFile() && /^\d{4}-.*\.md$/.test(entry.name))
     .map(({ name }) => name)
     .sort()
     .map((name) => path.join(decisionsDirectory, name));
