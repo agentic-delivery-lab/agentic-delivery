@@ -6,11 +6,11 @@ consulted: Name(s) or "None"
 informed: Name(s) or "None"
 ---
 
-# Short, solution-oriented title
+# Short, solution-focused title
 
 ## Context and Problem Statement
 
-Describe the context and the problem to solve. Link the source issue or sub-issue and any evidence that a future reader needs to understand the decision.
+Explain the situation and the problem. Link the source issue or sub-issue and any evidence a future reader needs.
 
 ## Decision Drivers
 
@@ -21,11 +21,11 @@ Describe the context and the problem to solve. Link the source issue or sub-issu
 
 - Option 1
 - Option 2
-- Option 3, if relevant
+- Option 3, if useful
 
 ## Decision Outcome
 
-Chosen option: **Option 1**, because [explain how it best satisfies the decision drivers].
+Chosen option: **Option 1**, because [explain how it best meets the decision drivers].
 
 ### Consequences
 
@@ -35,7 +35,7 @@ Chosen option: **Option 1**, because [explain how it best satisfies the decision
 
 ### Confirmation
 
-Describe how implementation or compliance with this decision will be reviewed or tested. Name the observable checks and their owner where possible.
+Explain how implementation or compliance with this decision will be reviewed or tested. Name observable checks and their owner when possible.
 
 ## Pros and Cons of the Options
 
