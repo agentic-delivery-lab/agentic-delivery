@@ -11,10 +11,10 @@ jobs:
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 5
     steps:
-      - name: Check out repository
+      - name: Check out the repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - name: Verify dedicated runner
+      - name: Check the dedicated runner
         shell: bash
         run: |
           set -euo pipefail

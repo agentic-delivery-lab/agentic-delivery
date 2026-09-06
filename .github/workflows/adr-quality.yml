@@ -12,6 +12,7 @@ on:
       - docs/decisions/**
       - scripts/validate-adrs.sh
       - tests/adr/**
+      - tests/communication/**
   push:
     branches: [main]
     paths:
@@ -23,23 +24,23 @@ on:
       - docs/decisions/**
       - scripts/validate-adrs.sh
       - tests/adr/**
+      - tests/communication/**
 
 permissions:
   contents: read
 
 jobs:
   validate:
-    # The repository is private and this job executes checked-in validation
-    # code on the dedicated runner. Fork PRs are intentionally excluded from
-    # this trust boundary; do not broaden this condition without a hosted-runner
-    # fallback.
+    # This private repository runs checked-in validation code on a dedicated
+    # runner. Fork PRs stay outside this trust boundary until a hosted-runner
+    # fallback is available.
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 5
     steps:
-      - name: Check out repository
+      - name: Check out the repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
@@ -65,6 +66,7 @@ jobs:
           .github/ISSUE_TEMPLATE/architecture-decision.yml
           .github/workflows/adr-quality.yml
           .agents/skills/architecture-decision/agents/openai.yaml
+          .agents/skills/plain-language-communication/agents/openai.yaml
 
       - name: Run ADR validator tests
         shell: bash
@@ -77,3 +79,7 @@ jobs:
       - name: Check repository contracts
         shell: bash
         run: ./tests/adr/test_repository_contract.sh
+
+      - name: Check plain-language communication contract
+        shell: bash
+        run: ./tests/communication/test_plain_language_skill.sh

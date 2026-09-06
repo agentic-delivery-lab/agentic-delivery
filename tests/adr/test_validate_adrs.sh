@@ -14,7 +14,7 @@ assert_passes() {
   if "$VALIDATOR" "$fixture" >/dev/null 2>&1; then
     pass_count=$((pass_count + 1))
   else
-    echo "expected validator to pass: $fixture" >&2
+    echo "expected the ADR check to accept: $fixture" >&2
     exit 1
   fi
 }
@@ -22,7 +22,7 @@ assert_passes() {
 assert_fails() {
   local fixture=$1
   if "$VALIDATOR" "$fixture" >/dev/null 2>&1; then
-    echo "expected validator to fail: $fixture" >&2
+    echo "expected the ADR check to reject: $fixture" >&2
     exit 1
   else
     fail_count=$((fail_count + 1))
@@ -79,4 +79,4 @@ assert_fails "$fixture"
 cleanup
 unset fixture
 
-printf 'ADR validator tests passed: %d positive, %d negative\n' "$pass_count" "$fail_count"
+printf 'ADR check tests passed: %d accepted, %d rejected\n' "$pass_count" "$fail_count"
