@@ -91,6 +91,7 @@ The repository cannot intercept a contributor who invokes raw `git switch -c` di
 ## More Information
 
 - Assignment brief: [GitHub issue #11](https://github.com/sjefsharp/agentic-delivery/issues/11)
+- Review and implementation: [pull request #13](https://github.com/sjefsharp/agentic-delivery/pull/13)
 - Related decision: [ADR-0004](0004-use-trunk-based-delivery.md)
 - Related decision: [ADR-0005](0005-use-conventional-commits-with-gitmoji.md)
 - Domain register: [`ubiquitous-language.yml`](../domain/ubiquitous-language.yml)
