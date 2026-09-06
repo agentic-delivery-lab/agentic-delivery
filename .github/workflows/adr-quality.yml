@@ -7,14 +7,25 @@ on:
       - AGENTS.md
       - .agents/skills/**
       - .github/ISSUE_TEMPLATE/architecture-decision.yml
+      - .github/pull_request_template.md
       - .github/workflows/adr-quality.yml
       - .markdownlint-cli2.jsonc
+      - CHANGELOG.md
+      - .node-version
+      - commitlint.config.mjs
       - docs/decisions/**
+      - docs/delivery/**
       - docs/domain/**
+      - package.json
+      - package-lock.json
       - scripts/validate-adrs.sh
+      - scripts/validate-changelog.rb
+      - scripts/validate-commit-range.sh
       - scripts/validate-domain-language.rb
+      - scripts/validate-gitmoji.mjs
       - tests/adr/**
       - tests/communication/**
+      - tests/delivery/**
       - tests/domain/**
   push:
     branches: [main]
@@ -22,14 +33,25 @@ on:
       - AGENTS.md
       - .agents/skills/**
       - .github/ISSUE_TEMPLATE/architecture-decision.yml
+      - .github/pull_request_template.md
       - .github/workflows/adr-quality.yml
       - .markdownlint-cli2.jsonc
+      - CHANGELOG.md
+      - .node-version
+      - commitlint.config.mjs
       - docs/decisions/**
+      - docs/delivery/**
       - docs/domain/**
+      - package.json
+      - package-lock.json
       - scripts/validate-adrs.sh
+      - scripts/validate-changelog.rb
+      - scripts/validate-commit-range.sh
       - scripts/validate-domain-language.rb
+      - scripts/validate-gitmoji.mjs
       - tests/adr/**
       - tests/communication/**
+      - tests/delivery/**
       - tests/domain/**
 
 permissions:
@@ -65,8 +87,11 @@ jobs:
           config: .markdownlint-cli2.jsonc
           globs: |
             AGENTS.md
+            CHANGELOG.md
             tasks/*.md
+            .github/*.md
             docs/decisions/*.md
+            docs/delivery/*.md
             docs/domain/*.md
             .agents/skills/**/*.md
 
@@ -78,6 +103,7 @@ jobs:
           .github/workflows/adr-quality.yml
           docs/domain/ubiquitous-language.yml
           .agents/skills/architecture-decision/agents/openai.yaml
+          .agents/skills/delivery-workflow/agents/openai.yaml
           .agents/skills/plain-language-communication/agents/openai.yaml
           .agents/skills/ubiquitous-language/agents/openai.yaml
 
