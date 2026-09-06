@@ -42,6 +42,17 @@ body:
       required: true
 
   - type: textarea
+    id: domain_language
+    attributes:
+      label: Affected bounded contexts and domain terms
+      description: List each affected bounded-context ID and registered term. Explain terms that are new, conflicting or changing, or write "None" when the domain model is not affected.
+      placeholder: |
+        - agentic-delivery-governance: source issue, review pull request
+        or: None
+    validations:
+      required: true
+
+  - type: textarea
     id: drivers
     attributes:
       label: Decision drivers and constraints

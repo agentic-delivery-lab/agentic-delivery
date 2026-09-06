@@ -13,3 +13,11 @@
 - Follow the user's language for Dutch and English conversations. Use Dutch when the language is mixed or unclear.
 - Use plain English for new or changed repository documentation. Keep code, commands, identifiers, quotations and necessary technical terms unchanged.
 - Use `$plain-language-communication` when drafting or reviewing human-agent communication or repository documentation.
+
+## Domain language
+
+- Before changing domain-bearing code, documentation or agentic primitives, identify the affected bounded context and read [`docs/domain/README.md`](docs/domain/README.md) and [`docs/domain/ubiquitous-language.yml`](docs/domain/ubiquitous-language.yml). Use `$ubiquitous-language` for this review.
+- Use registered terms with their defined meaning inside that bounded context. Do not assume that the same term has the same meaning outside it.
+- Treat a missing concept, conflicting meaning or changed term as a domain-model change. Update the register and affected artifacts in the same change set; use the architecture-decision process when the change is significant.
+- Keep exact external names, identifiers and quotations. Explain their context or map them to a registered term when the difference could be ambiguous.
+- Structural checks do not prove semantic consistency. Agents and human reviewers must review meaning; do not introduce a repository-wide forbidden-word scan.

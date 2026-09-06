@@ -1,0 +1,7 @@
+interface:
+  display_name: "Ubiquitous language"
+  short_description: "Apply context-scoped domain terms"
+  default_prompt: "Use $ubiquitous-language to identify the affected bounded context and apply or update its canonical domain terms."
+
+policy:
+  allow_implicit_invocation: true
