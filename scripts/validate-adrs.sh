@@ -69,8 +69,8 @@ for record in "${records[@]}"; do
   fi
 
   frontmatter=$(sed -n "2,$((frontmatter_end - 1))p" "$record")
-  if ! grep -Eq '^status: (proposed|accepted|rejected|deprecated|superseded by ADR-[0-9]{4})$' <<<"$frontmatter"; then
-    error "$filename has no allowed status in frontmatter"
+  if grep -Eq '^status:' <<<"$frontmatter"; then
+    error "$filename must not define status in frontmatter; official ADR state is derived from the main branch"
   fi
   if ! grep -Eq '^date: [0-9]{4}-[0-9]{2}-[0-9]{2}$' <<<"$frontmatter"; then
     error "$filename has no ISO date in frontmatter"

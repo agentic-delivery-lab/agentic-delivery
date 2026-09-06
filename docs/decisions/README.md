@@ -1,29 +1,46 @@
 # Architectural Decisions
 
-This directory is the canonical, version-controlled log of architectural decisions for this repository. Records use the [MADR](https://adr.github.io/madr/) Markdown format and explain one significant choice, its rationale, alternatives and consequences.
+This directory is the canonical, version-controlled log of architectural decisions for this repository. Records use the MADR structure and explain one significant choice, its rationale, alternatives and consequences.
 
-## Create a decision record
+## Main is the source of truth
 
-Start with a GitHub Issue as the assignment brief. Include the problem, scope, decision drivers, constraints, known options, reversibility/impact, owner and desired decision date. Link the issue from the eventual ADR and pull request.
+An ADR file present on the default branch `main` is an official repository decision. An ADR added or removed in a feature branch is provisional and applies only to that branch until its pull request is merged.
 
-The template intentionally lives beside README.md and the numbered records. It remains unnumbered so the canonical process and template links stay stable while the validator distinguishes it from ADR records.
+ADR files do not contain a lifecycle status in their YAML frontmatter. The branch state is the status:
 
-If an agent receives an architecture request without an issue, it must use guarded intake before drafting:
+- file present on `main`: official decision;
+- file added only on a feature branch: proposed decision for that branch;
+- file removed only on a feature branch: proposed removal for that branch;
+- file absent from `main`: no official decision record.
 
-- Search existing issues read-only and present a likely candidate for confirmation; never guess the repository or silently choose an unrelated issue. If the search fails because of tooling, authentication or connectivity, stop and report the failure rather than treating it as no match.
-- If no suitable issue exists, first confirm that the available context fills the required fields. If it does not, ask the missing questions and stop; do not publish a partial issue. Otherwise preview a safe title and an issue body matching the [issue form](../../.github/ISSUE_TEMPLATE/architecture-decision.yml), then require explicit confirmation before creating it. Re-check for duplicates immediately before creation.
-- If a candidate is inaccessible, stop and request an accessible link or permission; do not create a replacement issue.
-- If the issue is readable but incomplete, ask focused questions as issue comments only when that communication is explicitly authorized, then stop until the answers are available.
+Agents use ADR files from `main` as canonical context. When working on a feature branch, an agent may also use that branch's ADR additions or removals as provisional context for the current work. A branch that has not incorporated the latest `main` may need to be synchronized before it reflects the current official decisions.
 
-Do not publish raw prompt context, secrets or unnecessary personal data in an issue.
+## Issue and sub-issue intake
 
-Copy [`adr-template.md`](adr-template.md) to the next filename in the global sequence:
+A GitHub Issue is an assignment brief and audit trail, not automatically an ADR. The issue may be a normal product or implementation issue.
 
-```text
-docs/decisions/NNNN-title-with-dashes.md
-```
+During triage or refining, create a sub-issue with the architecture-decision issue form when a meaningful architectural decision emerges. If the issue itself already uses that form, no sub-issue is needed. If the need appears during implementation, create or update an issue or sub-issue before adding the ADR to the feature branch. For an ADR removal, record the affected ADR path and the reason in the issue or sub-issue.
 
-Use lowercase dashed titles and four consecutive digits (`0001`, `0002`, …). Do not create a second numbering scheme in a subdirectory. If two branches choose the same next number, keep the record with the merged pull request's number and renumber the other before merge.
+If no source issue is supplied, search existing issues read-only and present a likely candidate for confirmation. If no suitable issue exists, show an issue-form preview and require explicit confirmation before creating one. Stop on search/authentication failures, inaccessible issues or missing required context; never replace an inaccessible issue or publish a partial issue.
+
+## Runbook
+
+1. Identify the source issue or create the appropriate ADR sub-issue.
+2. Add the label `adr:needed` when an ADR change is required.
+3. Create a feature branch. Add a new ADR or remove an existing ADR in that branch.
+4. Add or update related agent primitives, README files and Markdown in the same branch when the ADR change affects them.
+5. Add `adr:proposed`; also add `adr:removal` for a deletion.
+6. Open a pull request linking the issue and describe the ADR addition or removal.
+7. Merge only through a protected `main` branch after the required pull-request approval and checks succeed.
+8. After merge, update the issue with the action and links. Close the ADR-tracking issue; keep a broader parent issue open when other work remains.
+
+The repository does not use an acceptance workflow. A merged addition is accepted because it is present on `main`; a merged deletion removes the decision from the official context. Branch protection must prevent direct pushes and bypasses if this rule is to be enforced.
+
+## Rejection and removal
+
+A proposal that is not adopted is not merged. Record the reason in the source issue, apply `adr:rejected` and close the ADR-tracking issue or sub-issue. The proposal remains available through the closed pull request and Git history without polluting `main`.
+
+If an ADR already on `main` must be removed, create a normal feature branch and pull request that deletes the file. The approved merge of that removal PR is the complete action; no follow-up cleanup workflow is needed.
 
 ## When to propose an ADR
 
@@ -31,37 +48,35 @@ Propose an ADR when a choice is architecturally significant and has meaningful a
 
 - the choice is costly or risky to reverse;
 - it affects multiple components, teams or future changes;
-- it establishes a public interface, data ownership, security/privacy posture, availability or performance characteristic, deployment model or important dependency;
-- it introduces or intentionally changes a repository-wide standard;
-- the rationale is likely to be revisited and needs durable traceability.
+- it establishes or changes a public interface, data ownership, security/privacy posture, availability, performance, deployment model or important dependency;
+- it introduces or changes a repository-wide standard;
+- its rationale is likely to be revisited and needs durable traceability.
 
-Do not create an ADR for a local, easily reversible implementation detail, an ordinary bug fix, a purely editorial change, or a choice with no meaningful alternative or lasting consequence. When uncertain, record the question in the source issue and ask for a human decision about whether an ADR is warranted.
+Do not create an ADR for a local, easily reversible implementation detail, an ordinary bug fix, a purely editorial change or a choice with no meaningful alternative or lasting consequence.
 
-## Review and lifecycle
+## Labels
 
-1. The source issue is the assignment brief and discussion history.
-2. The ADR pull request starts with status `proposed` and records the research, options and recommendation.
-3. A human reviewer checks the rationale, consequences and confirmation criteria.
-4. After an explicit approval, the trusted ADR workflow changes the status to `accepted`; merge remains gated by the repository's review rules.
-5. Use a closing keyword such as `Closes #NNN` in the pull request so GitHub closes the source issue when the pull request merges.
-6. For a changed decision, create a new record and mark the prior one `superseded by ADR-NNNN` or `deprecated`; never erase the historical record.
+Use a small, non-authoritative label state machine. `main` and Git history remain authoritative; labels help triage and find work.
 
-The allowed statuses are `proposed`, `accepted`, `rejected`, `deprecated` and `superseded by ADR-NNNN`. `rejected` is for a documented proposal that will not be adopted; a rejected proposal may remain only when its rationale is useful to the history.
+| Label | Meaning |
+| --- | --- |
+| `adr:needed` | Triage identified an ADR change, but no ADR branch/PR exists yet |
+| `adr:proposed` | An active branch or pull request adds or changes an ADR |
+| `adr:removal` | The active ADR change removes an existing record; combine with `adr:proposed` |
+| `adr:rejected` | The proposal was rejected and the reason is recorded in the issue |
 
-## Automated acceptance
-
-The [`adr-approval-signal.yml`](../../.github/workflows/adr-approval-signal.yml) workflow listens for submitted pull-request reviews but has no permissions, secrets or repository checkout. Only an eligible approval on a same-repository pull request targeting the default branch produces a successful signal.
-
-The [`adr-accept-on-approval.yml`](../../.github/workflows/adr-accept-on-approval.yml) workflow runs from the trusted default branch after that signal. On the existing self-hosted runner it rechecks the current pull request, review, head commit and changed files through the GitHub API, then changes exactly one `docs/decisions/NNNN-*.md` record from `proposed` to `accepted`. The update is idempotent and refuses forks, stale approvals, ambiguous ADR changes and non-proposed statuses. It does not execute pull-request code.
-
-The status update is a code-modifying commit. If branch protection dismisses stale approvals for every new commit, the reviewer may need to approve the resulting status-only commit again; configure the repository review rule with that consequence in mind.
-
-## Agent workflow
-
-The root [`AGENTS.md`](../../AGENTS.md) should route agents here and to the repository skill at [`.agents/skills/architecture-decision/SKILL.md`](../../.agents/skills/architecture-decision/SKILL.md). The skill may research and draft a complete `proposed` record, but it must not accept an ADR, merge a pull request or close an issue without explicit human authorization. The workflow above is the only automated status transition, and it is triggered by GitHub's recorded human approval rather than by an agent.
+After a successful merge, remove the active labels and close the ADR-tracking issue. Do not add an `adr:accepted` label: presence on `main` is the accepted state.
 
 ## Records
 
-| Number | Decision | Status | Source | Review |
-| --- | --- | --- | --- | --- |
-| [0001](0001-use-madr-for-architecture-decisions.md) | Use MADR and GitHub Issues for architectural decisions | Proposed | [Issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1) | [PR #2](https://github.com/sjefsharp/agentic-delivery/pull/2) |
+Records use four consecutive digits and lowercase dashed names:
+
+```text
+docs/decisions/NNNN-title-with-dashes.md
+```
+
+The template intentionally lives beside README.md and the numbered records so contributors and agents have one stable canonical path. Every record keeps a source-issue link, even though the source issue itself may be generic or may have an ADR sub-issue.
+
+| Number | Decision | Source | Review/implementation |
+| --- | --- | --- | --- |
+| [0001](0001-use-madr-for-architecture-decisions.md) | Use MADR and GitHub Issues for architectural decisions | [Issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1) | [PR #2](https://github.com/sjefsharp/agentic-delivery/pull/2) |

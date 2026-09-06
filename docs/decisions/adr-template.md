@@ -1,5 +1,4 @@
 ---
-status: proposed
 date: YYYY-MM-DD
 source-issue: https://github.com/owner/repository/issues/NNN
 decision-makers: Name(s)
@@ -11,7 +10,7 @@ informed: Name(s) or "None"
 
 ## Context and Problem Statement
 
-Describe the context and the problem to solve. Link the source issue and any evidence that a future reader needs to understand the decision.
+Describe the context and the problem to solve. Link the source issue or sub-issue and any evidence that a future reader needs to understand the decision.
 
 ## Decision Drivers
 

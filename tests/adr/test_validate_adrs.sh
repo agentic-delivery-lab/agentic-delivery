@@ -50,7 +50,7 @@ cleanup
 unset fixture
 
 fixture=$(new_fixture)
-sed -i 's/^status: proposed$/status: undecided/' "$fixture/docs/decisions/0001-use-madr-for-architecture-decisions.md"
+sed -i '/^date:/a status: proposed' "$fixture/docs/decisions/0001-use-madr-for-architecture-decisions.md"
 assert_fails "$fixture"
 cleanup
 unset fixture

@@ -7,13 +7,9 @@ on:
       - AGENTS.md
       - .agents/skills/**
       - .github/ISSUE_TEMPLATE/architecture-decision.yml
-      - .github/workflows/adr-approval-signal.yml
-      - .github/workflows/adr-accept-on-approval.yml
       - .github/workflows/adr-quality.yml
       - .markdownlint-cli2.jsonc
       - docs/decisions/**
-      - scripts/accept-adr-on-approval.sh
-      - scripts/accept-proposed-adr.sh
       - scripts/validate-adrs.sh
       - tests/adr/**
   push:
@@ -22,13 +18,9 @@ on:
       - AGENTS.md
       - .agents/skills/**
       - .github/ISSUE_TEMPLATE/architecture-decision.yml
-      - .github/workflows/adr-approval-signal.yml
-      - .github/workflows/adr-accept-on-approval.yml
       - .github/workflows/adr-quality.yml
       - .markdownlint-cli2.jsonc
       - docs/decisions/**
-      - scripts/accept-adr-on-approval.sh
-      - scripts/accept-proposed-adr.sh
       - scripts/validate-adrs.sh
       - tests/adr/**
 
@@ -72,8 +64,6 @@ jobs:
           ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) }'
           .github/ISSUE_TEMPLATE/architecture-decision.yml
           .github/workflows/adr-quality.yml
-          .github/workflows/adr-approval-signal.yml
-          .github/workflows/adr-accept-on-approval.yml
           .agents/skills/architecture-decision/agents/openai.yaml
 
       - name: Run ADR validator tests
@@ -83,10 +73,6 @@ jobs:
       - name: Check architecture decision skill intake contract
         shell: bash
         run: ./tests/adr/test_architecture_decision_skill.sh
-
-      - name: Check workflow security contracts
-        shell: bash
-        run: ./tests/adr/test_acceptance_workflows.sh
 
       - name: Check repository contracts
         shell: bash

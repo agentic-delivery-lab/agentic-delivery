@@ -26,6 +26,23 @@ assert_contains() {
 assert_file "$DECISIONS_DIR/README.md"
 assert_file "$DECISIONS_DIR/adr-template.md"
 assert_contains 'The template intentionally lives beside README.md and the numbered records' "$DECISIONS_DIR/README.md"
+assert_contains 'main' "$DECISIONS_DIR/README.md"
+
+if grep -Eq '^status:' "$DECISIONS_DIR/adr-template.md"; then
+  echo "ADR template must not define a status field" >&2
+  exit 1
+fi
+
+for obsolete_file in \
+  "$REPO_ROOT/.github/workflows/adr-approval-signal.yml" \
+  "$REPO_ROOT/.github/workflows/adr-accept-on-approval.yml" \
+  "$REPO_ROOT/scripts/accept-adr-on-approval.sh" \
+  "$REPO_ROOT/scripts/accept-proposed-adr.sh"; do
+  if [[ -e "$obsolete_file" ]]; then
+    echo "obsolete ADR acceptance artifact still exists: $obsolete_file" >&2
+    exit 1
+  fi
+done
 
 assert_file "$SMOKE_WORKFLOW"
 assert_contains 'workflow_dispatch:' "$SMOKE_WORKFLOW"

@@ -1,12 +1,14 @@
 name: Architecture decision
-description: Start a traceable investigation for an architecturally significant choice.
+description: Start a traceable investigation for an architectural decision or ADR removal.
 title: "ADR: "
+labels:
+  - "adr:needed"
 body:
   - type: markdown
     attributes:
       value: |
-        Use this form for a choice whose rationale should remain discoverable in the repository.
-        The issue is the assignment brief; a reviewed MADR record will be created only when the decision meets the criteria in `docs/decisions/README.md`.
+        Use this form when a new or changed architectural decision, or the removal of an existing ADR, needs a traceable record.
+        A normal issue can remain the assignment brief. During triage, refining or implementation an agent may create this form as an ADR sub-issue.
 
         Do not include passwords, API keys, personal data or other secrets.
 
@@ -16,6 +18,17 @@ body:
       label: Context and problem
       description: What is changing, what problem must be solved, and why is a decision needed now?
       placeholder: Describe the current situation and the decision question.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operation
+    attributes:
+      label: ADR operation
+      description: What kind of ADR change is being considered?
+      options:
+        - Create or update an ADR
+        - Remove an existing ADR
     validations:
       required: true
 
@@ -91,6 +104,17 @@ body:
     validations:
       required: true
 
+  - type: textarea
+    id: affected_adrs
+    attributes:
+      label: Affected ADR files
+      description: List existing ADR paths for a removal or update; for a new decision, write "None yet".
+      placeholder: |
+        docs/decisions/0001-example.md
+        or: None yet
+    validations:
+      required: true
+
   - type: checkboxes
     id: acknowledgement
     attributes:
@@ -98,5 +122,5 @@ body:
       options:
         - label: I have not included secrets or unnecessary personal data.
           required: true
-        - label: I understand that an agent may draft only a `proposed` ADR; a human must approve it before acceptance or merge.
+        - label: I understand that an ADR change is provisional in its feature branch and official only after an approved pull request is merged into `main`.
           required: true
