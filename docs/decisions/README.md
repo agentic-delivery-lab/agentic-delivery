@@ -27,11 +27,11 @@ If no source issue is supplied, search existing issues read-only and present a l
 
 1. Identify the source issue and its ADR tracking issue. Create a linked sub-issue when separate tracking is useful.
 2. Add `adr:needed` when triage finds that an ADR change is required.
-3. Create a feature branch. Add a new ADR or remove an existing ADR there.
+3. Create a feature branch. Add a new ADR or remove an existing ADR there. The feature branch is the pull-request head; never create a pull request from `main`, which is only the protected base.
 4. Update related agent primitives, README files and Markdown in the same branch when the decision affects them.
 5. Add `adr:proposed` for an active ADR branch or pull request. Add `adr:removal` as well for a deletion.
 6. Open or update a review pull request that links the source issue and describes the ADR change. Put the ADR tracking issue in the pull-request body with `Closes #123`, or use `Refs #123` when a broader source issue must remain open. Approval alone does not close the issue.
-7. Merge only through protected `main` after the required review and checks succeed.
+7. Merge only through protected `main` after the required review and checks succeed, and only with explicit human authorization.
 8. After merge, update the source issue and ADR tracking issue with the action and links, remove active labels and close the ADR tracking issue. A `Closes #123` reference closes it during the merge; otherwise close it explicitly. Keep a broader source issue open when other work remains.
 
 The repository has no acceptance workflow. A merged addition is accepted because it is present on `main`; a merged deletion removes the decision from official context. Branch protection must prevent direct pushes and bypasses.

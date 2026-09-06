@@ -5,7 +5,7 @@
 - For a costly, cross-cutting, repository-wide, security-sensitive or otherwise significant choice, read [`docs/decisions/README.md`](docs/decisions/README.md) and use `$architecture-decision`.
 - Treat a linked GitHub Issue as the assignment brief. It is not automatically an ADR. Keep the source issue, any separate ADR tracking issue and the review pull request linked.
 - When no source issue is supplied, follow the guarded intake in the decisions index and skill. Search read-only, confirm a candidate or preview before creating one, never replace an inaccessible issue, and ask questions only through explicitly authorized issue communication.
-- Add or remove an ADR only on a feature branch. The change is provisional there; only the merged contents of `main` are official. Do not merge a pull request or close its tracking issue without explicit human authorization.
+- Add or remove an ADR only on a feature branch. The feature branch must be the pull-request head; never create a pull request from `main`, which is only the protected base. The change is provisional there; only the merged contents of `main` are official. Do not merge a pull request or close its tracking issue without explicit human authorization.
 - When opening or updating an ADR pull request, include its ADR tracking issue with a closing reference such as `Closes #123`. The source issue may serve as the ADR tracking issue; otherwise use its linked sub-issue. GitHub closes that issue only after the PR is merged; approval alone does not close it. Use `Refs #123` when a broader source issue must remain open.
 
 ## Communication

@@ -35,6 +35,8 @@ assert_contains 'ADR tracking issue' "$DECISIONS_DIR/README.md"
 assert_contains 'Closes #' "$DECISIONS_DIR/README.md"
 assert_contains 'Approval alone does not close' "$DECISIONS_DIR/README.md"
 assert_contains 'Closes #' "$AGENTS_FILE"
+assert_contains 'never create a pull request from `main`' "$AGENTS_FILE"
+assert_contains 'is only the protected base' "$AGENTS_FILE"
 for label in adr:needed adr:proposed adr:removal adr:rejected; do
   assert_contains "$label" "$DECISIONS_DIR/README.md"
 done
