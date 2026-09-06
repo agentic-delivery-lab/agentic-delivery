@@ -1,0 +1,7 @@
+interface:
+  display_name: "Delivery workflow"
+  short_description: "Apply trunk, commit and changelog rules"
+  default_prompt: "Use $delivery-workflow to plan or review a trunk-based change with Conventional Commits, Gitmoji and a curated changelog."
+
+policy:
+  allow_implicit_invocation: true

@@ -21,3 +21,15 @@
 - Treat a missing concept, conflicting meaning or changed term as a domain-model change. Update the register and affected artifacts in the same change set; use the architecture-decision process when the change is significant.
 - Keep exact external names, identifiers and quotations. Explain their context or map them to a registered term when the difference could be ambiguous.
 - Structural checks do not prove semantic consistency. Agents and human reviewers must review meaning; do not introduce a repository-wide forbidden-word scan.
+
+## Delivery workflow
+
+- Use `$delivery-workflow` for changes that affect branches, commit history, pull requests, releases or `CHANGELOG.md`. The skill is implicitly available.
+- Keep `main` deployable. Work on a short-lived feature branch and make that branch the review pull-request head; `main` is the protected base. Never create a pull request from `main`.
+- Prefer completing a feature branch within two calendar days. Do not create `develop` or permanent feature/release branches for ordinary work. Use a feature flag when incomplete work must be integrated early.
+- Use merge commits for this repository. Do not use squash, rebase or auto-merge. A coding agent must not merge a pull request, bypass protection or close its source issue without explicit human authorization.
+- Write commit messages and pull-request titles as Conventional Commits with a Gitmoji immediately after the prefix, for example `feat(delivery): ✨ establish trunk-based delivery`. The official Unicode emoji or Gitmoji shortcode is allowed. Validate all non-merge commits and the pull-request title; historical commits are not rewritten.
+- Keep `CHANGELOG.md` curated for people. Put relevant changes in `[Unreleased]` under the Keep a Changelog categories. Releases, tags and release dates require a separate human decision.
+- CI checks structure, syntax, tests and dependency risk. Agents and human reviewers must still review commit intent, Gitmoji meaning, changelog relevance, affected bounded contexts and documentation in plain English.
+
+See [`$delivery-workflow`](.agents/skills/delivery-workflow/SKILL.md) and its sources for the full contract.
