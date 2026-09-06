@@ -1,0 +1,7 @@
+interface:
+  display_name: "Architecture Decision"
+  short_description: "Manage traceable branch-local ADR changes"
+  default_prompt: "Use $architecture-decision to evaluate this architecture decision or ADR removal; distinguish a generic source issue from an ADR issue/sub-issue and keep official context limited to main."
+
+policy:
+  allow_implicit_invocation: true
