@@ -1,43 +1,43 @@
-# Takenlijst: branch-gebaseerde ADR-lifecycle
+# Tasks: branch-based ADR lifecycle
 
-Bron: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1). Het officiële besluit ontstaat pas wanneer de wijzigings-PR naar `main` wordt gemerged.
+Source: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1). The official decision exists only after the change PR is merged into `main`.
 
-## Fase 1: Proces en agent-harness
+## Phase 1: process and agent harness
 
-- [x] Leg vast dat een issue niet automatisch een ADR is.
-- [x] Beschrijf ADR-subissues voor triage/refining en implementatie.
-- [x] Beschrijf branch-lokale ADR-context en `main` als officiële waarheid.
-- [x] Verwijder lifecycle-status uit ADR-frontmatter en het template.
-- [x] Werk `AGENTS.md`, de architecture-decision skill en agentconfiguratie bij.
-- [x] Breid het issueformulier uit voor ADR-toevoeging en ADR-verwijdering.
+- [x] State that an issue is not automatically an ADR.
+- [x] Describe ADR sub-issues for triage, refining and implementation.
+- [x] Describe branch-local ADR context and `main` as the official source.
+- [x] Remove lifecycle status from ADR frontmatter and the template.
+- [x] Update `AGENTS.md`, the architecture-decision skill and agent configuration.
+- [x] Extend the issue form for ADR additions and removals.
 
-## Fase 2: Validatie en opruimen
+## Phase 2: validation and cleanup
 
-- [x] Laat de ADR-validator statusloze frontmatter controleren.
-- [x] Verwijder acceptance-workflows en statusmutatiescripts.
-- [x] Verwijder tests en fakes die uitsluitend de acceptance-keten testen.
-- [x] Laat `adr-quality.yml` alleen nog kwaliteitsvalidatie uitvoeren.
-- [x] Voeg alle nieuwe label- en runbookcontracten toe aan de tests.
+- [x] Make the ADR validator check status-free frontmatter.
+- [x] Remove acceptance workflows and status-mutating scripts.
+- [x] Remove tests and fakes that only cover the old acceptance chain.
+- [x] Keep `adr-quality.yml` focused on quality validation.
+- [x] Add label and runbook contracts to the tests.
 
-## Fase 3: GitHub-administratie
+## Phase 3: GitHub administration
 
-- [x] Richt `adr:needed` in voor triage zonder ADR-PR.
-- [x] Richt `adr:proposed` in voor een actieve ADR-PR.
-- [x] Richt `adr:removal` in als verwijderingsmodifier.
-- [x] Richt `adr:rejected` in voor een afgewezen, niet-gemergede proposal.
-- [x] Werk issue #1 bij met het definitieve runbook, de labels en de implementatielinks.
-- [ ] Configureer branch protection voor `main` buiten de repository.
+- [x] Use `adr:needed` for triage before an ADR PR exists.
+- [x] Use `adr:proposed` for an active ADR PR.
+- [x] Use `adr:removal` as the deletion modifier.
+- [x] Use `adr:rejected` for a rejected proposal that was not merged.
+- [x] Update issue #1 with the final runbook, labels and implementation links.
+- [ ] Configure branch protection for `main` outside the repository.
 
-## Checkpoint: lokale implementatie
+## Local implementation checkpoint
 
-- [x] Geen `status:`-velden in ADR-frontmatter.
-- [x] Geen verwijzingen naar verwijderde acceptance-workflows of scripts buiten negatieve contracttests.
-- [x] Alle shelltests slagen.
-- [x] Markdown- en YAML-validatie slagen.
+- [x] No `status:` fields exist in ADR frontmatter.
+- [x] No references to removed acceptance workflows or scripts remain outside negative contract tests.
+- [x] All shell tests pass.
+- [x] Markdown and YAML validation pass.
 
-## Checkpoint: repositoryproces
+## Repository process checkpoint
 
-- [ ] Nieuwe ADR: issue/subissue → feature branch → PR → approval → merge → issue-update/sluiting.
-- [ ] ADR-verwijdering: issue/subissue → feature branch → bestand verwijderen → PR → approval → merge → issue-update/sluiting.
-- [x] Rejected proposal: reden in issue → label `adr:rejected` → PR sluiten; niets op `main`.
-- [x] Agents gebruiken alleen ADR’s op `main` als officiële context.
+- [ ] New ADR: issue/sub-issue → feature branch → PR → approval → merge → issue update/closure.
+- [ ] ADR removal: issue/sub-issue → feature branch → file deletion → PR → approval → merge → issue update/closure.
+- [x] Rejected proposal: reason in issue → `adr:rejected` → close PR; nothing on `main`.
+- [x] Agents use only ADRs on `main` as official context.

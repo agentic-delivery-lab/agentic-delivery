@@ -1,56 +1,54 @@
-# Implementatieplan: branch-gebaseerde ADR-lifecycle
+# Implementation plan: branch-based ADR lifecycle
 
-## Overzicht
+Issue [#1](https://github.com/sjefsharp/agentic-delivery/issues/1) defines the architecture-decision convention. An issue is the assignment brief, but it is not automatically an ADR. An ADR may arise during triage, refining or implementation. Additions and removals happen on a feature branch; only `main` is official repository context.
 
-Issue #1 beschrijft de conventie voor architectuurbesluiten. Een issue is de opdrachtbrief, maar wordt niet automatisch een ADR. Een ADR kan tijdens triage, refining of implementatie ontstaan als nieuw issue-subissue of als onderdeel van het bestaande issue. Toevoegen en verwijderen gebeurt in een feature branch; alleen de inhoud van `main` is officiële repositorycontext.
+ADR files have no lifecycle status in their YAML frontmatter. An approved pull request to `main` makes an addition official; an approved removal makes it no longer official. Branch protection is the merge boundary. GitHub Actions only validate quality; they do not accept or mutate ADR status.
 
-ADR’s bevatten geen lifecycle-status in YAML-frontmatter. Een goedgekeurde PR naar `main` maakt een toegevoegd ADR officieel; een goedgekeurde verwijderings-PR maakt het niet langer officieel. GitHub branch protection is de mergegrens. GitHub Actions voeren geen acceptatie of statusmutatie uit; de bestaande kwaliteitsworkflow blijft alleen validatie uitvoeren.
+## Decisions
 
-## Beslissingen
+- Use `docs/decisions/NNNN-title-with-dashes.md` for official ADR records.
+- Keep frontmatter limited to metadata such as the date, source issue and participants; do not add `status`.
+- Use `main` as the only source of official ADR context.
+- Treat branch-local ADR additions and removals as provisional context for that branch.
+- Use a normal issue or sub-issue as the assignment brief and audit trail.
+- Link the ADR-tracking issue or sub-issue in the PR with `Closes #<number>`; use `Refs #<number>` for a broader parent that must stay open. Approval alone does not close the issue.
+- Use labels only for triage: `adr:needed`, `adr:proposed`, `adr:removal` and `adr:rejected`.
+- Do not use `adr:accepted`; a file on `main` is the accepted state.
 
-- Gebruik `docs/decisions/NNNN-title-with-dashes.md` voor officiële ADR-records.
-- Houd de frontmatter beperkt tot metadata zoals datum, bronissue en betrokkenen; geen `status`.
-- Gebruik `main` als enige bron voor officiële ADR-context.
-- Laat branch-lokale ADR-toevoegingen en -verwijderingen gelden als voorlopige context voor die branch.
-- Gebruik een normaal issue of sub-issue als opdrachtbrief en audit trail.
-- Koppel de ADR-tracking issue of sub-issue in de PR met `Closes #<nummer>`; gebruik `Refs #<nummer>` voor een bredere parent die open moet blijven. Approval alleen sluit het issue niet.
-- Gebruik labels alleen voor triage: `adr:needed`, `adr:proposed`, `adr:removal` en `adr:rejected`.
-- Gebruik geen `adr:accepted`-label; een bestand op `main` is de geaccepteerde toestand.
+## Execution order
 
-## Uitvoeringsvolgorde
+1. Update process documentation, the ADR template and ADR-0001.
+2. Update `AGENTS.md`, the architecture-decision skill and the issue form.
+3. Make the validator and contract tests status-free.
+4. Remove acceptance workflows, status-mutating scripts and obsolete tests.
+5. Update issue #1 with the final runbook and configure the labels.
+6. Check Markdown, YAML, shell tests and remaining workflow references.
+7. Configure branch protection for `main` outside the repository.
 
-1. Werk de procesdocumentatie, het ADR-template en ADR-0001 bij.
-2. Werk `AGENTS.md`, de architecture-decision skill en het issueformulier bij.
-3. Maak de validator en contracttests statusloos.
-4. Verwijder acceptance-workflows, statusmutatiescripts en obsolete tests.
-5. Werk issue #1 bij met het definitieve runbook en richt labels in.
-6. Verifieer Markdown, YAML, shelltests en resterende workflowverwijzingen.
-7. Configureer buiten de repository branch protection voor `main`.
+## Acceptance criteria
 
-## Acceptatiecriteria
+- A generic issue can receive an ADR sub-issue during triage or refining.
+- The ADR issue form supports both adding and removing a record.
+- An ADR without `status` is valid; a `status` field is rejected.
+- Agent instructions distinguish official `main` context from branch-local context.
+- Old acceptance workflows and status-mutating scripts do not exist.
+- An addition or removal becomes repository-wide only after merge to `main`.
+- An ADR PR contains a closing reference to the ADR-tracking issue; the issue closes only at merge.
+- Issue #1 is updated after the action and closes after a successful merge when it is a standalone ADR-tracking issue.
+- All local quality tests pass.
 
-- Een generiek issue kan tijdens triage/refining een ADR-subissue krijgen.
-- Het ADR-issueformulier ondersteunt zowel toevoeging als verwijdering.
-- Een ADR zonder `status` is geldig; een `status`-veld wordt afgewezen.
-- Agentinstructies onderscheiden officiële `main`-context van branch-lokale context.
-- Oude acceptance-workflows en statusmutatiescripts bestaan niet meer.
-- Een toevoeging of verwijdering wordt pas repository-breed effectief na merge naar `main`.
-- Een ADR-PR bevat een sluitingsreferentie naar het ADR-tracking issue; het issue sluit pas bij merge.
-- Issue #1 wordt na de actie bijgewerkt en na succesvolle merge gesloten wanneer het een zelfstandig ADR-tracking issue is.
-- Alle lokale kwaliteitstests slagen.
+## External prerequisites
 
-## Externe randvoorwaarden
+- `main` must require pull requests, required checks and an approval.
+- Direct pushes and bypasses for `main` must be disabled.
+- A separate reviewer identity is needed; the only PR author cannot approve their own PR.
+- The current private-repository plan may require an upgrade or a public repository before branch protection can be enabled.
 
-- `main` moet pull requests, vereiste checks en een approval vereisen.
-- Directe pushes en bypasses voor `main` moeten uitgeschakeld zijn.
-- Een afzonderlijke reviewer-identiteit is nodig; de enige PR-auteur kan niet zelf goedkeuren.
-- Het huidige private-repositoryplan moet branch protection ondersteunen; anders is een planupgrade of publieke repository nodig.
-
-## Verificatie
+## Verification
 
 - `./tests/adr/test_validate_adrs.sh`
 - `./tests/adr/test_architecture_decision_skill.sh`
 - `./tests/adr/test_repository_contract.sh`
 - `git diff --check`
-- YAML parsing van het issueformulier, de kwaliteitsworkflow en agentconfiguratie.
-- `rg`-controle op oude acceptance-workflows, statusmutaties en stale procesbeschrijvingen.
+- Parse the issue form, quality workflow and agent configuration as YAML.
+- Search for old acceptance workflows, status mutations and stale process text.
