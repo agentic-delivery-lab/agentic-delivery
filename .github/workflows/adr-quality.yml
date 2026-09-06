@@ -17,7 +17,8 @@ on:
       - docs/delivery/**
       - docs/domain/**
       - package.json
-      - package-lock.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
       - scripts/validate-adrs.sh
       - scripts/validate-changelog.rb
       - scripts/validate-commit-range.sh
@@ -43,7 +44,8 @@ on:
       - docs/delivery/**
       - docs/domain/**
       - package.json
-      - package-lock.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
       - scripts/validate-adrs.sh
       - scripts/validate-changelog.rb
       - scripts/validate-commit-range.sh
@@ -72,6 +74,18 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Validate toolchain and dependency policy
+        run: node scripts/validate-toolchain.mjs
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Validate ADR structure
         shell: bash

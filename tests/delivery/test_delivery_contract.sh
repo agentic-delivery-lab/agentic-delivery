@@ -93,20 +93,26 @@ for needle in \
   'fetch-depth: 0' \
   'issues: read' \
   'actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09' \
-  'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' \
-  'npm ci --ignore-scripts' \
+  'pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2' \
+  'runtime: node@24' \
+  'cache: true' \
+  'install: false' \
+  'node scripts/validate-toolchain.mjs' \
+  'pnpm install --frozen-lockfile --ignore-scripts' \
   'github.event.pull_request.head.ref' \
   'GH_TOKEN: ${{ github.token }}' \
   'validate-branch-name.sh' \
   'validate-source-issue.sh' \
-  'npm run lint:commits' \
+  'pnpm exec commitlint' \
+  'pnpm lint:commits' \
+  'pnpm test' \
   'validate-changelog.rb' \
-  'npm audit --audit-level=high'; do
+  'pnpm audit --audit-level=high'; do
   assert_contains "$needle" "$workflow"
 done
 
 branch_check_line=$(grep -n 'validate-branch-name.sh' "$workflow" | head -n1 | cut -d: -f1)
-dependency_install_line=$(grep -n 'npm ci --ignore-scripts' "$workflow" | head -n1 | cut -d: -f1)
+dependency_install_line=$(grep -n 'pnpm install --frozen-lockfile --ignore-scripts' "$workflow" | head -n1 | cut -d: -f1)
 if [[ -z "$branch_check_line" || -z "$dependency_install_line" || "$branch_check_line" -ge "$dependency_install_line" ]]; then
   printf 'expected branch validation before dependency installation\n' >&2
   exit 1
