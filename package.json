@@ -1,0 +1,18 @@
+{
+  "name": "agentic-delivery-governance",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Governance tooling for the agentic-delivery repository.",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "lint:commits": "./scripts/validate-commit-range.sh",
+    "test": "./tests/adr/test_validate_adrs.sh && ./tests/adr/test_architecture_decision_skill.sh && ./tests/adr/test_repository_contract.sh && ./tests/communication/test_plain_language_skill.sh && ./tests/domain/test_validate_domain_language.sh && ./tests/domain/test_domain_language_contract.sh && ./tests/delivery/test_validate_gitmoji.sh && ./tests/delivery/test_validate_commit_range.sh && ./tests/delivery/test_validate_changelog.sh"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "21.2.2",
+    "@commitlint/config-conventional": "21.2.2",
+    "gitmojis": "3.15.0"
+  }
+}
