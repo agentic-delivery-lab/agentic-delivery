@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -274,12 +274,19 @@ test('rechecks a frozen lockfile created under a weaker policy', async (t) => {
     const initialInstall = await runPnpm(repositoryRoot, registry.url, ['install']);
     assert.equal(initialInstall.status, 0, `${initialInstall.stdout}\n${initialInstall.stderr}`);
 
-    await writeFile(path.join(repositoryRoot, 'pnpm-workspace.yaml'), `${releaseAgePolicy(2880)}\n`);
+    const strictRepositoryRoot = await createRoot({
+      dependencies: { 'young-frozen': '1.0.0' },
+      workspace: releaseAgePolicy(2880),
+    });
+    await copyFile(
+      path.join(repositoryRoot, 'pnpm-lock.yaml'),
+      path.join(strictRepositoryRoot, 'pnpm-lock.yaml'),
+    );
     const frozenInstall = await runPnpm(
-      repositoryRoot,
+      strictRepositoryRoot,
       registry.url,
       ['install', '--frozen-lockfile'],
-      { storeDirectory: path.join(repositoryRoot, '.strict-store') },
+      { storeDirectory: path.join(strictRepositoryRoot, '.strict-store') },
     );
 
     assert.notEqual(frozenInstall.status, 0, `${frozenInstall.stdout}\n${frozenInstall.stderr}`);

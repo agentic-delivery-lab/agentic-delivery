@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,7 +30,9 @@ test('public command definitions do not use shell chaining for preflight wiring'
 
 async function findExecutable(command) {
   const candidates = process.platform === 'win32'
-    ? [command, ...(process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').map((extension) => `${command}${extension}`)]
+    ? [command, ...(process.env.PATHEXT ?? '.COM;.EXE').split(';')
+      .filter((extension) => ['.COM', '.EXE'].includes(extension.toUpperCase()))
+      .map((extension) => `${command}${extension}`)]
     : [command];
   for (const directory of process.env.PATH.split(path.delimiter)) {
     for (const candidateName of candidates) {
@@ -62,15 +64,13 @@ function runPackageScript(repositoryRoot, executable, environment) {
   });
 }
 
-test('lifecycle preflight stops a mismatched pnpm before the command body', async (t) => {
+test('lifecycle preflight stops an invalid pnpm policy before the command body', async (t) => {
   const realPnpm = await findExecutable(PNPM_COMMAND);
   assert.ok(realPnpm, `expected ${PNPM_COMMAND} on PATH`);
 
   const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-wiring-'));
-  const fakeBin = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-fake-pnpm-'));
   t.after(async () => {
     await rm(repositoryRoot, { recursive: true, force: true });
-    await rm(fakeBin, { recursive: true, force: true });
   });
 
   await mkdir(path.join(repositoryRoot, 'scripts', 'lib'), { recursive: true });
@@ -87,32 +87,24 @@ test('lifecycle preflight stops a mismatched pnpm before the command body', asyn
       probe: 'node scripts/probe.mjs',
     },
   }));
-  await writeFile(path.join(repositoryRoot, 'pnpm-workspace.yaml'), [
-    'minimumReleaseAge: 2880',
-    'minimumReleaseAgeStrict: true',
-    'minimumReleaseAgeIgnoreMissingTime: false',
-  ].join('\n'));
+  const writeWorkspace = (minimumReleaseAge) => writeFile(
+    path.join(repositoryRoot, 'pnpm-workspace.yaml'),
+    [
+      `minimumReleaseAge: ${minimumReleaseAge}`,
+      'minimumReleaseAgeStrict: true',
+      'minimumReleaseAgeIgnoreMissingTime: false',
+    ].join('\n'),
+  );
+  await writeWorkspace(60);
   await writeFile(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
 
-  const fakeExecutableName = process.platform === 'win32' ? `${PNPM_COMMAND}.cmd` : PNPM_COMMAND;
-  const fakePnpm = path.join(fakeBin, fakeExecutableName);
-  if (process.platform === 'win32') {
-    await writeFile(fakePnpm, '@echo off\r\necho 11.25.0\r\n');
-  } else {
-    await writeFile(fakePnpm, '#!/bin/sh\nprintf \'11.25.0\\n\'\n');
-    await chmod(fakePnpm, 0o755);
-  }
-
-  const environment = {
-    ...process.env,
-    PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
-  };
-  const result = await runPackageScript(repositoryRoot, realPnpm, environment);
+  const result = await runPackageScript(repositoryRoot, realPnpm, process.env);
 
   assert.equal(result.status, 2, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stderr, /pnpm version mismatch: expected 12\.3\.4, found 11\.25\.0/);
+  assert.match(result.stderr, /minimumReleaseAge must be exactly 2880 minutes/);
   await assert.rejects(access(path.join(repositoryRoot, 'probe-ran')));
 
+  await writeWorkspace(2880);
   const validResult = await runPackageScript(repositoryRoot, realPnpm, process.env);
   assert.equal(validResult.status, 0, `${validResult.stdout}\n${validResult.stderr}`);
   await access(path.join(repositoryRoot, 'probe-ran'));
