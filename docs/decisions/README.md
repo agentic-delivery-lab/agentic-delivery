@@ -86,3 +86,4 @@ The template intentionally lives beside README.md and the numbered records. Ever
 | [0005](0005-use-conventional-commits-with-gitmoji.md) | Use Conventional Commits with Gitmoji | [Issue #7](https://github.com/sjefsharp/agentic-delivery/issues/7) | This review pull request |
 | [0006](0006-curate-a-changelog.md) | Curate a human-readable changelog | [Issue #7](https://github.com/sjefsharp/agentic-delivery/issues/7) | This review pull request |
 | [0007](0007-use-issue-linked-conventional-branch-names.md) | Use issue-linked Conventional branch names | [Issue #11](https://github.com/sjefsharp/agentic-delivery/issues/11) | This review pull request |
+| [0008](0008-use-pnpm-with-delayed-dependency-adoption.md) | Use pnpm with delayed dependency adoption and Node.js automation | [Issue #12](https://github.com/sjefsharp/agentic-delivery/issues/12) | This review pull request |

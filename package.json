@@ -3,18 +3,24 @@
   "version": "0.0.0",
   "private": true,
   "description": "Governance tooling for the agentic-delivery repository.",
+  "packageManager": "pnpm@12.3.4",
   "engines": {
     "node": ">=24.0.0"
   },
   "scripts": {
-    "branch:start": "./scripts/start-issue-branch.sh",
-    "lint:branch": "./scripts/validate-branch-name.sh",
-    "lint:commits": "./scripts/validate-commit-range.sh",
-    "test": "./tests/adr/test_validate_adrs.sh && ./tests/adr/test_architecture_decision_skill.sh && ./tests/adr/test_repository_contract.sh && ./tests/communication/test_plain_language_skill.sh && ./tests/domain/test_validate_domain_language.sh && ./tests/domain/test_domain_language_contract.sh && ./tests/delivery/test_delivery_contract.sh && ./tests/delivery/test_validate_branch_name.sh && ./tests/delivery/test_validate_source_issue.sh && ./tests/delivery/test_start_issue_branch.sh && ./tests/delivery/test_validate_gitmoji.sh && ./tests/delivery/test_validate_commit_range.sh && ./tests/delivery/test_validate_changelog.sh"
+    "prebranch:start": "node scripts/validate-toolchain.mjs",
+    "branch:start": "node scripts/start-issue-branch.mjs",
+    "prelint:branch": "node scripts/validate-toolchain.mjs",
+    "lint:branch": "node scripts/validate-branch-name.mjs",
+    "prelint:commits": "node scripts/validate-toolchain.mjs",
+    "lint:commits": "node scripts/validate-commit-range.mjs",
+    "pretest": "node scripts/validate-toolchain.mjs",
+    "test": "node --test \"tests/**/*.test.mjs\""
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.2",
     "@commitlint/config-conventional": "21.2.2",
-    "gitmojis": "3.15.0"
+    "gitmojis": "3.15.0",
+    "yaml": "2.9.0"
   }
 }

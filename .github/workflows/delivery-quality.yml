@@ -35,61 +35,39 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
           GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./scripts/validate-branch-name.sh "$BRANCH_NAME"
-          issue_number="${BRANCH_NAME#*/issue-}"
-          issue_number="${issue_number%%-*}"
-          ./scripts/validate-source-issue.sh "$issue_number"
+        run: node scripts/validate-pull-request-branch.mjs
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
-          node-version: 24
-          cache: npm
+          runtime: node@24
+          cache: true
+          install: false
+
+      - name: Validate toolchain and dependency policy
+        run: node scripts/validate-toolchain.mjs
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Validate pull-request title
         if: github.event_name == 'pull_request'
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s\n' "$PR_TITLE" | npx commitlint --config commitlint.config.mjs
-          printf '%s\n' "$PR_TITLE" | node scripts/validate-gitmoji.mjs
+        run: node scripts/validate-pull-request-title.mjs
 
       - name: Validate commit range
-        shell: bash
-        run: npm run lint:commits -- "$BASE_SHA" "$HEAD_SHA"
+        run: node scripts/validate-commit-range.mjs "$BASE_SHA" "$HEAD_SHA"
 
       - name: Validate direct pushes to main
         if: github.event_name == 'push'
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$BASE_SHA" =~ ^0{40}$ ]]; then
-            commit_range="$HEAD_SHA"
-          else
-            commit_range="$BASE_SHA..$HEAD_SHA"
-          fi
-
-          direct_commits=$(git rev-list --first-parent --no-merges "$commit_range")
-          if [[ -n "$direct_commits" ]]; then
-            echo "main received non-merge first-parent commits:" >&2
-            git log --first-parent --no-merges --format='%h %s' "$commit_range" >&2
-            exit 1
-          fi
+        run: node scripts/validate-main-history.mjs "$BASE_SHA" "$HEAD_SHA"
 
       - name: Run repository tests
-        run: npm test
+        run: pnpm test
 
       - name: Validate changelog structure
-        shell: bash
-        run: ./scripts/validate-changelog.rb "$GITHUB_WORKSPACE"
+        run: node scripts/validate-changelog.mjs "$GITHUB_WORKSPACE"
 
       - name: Lint Markdown
         uses: DavidAnson/markdownlint-cli2-action@4580e1612f6407034edd6c0e4e316d725920867b # v24.2.0
@@ -100,27 +78,43 @@ jobs:
             !node_modules/**/*.md
             !tests/**/fixtures/**/*.md
 
-      - name: Parse YAML configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-          ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) }' \
-            .github/ISSUE_TEMPLATE/architecture-decision.yml \
-            .github/workflows/adr-quality.yml \
-            .github/workflows/delivery-quality.yml \
-            .github/workflows/self-hosted-runner-smoke.yml \
-            docs/domain/ubiquitous-language.yml \
-            .agents/skills/architecture-decision/agents/openai.yaml \
-            .agents/skills/delivery-workflow/agents/openai.yaml \
-            .agents/skills/plain-language-communication/agents/openai.yaml \
-            .agents/skills/ubiquitous-language/agents/openai.yaml
-
-      - name: Parse JSON configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t json_files < <(git ls-files '*.json')
-          node -e 'const fs = require("node:fs"); for (const path of process.argv.slice(1)) JSON.parse(fs.readFileSync(path, "utf8"));' "${json_files[@]}"
+      - name: Validate configuration files
+        run: node scripts/validate-config-files.mjs "$GITHUB_WORKSPACE"
 
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        run: pnpm audit --audit-level=high
+
+  portability:
+    # Repository code runs on hosted runners only for internal pull requests.
+    # Fork pull requests stay outside the trust boundary until they have a safe
+    # workflow that does not execute checked-in code with repository secrets.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          cache: true
+          install: false
+
+      - name: Validate toolchain and dependency policy
+        run: node scripts/validate-toolchain.mjs
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Run repository tests
+        run: pnpm test

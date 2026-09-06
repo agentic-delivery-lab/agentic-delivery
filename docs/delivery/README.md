@@ -2,6 +2,52 @@
 
 This guide describes how people and coding agents move a change through the repository's trunk. It complements [ADR-0004](../decisions/0004-use-trunk-based-delivery.md), [ADR-0005](../decisions/0005-use-conventional-commits-with-gitmoji.md), [ADR-0006](../decisions/0006-curate-a-changelog.md) and [ADR-0007](../decisions/0007-use-issue-linked-conventional-branch-names.md).
 
+## Package manager and local preflight
+
+This repository uses the exact pnpm version declared by the `packageManager`
+field in `package.json`. The pin selects a version; it does not install pnpm.
+Node.js 24 or newer is required for the repository and for the documented
+bootstrap path.
+
+If pnpm is not installed, use the official cross-platform one-time bootstrap:
+
+```text
+npx get-pnpm 12.3.4
+```
+
+This is the only supported `npm`/`npx` exception after the migration. Optional
+exact-version standalone alternatives are:
+
+```sh
+curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.3.4 sh -
+```
+
+```powershell
+$env:PNPM_VERSION="12.3.4"; Invoke-WebRequest https://get.pnpm.io/install.ps1 -UseBasicParsing | Invoke-Expression
+```
+
+Before the first supported repository command, run:
+
+```text
+node scripts/validate-toolchain.mjs
+```
+
+The preflight checks the exact pnpm executable, the repository lockfile and the
+strict 2,880-minute release-age policy. Run `pnpm --version` and make sure it
+reports `12.3.4` before continuing.
+
+The delivery workflow includes an internal Linux/macOS/Windows portability
+matrix. Local tooling support for all three platforms is confirmed only after
+that matrix has completed successfully; the dedicated self-hosted runner smoke
+check remains intentionally Linux-specific.
+
+Install dependencies with the single authoritative lockfile and with lifecycle
+scripts disabled:
+
+```text
+pnpm install --frozen-lockfile --ignore-scripts
+```
+
 ## Trunk-based flow
 
 `main` is the trunk and the official source of truth. Start a short-lived feature branch from the current `main`. Keep it for no more than two calendar days. The feature branch must be the head of a review pull request whose base is `main`; never open a pull request from `main`.
@@ -10,7 +56,7 @@ Keep each increment small, test it and commit it. Use a feature flag or another 
 
 ## Issue-linked branch names
 
-Start supported work with `npm run branch:start -- <type> <issue-number> <summary>` from a clean, synchronized `main`. The command checks the source issue before creating the branch. The issue must be open and must be a GitHub Issue in this repository; an open pull request with the same number is not valid.
+Start supported work with `pnpm branch:start <type> <issue-number> <summary>` from a clean, synchronized `main`. The command checks the source issue before creating the branch. The issue must be open and must be a GitHub Issue in this repository; an open pull request with the same number is not valid.
 
 Change branches use this form:
 
@@ -18,7 +64,12 @@ Change branches use this form:
 <type>/issue-<number>-<lowercase-kebab-case-summary>
 ```
 
-The type is one of `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style` or `test`. Use `npm run lint:branch -- <branch-name>` to check an existing candidate. CI repeats both the branch syntax and open-issue checks when an internal pull request is opened or updated.
+The type is one of `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style` or `test`. Use `pnpm lint:branch <branch-name>` to check an existing candidate. CI repeats both the branch syntax and open-issue checks when an internal pull request is opened or updated.
+
+The supported `pnpm test`, `pnpm branch:start`, `pnpm lint:branch` and
+`pnpm lint:commits` commands run the same dependency-free preflight through
+their package lifecycle hooks. A mismatched or missing pnpm executable stops the
+command before its command body runs.
 
 ## Commit messages
 
