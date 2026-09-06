@@ -21,13 +21,30 @@ if [[ ! "$repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
   exit 1
 fi
 
-issue_data=$(gh issue view "$issue_number" \
-  --repo "$repository" \
-  --json state,url \
-  --jq '[.state, .url] | @tsv' 2>/dev/null) || {
-  printf 'Source issue check failed: issue #%s could not be read in %s.\n' "$issue_number" "$repository" >&2
-  exit 1
-}
+if [[ "${GITHUB_ACTIONS:-false}" == true ]]; then
+  if [[ -z "${GH_TOKEN:-}" ]]; then
+    printf 'Source issue check failed: GitHub Actions did not provide an issue-read token.\n' >&2
+    exit 1
+  fi
+
+  issue_data=$(curl --fail --silent --show-error \
+    --header 'Accept: application/vnd.github+json' \
+    --header 'X-GitHub-Api-Version: 2022-11-28' \
+    --header "Authorization: Bearer $GH_TOKEN" \
+    "https://api.github.com/repos/$repository/issues/$issue_number" |
+    ruby -rjson -e 'payload = JSON.parse(STDIN.read); puts [payload.fetch("state").upcase, payload.fetch("html_url")].join("\t")') || {
+      printf 'Source issue check failed: issue #%s could not be read in %s.\n' "$issue_number" "$repository" >&2
+      exit 1
+    }
+else
+  issue_data=$(gh issue view "$issue_number" \
+    --repo "$repository" \
+    --json state,url \
+    --jq '[.state, .url] | @tsv' 2>/dev/null) || {
+      printf 'Source issue check failed: issue #%s could not be read in %s.\n' "$issue_number" "$repository" >&2
+      exit 1
+    }
+fi
 
 IFS=$'\t' read -r issue_state issue_url <<<"$issue_data"
 

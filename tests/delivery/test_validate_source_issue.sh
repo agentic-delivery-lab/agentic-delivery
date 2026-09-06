@@ -37,10 +37,34 @@ exit 1
 EOF
 chmod +x "$FAKE_BIN/gh"
 
+cat >"$FAKE_BIN/curl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+case "$*" in
+  *'/issues/15') printf '{"state":"open","html_url":"https://github.com/sjefsharp/agentic-delivery/issues/15"}\n' ;;
+  *'/issues/16') printf '{"state":"closed","html_url":"https://github.com/sjefsharp/agentic-delivery/issues/16"}\n' ;;
+  *'/issues/17') printf '{"state":"open","html_url":"https://github.com/sjefsharp/agentic-delivery/pull/17"}\n' ;;
+  *'/issues/99') printf 'service unavailable\n' >&2; exit 1 ;;
+  *) printf 'unexpected curl invocation\n' >&2; exit 1 ;;
+esac
+EOF
+chmod +x "$FAKE_BIN/curl"
+
 run_status() {
   local status
   set +e
   PATH="$FAKE_BIN:$PATH" "$VALIDATOR" "$@" >/dev/null 2>&1
+  status=$?
+  set -e
+  printf '%s\n' "$status"
+}
+
+run_api_status() {
+  local status
+  set +e
+  GITHUB_ACTIONS=true GH_TOKEN=test-token GITHUB_REPOSITORY=sjefsharp/agentic-delivery \
+    PATH="$FAKE_BIN:$PATH" "$VALIDATOR" "$@" >/dev/null 2>&1
   status=$?
   set -e
   printf '%s\n' "$status"
@@ -57,6 +81,23 @@ for issue_number in 13 14 99 100; do
     exit 1
   fi
 done
+
+if [[ "$(run_api_status 15)" != 0 ]]; then
+  printf 'expected the CI REST API path to accept an open issue\n' >&2
+  exit 1
+fi
+
+for issue_number in 16 17 99; do
+  if [[ "$(run_api_status "$issue_number")" != 1 ]]; then
+    printf 'expected the CI REST API path to reject issue %s\n' "$issue_number" >&2
+    exit 1
+  fi
+done
+
+if [[ "$(GITHUB_ACTIONS=true GITHUB_REPOSITORY=sjefsharp/agentic-delivery run_status 15)" != 1 ]]; then
+  printf 'expected CI validation without a token to fail closed\n' >&2
+  exit 1
+fi
 
 if [[ "$(run_status 0)" != 2 || "$(run_status 11 extra)" != 2 ]]; then
   printf 'expected invalid usage to return exit 2\n' >&2

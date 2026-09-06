@@ -58,7 +58,7 @@ The repository cannot intercept a contributor who invokes raw `git switch -c` di
 ### Confirmation
 
 - `scripts/validate-branch-name.sh` checks the local name grammar.
-- `scripts/validate-source-issue.sh` checks repository, URL type and open state through GitHub CLI.
+- `scripts/validate-source-issue.sh` checks repository, URL type and open state through GitHub CLI locally and the GitHub REST API in Actions.
 - `scripts/start-issue-branch.sh` requires a clean, synchronized `main` and runs both validators before creating a branch.
 - Delivery tests cover valid names, malformed names, open and closed issues, pull request numbers, API failures and branch-creation guardrails.
 - `delivery-quality.yml` validates the pull-request head branch before installing dependencies.

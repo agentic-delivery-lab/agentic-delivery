@@ -50,6 +50,7 @@ Automation checks structure and syntax. Agents and human reviewers still check b
 - [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) defines the commit prefix grammar.
 - [`@commitlint/config-conventional`](https://github.com/conventional-changelog/commitlint/tree/master/%40commitlint/config-conventional) supplies the lint rules.
 - [GitHub CLI issue view](https://cli.github.com/manual/gh_issue_view) supplies the local open-issue check.
+- [GitHub REST API issue endpoint](https://docs.github.com/en/rest/issues/issues#get-an-issue) supplies the authenticated Actions check.
 - [Gitmoji](https://gitmoji.dev/) supplies the intention catalogue. This repository places its token after the Conventional Commit prefix so both conventions remain usable.
 - [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) defines the human-readable changelog structure.
 - [Semantic Versioning](https://semver.org/) defines release version meaning.
