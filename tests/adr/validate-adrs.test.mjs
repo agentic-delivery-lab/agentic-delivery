@@ -40,7 +40,8 @@ test('rejects missing required headings, duplicate records, broken sequence and 
     async (fixture) => {
       const record = path.join(fixture, 'docs/decisions/0001-use-madr-for-architecture-decisions.md');
       const source = await readFile(record, 'utf8');
-      await writeFile(record, source.replace(/^### Confirmation\n/m, ''));
+      const windowsSource = source.replace(/\n/g, '\r\n');
+      await writeFile(record, windowsSource.replace(/^### Confirmation\r?\n/m, ''));
       return /missing required heading: ### Confirmation/;
     },
     async (fixture) => {
