@@ -14,6 +14,8 @@
 
 - [ ] The review pull request head is this feature branch and the base is `main`.
 - [ ] The branch is short-lived and contains one coherent change.
+- [ ] The branch matches `<type>/issue-<number>-<lowercase-kebab-case-summary>` and its source issue is open in this repository.
+- [ ] The source issue number in the branch name matches the source issue listed above; a pull request number is not used as the source issue.
 - [ ] Every non-merge commit follows Conventional Commits and places an official Gitmoji immediately after the prefix.
 - [ ] The pull-request title follows the same commit contract.
 - [ ] The chosen merge method is a merge commit; no squash, rebase or auto-merge is planned.

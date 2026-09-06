@@ -49,17 +49,23 @@ done
 
 assert_contains '$delivery-workflow' "$REPO_ROOT/AGENTS.md"
 assert_contains 'never create a pull request from `main`' "$REPO_ROOT/AGENTS.md"
+assert_contains 'npm run branch:start' "$REPO_ROOT/AGENTS.md"
+assert_contains 'issue-linked branch name' "$REPO_ROOT/AGENTS.md"
 assert_contains 'Do not use squash, rebase or auto-merge' "$REPO_ROOT/AGENTS.md"
 assert_contains 'CHANGELOG.md' "$REPO_ROOT/AGENTS.md"
 assert_contains 'allow_implicit_invocation: true' "$REPO_ROOT/.agents/skills/delivery-workflow/agents/openai.yaml"
+assert_contains 'npm run branch:start' "$REPO_ROOT/.agents/skills/delivery-workflow/SKILL.md"
+assert_contains 'issue-linked branch' "$REPO_ROOT/docs/delivery/README.md"
 assert_contains 'Closes #123' "$REPO_ROOT/.github/pull_request_template.md"
+assert_contains 'source issue is open' "$REPO_ROOT/.github/pull_request_template.md"
 assert_contains 'issues/7' "$REPO_ROOT/docs/decisions/0004-use-trunk-based-delivery.md"
+assert_contains '0007-use-issue-linked-conventional-branch-names.md' "$REPO_ROOT/docs/decisions/README.md"
 
 for record in 0004-use-trunk-based-delivery.md 0005-use-conventional-commits-with-gitmoji.md 0006-curate-a-changelog.md; do
   assert_contains "($record)" "$REPO_ROOT/docs/decisions/README.md"
 done
 
-for term in trunk "short-lived feature branch" "conventional commit" gitmoji changelog "unreleased section" "merge commit" release; do
+for term in trunk "short-lived feature branch" "issue-linked branch name" "conventional commit" gitmoji changelog "unreleased section" "merge commit" release; do
   assert_contains "term: \"$term\"" "$REPO_ROOT/docs/domain/ubiquitous-language.yml"
 done
 
@@ -83,13 +89,24 @@ for needle in \
   'push:' \
   'branches: [main]' \
   'fetch-depth: 0' \
+  'issues: read' \
   'actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09' \
   'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' \
   'npm ci --ignore-scripts' \
+  'github.event.pull_request.head.ref' \
+  'validate-branch-name.sh' \
+  'validate-source-issue.sh' \
   'npm run lint:commits' \
   'validate-changelog.rb' \
   'npm audit --audit-level=high'; do
   assert_contains "$needle" "$workflow"
 done
+
+branch_check_line=$(grep -n 'validate-branch-name.sh' "$workflow" | head -n1 | cut -d: -f1)
+dependency_install_line=$(grep -n 'npm ci --ignore-scripts' "$workflow" | head -n1 | cut -d: -f1)
+if [[ -z "$branch_check_line" || -z "$dependency_install_line" || "$branch_check_line" -ge "$dependency_install_line" ]]; then
+  printf 'expected branch validation before dependency installation\n' >&2
+  exit 1
+fi
 
 printf 'Delivery workflow repository contracts passed\n'
