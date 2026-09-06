@@ -1,0 +1,15 @@
+version: 1
+domain:
+  name: "Delivery"
+  purpose: "Coordinate delivery work."
+bounded_contexts:
+  - id: "delivery-governance"
+    name: "Delivery governance"
+    definition: "Rules for delivery work."
+terms:
+  - context: "delivery-governance"
+    term: "source issue"
+    definition: "The issue that holds the assignment brief."
+  - context: "delivery-governance"
+    term: "Source Issue"
+    definition: "A duplicate term with different letter casing."
