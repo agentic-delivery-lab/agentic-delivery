@@ -8,7 +8,7 @@ SKILL="$REPO_ROOT/.agents/skills/architecture-decision/SKILL.md"
 assert_contains() {
   local needle=$1
   if ! grep -Fq -- "$needle" "$SKILL"; then
-    echo "expected architecture-decision skill to contain: $needle" >&2
+    echo "expected this text in the architecture-decision skill: $needle" >&2
     exit 1
   fi
 }
@@ -16,7 +16,7 @@ assert_contains() {
 assert_not_contains() {
   local needle=$1
   if grep -Fq -- "$needle" "$SKILL"; then
-    echo "architecture-decision skill must not contain: $needle" >&2
+    echo "the architecture-decision skill must not contain: $needle" >&2
     exit 1
   fi
 }
@@ -61,4 +61,4 @@ assert_not_contains 'workflow_run'
 assert_not_contains 'acceptance helper'
 assert_not_contains 'stop and ask for the missing information'
 
-printf 'Architecture-decision source issue intake contract passed\n'
+printf 'Architecture-decision issue intake contract passed\n'
