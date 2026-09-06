@@ -94,6 +94,7 @@ for needle in \
   'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' \
   'npm ci --ignore-scripts' \
   'github.event.pull_request.head.ref' \
+  'GH_TOKEN: ${{ github.token }}' \
   'validate-branch-name.sh' \
   'validate-source-issue.sh' \
   'npm run lint:commits' \
