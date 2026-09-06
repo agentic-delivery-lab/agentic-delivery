@@ -4,6 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import { PNPM_COMMAND } from './lib/toolchain.mjs';
+
 const execFileAsync = promisify(execFile);
 
 export class CommitRangeValidationError extends Error {
@@ -58,7 +60,7 @@ export async function validateCommitRange({
   head,
   repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
   toolingRoot = repositoryRoot,
-  pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+  pnpmCommand = PNPM_COMMAND,
   runInputImpl = runInput,
 } = {}) {
   const configPath = path.join(toolingRoot, 'commitlint.config.mjs');

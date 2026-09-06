@@ -7,6 +7,8 @@ import { test } from 'node:test';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+import { PNPM_COMMAND } from '../../scripts/lib/toolchain.mjs';
+
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
 
@@ -27,13 +29,18 @@ test('public command definitions do not use shell chaining for preflight wiring'
 });
 
 async function findExecutable(command) {
+  const candidates = process.platform === 'win32'
+    ? [command, ...(process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').map((extension) => `${command}${extension}`)]
+    : [command];
   for (const directory of process.env.PATH.split(path.delimiter)) {
-    const candidate = path.join(directory, command);
-    try {
-      await access(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-      // Continue searching the platform PATH.
+    for (const candidateName of candidates) {
+      const candidate = path.join(directory, candidateName);
+      try {
+        await access(candidate, constants.X_OK);
+        return candidate;
+      } catch {
+        // Continue searching the platform PATH.
+      }
     }
   }
   return null;
@@ -56,9 +63,8 @@ function runPackageScript(repositoryRoot, executable, environment) {
 }
 
 test('lifecycle preflight stops a mismatched pnpm before the command body', async (t) => {
-  const executableName = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-  const realPnpm = await findExecutable(executableName);
-  assert.ok(realPnpm, `expected ${executableName} on PATH`);
+  const realPnpm = await findExecutable(PNPM_COMMAND);
+  assert.ok(realPnpm, `expected ${PNPM_COMMAND} on PATH`);
 
   const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-wiring-'));
   const fakeBin = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-fake-pnpm-'));
@@ -88,7 +94,8 @@ test('lifecycle preflight stops a mismatched pnpm before the command body', asyn
   ].join('\n'));
   await writeFile(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
 
-  const fakePnpm = path.join(fakeBin, executableName);
+  const fakeExecutableName = process.platform === 'win32' ? `${PNPM_COMMAND}.cmd` : PNPM_COMMAND;
+  const fakePnpm = path.join(fakeBin, fakeExecutableName);
   if (process.platform === 'win32') {
     await writeFile(fakePnpm, '@echo off\r\necho 11.25.0\r\n');
   } else {

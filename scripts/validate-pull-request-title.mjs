@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { PNPM_COMMAND } from './lib/toolchain.mjs';
 import { validateGitmojiMessage } from './validate-gitmoji.mjs';
 
 function runInput(command, args, input, options) {
@@ -37,7 +38,7 @@ export class PullRequestTitleValidationError extends Error {
 export async function validatePullRequestTitle({
   title,
   repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
-  pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+  pnpmCommand = PNPM_COMMAND,
   runInputImpl = runInput,
 } = {}) {
   if (typeof title !== 'string' || title.length === 0) {

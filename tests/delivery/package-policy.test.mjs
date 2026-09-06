@@ -5,7 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { spawn } from 'node:child_process';
 
-import { runToolchainPreflight } from '../../scripts/lib/toolchain.mjs';
+import { PNPM_COMMAND, runToolchainPreflight } from '../../scripts/lib/toolchain.mjs';
 import { createMockPackageRegistry } from '../helpers/mock-package-registry.mjs';
 
 const expectedVersion = '12.3.4';
@@ -59,9 +59,8 @@ function releaseAgePolicy(minimumReleaseAge) {
 }
 
 function runPnpm(repositoryRoot, registryUrl, args, { storeDirectory = path.join(repositoryRoot, '.pnpm-store') } = {}) {
-  const command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
   return new Promise((resolve) => {
-    const child = spawn(command, [
+    const child = spawn(PNPM_COMMAND, [
       ...args,
       '--ignore-scripts',
       '--reporter=append-only',

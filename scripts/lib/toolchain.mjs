@@ -6,6 +6,8 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+export const PNPM_COMMAND = 'pnpm';
+
 export const REQUIRED_POLICY = Object.freeze({
   minimumReleaseAge: 2880,
   minimumReleaseAgeStrict: true,
@@ -144,7 +146,7 @@ export async function readToolchainConfiguration(repositoryRoot) {
 export async function runToolchainPreflight({
   repositoryRoot,
   execFileImpl = execFileAsync,
-  pnpmCommand = 'pnpm',
+  pnpmCommand = PNPM_COMMAND,
   env = process.env,
 } = {}) {
   const configuration = await readToolchainConfiguration(repositoryRoot ?? process.cwd());
