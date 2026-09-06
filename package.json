@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Governance tooling for the agentic-delivery repository.",
+  "packageManager": "pnpm@12.3.4",
   "engines": {
     "node": ">=24.0.0"
   },
@@ -15,6 +16,7 @@
   "devDependencies": {
     "@commitlint/cli": "21.2.2",
     "@commitlint/config-conventional": "21.2.2",
-    "gitmojis": "3.15.0"
+    "gitmojis": "3.15.0",
+    "yaml": "2.9.0"
   }
 }

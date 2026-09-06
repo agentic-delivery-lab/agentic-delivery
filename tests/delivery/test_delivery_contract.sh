@@ -24,7 +24,8 @@ assert_contains() {
 for path in \
   "$REPO_ROOT/CHANGELOG.md" \
   "$REPO_ROOT/package.json" \
-  "$REPO_ROOT/package-lock.json" \
+  "$REPO_ROOT/pnpm-lock.yaml" \
+  "$REPO_ROOT/pnpm-workspace.yaml" \
   "$REPO_ROOT/.node-version" \
   "$REPO_ROOT/commitlint.config.mjs" \
   "$REPO_ROOT/scripts/start-issue-branch.sh" \
@@ -72,6 +73,7 @@ done
 node -e '
   const fs = require("node:fs");
   const packageJson = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  if (packageJson.packageManager !== "pnpm@12.3.4") throw new Error("unexpected package manager pin");
   for (const script of ["branch:start", "lint:branch"]) {
     if (!packageJson.scripts[script]) throw new Error(`missing ${script} script`);
   }
