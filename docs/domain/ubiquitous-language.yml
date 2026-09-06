@@ -1,0 +1,61 @@
+version: 1
+domain:
+  name: "Agentic delivery"
+  purpose: "Govern how people and coding agents propose, implement, review, and record repository changes together."
+bounded_contexts:
+  - id: "agentic-delivery-governance"
+    name: "Agentic delivery governance"
+    definition: "The repository rules and agentic primitives used to propose, review, validate, and record delivery work."
+terms:
+  - context: "agentic-delivery-governance"
+    term: "bounded context"
+    definition: "An explicit boundary within which one domain model and its terms have a defined meaning."
+  - context: "agentic-delivery-governance"
+    term: "ubiquitous language"
+    definition: "The shared language built around a domain model and used consistently in communication, documentation, agent instructions, and domain-bearing code within a bounded context."
+  - context: "agentic-delivery-governance"
+    term: "domain model"
+    definition: "The selected concepts, meanings, and relationships used to reason about agentic delivery in a bounded context."
+  - context: "agentic-delivery-governance"
+    term: "source issue"
+    definition: "The GitHub Issue that provides the assignment brief and audit trail for a change; it may also serve as the ADR tracking issue."
+    avoid:
+      - "source ticket"
+  - context: "agentic-delivery-governance"
+    term: "ADR tracking issue"
+    definition: "The source issue or linked sub-issue that specifically tracks an architecture decision record change and is linked from its review pull request."
+    avoid:
+      - "ADR ticket"
+  - context: "agentic-delivery-governance"
+    term: "architecture decision record"
+    definition: "A versioned Markdown record that explains a significant architectural choice, its reasons, alternatives, and consequences."
+    avoid:
+      - "architecture decision document"
+  - context: "agentic-delivery-governance"
+    term: "provisional decision"
+    definition: "An architecture decision record addition, change, or removal that exists only on a feature branch and is not yet official repository context."
+    avoid:
+      - "accepted decision"
+  - context: "agentic-delivery-governance"
+    term: "official decision"
+    definition: "An architecture decision record that is present on the main branch and therefore belongs to the repository's official context."
+    avoid:
+      - "accepted ADR"
+  - context: "agentic-delivery-governance"
+    term: "review pull request"
+    definition: "The pull request that contains a provisional decision and related changes for checks and human review before merge."
+    avoid:
+      - "acceptance pull request"
+  - context: "agentic-delivery-governance"
+    term: "agentic primitive"
+    definition: "A versioned repository artifact, such as AGENTS.md or a skill, that gives coding agents reusable context or behavior."
+  - context: "agentic-delivery-governance"
+    term: "skill"
+    definition: "An agentic primitive whose SKILL.md provides reusable task guidance and whose optional metadata controls discovery and presentation."
+    avoid:
+      - "prompt pack"
+  - context: "agentic-delivery-governance"
+    term: "plain language"
+    definition: "Communication designed so its intended readers can get what they need, find it, understand it, and use it."
+    avoid:
+      - "simplified language"

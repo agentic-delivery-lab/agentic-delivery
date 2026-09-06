@@ -31,10 +31,12 @@ assert_file "$ISSUE_TEMPLATE"
 assert_file "$AGENTS_FILE"
 assert_contains 'The template intentionally lives beside README.md and the numbered records' "$DECISIONS_DIR/README.md"
 assert_contains 'main' "$DECISIONS_DIR/README.md"
-assert_contains 'sub-issue' "$DECISIONS_DIR/README.md"
+assert_contains 'ADR tracking issue' "$DECISIONS_DIR/README.md"
 assert_contains 'Closes #' "$DECISIONS_DIR/README.md"
 assert_contains 'Approval alone does not close' "$DECISIONS_DIR/README.md"
 assert_contains 'Closes #' "$AGENTS_FILE"
+assert_contains 'never create a pull request from `main`' "$AGENTS_FILE"
+assert_contains 'is only the protected base' "$AGENTS_FILE"
 for label in adr:needed adr:proposed adr:removal adr:rejected; do
   assert_contains "$label" "$DECISIONS_DIR/README.md"
 done

@@ -8,7 +8,7 @@ body:
     attributes:
       value: |
         Use this form when a new, changed or removed architectural decision needs a traceable record.
-        A normal issue may remain the assignment brief. During triage, refining or implementation, an agent may create this form as an ADR sub-issue.
+        A normal source issue may remain the assignment brief and serve as the ADR tracking issue. During triage, refining or implementation, an agent may create this form as a linked sub-issue when separate ADR tracking is useful.
 
         Do not include passwords, API keys, personal data or other secrets.
 
@@ -38,6 +38,17 @@ body:
       label: Scope and affected areas
       description: Which components, teams, interfaces, data or operational concerns could this affect?
       placeholder: List the systems, modules, teams, users or workflows in scope.
+    validations:
+      required: true
+
+  - type: textarea
+    id: domain_language
+    attributes:
+      label: Affected bounded contexts and domain terms
+      description: List each affected bounded-context ID and registered term. Explain terms that are new, conflicting or changing, or write "None" when the domain model is not affected.
+      placeholder: |
+        - agentic-delivery-governance: source issue, review pull request
+        or: None
     validations:
       required: true
 

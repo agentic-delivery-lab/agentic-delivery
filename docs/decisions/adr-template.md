@@ -10,7 +10,7 @@ informed: Name(s) or "None"
 
 ## Context and Problem Statement
 
-Explain the situation and the problem. Link the source issue or sub-issue and any evidence a future reader needs.
+Explain the situation and the problem. Link the source issue or ADR tracking issue and any evidence a future reader needs.
 
 ## Decision Drivers
 

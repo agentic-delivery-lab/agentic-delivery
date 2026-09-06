@@ -10,9 +10,12 @@ on:
       - .github/workflows/adr-quality.yml
       - .markdownlint-cli2.jsonc
       - docs/decisions/**
+      - docs/domain/**
       - scripts/validate-adrs.sh
+      - scripts/validate-domain-language.rb
       - tests/adr/**
       - tests/communication/**
+      - tests/domain/**
   push:
     branches: [main]
     paths:
@@ -22,9 +25,12 @@ on:
       - .github/workflows/adr-quality.yml
       - .markdownlint-cli2.jsonc
       - docs/decisions/**
+      - docs/domain/**
       - scripts/validate-adrs.sh
+      - scripts/validate-domain-language.rb
       - tests/adr/**
       - tests/communication/**
+      - tests/domain/**
 
 permissions:
   contents: read
@@ -49,6 +55,10 @@ jobs:
         shell: bash
         run: ./scripts/validate-adrs.sh "$GITHUB_WORKSPACE"
 
+      - name: Validate domain-language structure
+        shell: bash
+        run: ./scripts/validate-domain-language.rb "$GITHUB_WORKSPACE"
+
       - name: Lint Markdown
         uses: DavidAnson/markdownlint-cli2-action@4580e1612f6407034edd6c0e4e316d725920867b # v24.2.0
         with:
@@ -57,6 +67,7 @@ jobs:
             AGENTS.md
             tasks/*.md
             docs/decisions/*.md
+            docs/domain/*.md
             .agents/skills/**/*.md
 
       - name: Parse YAML configuration
@@ -65,8 +76,10 @@ jobs:
           ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) }'
           .github/ISSUE_TEMPLATE/architecture-decision.yml
           .github/workflows/adr-quality.yml
+          docs/domain/ubiquitous-language.yml
           .agents/skills/architecture-decision/agents/openai.yaml
           .agents/skills/plain-language-communication/agents/openai.yaml
+          .agents/skills/ubiquitous-language/agents/openai.yaml
 
       - name: Run ADR validator tests
         shell: bash
@@ -83,3 +96,11 @@ jobs:
       - name: Check plain-language communication contract
         shell: bash
         run: ./tests/communication/test_plain_language_skill.sh
+
+      - name: Run domain-language validator tests
+        shell: bash
+        run: ./tests/domain/test_validate_domain_language.sh
+
+      - name: Check domain-language repository contracts
+        shell: bash
+        run: ./tests/domain/test_domain_language_contract.sh
