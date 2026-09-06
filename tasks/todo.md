@@ -17,27 +17,27 @@ Bron: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1).
 - [x] Verwijder acceptance-workflows en statusmutatiescripts.
 - [x] Verwijder tests en fakes die uitsluitend de acceptance-keten testen.
 - [x] Laat `adr-quality.yml` alleen nog kwaliteitsvalidatie uitvoeren.
-- [ ] Voeg alle nieuwe label- en runbookcontracten toe aan de tests.
+- [x] Voeg alle nieuwe label- en runbookcontracten toe aan de tests.
 
 ## Fase 3: GitHub-administratie
 
-- [ ] Richt `adr:needed` in voor triage zonder ADR-PR.
-- [ ] Richt `adr:proposed` in voor een actieve ADR-PR.
-- [ ] Richt `adr:removal` in als verwijderingsmodifier.
-- [ ] Richt `adr:rejected` in voor een afgewezen, niet-gemergede proposal.
-- [ ] Werk issue #1 bij met het definitieve runbook, de labels en de implementatielinks.
+- [x] Richt `adr:needed` in voor triage zonder ADR-PR.
+- [x] Richt `adr:proposed` in voor een actieve ADR-PR.
+- [x] Richt `adr:removal` in als verwijderingsmodifier.
+- [x] Richt `adr:rejected` in voor een afgewezen, niet-gemergede proposal.
+- [x] Werk issue #1 bij met het definitieve runbook, de labels en de implementatielinks.
 - [ ] Configureer branch protection voor `main` buiten de repository.
 
 ## Checkpoint: lokale implementatie
 
-- [ ] Geen `status:`-velden in ADR-frontmatter.
-- [ ] Geen verwijzingen naar verwijderde acceptance-workflows of scripts buiten negatieve contracttests.
-- [ ] Alle shelltests slagen.
-- [ ] Markdown- en YAML-validatie slagen.
+- [x] Geen `status:`-velden in ADR-frontmatter.
+- [x] Geen verwijzingen naar verwijderde acceptance-workflows of scripts buiten negatieve contracttests.
+- [x] Alle shelltests slagen.
+- [x] Markdown- en YAML-validatie slagen.
 
 ## Checkpoint: repositoryproces
 
 - [ ] Nieuwe ADR: issue/subissue → feature branch → PR → approval → merge → issue-update/sluiting.
 - [ ] ADR-verwijdering: issue/subissue → feature branch → bestand verwijderen → PR → approval → merge → issue-update/sluiting.
-- [ ] Rejected proposal: reden in issue → label `adr:rejected` → PR sluiten; niets op `main`.
-- [ ] Agents gebruiken alleen ADR’s op `main` als officiële context.
+- [x] Rejected proposal: reden in issue → label `adr:rejected` → PR sluiten; niets op `main`.
+- [x] Agents gebruiken alleen ADR’s op `main` als officiële context.
