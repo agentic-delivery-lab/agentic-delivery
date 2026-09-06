@@ -36,6 +36,11 @@ The preflight checks the exact pnpm executable, the repository lockfile and the
 strict 2,880-minute release-age policy. Run `pnpm --version` and make sure it
 reports `12.3.4` before continuing.
 
+The delivery workflow includes an internal Linux/macOS/Windows portability
+matrix. Local tooling support for all three platforms is confirmed only after
+that matrix has completed successfully; the dedicated self-hosted runner smoke
+check remains intentionally Linux-specific.
+
 Install dependencies with the single authoritative lockfile and with lifecycle
 scripts disabled:
 
