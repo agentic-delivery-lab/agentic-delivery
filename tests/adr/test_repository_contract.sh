@@ -5,6 +5,7 @@ TEST_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$TEST_DIR/../.." && pwd)
 DECISIONS_DIR="$REPO_ROOT/docs/decisions"
 SMOKE_WORKFLOW="$REPO_ROOT/.github/workflows/self-hosted-runner-smoke.yml"
+ISSUE_TEMPLATE="$REPO_ROOT/.github/ISSUE_TEMPLATE/architecture-decision.yml"
 
 assert_file() {
   local path=$1
@@ -25,8 +26,16 @@ assert_contains() {
 
 assert_file "$DECISIONS_DIR/README.md"
 assert_file "$DECISIONS_DIR/adr-template.md"
+assert_file "$ISSUE_TEMPLATE"
 assert_contains 'The template intentionally lives beside README.md and the numbered records' "$DECISIONS_DIR/README.md"
 assert_contains 'main' "$DECISIONS_DIR/README.md"
+assert_contains 'sub-issue' "$DECISIONS_DIR/README.md"
+assert_contains 'adr:rejected' "$DECISIONS_DIR/README.md"
+assert_contains 'Do not add an `adr:accepted` label' "$DECISIONS_DIR/README.md"
+assert_contains 'ADR operation' "$ISSUE_TEMPLATE"
+assert_contains 'Create or update an ADR' "$ISSUE_TEMPLATE"
+assert_contains 'Remove an existing ADR' "$ISSUE_TEMPLATE"
+assert_contains 'adr:needed' "$ISSUE_TEMPLATE"
 
 if grep -Eq '^status:' "$DECISIONS_DIR/adr-template.md"; then
   echo "ADR template must not define a status field" >&2

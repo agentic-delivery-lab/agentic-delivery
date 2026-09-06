@@ -1,181 +1,43 @@
-# Takenlijst: vastlegging van architectuurbesluiten
+# Takenlijst: branch-gebaseerde ADR-lifecycle
 
-Bron: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1). Het inhoudelijke plan staat in [`tasks/plan.md`](plan.md).
+Bron: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1). Het officiële besluit ontstaat pas wanneer de wijzigings-PR naar `main` wordt gemerged.
 
-Status: taken 1–5 en de feedbackverwerking (inclusief guarded source-issue intake, template-rationale en runner-canary-verdict) zijn lokaal geïmplementeerd en geverifieerd op `feature/adr-workflow`; de statusworkflow wacht op aanwezigheid op `main` en een menselijke approval; taak 6 wacht op menselijke ADR-goedkeuring en merge.
+## Fase 1: Proces en agent-harness
 
-## Taak 1: Stel ADR-0001 op als besluitvoorstel ✅
+- [x] Leg vast dat een issue niet automatisch een ADR is.
+- [x] Beschrijf ADR-subissues voor triage/refining en implementatie.
+- [x] Beschrijf branch-lokale ADR-context en `main` als officiële waarheid.
+- [x] Verwijder lifecycle-status uit ADR-frontmatter en het template.
+- [x] Werk `AGENTS.md`, de architecture-decision skill en agentconfiguratie bij.
+- [x] Breid het issueformulier uit voor ADR-toevoeging en ADR-verwijdering.
 
-**Beschrijving:** Maak het eerste MADR-record waarin de repository besluit over locatie, formaat, lifecycle, GitHub-audit trail en agentische ondersteuning. Start met status `proposed`; issue #1 is de opdrachtbrief en primaire bronverwijzing.
+## Fase 2: Validatie en opruimen
 
-**Acceptatiecriteria:**
+- [x] Laat de ADR-validator statusloze frontmatter controleren.
+- [x] Verwijder acceptance-workflows en statusmutatiescripts.
+- [x] Verwijder tests en fakes die uitsluitend de acceptance-keten testen.
+- [x] Laat `adr-quality.yml` alleen nog kwaliteitsvalidatie uitvoeren.
+- [ ] Voeg alle nieuwe label- en runbookcontracten toe aan de tests.
 
-- [ ] `0001-use-madr-for-architecture-decisions.md` bevat context, drivers, reële alternatieven, uitkomst, consequenties en confirmation.
-- [ ] Het record vergelijkt minimaal opslaglocatie, workflowgrens en harness-opties en motiveert de aanbevolen keuzes.
-- [ ] Status is `proposed` totdat een menselijke reviewer het besluit expliciet goedkeurt.
+## Fase 3: GitHub-administratie
 
-**Verificatie:**
+- [ ] Richt `adr:needed` in voor triage zonder ADR-PR.
+- [ ] Richt `adr:proposed` in voor een actieve ADR-PR.
+- [ ] Richt `adr:removal` in als verwijderingsmodifier.
+- [ ] Richt `adr:rejected` in voor een afgewezen, niet-gemergede proposal.
+- [ ] Werk issue #1 bij met het definitieve runbook, de labels en de implementatielinks.
+- [ ] Configureer branch protection voor `main` buiten de repository.
 
-- [ ] Handmatige inhoudsreview tegen issue #1 en MADR 4.0.
-- [ ] Alle bron- en kruisverwijzingen openen correct.
-- [ ] `git diff --check` slaagt.
+## Checkpoint: lokale implementatie
 
-**Afhankelijkheden:** Geen.
+- [ ] Geen `status:`-velden in ADR-frontmatter.
+- [ ] Geen verwijzingen naar verwijderde acceptance-workflows of scripts buiten negatieve contracttests.
+- [ ] Alle shelltests slagen.
+- [ ] Markdown- en YAML-validatie slagen.
 
-**Waarschijnlijk geraakte bestanden:**
+## Checkpoint: repositoryproces
 
-- `docs/decisions/0001-use-madr-for-architecture-decisions.md`
-
-**Geschatte omvang:** Klein (1 bestand).
-
-## Taak 2: Leg de ADR-conventie en template vast ✅
-
-**Beschrijving:** Maak de canonieke beslissingenindex en een afgeslankte MADR 4.0-template. Leg nummering, verplichte velden, statusovergangen, superseding-regels, issue/PR-koppeling, criteria en verantwoordelijkheden op één plek vast.
-
-**Acceptatiecriteria:**
-
-- [ ] De template vereist status, datum, bronissue, context, drivers, opties, uitkomst, consequenties en confirmation.
-- [ ] De index beschrijft wanneer wel/niet een ADR nodig is en de volledige issue-naar-ADR-workflow.
-- [ ] Nummering en lifecycle zijn ondubbelzinnig en bestaande records worden nooit verwijderd bij vervanging.
-
-**Verificatie:**
-
-- [ ] Maak handmatig een tijdelijk voorbeeld vanuit de template en controleer dat geen essentiële context ontbreekt.
-- [ ] Controleer dat index, template en ADR-0001 dezelfde terminologie gebruiken.
-- [ ] `git diff --check` slaagt.
-
-**Afhankelijkheden:** Taak 1.
-
-**Waarschijnlijk geraakte bestanden:**
-
-- `docs/decisions/README.md`
-- `docs/decisions/adr-template.md`
-- `docs/decisions/0001-use-madr-for-architecture-decisions.md`
-
-**Geschatte omvang:** Middel (3 bestanden).
-
-## Checkpoint: besluitbasis na taken 1-2
-
-- [ ] ADR-0001 is inhoudelijk door een mens beoordeeld.
-- [ ] De voorkeursrichting is expliciet goedgekeurd voordat afgeleide harnessbestanden worden vastgezet.
-- [ ] Alle Markdown is intern consistent en links naar issue #1 en MADR werken.
-
-## Taak 3: Voeg een architectuurbesluit-issueformulier toe ✅
-
-**Beschrijving:** Maak een GitHub Issue Form dat als opdrachtbrief dient en de informatie verzamelt die nodig is om een ADR-voorstel te onderzoeken, zonder de uitkomst vooraf vast te leggen.
-
-**Acceptatiecriteria:**
-
-- [ ] Het formulier vraagt naar probleem/context, scope, drivers/constraints, bekende opties, impact/reversibility, eigenaar en gewenste beslisdatum.
-- [ ] Het formulier bevat de ADR-triggers en een korte uitsluitingsregel voor lokale of eenvoudig omkeerbare keuzes.
-- [ ] Het aangemaakte issue is direct als `source issue` vanuit een ADR te koppelen.
-
-**Verificatie:**
-
-- [ ] YAML-syntax en GitHub Issue Form-schema zijn geldig.
-- [ ] Een preview/proefissue bevat alle verplichte invoer zonder een voorkeursoptie af te dwingen.
-- [ ] `git diff --check` slaagt.
-
-**Afhankelijkheden:** Taak 2.
-
-**Waarschijnlijk geraakte bestanden:**
-
-- `.github/ISSUE_TEMPLATE/architecture-decision.yml`
-- `docs/decisions/README.md`
-
-**Geschatte omvang:** Klein (2 bestanden).
-
-## Taak 4: Integreer de ADR-workflow in het agent-harness ✅
-
-**Beschrijving:** Voeg minimale rootinstructies en één gerichte repository-skill toe. `AGENTS.md` routeert architectuursignificante keuzes naar de skill; de skill stelt via guarded intake een bronissue vast, toetst criteria, onderzoekt opties, maakt alleen een `proposed` ADR en bewaakt de menselijke acceptatiegrens.
-
-**Acceptatiecriteria:**
-
-- [ ] `AGENTS.md` bevat een korte triggerregel en verwijst naar de canonieke ADR-documentatie, zonder die te dupliceren.
-- [ ] De skill heeft expliciete positieve/negatieve triggers, invoer, stappen, output, stopcondities en guarded intake voor een GitHub-bronissue.
-- [ ] Codex ontdekt de skill vanaf de repositoryroot en de skill is als gedeeld skillformaat bruikbaar in ChatGPT.
-
-**Verificatie:**
-
-- [ ] Positieve proefprompt: een kostbare cross-cutting keuze activeert de workflow en levert `proposed` op.
-- [ ] Negatieve proefprompt: een lokale, omkeerbare keuze maakt geen ADR.
-- [ ] Intakeproef: geen issue leidt tot read-only zoeken en bevestiging vóór creatie; zoekfouten, ontbrekende context en ontoegankelijk/incompleet stoppen veilig.
-- [ ] Contractproef: template staat naast de index en de bestaande runner-smoketest blijft handmatig uitvoerbaar met een gepinde action.
-- [ ] Grensproef: de agent accepteert of sluit niets zonder menselijke instructie.
-
-**Afhankelijkheden:** Taken 2 en 3.
-
-**Waarschijnlijk geraakte bestanden:**
-
-- `AGENTS.md`
-- `.agents/skills/architecture-decision/SKILL.md`
-- `.agents/skills/architecture-decision/agents/openai.yaml`
-
-**Geschatte omvang:** Middel (3 bestanden).
-
-## Checkpoint: end-to-end workflow na taken 3-4
-
-- [ ] Een proefissue kan zonder aanvullende mondelinge context tot een volledig ADR-voorstel leiden.
-- [ ] Human-in-the-loop-acceptatie is aantoonbaar afgedwongen.
-- [ ] Terminologie en criteria zijn gelijk in index, issueformulier, `AGENTS.md` en skill.
-
-## Taak 5: Automatiseer ADR-kwaliteitscontroles ✅
-
-**Beschrijving:** Voeg kleine, lokaal uitvoerbare controles en een pull-requestworkflow toe voor Markdownstijl, bestandsnaam/nummering, toegestane status, verplichte secties en bronissue. Pin externe actions of dependencies en voer de workflow uit op de bestaande self-hosted runner, met een expliciete fork-trustgrens.
-
-**Acceptatiecriteria:**
-
-- [ ] CI weigert een foutieve ADR-naam, dubbele nummering, ontbrekende verplichte sectie of ongeldige status.
-- [ ] Dezelfde controles zijn lokaal met één gedocumenteerd commando uit te voeren.
-- [ ] De workflow gebruikt alleen minimaal benodigde GitHub-permissies, gepinde externe dependencies en de bestaande runnerlabels.
-
-**Verificatie:**
-
-- [ ] Geldige ADR-fixture slaagt en gerichte ongeldige fixtures falen met bruikbare meldingen.
-- [ ] De Markdown- en YAML-controles slagen op alle nieuwe bestanden.
-- [ ] De GitHub Actions-workflow slaagt op een pull request.
-- [ ] De statusmutatie- en review-orkestratietests dekken geldige approval, retry, stale/no approval, forks en meerdere ADR's.
-
-**Afhankelijkheden:** Taken 2 en 4.
-
-**Waarschijnlijk geraakte bestanden:**
-
-- `scripts/validate-adrs.sh`
-- `.github/workflows/adr-quality.yml`
-- `docs/decisions/README.md`
-- optioneel testfixtures onder `tests/adr/`
-
-**Geschatte omvang:** Middel (3-5 bestanden).
-
-## Taak 6: Accepteer ADR-0001 en sluit de audit trail
-
-**Beschrijving:** Verwerk reviewfeedback, laat na expliciete goedkeuring de trusted `workflow_run` de status van ADR-0001 naar `accepted` zetten, merge de pull request en sluit issue #1 via de closing keyword in de PR. Leg de daadwerkelijke confirmationchecks vast.
-
-**Acceptatiecriteria:**
-
-- [ ] ADR-0001 heeft status `accepted`, een besluitdatum en een verwijzing naar issue #1 en de review-PR.
-- [ ] Issue #1 verwijst naar het geaccepteerde ADR en is door de merge traceerbaar gesloten (`Closes #1`).
-- [ ] Alle in ADR-0001 beloofde templates, instructies, skill en controles zijn aanwezig en groen.
-- [ ] De approval-automatisering is vanaf `main` geactiveerd en heeft geen pull-requestcode uitgevoerd met schrijfrechten.
-
-**Verificatie:**
-
-- [ ] Doorloop issue → ADR → PR → merge → gesloten issue via de GitHub-links.
-- [ ] Voer de lokale ADR-validatie en alle repositoryworkflows uit.
-- [ ] Laat een nieuwe proefopdracht de geaccepteerde conventie volgen.
-
-**Afhankelijkheden:** Taken 1-5 en expliciete menselijke goedkeuring.
-
-**Waarschijnlijk geraakte bestanden:**
-
-- `docs/decisions/0001-use-madr-for-architecture-decisions.md`
-- GitHub issue #1 en de implementatie-PR
-
-**Geschatte omvang:** Klein (1 bestand plus trackerstatus).
-
-## Checkpoint: compleet
-
-- [ ] Alle acceptatiecriteria van issue #1 zijn aantoonbaar afgedekt.
-- [ ] Lokale validatie en GitHub Actions slagen.
-- [ ] ADR-0001 en issue #1 vormen samen een volledige, navigeerbare audit trail.
-- [ ] De workflow is klaar voor een tweede architectuurbesluit zonder nieuwe proceskeuzes.
+- [ ] Nieuwe ADR: issue/subissue → feature branch → PR → approval → merge → issue-update/sluiting.
+- [ ] ADR-verwijdering: issue/subissue → feature branch → bestand verwijderen → PR → approval → merge → issue-update/sluiting.
+- [ ] Rejected proposal: reden in issue → label `adr:rejected` → PR sluiten; niets op `main`.
+- [ ] Agents gebruiken alleen ADR’s op `main` als officiële context.

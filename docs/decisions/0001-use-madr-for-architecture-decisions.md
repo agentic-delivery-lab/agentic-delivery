@@ -59,7 +59,7 @@ ADR files do not contain a lifecycle status in their YAML frontmatter. The prese
 - Good, because `main` is the only official ADR context and there is no duplicated status to become stale.
 - Good, because a branch can introduce or remove an ADR alongside the implementation it explains.
 - Good, because issue, sub-issue, pull request and Git history provide an auditable trail for additions, removals and rejections.
-- Good, because agents can use the same branch model without a privileged acceptance helper.
+- Good, because agents can use the same branch model without privileged acceptance automation.
 - Bad, because branch protection is an operational prerequisite and must disallow direct pushes and bypasses to enforce the rule.
 - Bad, because a sole maintainer needs a separate reviewer identity, such as a future Codex review agent or another human, to satisfy a required approval.
 - Bad, because the current private-repository GitHub plan may require an upgrade before branch protection is available.
