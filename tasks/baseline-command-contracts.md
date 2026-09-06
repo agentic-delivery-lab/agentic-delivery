@@ -2,6 +2,9 @@
 
 This document records the command behavior observed before the pnpm and
 portable-tooling migration. It is the compatibility baseline for Issue #12.
+The commands and file names in the baseline tables are historical evidence;
+use the current pnpm and `.mjs` commands in [`docs/delivery/README.md`](../docs/delivery/README.md)
+for new work.
 
 ## Baseline context
 
