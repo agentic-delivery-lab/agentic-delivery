@@ -27,14 +27,24 @@ for path in \
   "$REPO_ROOT/package-lock.json" \
   "$REPO_ROOT/.node-version" \
   "$REPO_ROOT/commitlint.config.mjs" \
+  "$REPO_ROOT/scripts/start-issue-branch.sh" \
+  "$REPO_ROOT/scripts/validate-branch-name.sh" \
   "$REPO_ROOT/scripts/validate-commit-range.sh" \
   "$REPO_ROOT/scripts/validate-gitmoji.mjs" \
+  "$REPO_ROOT/scripts/validate-source-issue.sh" \
   "$REPO_ROOT/scripts/validate-changelog.rb" \
   "$REPO_ROOT/.agents/skills/delivery-workflow/SKILL.md" \
   "$REPO_ROOT/.agents/skills/delivery-workflow/agents/openai.yaml" \
   "$REPO_ROOT/.github/pull_request_template.md" \
   "$REPO_ROOT/.github/workflows/delivery-quality.yml"; do
   assert_file "$path"
+done
+
+for test_file in \
+  test_start_issue_branch.sh \
+  test_validate_branch_name.sh \
+  test_validate_source_issue.sh; do
+  assert_file "$REPO_ROOT/tests/delivery/$test_file"
 done
 
 assert_contains '$delivery-workflow' "$REPO_ROOT/AGENTS.md"
@@ -56,6 +66,9 @@ done
 node -e '
   const fs = require("node:fs");
   const packageJson = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  for (const script of ["branch:start", "lint:branch"]) {
+    if (!packageJson.scripts[script]) throw new Error(`missing ${script} script`);
+  }
   for (const dependency of ["@commitlint/cli", "@commitlint/config-conventional", "gitmojis"]) {
     if (!packageJson.devDependencies[dependency]) throw new Error(`missing ${dependency}`);
   }
