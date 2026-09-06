@@ -8,7 +8,7 @@ body:
     attributes:
       value: |
         Use this form when a new, changed or removed architectural decision needs a traceable record.
-        A normal issue may remain the assignment brief. During triage, refining or implementation, an agent may create this form as an ADR sub-issue.
+        A normal source issue may remain the assignment brief and serve as the ADR tracking issue. During triage, refining or implementation, an agent may create this form as a linked sub-issue when separate ADR tracking is useful.
 
         Do not include passwords, API keys, personal data or other secrets.
 

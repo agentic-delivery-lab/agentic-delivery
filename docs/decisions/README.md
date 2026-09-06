@@ -15,30 +15,30 @@ ADR frontmatter has no lifecycle status. The branch state supplies the status:
 
 Agents use ADR files from `main` as canonical context. On a feature branch they may also use that branch's additions or removals as provisional context. A branch that is behind `main` may not include the latest official decisions.
 
-## Issue and sub-issue intake
+## Source issue and ADR tracking issue intake
 
 A GitHub Issue is an assignment brief and audit trail, not automatically an ADR. It may be a normal product or implementation issue.
 
-During triage or refining, create a sub-issue with the architecture-decision issue form when a separate decision work item is useful. If the original issue already uses that form, use it directly. If the need appears during implementation, create or update an issue or sub-issue before adding the ADR to the feature branch. For a removal, record the affected ADR path and the reason in the issue or sub-issue.
+The source issue also serves as the ADR tracking issue when it directly tracks the decision work. During triage or refining, create a linked sub-issue with the architecture-decision issue form when a separate ADR tracking issue is useful. If the original issue already uses that form, use it directly. If the need appears during implementation, create or update the ADR tracking issue before adding the ADR to the feature branch. For a removal, record the affected ADR path and the reason there.
 
 If no source issue is supplied, search existing issues read-only and present a likely candidate for confirmation. If no suitable issue exists, show an issue-form preview and require explicit confirmation before creating one. Stop on search, authentication or access failures. Never replace an inaccessible issue or publish a partial issue.
 
 ## Runbook
 
-1. Identify the source issue or create the appropriate ADR sub-issue.
+1. Identify the source issue and its ADR tracking issue. Create a linked sub-issue when separate tracking is useful.
 2. Add `adr:needed` when triage finds that an ADR change is required.
 3. Create a feature branch. Add a new ADR or remove an existing ADR there.
 4. Update related agent primitives, README files and Markdown in the same branch when the decision affects them.
 5. Add `adr:proposed` for an active ADR branch or pull request. Add `adr:removal` as well for a deletion.
-6. Open or update a pull request that links the issue and describes the ADR change. Put the ADR-tracking issue or sub-issue in the PR body with `Closes #123`, or use `Refs #123` when a broader parent issue must remain open. Approval alone does not close the issue.
+6. Open or update a review pull request that links the source issue and describes the ADR change. Put the ADR tracking issue in the pull-request body with `Closes #123`, or use `Refs #123` when a broader source issue must remain open. Approval alone does not close the issue.
 7. Merge only through protected `main` after the required review and checks succeed.
-8. After merge, update the issue with the action and links, remove active labels and close the ADR-tracking issue. A `Closes #123` reference closes it during the merge; otherwise close it explicitly. Keep a broader parent open when other work remains.
+8. After merge, update the source issue and ADR tracking issue with the action and links, remove active labels and close the ADR tracking issue. A `Closes #123` reference closes it during the merge; otherwise close it explicitly. Keep a broader source issue open when other work remains.
 
 The repository has no acceptance workflow. A merged addition is accepted because it is present on `main`; a merged deletion removes the decision from official context. Branch protection must prevent direct pushes and bypasses.
 
 ## Rejection and removal
 
-Do not merge a rejected proposal. Record the reason in the issue, apply `adr:rejected` and close the ADR-tracking issue or sub-issue. The closed pull request and Git history retain the proposal without adding it to `main`.
+Do not merge a rejected proposal. Record the reason in the ADR tracking issue, apply `adr:rejected` and close that issue. The closed review pull request and Git history retain the proposal without adding it to `main`.
 
 To remove an official ADR, create a feature branch and a pull request that deletes the file. The approved merge completes the removal.
 
@@ -65,7 +65,7 @@ Labels help triage and find work; `main` and Git history remain authoritative.
 | `adr:removal` | The active ADR change removes an existing record; combine it with `adr:proposed` |
 | `adr:rejected` | The proposal was rejected and the reason is recorded in the issue |
 
-After a successful merge, remove active labels and close the ADR-tracking issue. Do not add an `adr:accepted` label: a file on `main` is the accepted state.
+After a successful merge, remove active labels and close the ADR tracking issue. Do not add an `adr:accepted` label: a file on `main` is the accepted state.
 
 ## Records
 
@@ -75,7 +75,7 @@ Use four digits and a lowercase dashed name:
 docs/decisions/NNNN-title-with-dashes.md
 ```
 
-The template intentionally lives beside README.md and the numbered records. Every record keeps a source-issue link, even when the source issue is generic or has an ADR sub-issue.
+The template intentionally lives beside README.md and the numbered records. Every record keeps a source-issue link, including when a separate ADR tracking issue is used.
 
 | Number | Decision | Source | Review/implementation |
 | --- | --- | --- | --- |
