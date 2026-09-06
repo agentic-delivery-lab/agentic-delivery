@@ -37,3 +37,6 @@ Automation cannot prove that prose or code expresses the intended model. Agents 
 - [ADR-0001: Use MADR and GitHub Issues for architectural decisions](../decisions/0001-use-madr-for-architecture-decisions.md).
 - [ADR-0002: Use plain language for human-agent communication](../decisions/0002-use-plain-language-for-human-agent-communication.md).
 - [ADR-0003: Use context-scoped ubiquitous language](../decisions/0003-use-context-scoped-ubiquitous-language.md).
+- [ADR-0004: Use trunk-based delivery with short-lived feature branches](../decisions/0004-use-trunk-based-delivery.md).
+- [ADR-0005: Use Conventional Commits with Gitmoji](../decisions/0005-use-conventional-commits-with-gitmoji.md).
+- [ADR-0006: Curate a human-readable changelog](../decisions/0006-curate-a-changelog.md).
