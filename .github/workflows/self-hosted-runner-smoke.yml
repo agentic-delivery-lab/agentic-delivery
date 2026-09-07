@@ -41,6 +41,10 @@ jobs:
           runtime: node@24
           install: false
 
+      - name: Set up pinned Codex CLI
+        if: inputs.codex
+        run: node scripts/setup-runner-codex.mjs
+
       - name: Check Codex without model execution
         if: inputs.codex
         run: node scripts/codex-preflight.mjs

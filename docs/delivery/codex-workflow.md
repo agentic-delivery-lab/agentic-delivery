@@ -23,10 +23,11 @@ It never merges the review pull request or closes the source issue.
 - A dedicated Linux runner with labels `self-hosted`, `linux`, `x64`, `omarchy`.
 - Node.js and exact pnpm as defined in `package.json`; workflows use the pinned
   pnpm setup action and frozen installations with lifecycle scripts disabled.
-- Codex CLI supporting the app-server protocol and permission profiles. The
-  initial local reference version is 0.153.4. The actual runner must verify
+- Codex CLI 0.153.4, installed by `scripts/setup-runner-codex.mjs` from the
+  official Linux x64 package after SHA-256 verification. The dedicated tool
+  cache keeps this installation separate from personal tools. The runner verifies
   both model/effort combinations, ChatGPT login, Plan mode, and quota telemetry.
-- The `codex` executable on the Actions service user's PATH and ChatGPT login
+- ChatGPT login for the installed `codex` executable
   under that user, `github-runner`. Another user's installation/login is not
   sufficient. Never commit or paste the authentication file into an issue.
 - Persistent writable state, defaulting to `.codex-delivery` beside
@@ -40,7 +41,10 @@ It never merges the review pull request or closes the source issue.
 
 Run `self-hosted-runner-smoke` with input `codex=true` for a check without a
 model turn. The initial runner check failed because the Actions service could
-not start Codex. Resolve that before claiming end-to-end operation.
+not start Codex. The setup step now supplies the executable without copying or
+changing authentication. Resolve login and rerun the smoke check before claiming
+end-to-end operation. The Linux package setup is runner infrastructure; local
+governance commands retain their separate cross-platform contract.
 
 ## Budget boundary and saved work
 

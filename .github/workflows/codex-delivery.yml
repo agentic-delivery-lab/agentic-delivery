@@ -40,6 +40,9 @@ jobs:
           runtime: node@24
           install: false
 
+      - name: Set up pinned Codex CLI
+        run: node scripts/setup-runner-codex.mjs
+
       - name: Install trusted controller dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
