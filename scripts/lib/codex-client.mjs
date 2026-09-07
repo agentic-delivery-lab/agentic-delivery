@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createInterface } from 'node:readline';
+import { existsSync, realpathSync } from 'node:fs';
+import path from 'node:path';
 
 export const MODELS = Object.freeze({
   plan: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
@@ -10,6 +12,9 @@ export const MODELS = Object.freeze({
 export function quotaBoundary(response, now = Date.now() / 1000) {
   const buckets = Object.values(response?.rateLimitsByLimitId ?? {});
   if (response?.rateLimits) buckets.push(response.rateLimits);
+  if (buckets.some((bucket) => !bucket || typeof bucket !== 'object' || !bucket.primary)) {
+    return { stop: true, reason: 'Quota telemetry contains an invalid bucket.' };
+  }
   const windows = buckets.flatMap((bucket) => [bucket.primary, bucket.secondary].filter(Boolean));
   if (!windows.some((window) => window.windowDurationMins === 300)
       || windows.some((window) => !Number.isFinite(window.usedPercent)
@@ -42,15 +47,31 @@ export function modelEnvironment(env = process.env) {
   return Object.fromEntries(allowed.filter((key) => env[key] !== undefined).map((key) => [key, env[key]]));
 }
 
-export function deliveryPermissions() {
-  return Object.fromEntries(['plan', 'edit'].map((phase) => [`delivery-${phase}`, {
+function runtimeFiles(env) {
+  const files = [process.execPath];
+  if (env.PNPM_HOME) files.push(env.PNPM_HOME);
+  for (const tool of ['codex', 'node', 'pnpm']) {
+    const candidate = (env.PATH ?? '').split(path.delimiter).map((dir) => path.join(dir, tool)).find(existsSync);
+    if (candidate) files.push(candidate, realpathSync(candidate));
+  }
+  return [...new Set(files)];
+}
+
+export function deliveryPermissions(readableFiles = []) {
+  return Object.fromEntries(['plan', 'edit', 'verify'].map((phase) => [`delivery-${phase}`, {
     extends: phase === 'plan' ? ':read-only' : ':workspace',
     filesystem: {
       ':root': 'deny', ':minimal': 'read', ':tmpdir': 'deny', ':slash_tmp': 'deny',
+      ...Object.fromEntries(readableFiles.map((file) => [file, 'read'])),
       ':workspace_roots': { '.': phase === 'plan' ? 'read' : 'write', '.git': 'read', '.codex': 'read' },
     },
-    network: { enabled: false },
+    network: { enabled: phase === 'verify' },
   }]));
+}
+
+function tomlValue(value) {
+  if (typeof value !== 'object') return JSON.stringify(value);
+  return `{ ${Object.entries(value).map(([key, child]) => `${JSON.stringify(key)} = ${tomlValue(child)}`).join(', ')} }`;
 }
 
 export class CodexClient extends EventEmitter {
@@ -59,8 +80,9 @@ export class CodexClient extends EventEmitter {
     this.pending = new Map();
     this.nextId = 0;
     this.timeoutMs = timeoutMs;
-    this.child = spawn(command, [...args, 'app-server', '--listen', 'stdio://'], {
-      cwd, env, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true,
+    this.permissions = deliveryPermissions(runtimeFiles(env));
+    this.child = spawn(command, [...args, '-c', `permissions=${tomlValue(this.permissions)}`, 'app-server', '--listen', 'stdio://'], {
+      cwd, env, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true, detached: process.platform !== 'win32',
     });
     this.child.on('error', () => this.fail(new Error('Codex CLI could not start; check the runner installation.')));
     this.child.on('exit', () => this.fail(new Error('Codex app-server stopped.')));
@@ -87,17 +109,26 @@ export class CodexClient extends EventEmitter {
     this.emit('failure', error);
   }
 
-  request(method, params = {}) {
+  request(method, params = {}, timeoutMs = this.timeoutMs) {
     if (this.failure) return Promise.reject(this.failure);
     const id = ++this.nextId;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`Codex ${method} timed out.`));
-      }, this.timeoutMs);
+      }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer, method });
       this.child.stdin.write(`${JSON.stringify({ id, method, params })}\n`);
     });
+  }
+
+  async exec(command, cwd, timeoutMs = 600_000) {
+    const result = await this.request('command/exec', {
+      command, cwd, permissionProfile: 'delivery-verify', timeoutMs,
+      outputBytesCap: 24_000, env: modelEnvironment(),
+    }, timeoutMs + 5000);
+    if (result.exitCode !== 0) throw new Error(`${command.join(' ')} failed (${result.exitCode}):\n${result.stderr}\n${result.stdout}`);
+    return result.stdout;
   }
 
   reply(id, result) {
@@ -129,11 +160,11 @@ export class CodexClient extends EventEmitter {
     const { config } = await this.request('config/read', { includeLayers: false });
     const mcpServers = Object.fromEntries(Object.keys(config?.mcp_servers ?? {}).map((name) => [name, { enabled: false }]));
     return this.request('thread/start', {
-      cwd, model: MODELS.plan.model, allowProviderModelFallback: false,
+      cwd, model: MODELS.plan.model, modelProvider: 'openai', allowProviderModelFallback: false,
       permissions: 'delivery-plan', approvalPolicy: 'never', ephemeral: true,
       developerInstructions, environments: [],
       config: {
-        permissions: deliveryPermissions(), mcp_servers: mcpServers, web_search: 'disabled',
+        permissions: this.permissions, mcp_servers: mcpServers, web_search: 'disabled',
         features: { multi_agent: false, apps: false, plugins: false },
         shell_environment_policy: { inherit: 'none', set: modelEnvironment() },
       },
@@ -144,6 +175,9 @@ export class CodexClient extends EventEmitter {
     this.lines.close();
     this.fail(new Error('Codex client closed.'));
     this.child.stdin.end();
-    this.child.kill();
+    try {
+      if (process.platform !== 'win32' && this.child.pid) process.kill(-this.child.pid, 'SIGTERM');
+      else this.child.kill();
+    } catch { /* The owned process group has already stopped. */ }
   }
 }

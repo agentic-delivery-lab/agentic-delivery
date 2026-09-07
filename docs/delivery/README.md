@@ -1,5 +1,10 @@
 # Delivery workflow
 
+For automated intake, planning, implementation, and continuation, see the
+[Codex source issue workflow](codex-workflow.md). GitHub Free does not enforce
+branch protection for this private repository; human review and merge authority
+remain repository policy.
+
 This guide describes how people and coding agents move a change through the repository's trunk. It complements [ADR-0004](../decisions/0004-use-trunk-based-delivery.md), [ADR-0005](../decisions/0005-use-conventional-commits-with-gitmoji.md), [ADR-0006](../decisions/0006-curate-a-changelog.md) and [ADR-0007](../decisions/0007-use-issue-linked-conventional-branch-names.md).
 
 ## Package manager and local preflight

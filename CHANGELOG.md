@@ -9,6 +9,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- [Issue #15](https://github.com/sjefsharp/agentic-delivery/issues/15) proposes immediate source issue intake with Codex planning, implementation, issue audit history, review pull requests, and resumable quota pauses on the self-hosted runner.
+
 - [Pull request #2](https://github.com/sjefsharp/agentic-delivery/pull/2) established the issue-driven architecture decision workflow, including MADR records, linked GitHub Issues, feature-branch review and `main` as the official source.
 - [Pull request #4](https://github.com/sjefsharp/agentic-delivery/pull/4) introduced adaptive Dutch/English human-agent communication, plain-English repository documentation, a reusable plain-language skill and contract checks.
 - [Pull request #6](https://github.com/sjefsharp/agentic-delivery/pull/6) introduced context-scoped ubiquitous language for the `agentic-delivery-governance` bounded context, with a canonical register, guidance, validators and CI checks.
