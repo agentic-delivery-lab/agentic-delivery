@@ -68,9 +68,16 @@ publishes the recorded feature branch and review pull request. Validation
 repairs are bounded to three attempts per invocation.
 
 Model tools use named permissions: restricted reads, read-only planning,
-workspace writes for implementation, read-only Git metadata, and no network.
-The controller separately runs validation with network access for dependency
-installation and audit. The workflow token is excluded from Codex processes.
+workspace writes for implementation, read-only Git metadata, and no external
+network access. The explicitly enabled managed proxy denies outbound domains
+while preserving process-local communication in an isolated network namespace.
+The plain `network=false` mode blocks Node.js child-process socket operations
+in the tested CLI. Dependency installation and audit instead allow only
+`registry.npmjs.org`, with lifecycle scripts and pnpm hooks disabled. Tests run
+read-only, and governance validators come from the trusted controller checkout.
+Model tools use a temporary home without `CODEX_HOME` or workflow credentials.
+Configured hooks, notifications, and custom providers fail closed before a
+model thread starts. The runner uses a dedicated ChatGPT login.
 
 ### Consequences
 
@@ -118,6 +125,7 @@ tests alone. This ADR remains provisional until merged into `main`.
 
 - [Codex app-server](https://learn.chatgpt.com/docs/app-server)
 - [Codex permissions](https://learn.chatgpt.com/docs/permissions)
+- [Codex managed network proxy](https://github.com/openai/codex/blob/rust-v0.153.4/codex-rs/network-proxy/README.md)
 - [Codex subscription allowance](https://learn.chatgpt.com/docs/pricing)
 - [GitHub workflow triggers](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
 - [GitHub branch protection availability](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)

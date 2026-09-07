@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { quotaBoundary, verifyModels, modelEnvironment, deliveryPermissions } from '../../scripts/lib/codex-client.mjs';
+import path from 'node:path';
+import { quotaBoundary, verifyModels, modelEnvironment, deliveryPermissions, checkConfiguration } from '../../scripts/lib/codex-client.mjs';
 
 const now = 1_800_000_000;
 const window = (usedPercent, windowDurationMins = 300) => ({ usedPercent, windowDurationMins, resetsAt: now + 100 });
@@ -43,7 +44,7 @@ test('requires the exact requested models and reasoning efforts', () => {
 
 test('model processes do not inherit publishing, API, or Actions credentials', () => {
   const env = modelEnvironment({PATH:'/bin', HOME:'/example', GH_TOKEN:'secret', OPENAI_API_KEY:'secret', ACTIONS_RUNTIME_TOKEN:'secret', NODE_OPTIONS:'--import=/malicious.mjs'});
-  assert.deepEqual(env, {PATH:'/bin', HOME:'/example'});
+  assert.deepEqual(env, {PATH:'/bin'});
 });
 
 test('planning and implementation restrict reads and deny tool network access', () => {
@@ -52,5 +53,25 @@ test('planning and implementation restrict reads and deny tool network access', 
   assert.equal(profiles['delivery-plan'].filesystem[':workspace_roots']['.'], 'read');
   assert.equal(profiles['delivery-edit'].filesystem[':workspace_roots']['.'], 'write');
   assert.equal(profiles['delivery-edit'].filesystem[':workspace_roots']['.git'], 'read');
-  assert.equal(profiles['delivery-edit'].network.enabled, false);
+  assert.deepEqual(profiles['delivery-edit'].network.domains, {'registry.npmjs.org':'deny'});
+  assert.deepEqual(profiles['delivery-verify'].network.domains, {'registry.npmjs.org':'deny'});
+  assert.equal(profiles['delivery-verify'].filesystem[':workspace_roots']['.'], 'read');
+  assert.deepEqual(profiles['delivery-deps'].network.domains, {'registry.npmjs.org':'allow'});
+  assert.equal(profiles['delivery-deps'].network.allow_local_binding, false);
+});
+
+test('tools have a private temporary home and cannot inherit Codex authentication paths', () => {
+  const env = modelEnvironment({HOME:'/account', CODEX_HOME:'/auth', GH_TOKEN:'secret', PATH:'/bin'}, '/runtime');
+  assert.equal(env.HOME, path.join('/runtime', 'home'));
+  assert.equal(env.TMPDIR, path.join('/runtime', 'tmp'));
+  assert.equal(env.CODEX_HOME, undefined);
+  assert.equal(env.GH_TOKEN, undefined);
+});
+
+test('unsafe user and project configuration fails before thread startup', () => {
+  checkConfiguration({});
+  for (const config of [{hooks:{session_start:[]}}, {notify:['sh']}, {model_provider:'custom'},
+    {model_providers:{openai:{base_url:'http://example.invalid'}}}, {chatgpt_base_url:'http://example.invalid'}]) {
+    assert.throws(() => checkConfiguration(config), /configuration/);
+  }
 });

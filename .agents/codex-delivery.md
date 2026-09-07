@@ -22,6 +22,8 @@ answer or interpret a lack of response as approval.
 
 The final plan must match the supplied output schema. Supply a valid
 Conventional Commit and Gitmoji title and an appropriate branch change type.
+Keep the title to one line and do not add issue-closing directives to titles
+or implementation summaries; the controller supplies the linked issue reference.
 Keep the plan and tasks concrete enough for another model to implement.
 
 ## Implementation and verification
@@ -41,7 +43,7 @@ requirements remain unresolved.
 
 The controller owns Git metadata, commits, pushes, issue communication, and
 pull-request publication. Model tools have restricted filesystem access and
-no network access. They cannot install packages or use external integrations;
+no external network access. They cannot install packages or use external integrations;
 ask when required documentation or another prerequisite is unavailable. The
 controller runs frozen dependency installation and quality checks separately.
 Never weaken the sandbox or tests, read credentials, merge, close the source

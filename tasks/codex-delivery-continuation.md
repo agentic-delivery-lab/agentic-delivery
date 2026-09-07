@@ -4,6 +4,61 @@ This change is unfinished and must remain a draft review pull request. The
 implementation session is wrapping up near the shared five-hour Codex limit,
 as requested. Do not activate the workflow or claim end-to-end operation yet.
 
+## Latest checkpoint after the reset
+
+Draft PR: [#16](https://github.com/sjefsharp/agentic-delivery/pull/16).
+The latest measured five-hour usage is 94 percent; weekly usage is 43 percent.
+No fresh chat is required: this file supports compaction or a new session.
+The newer evidence and priorities below supersede the original checklist.
+
+- The current local full suite passes all **81 tests**. Earlier PR CI passed
+  on Linux, macOS, and Windows; rerun checks for this checkpoint.
+- The checksum-pinned official Codex 0.153.4 package installed successfully as
+  `github-runner` in [smoke run 34160939468](https://github.com/sjefsharp/agentic-delivery/actions/runs/34160939468).
+  Executable: `/opt/actions-runner/_work/_tool/codex-delivery/0.153.4/bin/codex`.
+  App-server then exited. Rerun the updated smoke workflow with `codex=true`:
+  preflight now checks login status first. The same release package starts
+  locally. A service-account device login may need a human; passwordless sudo
+  is unavailable here. Never copy personal credentials.
+- `node scripts/codex-sandbox-check.mjs` passes real filesystem, environment,
+  child-process output, and denied external-network probes for all three
+  model/test profiles. Frozen install passes with the npm allowlist enforced.
+- Runtime findings: grant only the canonical systemd resolver target for DNS;
+  inherited temporary-directory deny rules hid read-only workspaces; plain
+  `network=false` seccomp broke Node child-process sockets. Managed proxy mode
+  preserves IPC, but **requires `features.network_proxy=true`**. Domain rules
+  alone did not enforce egress. The runtime probe caught this before activation.
+- A separate-model review found six blockers. Changes now split permissions,
+  isolate the tool home, reject unsafe config, use trusted branch and validator
+  helpers, guard publication metadata, checkpoint branch/publication, flush
+  outbox before deduplication, and await process-group termination. These
+  controller changes are not yet integration-tested or fully reviewed.
+
+### First work after the next reset
+
+1. **Stop-the-line runtime failure:** the full suite fails under the enforced
+   managed proxy in the mock-registry tests in
+   `tests/delivery/package-policy.test.mjs`. The earlier sandbox full-suite
+   pass was before proxy enforcement and is not valid safety evidence.
+   Investigate process-local loopback/NO_PROXY inside the isolated namespace;
+   do not grant host-local or unrestricted external networking.
+   Reproduction workspace: `/tmp/codex-delivery-verification.w7fxK7/workspace`
+   (76-test checkpoint). Use CodexClient.exec with `delivery-deps` for frozen
+   install and `delivery-verify` for tests. Run individual test files directly
+   with Node for detailed failures. Verify audit and trusted validators too.
+2. Add isolated controller integration tests before further publication work.
+   Test branch and publish-only recovery, source closure, failed outbox writes,
+   repeated events, quota pauses, cancellation, stale locks, and shutdown with
+   descendants. A durable verify phase and audit-write serialization still
+   need review. Simplify the new large controller conditional.
+3. Recheck effective thread config, MCP/plugins/hooks, symlink escapes, exact
+   staged-tree verification, metadata references, and dedicated login setup.
+4. Rerun runner smoke, then validate a tiny actual Sol High Plan-mode outcome
+   and Luna Max handoff. No model turn has been tested yet. Resolve the sandbox
+   failure first; no end-to-end activation, merging, or issue closure is authorized.
+
+Continue with the original checklist below after these priorities.
+
 ## Saved work
 
 - Source and ADR tracking issue: [#15](https://github.com/sjefsharp/agentic-delivery/issues/15).

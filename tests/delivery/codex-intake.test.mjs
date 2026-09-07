@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { intakeEvent, redact } from '../../scripts/codex-delivery.mjs';
+import { intakeEvent, redact, checkPublicationText } from '../../scripts/codex-delivery.mjs';
+
+test('model publication text cannot add commit bodies or close unrelated issues', () => {
+  checkPublicationText('feat: ✨ add intake', 'Added intake and tests.');
+  for (const title of ['feat: ✨ work\n\nCloses #2', 'feat: ✨ fixes #2', 'x'.repeat(121)]) {
+    assert.throws(() => checkPublicationText(title));
+  }
+  for (const summary of ['Resolves org/repo#2', 'Closes https://github.com/org/repo/issues/2']) {
+    assert.throws(() => checkPublicationText('feat: ✨ add intake', summary), /closing directives/);
+  }
+});
 
 const env = {SOURCE_ISSUE:'15',GITHUB_REPOSITORY:'owner/repo',GITHUB_EVENT_NAME:'issues',GITHUB_ACTOR:'owner'};
 test('starts free-form source issues without a label or form requirement', () => {

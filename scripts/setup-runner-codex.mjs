@@ -18,9 +18,9 @@ export function verifyArchive(bytes, expected = RELEASE.sha256) {
 
 export function setupTarget(cache, platform = process.platform, arch = process.arch) {
   if (platform !== 'linux' || arch !== 'x64') throw new Error('Codex runner setup requires Linux x64.');
-  if (!cache || !path.isAbsolute(cache)) throw new Error('RUNNER_TOOL_CACHE must be an absolute directory.');
-  if (path.parse(cache).root === path.resolve(cache)) throw new Error('Use a dedicated runner tool cache.');
-  return path.join(cache, 'codex-delivery', RELEASE.version);
+  if (!cache || !path.posix.isAbsolute(cache)) throw new Error('RUNNER_TOOL_CACHE must be an absolute directory.');
+  if (path.posix.parse(cache).root === path.posix.resolve(cache)) throw new Error('Use a dedicated runner tool cache.');
+  return path.posix.join(cache, 'codex-delivery', RELEASE.version);
 }
 
 export async function setupCodex(env = process.env) {

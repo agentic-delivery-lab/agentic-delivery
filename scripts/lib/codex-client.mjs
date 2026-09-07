@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createInterface } from 'node:readline';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, realpathSync, mkdirSync, mkdtempSync } from 'node:fs';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 
 export const MODELS = Object.freeze({
   plan: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
@@ -42,13 +43,41 @@ export function verifyModels(models) {
   }
 }
 
-export function modelEnvironment(env = process.env) {
+function serverEnvironment(env = process.env) {
   const allowed = ['PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'TMPDIR', 'TEMP', 'TMP', 'CODEX_HOME', 'PNPM_HOME', 'SystemRoot'];
   return Object.fromEntries(allowed.filter((key) => env[key] !== undefined).map((key) => [key, env[key]]));
 }
 
+export function modelEnvironment(env = process.env, runtime) {
+  const clean = serverEnvironment(env);
+  for (const key of ['HOME', 'CODEX_HOME', 'TMPDIR', 'TEMP', 'TMP']) delete clean[key];
+  return { ...clean, ...(runtime ? {
+    HOME: path.join(runtime, 'home'), TMPDIR: path.join(runtime, 'tmp'),
+    TEMP: path.join(runtime, 'tmp'), TMP: path.join(runtime, 'tmp'),
+    XDG_CACHE_HOME: path.join(runtime, 'cache'), XDG_DATA_HOME: path.join(runtime, 'data'),
+  } : {}) };
+}
+
+export function checkConfiguration(config) {
+  for (const key of ['hooks', 'notify', 'model_instructions_file', 'experimental_compact_prompt_file',
+    'openai_base_url', 'experimental_realtime_ws_base_url']) {
+    if (config[key] != null && (!Array.isArray(config[key]) || config[key].length)) {
+      throw new Error(`Unsafe Codex configuration: ${key}. Use a dedicated delivery login/configuration.`);
+    }
+  }
+  if (config.chatgpt_base_url && !['https://chatgpt.com/backend-api/', 'https://chatgpt.com/backend-api'].includes(config.chatgpt_base_url)) {
+    throw new Error('Custom ChatGPT endpoint configuration is not allowed for delivery.');
+  }
+  if ((config.model_provider && config.model_provider !== 'openai') || Object.keys(config.model_providers ?? {}).length) {
+    throw new Error('Custom provider configuration is not allowed for delivery.');
+  }
+}
+
 function runtimeFiles(env) {
   const files = [process.execPath];
+  // On systemd hosts resolv.conf points outside the minimal /etc view.
+  // Grant only this public resolver file and its canonical target.
+  if (existsSync('/etc/resolv.conf')) files.push(realpathSync('/etc/resolv.conf'));
   if (env.PNPM_HOME) files.push(env.PNPM_HOME);
   for (const tool of ['codex', 'node', 'pnpm']) {
     const candidate = (env.PATH ?? '').split(path.delimiter).map((dir) => path.join(dir, tool)).find(existsSync);
@@ -57,15 +86,22 @@ function runtimeFiles(env) {
   return [...new Set(files)];
 }
 
-export function deliveryPermissions(readableFiles = []) {
-  return Object.fromEntries(['plan', 'edit', 'verify'].map((phase) => [`delivery-${phase}`, {
-    extends: phase === 'plan' ? ':read-only' : ':workspace',
+export function deliveryPermissions(readableFiles = [], runtime) {
+  return Object.fromEntries(['plan', 'edit', 'verify', 'deps'].map((phase) => [`delivery-${phase}`, {
+    extends: ':read-only',
     filesystem: {
-      ':root': 'deny', ':minimal': 'read', ':tmpdir': 'deny', ':slash_tmp': 'deny',
+      ':root': 'deny', ':minimal': 'read',
       ...Object.fromEntries(readableFiles.map((file) => [file, 'read'])),
-      ':workspace_roots': { '.': phase === 'plan' ? 'read' : 'write', '.git': 'read', '.codex': 'read' },
+      ...(runtime ? {[runtime]: 'write'} : {}),
+      ':workspace_roots': { '.': ['plan', 'verify'].includes(phase) ? 'read' : 'write', '.git': 'read', '.codex': 'read' },
     },
-    network: { enabled: phase === 'verify' },
+    // A deny-all managed proxy preserves process-local IPC in the isolated
+    // network namespace. The plain network=false seccomp mode blocks Node's
+    // child-process socket operations (including captured stderr).
+    network: {
+      enabled: true, domains: {'registry.npmjs.org': phase === 'deps' ? 'allow' : 'deny'},
+      allow_local_binding: false, allow_upstream_proxy: false,
+    },
   }]));
 }
 
@@ -75,17 +111,24 @@ function tomlValue(value) {
 }
 
 export class CodexClient extends EventEmitter {
-  constructor({ command = 'codex', args = [], cwd, env = modelEnvironment(), timeoutMs = 30_000 } = {}) {
+  constructor({ command = 'codex', args = [], cwd, env = serverEnvironment(), runtime, readableFiles = [], timeoutMs = 30_000 } = {}) {
     super();
     this.pending = new Map();
     this.nextId = 0;
     this.timeoutMs = timeoutMs;
-    this.permissions = deliveryPermissions(runtimeFiles(env));
-    this.child = spawn(command, [...args, '-c', `permissions=${tomlValue(this.permissions)}`, 'app-server', '--listen', 'stdio://'], {
+    this.runtime = runtime ?? mkdtempSync(path.join(tmpdir(), 'codex-delivery-tools-'));
+    for (const dir of ['home', 'tmp', 'cache', 'data']) mkdirSync(path.join(this.runtime, dir), {recursive:true, mode:0o700});
+    this.toolEnv = modelEnvironment(env, this.runtime);
+    this.permissions = deliveryPermissions([...runtimeFiles(env), ...readableFiles], this.runtime);
+    this.child = spawn(command, [...args, '-c', `permissions=${tomlValue(this.permissions)}`,
+      '-c', `shell_environment_policy=${tomlValue({inherit:'none', set:this.toolEnv})}`,
+      '-c', 'allow_login_shell=false', '-c', 'features.plugins=false', '-c', 'features.apps=false',
+      '-c', 'features.network_proxy=true',
+      '-c', 'features.remote_plugin=false', 'app-server', '--listen', 'stdio://'], {
       cwd, env, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true, detached: process.platform !== 'win32',
     });
     this.child.on('error', () => this.fail(new Error('Codex CLI could not start; check the runner installation.')));
-    this.child.on('exit', () => this.fail(new Error('Codex app-server stopped.')));
+    this.child.on('exit', (code, signal) => this.fail(new Error(`Codex app-server stopped (${code ?? signal}).`)));
     this.child.stdin.on('error', () => this.fail(new Error('Codex input pipe closed.')));
     this.lines = createInterface({ input: this.child.stdout });
     this.lines.on('line', (line) => {
@@ -122,10 +165,10 @@ export class CodexClient extends EventEmitter {
     });
   }
 
-  async exec(command, cwd, timeoutMs = 600_000) {
+  async exec(command, cwd, timeoutMs = 600_000, permissionProfile = 'delivery-verify') {
     const result = await this.request('command/exec', {
-      command, cwd, permissionProfile: 'delivery-verify', timeoutMs,
-      outputBytesCap: 24_000, env: modelEnvironment(),
+      command, cwd, permissionProfile, timeoutMs,
+      outputBytesCap: 24_000, env: this.toolEnv,
     }, timeoutMs + 5000);
     if (result.exitCode !== 0) throw new Error(`${command.join(' ')} failed (${result.exitCode}):\n${result.stderr}\n${result.stdout}`);
     return result.stdout;
@@ -157,7 +200,8 @@ export class CodexClient extends EventEmitter {
   }
 
   async thread(cwd, developerInstructions = '') {
-    const { config } = await this.request('config/read', { includeLayers: false });
+    const { config } = await this.request('config/read', { includeLayers: false, cwd });
+    checkConfiguration(config);
     const mcpServers = Object.fromEntries(Object.keys(config?.mcp_servers ?? {}).map((name) => [name, { enabled: false }]));
     return this.request('thread/start', {
       cwd, model: MODELS.plan.model, modelProvider: 'openai', allowProviderModelFallback: false,
@@ -165,19 +209,38 @@ export class CodexClient extends EventEmitter {
       developerInstructions, environments: [],
       config: {
         permissions: this.permissions, mcp_servers: mcpServers, web_search: 'disabled',
-        features: { multi_agent: false, apps: false, plugins: false },
-        shell_environment_policy: { inherit: 'none', set: modelEnvironment() },
+        features: { multi_agent: false, apps: false, plugins: false, remote_plugin: false, tool_suggest: false, network_proxy:true },
+        allow_login_shell: false,
+        shell_environment_policy: { inherit: 'none', set: this.toolEnv },
       },
     });
   }
 
   close() {
+    if (this.closing) return this.closing;
     this.lines.close();
     this.fail(new Error('Codex client closed.'));
     this.child.stdin.end();
-    try {
-      if (process.platform !== 'win32' && this.child.pid) process.kill(-this.child.pid, 'SIGTERM');
-      else this.child.kill();
-    } catch { /* The owned process group has already stopped. */ }
+    this.closing = this.terminate();
+    return this.closing;
+  }
+
+  async terminate() {
+    const signal = (name) => {
+      try {
+        if (process.platform !== 'win32' && this.child.pid) process.kill(-this.child.pid, name);
+        else return this.child.kill(name);
+        return true;
+      } catch (error) { if (error.code === 'ESRCH') return false; throw error; }
+    };
+    if (!this.child.pid || !signal('SIGTERM')) return;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    // Also kill remaining descendants when the app-server leader has exited.
+    signal('SIGKILL');
+    for (let attempt = 0; attempt < 50; attempt++) {
+      if (!signal(0)) return;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error('Codex process group did not stop; retain the account lock for operator inspection.');
   }
 }

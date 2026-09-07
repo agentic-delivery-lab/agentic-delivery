@@ -42,9 +42,18 @@ It never merges the review pull request or closes the source issue.
 Run `self-hosted-runner-smoke` with input `codex=true` for a check without a
 model turn. The initial runner check failed because the Actions service could
 not start Codex. The setup step now supplies the executable without copying or
-changing authentication. Resolve login and rerun the smoke check before claiming
+changing authentication. Run 34160939468 installed the CLI successfully, but the
+app server stopped during preflight. Resolve login and rerun the smoke check before claiming
 end-to-end operation. The Linux package setup is runner infrastructure; local
 governance commands retain their separate cross-platform contract.
+
+Use `node scripts/codex-sandbox-check.mjs` for an opt-in, zero-generation Linux
+boundary check. It retains an isolated inspection fixture and checks filesystem
+permissions, tool environment, child-process output, and denied external access.
+The managed proxy feature must be enabled explicitly; declaring domain rules
+alone does not enforce them. Tests have read-only workspace access and private
+writable temporary directories. Only dependency installation and audit can use
+the public npm registry. Governance validators run from the trusted checkout.
 
 ## Budget boundary and saved work
 

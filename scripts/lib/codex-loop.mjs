@@ -47,6 +47,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
   let interruptTimer;
   let polling = false;
   let resolveResult;
+  const closeClient = () => { Promise.resolve(client.close()).catch(() => {}); };
   const result = new Promise((resolve) => { resolveResult = resolve; });
   const finish = (value) => {
     if (settled) return;
@@ -62,8 +63,8 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
   const stop = (reason, status = 'paused') => {
     if (stopped || settled) return;
     stopped = { status, reason, budget };
-    interruptTimer = setTimeout(() => { client.close(); finish(stopped); }, 5000);
-    if (turnId) client.request('turn/interrupt', { threadId, turnId }).catch(() => { client.close(); finish(stopped); });
+    interruptTimer = setTimeout(() => { closeClient(); finish(stopped); }, 5000);
+    if (turnId) client.request('turn/interrupt', { threadId, turnId }).catch(() => { closeClient(); finish(stopped); });
   };
   const onAbort = () => stop('Workflow cancelled; saved work can be resumed.');
   const onFailure = () => finish(stopped ?? { status: 'paused', reason: 'Codex app-server disconnected.' });

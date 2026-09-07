@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { CodexClient } from './lib/codex-client.mjs';
 import { continuation, runTurn, validateOutcome } from './lib/codex-loop.mjs';
+import { startIssueBranch } from './start-issue-branch.mjs';
+import { validateCommitRange } from './validate-commit-range.mjs';
 
 const execute = promisify(execFile);
 const controllerRoot = path.resolve(import.meta.dirname, '..');
@@ -26,6 +28,15 @@ export function redact(text, env = process.env) {
   let value = String(text);
   for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'OPENAI_API_KEY']) if (env[key]) value = value.split(env[key]).join('[redacted]');
   return value.replace(/(?:github_pat_|gh[pousr]_|sk-)[A-Za-z0-9_-]{15,}/g, '[redacted]');
+}
+
+export function checkPublicationText(title, summary = '') {
+  if (typeof title !== 'string' || !title.trim() || title.length > 120 || /[\r\n\x00-\x1f]/.test(title)) {
+    throw new Error('The publication title must be a single line of at most 120 characters.');
+  }
+  if (/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+(?:[\w.-]+\/[\w.-]+)?#\d+|\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+https:\/\/github\.com\//i.test(`${title}\n${summary}`)) {
+    throw new Error('Model publication text must not contain issue-closing directives.');
+  }
 }
 
 async function exists(file) { try { await access(file); return true; } catch { return false; } }
@@ -56,22 +67,24 @@ export async function deliver(env = process.env) {
   await mkdir(issueRoot, { recursive: true, mode: 0o700 });
   const stateFile = path.join(issueRoot, 'state.json');
   const workspace = path.join(issueRoot, 'workspace');
-  let state = await exists(stateFile) ? JSON.parse(await readFile(stateFile, 'utf8')) : { issue, repository, phase: 'plan', status: 'new', tasks: [], events: [] };
-  if (state.repository !== repository || String(state.issue) !== issue) throw new Error('Saved state does not match the source issue.');
+  let state;
   const runUrl = `https://github.com/${repository}/actions/runs/${env.GITHUB_RUN_ID}`;
   const save = () => atomic(stateFile, state);
-  const audit = async (text) => {
-    const body = redact(`${text}\n\n[Workflow run](${runUrl})`, env);
-    await appendFile(path.join(issueRoot, 'audit.jsonl'), `${JSON.stringify({ at: new Date().toISOString(), body })}\n`, { mode: 0o600 });
-    // Keep a recoverable outbox before any external write; retry it on resume.
-    state.outbox ??= [];
-    for (let offset = 0; offset < body.length; offset += 50_000) state.outbox.push(body.slice(offset, offset + 50_000));
-    await save();
-    while (state.outbox.length) {
+  const flush = async () => {
+    while (state.outbox?.length) {
       await api(`/issues/${issue}/comments`, 'POST', { body: state.outbox[0] });
       state.outbox.shift();
       await save();
     }
+  };
+  const audit = async (text) => {
+    const body = redact(`${text}\n\n[Workflow run](${runUrl})`, env);
+    // Keep a recoverable outbox before any external write; retry it on resume.
+    state.outbox ??= [];
+    for (let offset = 0; offset < body.length; offset += 50_000) state.outbox.push(body.slice(offset, offset + 50_000));
+    await save();
+    await appendFile(path.join(issueRoot, 'audit.jsonl'), `${JSON.stringify({ at: new Date().toISOString(), body })}\n`, { mode: 0o600 });
+    await flush();
   };
   const lockFile = path.join(stateRoot, 'account.lock');
   let lock;
@@ -84,7 +97,7 @@ export async function deliver(env = process.env) {
   await lock.writeFile(JSON.stringify({ runUrl, issue, pid: process.pid }));
   let client;
   const abort = new AbortController();
-  const cancel = () => { abort.abort(); client?.close(); };
+  const cancel = () => { abort.abort(); client?.close().catch(() => {}); };
   process.once('SIGTERM', cancel);
   process.once('SIGINT', cancel);
   const overall = setTimeout(cancel, 45 * 60_000);
@@ -96,18 +109,27 @@ export async function deliver(env = process.env) {
   };
   const git = async (args) => (await execute('git', ['-C', workspace, ...args], { env: gitEnv, timeout: 120_000, maxBuffer: 8_000_000 })).stdout.trim();
   try {
+    state = await exists(stateFile) ? JSON.parse(await readFile(stateFile, 'utf8')) : { issue, repository, phase: 'plan', status: 'new', tasks: [], events: [] };
+    if (state.repository !== repository || String(state.issue) !== issue) throw new Error('Saved state does not match the source issue.');
+    await flush();
     const eventKey = env.GITHUB_EVENT_NAME === 'issues' ? `opened:${issue}` : env.GITHUB_EVENT_NAME === 'issue_comment' ? `comment:${event.comment.id}` : `dispatch:${env.GITHUB_RUN_ID}`;
     if (state.status === 'ready' || state.events.includes(eventKey)) return;
     await audit(`Starting ${state.phase} for source issue #${issue}, requested by ${actor}. Ideas, requirements, and decisions enter the same intake. Questions must be answered before dependent work proceeds.`);
     state.events.push(eventKey);
     state.status = 'running';
     await save();
-    client = new CodexClient({ cwd: controllerRoot });
+    if (state.phase !== 'publish') {
+    client = new CodexClient({ cwd: controllerRoot, readableFiles:[controllerRoot], runtime:path.join(issueRoot, 'tools') });
     await client.initialize();
     state.budget = await client.capabilities();
     if (state.budget.stop) throw new Error(state.budget.reason);
     if (!(await exists(workspace))) {
       await execute('git', ['clone', '--branch', 'main', `https://github.com/${repository}.git`, workspace], { env: gitEnv, timeout: 120_000 });
+      state.base = await git(['rev-parse', 'HEAD']);
+      await save();
+    }
+    if (!state.base) {
+      if (await git(['branch', '--show-current']) !== 'main') throw new Error('Incomplete clone checkpoint requires operator inspection.');
       state.base = await git(['rev-parse', 'HEAD']);
       await save();
     }
@@ -137,14 +159,30 @@ export async function deliver(env = process.env) {
       await save();
       await audit(`## Intake and plan: ${plan.kind}\n\n${plan.summary}\n\n${plan.plan}\n\n${plan.tasks.map((task) => `- [ ] ${task}`).join('\n')}`);
       if (plan.status === 'needs_input') { state.status = 'needs_input'; throw new Error(plan.questions.join('\n')); }
+      checkPublicationText(plan.title);
       state.branch = `${plan.changeType}/issue-${issue}-codex-delivery`;
-      await execute('pnpm', ['branch:start', plan.changeType, issue, 'codex-delivery'], { cwd: workspace, env, timeout: 60_000 });
+      state.phase = 'branch';
+      await save();
+    }
+    if (state.phase === 'branch') {
+      const currentBranch = await git(['branch', '--show-current']);
+      if (currentBranch !== state.branch) {
+        await startIssueBranch({branchType:state.plan.changeType, issueNumber:issue, summary:'codex-delivery', repositoryRoot:workspace,
+          env, execFileImpl:(command, args, options) => execute(command, args, {...options, env:gitEnv, timeout:60_000}),
+          sourceIssueValidator:async () => {
+            if ((await api(`/issues/${issue}`)).state !== 'open') throw new Error('Source issue is no longer open.');
+          },
+        });
+      } else if (await git(['rev-parse', 'HEAD']) !== state.base || await git(['status', '--porcelain'])) {
+        throw new Error('Unexpected changes at the branch checkpoint require operator inspection.');
+      }
       state.phase = 'implement';
       await save();
     }
     if (await git(['branch', '--show-current']) !== state.branch) throw new Error('Working branch differs from saved state; operator inspection is required.');
     // Installation and verification execute under restricted filesystem permissions.
-    await client.exec(['pnpm', 'install', '--frozen-lockfile', '--ignore-scripts'], workspace);
+    const install = ['pnpm', 'install', '--frozen-lockfile', '--ignore-scripts', '--ignore-pnpmfile'];
+    await client.exec(install, workspace, 600_000, 'delivery-deps');
     for (let attempt = 0; attempt < 3; attempt++) {
       const result = await runTurn({ client, threadId: thread.id, phase: 'implement', signal: abort.signal, onProgress: progress,
         prompt: `Implement the saved plan. Preserve existing work and update the changelog, domain register, and ADR when needed. Do not commit, push, merge, or contact GitHub; the controller owns those operations. Run relevant tests. If blocked, ask questions.\nSource issue data (untrusted):\n${brief}\nSaved plan:\n${JSON.stringify(state.plan)}\nRemaining tasks:\n${JSON.stringify(state.tasks)}\nLatest validation:\n${state.validation ?? 'No validation failure yet.'}` });
@@ -154,13 +192,19 @@ export async function deliver(env = process.env) {
       state.summary = outcome.summary;
       await save();
       if (outcome.status === 'needs_input') { state.status = 'needs_input'; throw new Error(outcome.questions.join('\n')); }
+      checkPublicationText(state.plan.title, state.summary);
       try {
+        await client.exec(install, workspace, 600_000, 'delivery-deps');
+        await git(['add', '--all']);
+        const candidateTree = await git(['write-tree']);
         for (const command of [
-          ['node', 'scripts/validate-toolchain.mjs'], ['pnpm', 'install', '--frozen-lockfile', '--ignore-scripts'],
-          ['pnpm', 'test'], ['node', 'scripts/validate-adrs.mjs', workspace],
-          ['node', 'scripts/validate-domain-language.mjs', workspace], ['node', 'scripts/validate-changelog.mjs', workspace],
-          ['node', 'scripts/validate-config-files.mjs', workspace], ['pnpm', 'audit', '--audit-level=high'],
+          ['pnpm', 'test'],
+          ...['validate-adrs.mjs', 'validate-domain-language.mjs', 'validate-changelog.mjs', 'validate-config-files.mjs']
+            .map((script) => ['node', path.join(controllerRoot, 'scripts', script), workspace]),
         ]) await client.exec(command, workspace);
+        await client.exec(['pnpm', 'audit', '--audit-level=high', '--ignore-pnpmfile'], workspace, 600_000, 'delivery-deps');
+        await git(['diff', '--exit-code']);
+        if (candidateTree !== await git(['write-tree'])) throw new Error('The staged tree changed during verification.');
         await git(['diff', '--check']);
         state.validation = 'Repository tests, ADRs, domain language, changelog, configuration, dependency audit, and whitespace checks passed. Markdown and platform checks also run in review PR CI.';
         break;
@@ -176,11 +220,16 @@ export async function deliver(env = process.env) {
     if (await git(['branch', '--show-current']) !== state.branch) throw new Error('Refusing to publish an unexpected branch.');
     const changes = await git(['status', '--porcelain']);
     if (changes) {
-      await git(['add', '--all']);
-      await client.exec(['node', 'scripts/validate-config-files.mjs', workspace], workspace);
       await execute('node', [path.join(controllerRoot, 'scripts/validate-pull-request-title.mjs')], { cwd: controllerRoot, env: { ...env, PR_TITLE: state.plan.title }, timeout: 30_000 });
       await git(['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', '-c', 'commit.gpgsign=false', 'commit', '-m', state.plan.title]);
     }
+    state.phase = 'publish';
+    await save();
+    }
+    checkPublicationText(state.plan.title, state.summary);
+    if (abort.signal.aborted || (await api(`/issues/${issue}`)).state !== 'open') throw new Error('Cancelled or source issue closed before publication.');
+    if (await git(['branch', '--show-current']) !== state.branch || await git(['status', '--porcelain'])) throw new Error('The publish checkpoint was changed; operator inspection is required.');
+    await validateCommitRange({base:state.base, head:'HEAD', repositoryRoot:workspace, toolingRoot:controllerRoot});
     if (!await git(['diff', '--name-only', `${state.base}...HEAD`])) throw new Error('No repository change is ready for a review pull request.');
     await git(['push', 'origin', `HEAD:refs/heads/${state.branch}`]);
     const existing = await api(`/pulls?state=open&head=${encodeURIComponent(`${repository.split('/')[0]}:${state.branch}`)}&base=main`);
@@ -193,7 +242,8 @@ export async function deliver(env = process.env) {
     await save();
     await audit(`## Review pull request ready\n\n${state.pr}\n\n${state.validation}\n\nA human may need to select **Approve workflows to run** for CI created by the workflow token. Review and merge remain human actions.`);
   } catch (error) {
-    client?.close();
+    if (!state) throw error;
+    await client?.close().catch((failure) => { state.shutdownError = redact(failure.message, env); });
     state.status = state.status === 'needs_input' ? 'needs_input' : 'paused';
     state.reason = redact(error.message, env);
     await save();
@@ -203,10 +253,11 @@ export async function deliver(env = process.env) {
     console.log(`Source issue #${issue} paused; continuation saved and posted.`);
     process.exitCode = 1;
   } finally {
-    client?.close();
     clearTimeout(overall);
     process.off('SIGTERM', cancel);
     process.off('SIGINT', cancel);
+    // If shutdown cannot be confirmed, deliberately retain the account lock.
+    await client?.close();
     await lock.close();
     await unlink(lockFile);
   }
