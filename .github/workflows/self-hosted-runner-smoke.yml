@@ -51,3 +51,7 @@ jobs:
       - name: Check Codex without model execution
         if: inputs.codex
         run: node scripts/codex-preflight.mjs
+
+      - name: Check actual tool isolation without model execution
+        if: inputs.codex
+        run: node scripts/codex-sandbox-check.mjs

@@ -20,4 +20,9 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- Headless runner Codex authentication now uses the service account's explicit file-backed credential store and reports redacted app-server diagnostics when startup fails.
+- Headless runner Codex authentication uses the service account's explicit file-backed credential store. Startup and protocol errors publish safe diagnostic hints without raw authentication data.
+- Paused delivery runs return to planning when the source issue changes, preserve invalid saved state for inspection, and refuse to publish changes that no longer match the verified tree.
+
+### Security
+
+- Subscription-only delivery pauses when credit spillover is possible or credit telemetry is unavailable, in addition to the 98-percent usage boundary.

@@ -13,16 +13,19 @@ export const MODELS = Object.freeze({
 export const AUTH_STORAGE_CONFIG = 'cli_auth_credentials_store="file"';
 export const DEFAULT_PERMISSION_CONFIG = 'default_permissions="delivery-plan"';
 
-function redactProcessDiagnostic(value) {
-  return String(value)
-    .replace(/(\b(?:access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|token|secret|password)\b\s*[:=]\s*)[^\s,;]+/gi, '$1[redacted]')
-    .replace(/(\bBearer\s+)[^\s,;]+/gi, '$1[redacted]');
+function safeCodexDiagnostic(value) {
+  // Codex owns authentication. Its errors may contain arbitrary credentials,
+  // including fragments whose labels were lost when stderr was truncated.
+  // Publish only fixed hints, never a substring of the original diagnostic.
+  if (String(value).includes('config defines [permissions] profiles but does not set default_permissions')) {
+    return 'A default permission profile is required. Check the controller startup configuration.';
+  }
+  return 'Details withheld because Codex errors may contain credentials. Check the runner installation, authentication, and configuration.';
 }
 
 export function appServerFailure(code, signal, stderr = '') {
   const stopped = `Codex app-server stopped (${code ?? signal}).`;
-  const diagnostic = redactProcessDiagnostic(stderr).trim();
-  return diagnostic ? `${stopped} Diagnostic: ${diagnostic.slice(-4000)}` : stopped;
+  return String(stderr).trim() ? `${stopped} Diagnostic: ${safeCodexDiagnostic(stderr)}` : stopped;
 }
 
 export function quotaBoundary(response, now = Date.now() / 1000) {
@@ -30,6 +33,9 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
   if (response?.rateLimits) buckets.push(response.rateLimits);
   if (buckets.some((bucket) => !bucket || typeof bucket !== 'object' || !bucket.primary)) {
     return { stop: true, reason: 'Quota telemetry contains an invalid bucket.' };
+  }
+  if (buckets.some((bucket) => bucket.credits?.hasCredits !== false || bucket.credits?.unlimited !== false)) {
+    return { stop: true, reason: 'Credit spillover is possible or credit telemetry is unavailable; subscription-only execution is required.' };
   }
   const windows = buckets.flatMap((bucket) => [bucket.primary, bucket.secondary].filter(Boolean));
   if (!windows.some((window) => window.windowDurationMins === 300)
@@ -159,7 +165,7 @@ export class CodexClient extends EventEmitter {
       if (!pending) return;
       clearTimeout(pending.timer);
       this.pending.delete(message.id);
-      if (message.error) pending.reject(new Error(`Codex ${pending.method}: ${message.error.message}`));
+      if (message.error) pending.reject(new Error(`Codex ${pending.method}: ${safeCodexDiagnostic(message.error.message)}`));
       else pending.resolve(message.result);
     });
   }

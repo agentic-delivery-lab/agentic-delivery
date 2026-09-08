@@ -3,10 +3,12 @@ import { appendFile, mkdir, readFile, rename, writeFile, access, unlink } from '
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { createHash } from 'node:crypto';
 import { CodexClient } from './lib/codex-client.mjs';
 import { continuation, runTurn, validateOutcome } from './lib/codex-loop.mjs';
 import { startIssueBranch } from './start-issue-branch.mjs';
 import { validateCommitRange } from './validate-commit-range.mjs';
+import { validateBranchName } from './validate-branch-name.mjs';
 
 const executeFile = promisify(execFile);
 const controllerRoot = path.resolve(import.meta.dirname, '..');
@@ -46,6 +48,32 @@ async function atomic(file, value) {
   await rename(`${file}.next`, file);
 }
 
+async function readSavedState(file, issue, repository) {
+  const contents = await readFile(file, 'utf8');
+  try {
+    const value = JSON.parse(contents);
+    const strings = (items) => Array.isArray(items) && items.every((item) => typeof item === 'string');
+    const hash = (item) => typeof item === 'string' && /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(item);
+    if (value?.repository !== repository || String(value?.issue) !== issue
+      || !['plan','branch','implement','verify','commit','publish'].includes(value.phase)
+      || !['new','running','paused','needs_input','ready'].includes(value.status)
+      || !strings(value.events) || !strings(value.tasks)
+      || (value.outbox !== undefined && !strings(value.outbox))
+      || (value.auditCommentIds !== undefined && (!Array.isArray(value.auditCommentIds)
+        || !value.auditCommentIds.every((id) => Number.isSafeInteger(id) && id > 0)))) throw new Error();
+    if (value.branch !== undefined) {
+      validateBranchName(value.branch);
+      if (!value.branch.split('/')[1].startsWith(`issue-${issue}-`)) throw new Error();
+    }
+    if (value.plan !== undefined) validateOutcome('plan', JSON.stringify(value.plan));
+    if (value.phase !== 'plan' && (!value.branch || !hash(value.base) || value.plan?.status !== 'ready')) throw new Error();
+    if (['commit','publish'].includes(value.phase) && !hash(value.validatedTree)) throw new Error();
+    return value;
+  } catch {
+    throw new Error('Invalid saved state; preserve the issue directory for operator inspection.');
+  }
+}
+
 export async function deliver(env = process.env, dependencies = {}) {
   const execute = dependencies.execute ?? executeFile;
   const fetchApi = dependencies.fetch ?? fetch;
@@ -83,7 +111,8 @@ export async function deliver(env = process.env, dependencies = {}) {
   };
   const flush = async () => {
     while (state.outbox?.length) {
-      await api(`/issues/${issue}/comments`, 'POST', { body: state.outbox[0] });
+      const posted = await api(`/issues/${issue}/comments`, 'POST', { body: state.outbox[0] });
+      (state.auditCommentIds ??= []).push(posted.id);
       state.outbox.shift();
       await save();
     }
@@ -96,6 +125,31 @@ export async function deliver(env = process.env, dependencies = {}) {
     await save();
     await appendFile(path.join(issueRoot, 'audit.jsonl'), `${JSON.stringify({ at: new Date().toISOString(), body })}\n`, { mode: 0o600 });
     await flush();
+  };
+  const readBrief = async () => {
+    const current = await api(`/issues/${issue}`);
+    if (current.state !== 'open' || current.pull_request) throw new Error('The source issue must still be open.');
+    const ownComments = new Set(state.auditCommentIds ?? []);
+    const comments = [];
+    for (let page = 1; ; page++) {
+      const batch = await api(`/issues/${issue}/comments?per_page=100&page=${page}`);
+      comments.push(...batch.filter((item) => !ownComments.has(item.id) && item.body?.trim() !== '/codex resume')
+        .map((item) => ({ id:item.id, author:item.user.login, body:item.body })));
+      if (batch.length < 100) break;
+      if (page >= 10) throw new Error('Issue history exceeds the intake limit; summarize it before resuming.');
+    }
+    const brief = JSON.stringify({ title:current.title, body:current.body, comments });
+    if (brief.length > 150_000) throw new Error('Issue history exceeds the intake size limit; summarize it before resuming.');
+    return brief;
+  };
+  const digest = (brief) => createHash('sha256').update(brief).digest('hex');
+  const requireCurrentBrief = async (brief) => {
+    if (state.sourceDigest !== digest(brief)) {
+      state.phase = 'plan';
+      state.tasks = ['Review the changed source issue and discussion, then update the saved plan.', ...(state.tasks ?? [])];
+      await save();
+      throw new Error('Source issue requirements or discussion changed, or the saved snapshot is missing. Resume planning before continuing; existing files are preserved.');
+    }
   };
   const lockFile = path.join(stateRoot, 'account.lock');
   let lock;
@@ -120,8 +174,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   const git = async (args) => (await execute('git', ['-C', workspace, ...args], { env: gitEnv, timeout: 120_000, maxBuffer: 8_000_000 })).stdout.trim();
   try {
     await lock.writeFile(JSON.stringify({ runUrl, issue, pid: process.pid }));
-    state = await exists(stateFile) ? JSON.parse(await readFile(stateFile, 'utf8')) : { issue, repository, phase: 'plan', status: 'new', tasks: [], events: [] };
-    if (state.repository !== repository || String(state.issue) !== issue) throw new Error('Saved state does not match the source issue.');
+    state = await exists(stateFile) ? await readSavedState(stateFile, issue, repository) : { issue, repository, phase: 'plan', status: 'new', tasks: [], events: [] };
     await flush();
     const eventKey = env.GITHUB_EVENT_NAME === 'issues' ? `opened:${issue}` : env.GITHUB_EVENT_NAME === 'issue_comment' ? `comment:${event.comment.id}` : `dispatch:${env.GITHUB_RUN_ID}`;
     if (state.status === 'ready' || state.events.includes(eventKey)) return;
@@ -144,15 +197,9 @@ export async function deliver(env = process.env, dependencies = {}) {
         state.base = await git(['rev-parse', 'HEAD']);
         await save();
       }
-      const comments = [];
-      for (let page = 1; ; page++) {
-        const batch = await api(`/issues/${issue}/comments?per_page=100&page=${page}`);
-        comments.push(...batch.map((item) => ({ author: item.user.login, body: item.body })));
-        if (batch.length < 100) break;
-        if (page >= 10) throw new Error('Issue history exceeds the intake limit; summarize it before resuming.');
-      }
-      const brief = JSON.stringify({ title: source.title, body: source.body, comments });
-      if (brief.length > 150_000) throw new Error('Issue history exceeds the intake size limit; summarize it before resuming.');
+      const brief = await readBrief();
+      if (state.phase === 'plan') { state.sourceDigest = digest(brief); await save(); }
+      else await requireCurrentBrief(brief);
       const instructions = await readFile(path.join(controllerRoot, '.agents', 'codex-delivery.md'), 'utf8');
       const { thread } = await client.thread(workspace, instructions);
       const progress = async (text) => {
@@ -242,7 +289,7 @@ export async function deliver(env = process.env, dependencies = {}) {
     await client?.close();
     if (state.phase === 'commit') {
     if (abort.signal.aborted) throw new Error('Workflow cancelled before publishing.');
-    if ((await api(`/issues/${issue}`)).state !== 'open') throw new Error('Source issue was closed before publishing.');
+    await requireCurrentBrief(await readBrief());
     // Git metadata is read-only to model tools. Publish only the recorded head.
     if (await git(['branch', '--show-current']) !== state.branch) throw new Error('Refusing to publish an unexpected branch.');
     await git(['diff', '--exit-code']);
@@ -258,8 +305,10 @@ export async function deliver(env = process.env, dependencies = {}) {
     await save();
     }
     checkPublicationText(state.plan.title, state.summary);
-    if (abort.signal.aborted || (await api(`/issues/${issue}`)).state !== 'open') throw new Error('Cancelled or source issue closed before publication.');
+    if (abort.signal.aborted) throw new Error('Cancelled before publication.');
+    await requireCurrentBrief(await readBrief());
     if (await git(['branch', '--show-current']) !== state.branch || await git(['status', '--porcelain'])) throw new Error('The publish checkpoint was changed; operator inspection is required.');
+    if (await git(['write-tree']) !== state.validatedTree) throw new Error('The publish checkpoint no longer matches the verified tree; operator inspection is required.');
     await validateCommits({base:state.base, head:'HEAD', repositoryRoot:workspace, toolingRoot:controllerRoot});
     if (!await git(['diff', '--name-only', `${state.base}...HEAD`])) throw new Error('No repository change is ready for a review pull request.');
     await git(['push', 'origin', `HEAD:refs/heads/${state.branch}`]);

@@ -18,6 +18,12 @@ work. The same event is not processed twice; a new resume comment is an
 explicit new attempt. The controller reuses saved changes and a single branch.
 It never merges the review pull request or closes the source issue.
 
+The controller checks the source issue title, body, and discussion against the
+saved planning snapshot before resuming dependent work and before publication.
+New, edited, or removed discussion returns the delivery run to planning without
+discarding files. Its own audit comments and bare `/codex resume` commands do
+not invalidate the plan. These checks are snapshots, not a lock on issue edits.
+
 ## Runner prerequisites
 
 - A dedicated Linux runner with labels `self-hosted`, `linux`, `x64`, `omarchy`.
@@ -51,14 +57,24 @@ It never merges the review pull request or closes the source issue.
   to the runner service user and back it up as operational data.
 - Enable **Allow GitHub Actions to create and approve pull requests** in
   repository Actions settings if using `GITHUB_TOKEN` to create review PRs.
-  The controller creates PRs but never approves them. The repository currently
-  has this setting disabled; enabling it is an activation prerequisite.
+  The controller creates PRs but never approves them. Verify the setting before
+  activation; creation and approval share one GitHub setting. Keep default
+  workflow permissions read-only and grant writes only in the delivery job.
 
 Run `self-hosted-runner-smoke` with input `codex=true` for a check without a
 model turn. The setup step supplies the executable without copying
 authentication. Complete the device login as `github-runner`, using the
-file-backed store above, and rerun the smoke check before claiming end-to-end
-operation. The Linux package setup is runner infrastructure; local governance
+file-backed store above. The smoke check also runs the actual tool-isolation
+probes, without a model turn. It does not prove issue-to-PR operation.
+Specify the repository explicitly when dispatching outside its checkout:
+
+```bash
+gh workflow run self-hosted-runner-smoke.yml \
+  --repo sjefsharp/agentic-delivery --ref main -f codex=true
+```
+
+Before merge, replace `main` with the review pull request's head branch.
+The Linux package setup is runner infrastructure; local governance
 commands retain their separate cross-platform contract.
 
 Use `node scripts/codex-sandbox-check.mjs` for an opt-in, zero-generation Linux
@@ -89,7 +105,11 @@ inside a 55-minute Actions timeout. Validation repairs are capped at three.
 Quota updates are not reservations. Other clients and in-flight requests may
 consume the final reserve. There is no guarantee that arbitrary work completes
 in one window. The controller never buys credits, consumes quota resets, or
-switches billing or models to continue.
+switches billing or models to continue. It requires telemetry confirming that
+no spendable or unlimited credits are available; available credits or missing
+credit telemetry pause model execution. Do not enable automatic credit
+recharging or add credits while a delivery run is active. Other account clients
+and in-flight usage remain outside the controller's control.
 
 Each issue directory contains `state.json`, an append-only `audit.jsonl`, the
 working tree, and `CONTINUE.md` after a pause. The continuation prompt and
@@ -100,6 +120,16 @@ verification, commit, and publication. Commit/publication retries do not start
 a model or require available generation quota. Implementation questions return
 to planning while retaining the existing branch and work. The controller stops
 owned processes before committing and checks the verified tree again.
+
+Publication retries must still match that verified tree, even if somebody has
+made another clean commit locally. Invalid saved state is left untouched for
+operator inspection. Older state without a source snapshot returns to planning
+before dependent work can continue.
+
+Codex startup and protocol failures publish fixed diagnostic hints only. Raw
+errors may contain authentication data, so the controller does not copy them
+into logs or issue comments. Inspect unexpected failures locally as the runner
+operator; never paste credential-bearing output into the audit trail.
 
 If issue posting fails, the outbox remains in state for another attempt. A
 hard process kill may leave `account.lock`; inspect the referenced run and
@@ -115,3 +145,9 @@ The controller restricts its own publication to its recorded feature branch;
 that is not protection against other credentials. Review PR CI triggered by
 `GITHUB_TOKEN` can require **Approve workflows to run**. A human reviews the
 source issue, changed files, and checks, and separately authorizes the merge.
+
+Review generated workflow and test changes before approving their execution.
+Review PR CI runs repository code directly as the runner service account; it
+does not inherit the model-tool sandbox. Contributors with repository write
+access remain trusted to change workflows. Do not grant workflow approval to
+unreviewed code simply because the controller's own sandbox checks passed.

@@ -61,11 +61,22 @@ quota reservation. Finalization writes saved tasks and a continuation prompt
 without another model call. No credits, quota resets, API billing, account
 switching, or silent model substitution is permitted.
 
+Model execution also requires telemetry reporting no spendable or unlimited
+credits. Available credits or missing credit telemetry pause the delivery run.
+Do not add credits or enable automatic credit recharging during execution.
+This avoids relying on a quota interrupt alone to prevent credit spillover.
+
 Persistent runner state holds the working tree, plan, progress, audit outbox,
 and continuation prompt. Issue comments provide a human-readable audit trail.
 The controller uses the repository branch helper, validates changes, and
 publishes the recorded feature branch and review pull request. Validation
 repairs are bounded to three attempts per invocation.
+
+Source issue and discussion snapshots are checked before dependent resumption
+and publication. Changed input returns to planning while preserving files.
+Publication retries must match the verified tree. Invalid saved state remains
+untouched for operator inspection. Authentication-bearing Codex errors are
+replaced with fixed diagnostic hints before publication.
 
 Model tools use named permissions: restricted reads, read-only planning,
 workspace writes for implementation, read-only Git metadata, and no external

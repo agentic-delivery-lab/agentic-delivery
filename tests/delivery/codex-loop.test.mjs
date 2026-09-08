@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import { runTurn, validateOutcome, continuation } from '../../scripts/lib/codex-loop.mjs';
 
-const quota = (usedPercent = 20) => ({rateLimits:{primary:{usedPercent,windowDurationMins:300,resetsAt:Date.now()/1000+1000}}});
+const quota = (usedPercent = 20) => ({rateLimits:{credits:{hasCredits:false,unlimited:false},primary:{usedPercent,windowDurationMins:300,resetsAt:Date.now()/1000+1000}}});
 class FakeCodex extends EventEmitter {
   constructor(action) { super(); this.action=action; this.calls=[]; }
   async request(method, params) {
