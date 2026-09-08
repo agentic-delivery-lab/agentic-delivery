@@ -23,6 +23,9 @@ jobs:
        startsWith(github.event.comment.body, '/codex resume'))
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 55
+    env:
+      HOME: /var/lib/github-runner
+      CODEX_HOME: /var/lib/github-runner/.codex
     permissions:
       contents: write
       issues: write

@@ -17,3 +17,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 - [Pull request #8](https://github.com/sjefsharp/agentic-delivery/pull/8) introduced trunk-based delivery, Conventional Commits, Gitmoji, curated changelog validation, delivery-quality CI and repository settings that allow merge commits and delete merged head branches.
 - [Issue #11](https://github.com/sjefsharp/agentic-delivery/issues/11) adds issue-linked branch names, early validation and an open-source-issue check for supported branch creation and internal pull requests.
 - [Issue #12](https://github.com/sjefsharp/agentic-delivery/issues/12) adopts exact pnpm tooling with a strict 48-hour dependency release-age policy and portable Node.js ESM governance commands.
+
+### Fixed
+
+- Headless runner Codex authentication now uses the service account's explicit file-backed credential store and reports redacted app-server diagnostics when startup fails.

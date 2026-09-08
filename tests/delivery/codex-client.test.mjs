@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import path from 'node:path';
-import { quotaBoundary, verifyModels, modelEnvironment, deliveryPermissions, checkConfiguration } from '../../scripts/lib/codex-client.mjs';
+import { quotaBoundary, verifyModels, modelEnvironment, deliveryPermissions, checkConfiguration, AUTH_STORAGE_CONFIG, appServerFailure } from '../../scripts/lib/codex-client.mjs';
 
 const now = 1_800_000_000;
 const window = (usedPercent, windowDurationMins = 300) => ({ usedPercent, windowDurationMins, resetsAt: now + 100 });
@@ -74,4 +74,16 @@ test('unsafe user and project configuration fails before thread startup', () => 
     {model_providers:{openai:{base_url:'http://example.invalid'}}}, {chatgpt_base_url:'http://example.invalid'}]) {
     assert.throws(() => checkConfiguration(config), /configuration/);
   }
+});
+
+test('app-server diagnostics retain safe failure context without exposing credentials', () => {
+  assert.equal(
+    appServerFailure(1, null, 'Error: access_token=super-secret\nconnection refused'),
+    'Codex app-server stopped (1). Diagnostic: Error: access_token=[redacted]\nconnection refused',
+  );
+  assert.equal(appServerFailure(null, 'SIGTERM', ''), 'Codex app-server stopped (SIGTERM).');
+});
+
+test('headless app-server authentication uses the file-backed service credential store', () => {
+  assert.equal(AUTH_STORAGE_CONFIG, 'cli_auth_credentials_store="file"');
 });

@@ -42,6 +42,11 @@ test('quality workflows use the pinned pnpm action and preserve the infrastructu
   const smokeWorkflow = await text('.github/workflows/self-hosted-runner-smoke.yml');
   assert.ok(smokeWorkflow.includes('shell: bash'));
   assert.ok(smokeWorkflow.includes('runs-on: [self-hosted, linux, x64, omarchy]'));
+  const codexWorkflow = await text('.github/workflows/codex-delivery.yml');
+  for (const workflow of [smokeWorkflow, codexWorkflow]) {
+    assert.match(workflow, /HOME: \/var\/lib\/github-runner/);
+    assert.match(workflow, /CODEX_HOME: \/var\/lib\/github-runner\/\.codex/);
+  }
 });
 
 test('the hosted portability matrix is internal-only and tests the frozen install once per platform', async () => {

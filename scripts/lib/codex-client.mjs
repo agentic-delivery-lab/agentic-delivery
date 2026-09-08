@@ -10,6 +10,20 @@ export const MODELS = Object.freeze({
   implement: { model: 'gpt-5.6-luna', effort: 'max', mode: 'default' },
 });
 
+export const AUTH_STORAGE_CONFIG = 'cli_auth_credentials_store="file"';
+
+function redactProcessDiagnostic(value) {
+  return String(value)
+    .replace(/(\b(?:access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|token|secret|password)\b\s*[:=]\s*)[^\s,;]+/gi, '$1[redacted]')
+    .replace(/(\bBearer\s+)[^\s,;]+/gi, '$1[redacted]');
+}
+
+export function appServerFailure(code, signal, stderr = '') {
+  const stopped = `Codex app-server stopped (${code ?? signal}).`;
+  const diagnostic = redactProcessDiagnostic(stderr).trim();
+  return diagnostic ? `${stopped} Diagnostic: ${diagnostic.slice(-4000)}` : stopped;
+}
+
 export function quotaBoundary(response, now = Date.now() / 1000) {
   const buckets = Object.values(response?.rateLimitsByLimitId ?? {});
   if (response?.rateLimits) buckets.push(response.rateLimits);
@@ -120,15 +134,19 @@ export class CodexClient extends EventEmitter {
     for (const dir of ['home', 'tmp', 'cache', 'data']) mkdirSync(path.join(this.runtime, dir), {recursive:true, mode:0o700});
     this.toolEnv = modelEnvironment(env, this.runtime);
     this.permissions = deliveryPermissions([...runtimeFiles(env), ...readableFiles], this.runtime);
-    this.child = spawn(command, [...args, '-c', `permissions=${tomlValue(this.permissions)}`,
+    this.stderr = '';
+    this.child = spawn(command, [...args, '-c', AUTH_STORAGE_CONFIG, '-c', `permissions=${tomlValue(this.permissions)}`,
       '-c', `shell_environment_policy=${tomlValue({inherit:'none', set:this.toolEnv})}`,
       '-c', 'allow_login_shell=false', '-c', 'features.plugins=false', '-c', 'features.apps=false',
       '-c', 'features.network_proxy=true',
       '-c', 'features.remote_plugin=false', 'app-server', '--listen', 'stdio://'], {
-      cwd, env, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true, detached: process.platform !== 'win32',
+      cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32',
     });
     this.child.on('error', () => this.fail(new Error('Codex CLI could not start; check the runner installation.')));
-    this.child.on('exit', (code, signal) => this.fail(new Error(`Codex app-server stopped (${code ?? signal}).`)));
+    this.child.stderr.on('data', (chunk) => {
+      this.stderr = `${this.stderr}${chunk.toString()}`.slice(-4000);
+    });
+    this.child.on('close', (code, signal) => this.fail(new Error(appServerFailure(code, signal, this.stderr))));
     this.child.stdin.on('error', () => this.fail(new Error('Codex input pipe closed.')));
     this.lines = createInterface({ input: this.child.stdout });
     this.lines.on('line', (line) => {

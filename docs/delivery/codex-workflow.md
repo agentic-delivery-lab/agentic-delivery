@@ -27,9 +27,24 @@ It never merges the review pull request or closes the source issue.
   official Linux x64 package after SHA-256 verification. The dedicated tool
   cache keeps this installation separate from personal tools. The runner verifies
   both model/effort combinations, ChatGPT login, Plan mode, and quota telemetry.
-- ChatGPT login for the installed `codex` executable
-  under that user, `github-runner`. Another user's installation/login is not
-  sufficient. Never commit or paste the authentication file into an issue.
+- ChatGPT login for the installed `codex` executable under that user,
+  `github-runner`. Another user's installation/login is not sufficient. For a
+  headless runner, use the file-backed credential store so the service does not
+  depend on an interactive desktop keyring:
+
+  ```bash
+  sudo install -d -o github-runner -g github-runner -m 700 \
+    /var/lib/github-runner/.codex
+  sudo -H -u github-runner env \
+    HOME=/var/lib/github-runner \
+    CODEX_HOME=/var/lib/github-runner/.codex \
+    /opt/actions-runner/_work/_tool/codex-delivery/0.153.4/bin/codex \
+    -c 'cli_auth_credentials_store="file"' login --device-auth
+  ```
+
+  Complete the device login in a browser, then verify it with the same
+  `HOME`, `CODEX_HOME`, and `-c 'cli_auth_credentials_store="file"'` values.
+  Never commit, print, copy, or paste the authentication file into an issue.
 - Persistent writable state, defaulting to `.codex-delivery` beside
   `RUNNER_WORKSPACE`. Set repository variable `CODEX_DELIVERY_STATE_DIR` to an
   absolute directory outside disposable checkouts if needed. Restrict access
@@ -40,13 +55,11 @@ It never merges the review pull request or closes the source issue.
   has this setting disabled; enabling it is an activation prerequisite.
 
 Run `self-hosted-runner-smoke` with input `codex=true` for a check without a
-model turn. The initial runner check failed because the Actions service could
-not start Codex. The setup step now supplies the executable without copying or
-changing authentication. Run 34177945270 confirmed that the service account is
-not signed in. Complete `codex login --device-auth` as `github-runner`, using
-the installed executable, and rerun the smoke check before claiming
-end-to-end operation. The Linux package setup is runner infrastructure; local
-governance commands retain their separate cross-platform contract.
+model turn. The setup step supplies the executable without copying
+authentication. Complete the device login as `github-runner`, using the
+file-backed store above, and rerun the smoke check before claiming end-to-end
+operation. The Linux package setup is runner infrastructure; local governance
+commands retain their separate cross-platform contract.
 
 Use `node scripts/codex-sandbox-check.mjs` for an opt-in, zero-generation Linux
 boundary check. It retains an isolated inspection fixture and checks filesystem

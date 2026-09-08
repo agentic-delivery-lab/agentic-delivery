@@ -77,7 +77,10 @@ in the tested CLI. Dependency installation and audit instead allow only
 read-only, and governance validators come from the trusted controller checkout.
 Model tools use a temporary home without `CODEX_HOME` or workflow credentials.
 Configured hooks, notifications, and custom providers fail closed before a
-model thread starts. The runner uses a dedicated ChatGPT login.
+model thread starts. The runner uses a dedicated ChatGPT login in the
+`github-runner` account's file-backed credential store. This avoids depending
+on an interactive desktop keyring while keeping the credential directory
+restricted to that service account.
 
 ### Consequences
 

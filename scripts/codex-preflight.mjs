@@ -1,9 +1,9 @@
-import { CodexClient } from './lib/codex-client.mjs';
+import { AUTH_STORAGE_CONFIG, CodexClient } from './lib/codex-client.mjs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 try {
-  await promisify(execFile)('codex', ['login', 'status'], {timeout:15_000});
+  await promisify(execFile)('codex', ['-c', AUTH_STORAGE_CONFIG, 'login', 'status'], {timeout:15_000});
 } catch {
   console.error('Codex login is unavailable for this account. An operator must run codex login --device-auth as the runner service user. Do not copy or publish authentication files.');
   process.exit(1);
