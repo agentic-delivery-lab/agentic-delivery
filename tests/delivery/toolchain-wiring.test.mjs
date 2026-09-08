@@ -96,7 +96,14 @@ test('lifecycle preflight stops an invalid pnpm policy before the command body',
     ].join('\n'),
   );
   await writeWorkspace(60);
-  await writeFile(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
+  // pnpm 12 persists its own package-manager resolution in the first YAML
+  // document. Without it even `run probe` repairs the pin over the network
+  // before reaching the lifecycle hook. Reuse the reviewed resolution so this
+  // lifecycle test stays offline and tests the hook, not package resolution.
+  const lockedManager = (await readFile(path.join(repositoryRootFromTests(), 'pnpm-lock.yaml'), 'utf8'))
+    .split(/\r?\n---\r?\n/, 1)[0];
+  assert.match(lockedManager, /packageManagerDependencies:/);
+  await writeFile(path.join(repositoryRoot, 'pnpm-lock.yaml'), `${lockedManager}\n---\nlockfileVersion: 9.0\n`);
 
   const result = await runPackageScript(repositoryRoot, realPnpm, process.env);
 

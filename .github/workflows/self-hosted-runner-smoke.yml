@@ -2,6 +2,11 @@ name: self-hosted-runner-smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      codex:
+        description: Check Codex authentication and capabilities without a model turn
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -10,9 +15,14 @@ jobs:
   smoke:
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 5
+    env:
+      HOME: /var/lib/github-runner
+      CODEX_HOME: /var/lib/github-runner/.codex
     steps:
       - name: Check out the repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
       - name: Check the dedicated runner
         shell: bash
@@ -26,3 +36,22 @@ jobs:
           printf 'runner=%s\n' "$RUNNER_NAME"
           printf 'user=%s\n' "$(id -un)"
           printf 'workspace=%s\n' "$GITHUB_WORKSPACE"
+
+      - name: Set up pnpm and Node.js
+        if: inputs.codex
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Set up pinned Codex CLI
+        if: inputs.codex
+        run: node scripts/setup-runner-codex.mjs
+
+      - name: Check Codex without model execution
+        if: inputs.codex
+        run: node scripts/codex-preflight.mjs
+
+      - name: Check actual tool isolation without model execution
+        if: inputs.codex
+        run: node scripts/codex-sandbox-check.mjs

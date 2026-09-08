@@ -24,6 +24,9 @@
 
 ## Delivery workflow
 
+- For automated source issue execution, read [`.agents/codex-delivery.md`](.agents/codex-delivery.md) and [`docs/delivery/codex-workflow.md`](docs/delivery/codex-workflow.md). Preserve mandatory issue communication, clarification pauses, exact model settings, and the budget boundary.
+- GitHub Free does not enforce branch protection for this private repository. The main-branch protection rules below are repository policy; do not describe them as a hosting guarantee.
+
 - Use `$delivery-workflow` for changes that affect branches, commit history, pull requests, releases or `CHANGELOG.md`. The skill is implicitly available.
 - Keep `main` deployable. Work on a short-lived feature branch and make that branch the review pull-request head; `main` is the protected base. Never create a pull request from `main`.
 - Start supported work from a clean, synchronized `main` with `pnpm branch:start <type> <issue-number> <summary>`. The command requires an open source issue in this repository and creates a branch with an issue-linked branch name in the form `<type>/issue-<number>-<lowercase-kebab-case-summary>`.
