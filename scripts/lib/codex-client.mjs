@@ -11,6 +11,7 @@ export const MODELS = Object.freeze({
 });
 
 export const AUTH_STORAGE_CONFIG = 'cli_auth_credentials_store="file"';
+export const DEFAULT_PERMISSION_CONFIG = 'default_permissions="delivery-plan"';
 
 function redactProcessDiagnostic(value) {
   return String(value)
@@ -135,7 +136,8 @@ export class CodexClient extends EventEmitter {
     this.toolEnv = modelEnvironment(env, this.runtime);
     this.permissions = deliveryPermissions([...runtimeFiles(env), ...readableFiles], this.runtime);
     this.stderr = '';
-    this.child = spawn(command, [...args, '-c', AUTH_STORAGE_CONFIG, '-c', `permissions=${tomlValue(this.permissions)}`,
+    this.child = spawn(command, [...args, '-c', AUTH_STORAGE_CONFIG, '-c', DEFAULT_PERMISSION_CONFIG,
+      '-c', `permissions=${tomlValue(this.permissions)}`,
       '-c', `shell_environment_policy=${tomlValue({inherit:'none', set:this.toolEnv})}`,
       '-c', 'allow_login_shell=false', '-c', 'features.plugins=false', '-c', 'features.apps=false',
       '-c', 'features.network_proxy=true',

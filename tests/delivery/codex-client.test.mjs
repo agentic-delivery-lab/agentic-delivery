@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import path from 'node:path';
-import { quotaBoundary, verifyModels, modelEnvironment, deliveryPermissions, checkConfiguration, AUTH_STORAGE_CONFIG, appServerFailure } from '../../scripts/lib/codex-client.mjs';
+import { quotaBoundary, verifyModels, modelEnvironment, deliveryPermissions, checkConfiguration, AUTH_STORAGE_CONFIG, DEFAULT_PERMISSION_CONFIG, appServerFailure } from '../../scripts/lib/codex-client.mjs';
 
 const now = 1_800_000_000;
 const window = (usedPercent, windowDurationMins = 300) => ({ usedPercent, windowDurationMins, resetsAt: now + 100 });
@@ -86,4 +86,5 @@ test('app-server diagnostics retain safe failure context without exposing creden
 
 test('headless app-server authentication uses the file-backed service credential store', () => {
   assert.equal(AUTH_STORAGE_CONFIG, 'cli_auth_credentials_store="file"');
+  assert.equal(DEFAULT_PERMISSION_CONFIG, 'default_permissions="delivery-plan"');
 });
