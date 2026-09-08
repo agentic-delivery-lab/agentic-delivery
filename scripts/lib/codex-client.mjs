@@ -206,7 +206,7 @@ export class CodexClient extends EventEmitter {
     return this.request('thread/start', {
       cwd, model: MODELS.plan.model, modelProvider: 'openai', allowProviderModelFallback: false,
       permissions: 'delivery-plan', approvalPolicy: 'never', ephemeral: true,
-      developerInstructions, environments: [],
+      developerInstructions,
       config: {
         permissions: this.permissions, mcp_servers: mcpServers, web_search: 'disabled',
         features: { multi_agent: false, apps: false, plugins: false, remote_plugin: false, tool_suggest: false, network_proxy:true },

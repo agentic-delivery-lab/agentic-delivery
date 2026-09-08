@@ -7,7 +7,7 @@ test('model publication text cannot add commit bodies or close unrelated issues'
   for (const title of ['feat: ✨ work\n\nCloses #2', 'feat: ✨ fixes #2', 'x'.repeat(121)]) {
     assert.throws(() => checkPublicationText(title));
   }
-  for (const summary of ['Resolves org/repo#2', 'Closes https://github.com/org/repo/issues/2']) {
+  for (const summary of ['Resolves org/repo#2', 'Closes https://github.com/org/repo/issues/2', '**Resolves:** #2']) {
     assert.throws(() => checkPublicationText('feat: ✨ add intake', summary), /closing directives/);
   }
 });

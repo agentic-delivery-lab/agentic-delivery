@@ -25,6 +25,7 @@ export function validateOutcome(phase, text) {
     }
   }
   if (value.status !== 'needs_input' && value.questions.length) throw new Error('Unanswered questions prevent implementation or publication.');
+  if (value.status === 'needs_input' && !value.questions.some((question) => question.trim())) throw new Error('A clarification outcome must include a question.');
   if (phase === 'implement' && value.status === 'complete' && value.tasks.length) throw new Error('Remaining tasks prevent publication.');
   if (!value.summary.trim() || (phase === 'plan' && value.status === 'ready' && (!value.plan.trim() || !value.tasks.length))) {
     throw new Error('The structured outcome is incomplete.');
@@ -112,7 +113,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
       threadId, input: [{ type: 'text', text: prompt }],
       collaborationMode: { mode: selected.mode, settings: { model: selected.model, reasoning_effort: selected.effort, developer_instructions: null } },
       permissions: phase === 'plan' ? 'delivery-plan' : 'delivery-edit',
-      approvalPolicy: 'never', environments: [], serviceTierForTurn: 'default',
+      approvalPolicy: 'never', serviceTierForTurn: 'default',
       outputSchema: outcomeSchema(phase),
     });
     turnId = response.turn.id;
@@ -125,6 +126,7 @@ export function continuation(state) {
   return [
     `## Continuation for source issue #${state.issue}`,
     `Reason: ${state.reason ?? 'Work remains.'}`,
+    ...(state.shutdownError ? [`Shutdown warning: ${state.shutdownError}. The account lock requires operator inspection.`] : []),
     `Phase: ${state.phase}. Branch: ${state.branch ?? 'not created yet'}.`,
     `Saved progress: ${state.lastProgress ?? 'Intake has not completed.'}`,
     '### Remaining tasks',

@@ -31,6 +31,7 @@ test('uses actual Plan mode with Sol High, then Luna Max for implementation', as
     const start=client.calls.find(c=>c.method==='turn/start').params;
     assert.deepEqual(start.collaborationMode,{mode:phase==='plan'?'plan':'default',settings:{model:phase==='plan'?'gpt-5.6-sol':'gpt-5.6-luna',reasoning_effort:phase==='plan'?'high':'max',developer_instructions:null}});
     assert.equal(start.permissions,phase==='plan'?'delivery-plan':'delivery-edit');
+    assert.equal(start.environments,undefined,'an empty environment list disables all filesystem tools');
   }
 });
 

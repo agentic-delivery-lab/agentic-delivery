@@ -42,8 +42,9 @@ It never merges the review pull request or closes the source issue.
 Run `self-hosted-runner-smoke` with input `codex=true` for a check without a
 model turn. The initial runner check failed because the Actions service could
 not start Codex. The setup step now supplies the executable without copying or
-changing authentication. Run 34160939468 installed the CLI successfully, but the
-app server stopped during preflight. Resolve login and rerun the smoke check before claiming
+changing authentication. Run 34177945270 confirmed that the service account is
+not signed in. Complete `codex login --device-auth` as `github-runner`, using
+the installed executable, and rerun the smoke check before claiming
 end-to-end operation. The Linux package setup is runner infrastructure; local
 governance commands retain their separate cross-platform contract.
 
@@ -54,6 +55,15 @@ The managed proxy feature must be enabled explicitly; declaring domain rules
 alone does not enforce them. Tests have read-only workspace access and private
 writable temporary directories. Only dependency installation and audit can use
 the public npm registry. Governance validators run from the trusted checkout.
+The trusted test wrapper bypasses the proxy only for loopback in the isolated
+namespace, so local test servers work without access to runner-host services.
+
+`node scripts/codex-handoff-check.mjs` is an opt-in local check that consumes
+subscription allowance. It makes two bounded real model turns, verifies that
+Sol High does not write during planning, and checks Luna Max's resulting file.
+Do not add it to ordinary CI. An empty app-server environment list disables
+filesystem tools; the controller deliberately retains the default local
+environment with its named permissions.
 
 ## Budget boundary and saved work
 
@@ -72,6 +82,11 @@ Each issue directory contains `state.json`, an append-only `audit.jsonl`, the
 working tree, and `CONTINUE.md` after a pause. The continuation prompt and
 remaining tasks are also posted on the source issue without another model
 call. Answer open questions or wait for the reset, then `/codex resume`.
+Saved phases distinguish planning, branch creation, implementation,
+verification, commit, and publication. Commit/publication retries do not start
+a model or require available generation quota. Implementation questions return
+to planning while retaining the existing branch and work. The controller stops
+owned processes before committing and checks the verified tree again.
 
 If issue posting fails, the outbox remains in state for another attempt. A
 hard process kill may leave `account.lock`; inspect the referenced run and
