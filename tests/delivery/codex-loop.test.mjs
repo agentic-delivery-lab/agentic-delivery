@@ -109,6 +109,22 @@ test('active turns can outlive the stall interval while inactive turns are inter
   assert.equal(paused.status,'paused');
   assert.match(paused.reason,/no activity/i);
   assert.equal(inactive.calls.filter(c=>c.method==='turn/interrupt').length,1);
+
+  let foreignMessages=0;
+  let foreignTimer;
+  const foreign=new FakeCodex((client)=> {
+    foreignTimer=setInterval(()=> {
+      foreignMessages++;
+      client.emit('message',{method:'thread/tokenUsage/updated',params:{threadId:'another-thread',turnId:'another-turn'}});
+    },2);
+  });
+  const foreignPaused=await runTurn({
+    client:foreign,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{},
+    stallTimeoutMs:15,pollMs:1_000,
+  });
+  clearInterval(foreignTimer);
+  assert.equal(foreignPaused.status,'paused');
+  assert.ok(foreignMessages < 15,'another thread cannot keep this turn active');
 });
 
 test('structured model progress becomes concise Markdown instead of raw JSON', () => {

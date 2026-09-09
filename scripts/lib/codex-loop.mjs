@@ -162,7 +162,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     const messageTurnId = p.turnId ?? p.turn?.id;
     if (turnId && messageTurnId && messageTurnId !== turnId) return;
     if (message.method === 'turn/started') turnId = p.turn.id;
-    if (message.method !== 'turn/completed') recordActivity();
+    if (p.threadId === threadId && message.method !== 'turn/completed') recordActivity();
     if (message.id !== undefined && message.method) {
       turnId ??= p.turnId;
       const questions = p.questions?.map((q) => `${q.question}${q.options?.length ? ` Options: ${q.options.map((o) => `${o.label}: ${o.description}`).join('; ')}` : ''}`);
