@@ -117,10 +117,11 @@ without another model call. No credits, quota resets, API billing, account
 switching, or silent model substitution is permitted.
 
 Model turns have no independent absolute duration limit. A 20-minute inactivity
-watchdog is reset by activity for the current turn and interrupts only a turn
-that stops producing activity. A 5.5-hour controller timeout and a 350-minute
-Actions timeout are recovery failsafes, not subscription budgets; the gap lets
-the controller save its handoff before Actions stops the job.
+watchdog starts after `turn/start` acknowledges the active turn, is reset by
+activity for that turn, and interrupts only a turn that stops producing
+activity. A 5.5-hour controller timeout and a 350-minute Actions timeout are
+recovery failsafes, not subscription budgets; the gap lets the controller save
+its handoff before Actions stops the job.
 
 Implementation outcomes distinguish `continue`, `complete`, and `needs_input`.
 `continue` carries exact remaining implementation tasks and immediately starts

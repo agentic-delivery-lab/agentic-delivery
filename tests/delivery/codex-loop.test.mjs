@@ -127,6 +127,26 @@ test('active turns can outlive the stall interval while inactive turns are inter
   assert.ok(foreignMessages < 15,'another thread cannot keep this turn active');
 });
 
+test('the inactivity watchdog starts after turn startup is acknowledged', async () => {
+  const client=new FakeCodex(()=>{});
+  const request=client.request.bind(client);
+  client.request=async (method,params) => {
+    if(method!=='turn/start') return request(method,params);
+    client.calls.push({method,params});
+    await new Promise((resolve)=>setTimeout(resolve,25));
+    setImmediate(()=>client.finish('{"status":"complete"}'));
+    return {turn:{id:'turn-1'}};
+  };
+
+  const result=await runTurn({
+    client,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{},
+    stallTimeoutMs:10,pollMs:1_000,
+  });
+
+  assert.equal(result.status,'completed');
+  assert.equal(client.calls.filter(c=>c.method==='turn/interrupt').length,0);
+});
+
 test('structured model progress becomes concise Markdown instead of raw JSON', () => {
   const text = formatProgressComment('plan', JSON.stringify({
     status:'ready',

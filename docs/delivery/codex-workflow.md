@@ -170,11 +170,11 @@ environment with its named permissions.
 The controller checks all returned usage windows and stops at 98 percent
 usage. It also stops if telemetry cannot be read. Five hours describes the
 subscription window and is the normal model-execution boundary. A turn has no
-independent absolute duration limit: its 20-minute inactivity watchdog resets
-whenever the current turn produces activity. The 5.5-hour controller timeout
-and 350-minute Actions timeout are recovery failsafes. Their gap gives the
-controller time to save a handoff before Actions stops the job. Validation
-repairs are capped at three.
+independent absolute duration limit: its 20-minute inactivity watchdog starts
+after `turn/start` acknowledges the active turn and resets whenever that turn
+produces activity. The 5.5-hour controller timeout and 350-minute Actions
+timeout are recovery failsafes. Their gap gives the controller time to save a
+handoff before Actions stops the job. Validation repairs are capped at three.
 
 Implementation can span multiple model turns in one run. A `continue` outcome
 records exact remaining implementation tasks and starts the next turn without

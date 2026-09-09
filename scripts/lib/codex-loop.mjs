@@ -183,7 +183,6 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
   client.on('message', onMessage);
   client.on('failure', onFailure);
   signal?.addEventListener('abort', onAbort, { once: true });
-  recordActivity();
   const selected = MODELS[phase];
   try {
     const response = await client.request('turn/start', {
@@ -194,6 +193,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
       outputSchema: outcomeSchema(phase),
     });
     turnId = response.turn.id;
+    recordActivity();
     if (stopped && !settled) await client.request('turn/interrupt', { threadId, turnId });
   } catch (error) { finish(stopped ?? { status: 'paused', reason: error.message }); }
   return result;
