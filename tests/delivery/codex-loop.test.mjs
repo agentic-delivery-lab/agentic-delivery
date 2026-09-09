@@ -50,9 +50,20 @@ test('interrupts on clarification without inventing an answer', async () => {
 });
 
 test('interrupts near exhaustion and refuses to start when quota is unavailable', async () => {
-  const client=new FakeCodex((c)=>c.emit('message',{method:'account/rateLimits/updated',params:quota(98)}));
+  const client=new FakeCodex((c)=>c.emit('message',{method:'account/rateLimits/updated',params:{rateLimits:{primary:{usedPercent:98}}}}));
+  let reads=0;
+  const request=client.request.bind(client);
+  client.request=async (method,params) => {
+    if(method==='account/rateLimits/read') {
+      client.calls.push({method,params});
+      return reads++ ? quota(98) : quota();
+    }
+    return request(method,params);
+  };
   const result=await runTurn({client,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{}});
   assert.equal(result.status,'paused');
+  assert.match(result.reason,/allowance/i);
+  assert.equal(reads,2,'a sparse notification triggers a full quota read');
   assert.equal(client.calls.filter(c=>c.method==='turn/interrupt').length,1);
   const unavailable=new FakeCodex(()=>assert.fail('must not generate'));
   unavailable.request=async (method)=> {assert.equal(method,'account/rateLimits/read');return {};};
@@ -70,6 +81,50 @@ test('invalid structured plans cannot advance to implementation', () => {
   assert.throws(()=>validateOutcome('plan','plain text'),/structured/);
   assert.throws(()=>validateOutcome('plan',JSON.stringify({status:'ready',questions:['Unanswered']})),/structured/);
   assert.throws(()=>validateOutcome('implement',JSON.stringify({status:'complete',summary:'done',tasks:[],questions:['Which one?']})),/questions/);
+  assert.throws(()=>validateOutcome('implement',JSON.stringify({status:'continue',summary:'working',tasks:[],questions:[]})),/remaining task/);
+  let error;
+  try { validateOutcome('implement',JSON.stringify({status:'complete',summary:'done',tasks:['Run verification.'],questions:[]})); }
+  catch (failure) { error=failure; }
+  assert.match(error.message,/Remaining tasks/);
+  assert.deepEqual(error.outcome.tasks,['Run verification.']);
+});
+
+test('active turns can outlive the stall interval while inactive turns are interrupted', async () => {
+  const active=new FakeCodex((client)=> {
+    setTimeout(()=>client.emit('message',{method:'thread/tokenUsage/updated',params:{threadId:'thread-1',turnId:'turn-1'}}),25);
+    setTimeout(()=>client.finish('{"status":"complete"}'),55);
+  });
+  const completed=await runTurn({
+    client:active,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{},
+    stallTimeoutMs:40,pollMs:1_000,
+  });
+  assert.equal(completed.status,'completed');
+  assert.equal(active.calls.filter(c=>c.method==='turn/interrupt').length,0);
+
+  const inactive=new FakeCodex(()=>{});
+  const paused=await runTurn({
+    client:inactive,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{},
+    stallTimeoutMs:10,pollMs:1_000,
+  });
+  assert.equal(paused.status,'paused');
+  assert.match(paused.reason,/no activity/i);
+  assert.equal(inactive.calls.filter(c=>c.method==='turn/interrupt').length,1);
+
+  let foreignMessages=0;
+  let foreignTimer;
+  const foreign=new FakeCodex((client)=> {
+    foreignTimer=setInterval(()=> {
+      foreignMessages++;
+      client.emit('message',{method:'thread/tokenUsage/updated',params:{threadId:'another-thread',turnId:'another-turn'}});
+    },2);
+  });
+  const foreignPaused=await runTurn({
+    client:foreign,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{},
+    stallTimeoutMs:15,pollMs:1_000,
+  });
+  clearInterval(foreignTimer);
+  assert.equal(foreignPaused.status,'paused');
+  assert.ok(foreignMessages < 15,'another thread cannot keep this turn active');
 });
 
 test('structured model progress becomes concise Markdown instead of raw JSON', () => {

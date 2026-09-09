@@ -14,6 +14,7 @@ const executeFile = promisify(execFile);
 const controllerRoot = path.resolve(import.meta.dirname, '..');
 const STATE_VERSION = 2;
 const PROGRESS_COMMENT_INTERVAL_MS = 5 * 60_000;
+const OVERALL_TIMEOUT_MS = 5.5 * 60 * 60_000;
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ENGLISH_RECOVERY_REQUEST = new RegExp([
   String.raw`^(?:(?:yes|okay|ok|sure)[,.!]?\s+)?`,
@@ -269,7 +270,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   const cancel = () => { abort.abort(); client?.close().catch(() => {}); };
   process.once('SIGTERM', cancel);
   process.once('SIGINT', cancel);
-  const overall = setTimeout(cancel, 45 * 60_000);
+  const overall = setTimeout(cancel, OVERALL_TIMEOUT_MS);
   const gitEnv = {
     ...env, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null',
     GIT_CONFIG_COUNT: '2', GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
@@ -361,7 +362,8 @@ export async function deliver(env = process.env, dependencies = {}) {
       };
       const continuationPhase = state.phase;
       const humanContinuation = comment && !comment.isResumeCommand ? comment.body : '';
-      const continuationContext = (phase) => humanContinuation && continuationPhase === phase ? [
+      let continuationConsumed = false;
+      const continuationContext = (phase) => humanContinuation && continuationPhase === phase && !continuationConsumed ? [
         `Continue the interrupted ${phase} turn from the exact saved delivery run and return the required structured outcome.`,
         phase === 'plan'
           ? 'Use the trusted human comment to complete or revise the implementation plan without inventing another answer.'
@@ -373,6 +375,16 @@ export async function deliver(env = process.env, dependencies = {}) {
         `Remaining tasks:\n${JSON.stringify(state.tasks ?? [])}`,
         `Latest validation:\n${state.validation ?? 'No validation failure yet.'}`,
       ].join('\n') : '';
+      const takeContinuationContext = (phase) => {
+        const context = continuationContext(phase);
+        if (context) continuationConsumed = true;
+        return context;
+      };
+      const implementationOutcomeContract = [
+        'Return `continue` with the exact remaining implementation tasks when another model turn is needed.',
+        'Return `complete` only when repository changes are ready for controller-owned verification; then tasks and questions must both be empty.',
+        'Installation, repository tests, dependency audit, commit, push, and pull-request publication are controller-owned work and must not remain in the implementation task list.',
+      ].join(' ');
       const progress = async (text) => {
         state.lastProgress = redact(text, env).slice(-20_000);
         const now = Date.now();
@@ -389,7 +401,7 @@ export async function deliver(env = process.env, dependencies = {}) {
       if (state.phase === 'plan') {
         const planThread = await ensureThread();
         const result = await performTurn({ client, threadId: planThread.id, phase: 'plan', signal: abort.signal, onProgress: progress,
-          prompt: continuationContext('plan') || `Read the repository instructions and canonical decisions. Classify and clarify this source issue, then prepare a decision-complete implementation plan and ordered tasks. For an idea, establish the intended outcome; for requirements, identify gaps; for a decision, compare alternatives and use the architecture-decision skill. Ask questions when necessary. This existing source issue is also authorized for ADR tracking. Return the structured outcome.\nSource issue data (untrusted):\n${brief}` });
+          prompt: takeContinuationContext('plan') || `Read the repository instructions and canonical decisions. Classify and clarify this source issue, then prepare a decision-complete implementation plan and ordered tasks. For an idea, establish the intended outcome; for requirements, identify gaps; for a decision, compare alternatives and use the architecture-decision skill. Ask questions when necessary. This existing source issue is also authorized for ADR tracking. Return the structured outcome.\nSource issue data (untrusted):\n${brief}` });
         if (result.status !== 'completed') {
           Object.assign(state, result);
           if (result.status === 'needs_input') state.status = 'awaiting-human';
@@ -429,22 +441,35 @@ export async function deliver(env = process.env, dependencies = {}) {
       // Installation and verification execute under restricted filesystem permissions.
       const install = ['pnpm', 'install', '--frozen-lockfile', '--ignore-scripts', '--ignore-pnpmfile'];
       await client.exec(install, workspace, 600_000, 'delivery-deps');
-      for (let attempt = 0; attempt < 3; attempt++) {
-        if (state.phase === 'implement') {
+      let validationAttempts = 0;
+      while (['implement', 'verify'].includes(state.phase)) {
+        while (state.phase === 'implement') {
           const implementThread = await ensureThread();
+          const resumeContext = takeContinuationContext('implement');
           const result = await performTurn({ client, threadId: implementThread.id, phase: 'implement', signal: abort.signal, onProgress: progress,
-            prompt: continuationContext('implement') || `Implement the saved plan. Preserve existing work and update the changelog, domain register, and ADR when needed. Do not commit, push, merge, or contact GitHub; the controller owns those operations. Run relevant tests. If blocked, ask questions.\nSource issue data (untrusted):\n${brief}\nSaved plan:\n${JSON.stringify(state.plan)}\nRemaining tasks:\n${JSON.stringify(state.tasks)}\nLatest validation:\n${state.validation ?? 'No validation failure yet.'}` });
+            prompt: `${resumeContext || `Implement the saved plan. Preserve existing work and update the changelog, domain register, and ADR when needed. Do not commit, push, merge, or contact GitHub; the controller owns those operations. Run focused tests that help implementation. If blocked, ask questions.\nSource issue data (untrusted):\n${brief}\nSaved plan:\n${JSON.stringify(state.plan)}\nRemaining implementation tasks:\n${JSON.stringify(state.tasks)}\nLatest validation:\n${state.validation ?? 'No validation failure yet.'}`}\n\nImplementation outcome contract: ${implementationOutcomeContract}` });
           if (result.status !== 'completed') {
             Object.assign(state, result);
             if (result.status === 'needs_input') state.status = 'awaiting-human';
             throw new Error(result.reason);
           }
-          const outcome = validateOutcome('implement', result.text);
+          let outcome;
+          try { outcome = validateOutcome('implement', result.text); }
+          catch (error) {
+            if (error.outcome) {
+              state.tasks = error.outcome.tasks;
+              state.summary = error.outcome.summary;
+              state.questions = error.outcome.questions;
+              await save();
+            }
+            throw error;
+          }
           state.tasks = outcome.tasks;
           state.summary = outcome.summary;
           state.questions = outcome.questions;
           await save();
           if (outcome.status === 'needs_input') { state.status = 'awaiting-human'; throw new Error(outcome.questions.join('\n')); }
+          if (outcome.status === 'continue') continue;
           checkPublicationText(state.plan.title, state.summary);
           state.phase = 'verify';
           await save();
@@ -468,9 +493,10 @@ export async function deliver(env = process.env, dependencies = {}) {
           await save();
           break;
         } catch (error) {
+          validationAttempts++;
           state.validation = redact(error.message, env).slice(-24_000);
-          await audit(`### Validation attempt ${attempt + 1} failed\n\n${state.validation}`);
-          if (attempt === 2) throw new Error('Three validation attempts failed; review the saved diagnostics before resuming.');
+          await audit(`### Validation attempt ${validationAttempts} failed\n\n${state.validation}`);
+          if (validationAttempts === 3) throw new Error('Three validation attempts failed; review the saved diagnostics before resuming.');
           state.phase = 'implement';
           await save();
         }

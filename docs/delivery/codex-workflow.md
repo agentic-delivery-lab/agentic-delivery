@@ -66,8 +66,11 @@ Manual recovery: codex resume <UUID>
 
 The next accepted owner comment is supplied directly to the resumed turn with
 the saved issue brief, progress, implementation plan, remaining tasks, and
-validation context. Comments at or before the waiting boundary and duplicate
-event deliveries are ignored. Bot-authored comments are excluded from issue
+validation context. It is consumed by that first resumed turn; any further
+implementation turns continue automatically from saved tasks without replaying
+the comment or asking the owner to comment again. Comments at or before the
+waiting boundary and duplicate event deliveries are ignored. Bot-authored
+comments are excluded from issue
 snapshots so automation cannot change the planning digest or create a loop.
 
 Legacy state from the historical #17 and #18 runs had no persistent UUID. On
@@ -163,9 +166,21 @@ environment with its named permissions.
 
 The controller checks all returned usage windows and stops at 98 percent
 usage. It also stops if telemetry cannot be read. Five hours describes the
-subscription window, not a permissible continuous job duration. Each model
-turn has a 20-minute limit; each invocation has a 45-minute controller limit
-inside a 55-minute Actions timeout. Validation repairs are capped at three.
+subscription window and is the normal model-execution boundary. A turn has no
+independent absolute duration limit: its 20-minute inactivity watchdog resets
+whenever the current turn produces activity. The 5.5-hour controller timeout
+and 350-minute Actions timeout are recovery failsafes. Their gap gives the
+controller time to save a handoff before Actions stops the job. Validation
+repairs are capped at three.
+
+Implementation can span multiple model turns in one run. A `continue` outcome
+records exact remaining implementation tasks and starts the next turn without
+human intervention. A `complete` outcome must have no remaining tasks or
+questions. Installation, repository verification, audit, commit, push, and
+pull-request publication are controller-owned work and therefore do not belong
+in the model's remaining task list. If a structured completion is rejected,
+the controller preserves its reported tasks in the handoff instead of showing
+an older plan.
 
 Quota updates are not reservations. Other clients and in-flight requests may
 consume the final reserve. There is no guarantee that arbitrary work completes
