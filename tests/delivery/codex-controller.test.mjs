@@ -84,7 +84,9 @@ async function fixture(t) {
     runTurn:async ({phase,threadId,prompt,onProgress}) => {
       calls.turns.push(phase);
       calls.prompts.push({phase,threadId,prompt});
-      if (faults.turnPause) return {status:'paused', reason:'Quota reserve reached.'};
+      if (faults.turnPause || (phase === 'implement' && faults.pauseImplementation)) {
+        return {status:'paused', reason:'Quota reserve reached.'};
+      }
       if (phase === 'plan') {
         if (faults.progressBurst) {
           await onProgress(JSON.stringify({...plan,summary:'Inspecting the repository.',tasks:['Inspect files.']}));
@@ -97,6 +99,11 @@ async function fixture(t) {
       if (faults.closeDuringTurn) faults.sourceState = 'closed';
       if (faults.editDuringTurn) faults.sourceBody = 'Create a different file instead.';
       if (faults.implementationQuestion) return {status:'completed',text:JSON.stringify({status:'needs_input',summary:'Need a decision.',tasks:['Resolve the decision.'],questions:['Which wording?']})};
+      if (faults.invalidCompleteTasks) return {status:'completed',text:JSON.stringify({status:'complete',summary:'Implementation is ready.',tasks:['Run controller verification.'],questions:[]})};
+      if (faults.incompleteTurns > 0) {
+        faults.incompleteTurns--;
+        return {status:'completed',text:JSON.stringify({status:'continue',summary:'Implementation is progressing.',tasks:['Finish the implementation.'],questions:[]})};
+      }
       return {status:'completed',text:JSON.stringify({status:'complete',summary:'Added result.txt.',tasks:[],questions:[]})};
     },
     validateCommits:async ({repositoryRoot,toolingRoot}) => {
@@ -138,6 +145,46 @@ test('publishes one recorded branch and PR with a complete issue audit trail', a
   assert.ok(validators.length); assert.ok(validators.every(({command}) => !command[1].startsWith(f.workspace)));
   await assert.rejects(access(path.join(f.stateRoot,'account.lock')));
   await f.run(); assert.equal(f.calls.prs.length,1); assert.equal(f.calls.turns.length,2);
+});
+
+test('continues incomplete implementation turns automatically before verification', async (t) => {
+  const f = await fixture(t);
+  f.faults.incompleteTurns = 4;
+  await f.run();
+
+  assert.equal((await f.state()).status,'ready');
+  assert.deepEqual(f.calls.turns,['plan','implement','implement','implement','implement','implement']);
+  assert.equal(f.calls.prs.length,1);
+  assert.ok(f.calls.prompts.slice(1).every(({prompt}) => prompt.includes('controller-owned verification')));
+});
+
+test('an owner continue comment resumes implementation and is consumed once across automatic turns', async (t) => {
+  const f = await fixture(t);
+  f.faults.pauseImplementation = true;
+  assert.equal((await f.run()).status,'paused');
+
+  f.faults.pauseImplementation = false;
+  f.faults.incompleteTurns = 1;
+  await f.comment({id:211,body:'continue'});
+  await f.run();
+
+  assert.equal((await f.state()).status,'ready');
+  const implementationPrompts = f.calls.prompts.filter(({phase}) => phase === 'implement');
+  assert.equal(implementationPrompts.length,3);
+  assert.match(implementationPrompts[1].prompt,/Human continuation comment[\s\S]*continue/);
+  assert.doesNotMatch(implementationPrompts[2].prompt,/Human continuation comment/);
+  assert.match(implementationPrompts[2].prompt,/Remaining implementation tasks/);
+});
+
+test('persists exact tasks from a rejected completion outcome', async (t) => {
+  const f = await fixture(t);
+  f.faults.invalidCompleteTasks = true;
+  assert.equal((await f.run()).status,'paused');
+
+  const state = await f.state();
+  assert.deepEqual(state.tasks,['Run controller verification.']);
+  assert.match(await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8'),/Run controller verification/);
+  assert.doesNotMatch(await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8'),/Add result\.txt/);
 });
 
 test('coalesces rapid progress updates within one delivery phase', async (t) => {

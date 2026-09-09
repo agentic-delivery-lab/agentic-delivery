@@ -3,7 +3,7 @@ import { MODELS, quotaBoundary } from './codex-client.mjs';
 const strings = { type: 'array', items: { type: 'string' } };
 export function outcomeSchema(phase) {
   const properties = {
-    status: { type: 'string', enum: phase === 'plan' ? ['ready', 'needs_input'] : ['complete', 'needs_input'] },
+    status: { type: 'string', enum: phase === 'plan' ? ['ready', 'needs_input'] : ['continue', 'complete', 'needs_input'] },
     summary: { type: 'string' }, tasks: strings, questions: strings,
     ...(phase === 'plan' ? {
       kind: { type: 'string', enum: ['idea', 'requirements', 'decision', 'mixed'] },
@@ -24,11 +24,17 @@ export function validateOutcome(phase, text) {
       throw new Error(`Invalid structured outcome: ${key}.`);
     }
   }
-  if (value.status !== 'needs_input' && value.questions.length) throw new Error('Unanswered questions prevent implementation or publication.');
-  if (value.status === 'needs_input' && !value.questions.some((question) => question.trim())) throw new Error('A clarification outcome must include a question.');
-  if (phase === 'implement' && value.status === 'complete' && value.tasks.length) throw new Error('Remaining tasks prevent publication.');
+  const reject = (message) => {
+    const error = new Error(message);
+    error.outcome = value;
+    throw error;
+  };
+  if (value.status !== 'needs_input' && value.questions.length) reject('Unanswered questions prevent implementation or publication.');
+  if (value.status === 'needs_input' && !value.questions.some((question) => question.trim())) reject('A clarification outcome must include a question.');
+  if (phase === 'implement' && value.status === 'continue' && !value.tasks.some((task) => task.trim())) reject('A continuation outcome must include a remaining task.');
+  if (phase === 'implement' && value.status === 'complete' && value.tasks.length) reject('Remaining tasks prevent publication.');
   if (!value.summary.trim() || (phase === 'plan' && value.status === 'ready' && (!value.plan.trim() || !value.tasks.length))) {
-    throw new Error('The structured outcome is incomplete.');
+    reject('The structured outcome is incomplete.');
   }
   return value;
 }
@@ -93,7 +99,7 @@ export function formatPlanComment(plan) {
   ].join('\n');
 }
 
-export async function runTurn({ client, threadId, phase, prompt, onProgress, signal, timeoutMs = 20 * 60_000, pollMs = 15_000 }) {
+export async function runTurn({ client, threadId, phase, prompt, onProgress, signal, stallTimeoutMs = 20 * 60_000, pollMs = 15_000 }) {
   let budget;
   try { budget = quotaBoundary(await client.request('account/rateLimits/read')); }
   catch { return { status: 'paused', reason: 'Quota telemetry is unavailable.' }; }
@@ -106,6 +112,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
   let finalText = '';
   let progress = Promise.resolve();
   let interruptTimer;
+  let stallTimer;
   let polling = false;
   let resolveResult;
   const closeClient = () => { Promise.resolve(client.close()).catch(() => {}); };
@@ -114,8 +121,8 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     if (settled) return;
     settled = true;
     clearInterval(pollTimer);
-    clearTimeout(deadline);
     clearTimeout(interruptTimer);
+    clearTimeout(stallTimer);
     client.off('message', onMessage);
     client.off('failure', onFailure);
     signal?.removeEventListener('abort', onAbort);
@@ -127,17 +134,35 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     interruptTimer = setTimeout(() => { closeClient(); finish(stopped); }, 5000);
     if (turnId) client.request('turn/interrupt', { threadId, turnId }).catch(() => { closeClient(); finish(stopped); });
   };
+  const recordActivity = () => {
+    if (stopped || settled) return;
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => stop('The Codex turn produced no activity within the stall timeout.'), stallTimeoutMs);
+  };
+  const checkBudget = async () => {
+    if (polling || stopped || settled) return;
+    polling = true;
+    try {
+      budget = quotaBoundary(await client.request('account/rateLimits/read'));
+      if (budget.stop) stop(budget.reason);
+    } catch { stop('Quota telemetry became unavailable.'); }
+    finally { polling = false; }
+  };
   const onAbort = () => stop('Workflow cancelled; saved work can be resumed.');
   const onFailure = () => finish(stopped ?? { status: 'paused', reason: 'Codex app-server disconnected.' });
   const onMessage = (message) => {
     const p = message.params ?? {};
     if (message.method === 'account/rateLimits/updated') {
-      budget = quotaBoundary(p);
-      if (budget.stop) stop(budget.reason);
+      // Notifications may be sparse. Read the complete snapshot before making
+      // a subscription-budget decision.
+      void checkBudget();
       return;
     }
     if (p.threadId && p.threadId !== threadId) return;
+    const messageTurnId = p.turnId ?? p.turn?.id;
+    if (turnId && messageTurnId && messageTurnId !== turnId) return;
     if (message.method === 'turn/started') turnId = p.turn.id;
+    if (message.method !== 'turn/completed') recordActivity();
     if (message.id !== undefined && message.method) {
       turnId ??= p.turnId;
       const questions = p.questions?.map((q) => `${q.question}${q.options?.length ? ` Options: ${q.options.map((o) => `${o.label}: ${o.description}`).join('; ')}` : ''}`);
@@ -154,19 +179,11 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
         : { status: 'paused', reason: `Codex turn ended with status ${p.turn.status}.` })));
     }
   };
-  const pollTimer = setInterval(async () => {
-    if (polling || stopped || settled) return;
-    polling = true;
-    try {
-      budget = quotaBoundary(await client.request('account/rateLimits/read'));
-      if (budget.stop) stop(budget.reason);
-    } catch { stop('Quota telemetry became unavailable.'); }
-    finally { polling = false; }
-  }, pollMs);
-  const deadline = setTimeout(() => stop('The bounded Codex turn time elapsed.'), timeoutMs);
+  const pollTimer = setInterval(checkBudget, pollMs);
   client.on('message', onMessage);
   client.on('failure', onFailure);
   signal?.addEventListener('abort', onAbort, { once: true });
+  recordActivity();
   const selected = MODELS[phase];
   try {
     const response = await client.request('turn/start', {
