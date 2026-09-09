@@ -116,8 +116,9 @@ test('completed plans keep details available without overwhelming the issue time
 
 test('continuation includes source, phase, saved work, and outstanding tasks', () => {
   const text=continuation({issue:15,status:'paused',phase:'implement',reason:'Quota reserve',branch:'feat/issue-15-change',plan:{plan:'The plan',tasks:['First task']},tasks:['Remaining task'],lastProgress:'Edited controller'});
-  for(const value of ['Delivery paused: recovery required','#15','Implement','Quota reserve','feat/issue-15-change','Remaining task','Edited controller','/codex resume']) assert.ok(text.includes(value),value);
+  for(const value of ['Delivery paused: recovery required','#15','Implement','Quota reserve','feat/issue-15-change','Remaining task','Edited controller','Please continue from the saved work.']) assert.ok(text.includes(value),value);
   assert.match(text,/No decision is requested/);
+  assert.doesNotMatch(text,/comment `\/codex resume`/);
 });
 
 test('awaiting-human handoffs lead with questions and separate recovery details', () => {

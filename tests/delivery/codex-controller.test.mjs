@@ -155,7 +155,9 @@ test('publication retry consumes no model turn or account preflight', async (t) 
   const f = await fixture(t); f.faults.failPublish = true;
   assert.equal((await f.run()).status,'paused');
   assert.equal((await f.state()).phase,'publish');
-  f.faults.failPublish = false; f.faults.quota = true; await f.resume();
+  f.faults.failPublish = false; f.faults.quota = true;
+  await f.comment({id:198,body:'Please continue from the saved work.'});
+  await f.run();
   assert.equal((await f.state()).status,'ready'); assert.equal(f.calls.clients,1);
   assert.deepEqual(f.calls.turns,['plan','implement']);
 });
@@ -309,6 +311,10 @@ test('trusted owner comments continue the exact waiting session and finish succe
     `codex resume ${SESSION_ID}`,
   ]) assert.ok(handoff.includes(value),value);
 
+  await f.comment({id:199,body:'Please continue from the saved work.'});
+  assert.equal((await f.run())?.status,'ignored');
+  assert.equal((await f.state()).status,'awaiting-human');
+
   f.faults.questions = false;
   await f.comment({id:200,body:'Use the existing result file.'});
   const result = await f.run();
@@ -323,21 +329,28 @@ test('trusted owner comments continue the exact waiting session and finish succe
   assert.doesNotMatch(resumedImplementation.prompt,/Continue the interrupted plan turn/);
 });
 
-test('bare resume recovers a technical pause, while a plain comment does not', async (t) => {
+test('natural-language owner requests recover a technical pause in the exact session', async (t) => {
+  const f = await fixture(t);
+  f.faults.turnPause = true;
+  assert.equal((await f.run()).status,'paused');
+
+  f.faults.turnPause = false;
+  await f.comment({id:201,body:'Please continue from the saved work.'});
+  await f.run();
+  assert.equal((await f.state()).status,'ready');
+  assert.deepEqual(f.calls.threads,[{method:'start'},{method:'resume',sessionId:SESSION_ID}]);
+  assert.ok(f.calls.prompts.some(({prompt}) => prompt.includes('Please continue from the saved work.')));
+});
+
+test('ordinary owner feedback does not accidentally recover a technical pause', async (t) => {
   const f = await fixture(t);
   f.faults.turnPause = true;
   assert.equal((await f.run()).status,'paused');
   const pausedTurns = f.calls.turns.length;
 
-  await f.comment({id:201,body:'Please continue.'});
+  await f.comment({id:202,body:'Do not continue yet; I am reviewing the plan.'});
   assert.equal((await f.run())?.status,'ignored');
   assert.equal(f.calls.turns.length,pausedTurns);
-
-  f.faults.turnPause = false;
-  await f.comment({id:202,body:'/codex resume'});
-  await f.run();
-  assert.equal((await f.state()).status,'ready');
-  assert.deepEqual(f.calls.threads,[{method:'start'},{method:'resume',sessionId:SESSION_ID}]);
 });
 
 test('manual dispatch remains available for a waiting continuation', async (t) => {
@@ -379,7 +392,7 @@ test('a missing UUID in versioned waiting state fails without starting a replace
     version:2,repository:'fixture/repo',issue:'7',phase:'plan',status:'awaiting-human',
     waitingCommentId:'100',events:[],consumedCommentIds:[],tasks:[],plan,
   }));
-  await f.comment({id:206,body:'Continue.'});
+  await f.comment({id:206,body:'Use result.txt.'});
   assert.equal((await f.run())?.status,'paused');
   assert.equal(f.calls.clients,0);
   assert.match((await f.state()).reason,/session ID is missing/i);
@@ -393,7 +406,7 @@ test('a resumed UUID mismatch fails without falling back to a new thread', async
     sessionId:SESSION_ID,waitingCommentId:'100',events:[],consumedCommentIds:[],tasks:[],plan,
   }));
   f.faults.resumeSessionId = REPLACEMENT_SESSION_ID;
-  await f.comment({id:207,body:'Continue.'});
+  await f.comment({id:207,body:'Use result.txt.'});
   assert.equal((await f.run())?.status,'paused');
   assert.deepEqual(f.calls.threads,[{method:'resume',sessionId:SESSION_ID}]);
   assert.equal(f.calls.turns.length,0);

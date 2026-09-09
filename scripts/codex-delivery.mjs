@@ -15,6 +15,22 @@ const controllerRoot = path.resolve(import.meta.dirname, '..');
 const STATE_VERSION = 2;
 const PROGRESS_COMMENT_INTERVAL_MS = 5 * 60_000;
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ENGLISH_RECOVERY_REQUEST = new RegExp([
+  String.raw`^(?:(?:yes|okay|ok|sure)[,.!]?\s+)?`,
+  String.raw`(?:(?:please|kindly)\s+|(?:could|would|can|will)\s+you\s+(?:please\s+)?)?`,
+  String.raw`(?:continue|resume|proceed|retry|try\s+again|go\s+ahead)`,
+  String.raw`(?:\s+(?:(?:with\s+)?(?:the\s+)?(?:saved\s+)?(?:work|delivery|run|task)`,
+  String.raw`|from\s+(?:(?:the\s+)?saved\s+work|where\s+you\s+(?:stopped|left\s+off))))?`,
+  String.raw`(?:\s+please)?[.!?]*$`,
+].join(''), 'i');
+const DUTCH_RECOVERY_REQUEST = new RegExp([
+  String.raw`^(?:(?:ja|ok[eé]?|prima)[,.!]?\s+)?`,
+  String.raw`(?:(?:graag|alsjeblieft)\s+|(?:kun|wil|kan)\s+je\s+(?:alsjeblieft\s+)?)?`,
+  String.raw`(?:ga(?:\s+maar)?\s+verder|ga\s+door|hervat|probeer\s+opnieuw)`,
+  String.raw`(?:\s+(?:met\s+(?:het\s+)?(?:opgeslagen\s+)?(?:werk|proces|taak)`,
+  String.raw`|vanaf\s+waar\s+je\s+gebleven\s+was))?`,
+  String.raw`(?:\s+(?:graag|alsjeblieft))?[.!?]*$`,
+].join(''), 'i');
 
 function commentId(value) {
   const id = String(value ?? '');
@@ -31,6 +47,12 @@ function compareCommentIds(left, right) {
   return BigInt(left) === BigInt(right) ? 0 : BigInt(left) < BigInt(right) ? -1 : 1;
 }
 
+function isResumeRequestBody(body) {
+  const text = String(body ?? '').trim().replace(/\s+/g, ' ');
+  if (text === '/codex resume') return true;
+  return ENGLISH_RECOVERY_REQUEST.test(text) || DUTCH_RECOVERY_REQUEST.test(text);
+}
+
 function trustedOwnerComment(event, repository) {
   const comment = event.comment;
   const owner = event.repository?.owner?.login ?? repository.split('/')[0];
@@ -42,6 +64,7 @@ function trustedOwnerComment(event, repository) {
     id: commentId(comment.id),
     body: typeof comment.body === 'string' ? comment.body : '',
     isResumeCommand: comment.body?.trim() === '/codex resume',
+    isResumeRequest: isResumeRequestBody(comment.body),
   };
 }
 
@@ -214,7 +237,7 @@ export async function deliver(env = process.env, dependencies = {}) {
         const login = String(item.user?.login ?? '');
         const bot = item.user?.type === 'Bot' || login.endsWith('[bot]') || login === 'github-actions';
         return !ownComments.has(String(item.id)) && String(item.id) !== String(excludedCommentId ?? '')
-          && item.body?.trim() !== '/codex resume' && !bot;
+          && !isResumeRequestBody(item.body) && !bot;
       })
         .map((item) => ({ id:item.id, author:item.user.login, body:item.body })));
       if (batch.length < 100) break;
@@ -238,7 +261,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   try { lock = await import('node:fs/promises').then(({ open }) => open(lockFile, 'wx', 0o600)); }
   catch (error) {
     if (error.code !== 'EEXIST') throw error;
-    await api(`/issues/${issue}/comments`, 'POST', { body: 'Codex execution is already locked on this runner. After the active run finishes, comment `/codex resume`. If a run was killed, an operator must inspect the saved lock and confirm no Codex process is active before removing it.' });
+    await api(`/issues/${issue}/comments`, 'POST', { body: 'Codex execution is already locked on this runner. After the active run finishes, reply with a natural-language request such as “Please continue from the saved work.” If a run was killed, an operator must inspect the saved lock and confirm no Codex process is active before removing it.' });
     return;
   }
   let client;
@@ -269,9 +292,9 @@ export async function deliver(env = process.env, dependencies = {}) {
       || (comment && state.consumedCommentIds.includes(comment.id))) return {status:'ignored', reason:'This delivery event is already complete or in progress.'};
     if (env.GITHUB_EVENT_NAME === 'issue_comment') {
       if (state.status === 'new') return {status:'ignored', reason:'An issue comment cannot start a new delivery task.'};
-      if (state.status === 'paused' && !comment.isResumeCommand) return {status:'ignored', reason:'Only a bare /codex resume recovers a technical pause.'};
+      if (state.status === 'paused' && !comment.isResumeRequest) return {status:'ignored', reason:'A technical pause requires a clear natural-language request to continue.'};
       if (state.status === 'awaiting-human') {
-        if (comment.isResumeCommand || !comment.body.trim()) return {status:'ignored', reason:'A waiting state requires a human continuation comment.'};
+        if (comment.isResumeRequest || !comment.body.trim()) return {status:'ignored', reason:'A waiting state requires an answer, not only a request to continue.'};
         if (compareCommentIds(comment.id, state.waitingCommentId ?? '0') <= 0) return {status:'ignored', reason:'The comment is at or before the waiting boundary.'};
       }
       if (!['paused','awaiting-human'].includes(state.status)) return {status:'ignored', reason:'The saved state is not eligible for issue-comment continuation.'};

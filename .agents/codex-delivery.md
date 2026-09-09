@@ -69,5 +69,9 @@ a continuation prompt without another model call. A human-input request is
 saved as the successful `awaiting-human` continuation state; technical quota,
 session, repository, and validation failures remain `paused` failures. Keep
 progress current so a trusted owner can answer a waiting run or an operator can
-recover a technical pause. A five-hour wall-clock timeout is not a subscription
-budget. Never switch models, billing methods, or accounts to get around a limit.
+recover a technical pause. A clear natural-language owner request continues a
+technical pause and is passed to the exact saved Codex session when model work
+resumes. The legacy `/codex resume` command remains a compatibility shortcut,
+not the required human interface. A five-hour wall-clock timeout is not a
+subscription budget. Never switch models, billing methods, or accounts to get
+around a limit.

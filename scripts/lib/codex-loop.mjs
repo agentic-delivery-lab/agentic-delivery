@@ -239,7 +239,7 @@ export function continuation(state) {
     `**Why it stopped:** ${state.reason ?? 'Work remains.'}`,
     ...(state.shutdownError ? [`Shutdown warning: ${state.shutdownError}. The account lock requires operator inspection.`] : []),
     '',
-    `**What to do:** ${quotaPause ? 'After the reported quota reset, ' : 'After the cause is resolved, '}comment \`/codex resume\` on this issue. Manual workflow dispatch remains available for recovery.`,
+    `**What to do:** ${quotaPause ? 'After the reported quota reset, ' : 'After the cause is resolved, '}reply with a natural-language request such as “Please continue from the saved work.” Manual workflow dispatch remains available for recovery.`,
     ...(quotaPause && state.budget?.resetsAt ? ['', `Reported quota reset: ${new Date(state.budget.resetsAt * 1000).toISOString()}.`] : []),
     '',
     ...savedDetails,

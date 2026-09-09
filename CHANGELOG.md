@@ -20,7 +20,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- [Issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17) renders Codex progress as concise Markdown, clearly separates human questions from technical pauses, coalesces rapid updates, and prevents a planning-continuation prompt from leaking into implementation.
+- [Issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17) renders Codex progress as concise Markdown, clearly separates human questions from technical pauses, supports natural-language recovery requests, coalesces rapid updates, and prevents a planning-continuation prompt from leaking into implementation.
 
 - [Issue #18](https://github.com/sjefsharp/agentic-delivery/issues/18) restores exact issue continuation with persistent Codex session UUIDs, trusted owner comments, explicit `awaiting-human` state, duplicate-event protection, and one-time legacy session reconstruction.
 

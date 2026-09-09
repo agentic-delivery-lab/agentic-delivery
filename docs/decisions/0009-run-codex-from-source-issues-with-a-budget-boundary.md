@@ -13,6 +13,9 @@ informed: None
 [Source issue #18](https://github.com/sjefsharp/agentic-delivery/issues/18)
 amends the continuation design originally tracked by
 [source issue #15](https://github.com/sjefsharp/agentic-delivery/issues/15).
+[Source issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17)
+later clarified that people must be able to continue a saved run with natural
+language instead of a required slash command.
 It requests reliable continuation of the current source-issue workflow on the
 existing self-hosted runner,
 planning with GPT-5.6 Sol High, implementation with GPT-5.6 Luna Max, and a
@@ -34,6 +37,8 @@ delivery run, budget boundary, and continuation prompt.
 - Preserve human review, merge, and issue-closing authority.
 - Continue only the exact source issue and persistent Codex session requested by
   a trusted repository-owner comment.
+- Keep natural language as the primary human continuation interface without
+  letting unrelated or negative comments resume technical work.
 - Keep human-input waiting separate from technical failure and prevent comment
   redelivery or bot feedback loops.
 
@@ -42,6 +47,8 @@ delivery run, budget boundary, and continuation prompt.
 - A small Node.js controller using `codex app-server`.
 - Separate `codex exec` invocations with prompt-based planning.
 - An API-key-based coding action.
+- For technical recovery, recognize clear natural-language continuation intent,
+  require an exact slash command, or treat every owner comment as a resume.
 
 ## Decision Outcome
 
@@ -53,10 +60,15 @@ An issue opened by a contributor with current repository write permission
 starts intake. A newly created issue comment can enter the controller only when
 the payload author is the repository owner with `author_association: OWNER`;
 the controller repeats this check using the comment payload rather than
-`GITHUB_TRIGGERING_ACTOR`. A plain owner comment continues only an existing
-`awaiting-human` state. A bare `/codex resume` comment and manual dispatch
-remain recovery paths for technical `paused` state. Free-form intake precedes
-the implementation plan. The source issue also serves as ADR tracking when a
+`GITHUB_TRIGGERING_ACTOR`. A plain owner answer continues an existing
+`awaiting-human` state. A clear natural-language owner request such as “Please
+continue from the saved work” continues a technical `paused` state and is
+passed to the exact saved Codex session when model work resumes. Deterministic
+leading-intent matching accepts common English and Dutch continuation wording
+without treating comments such as “Do not continue yet” as authorization. The
+legacy `/codex resume` comment remains a compatibility shortcut, and manual
+dispatch remains an operator recovery path. Free-form intake precedes the
+implementation plan. The source issue also serves as ADR tracking when a
 significant decision is needed.
 
 New delivery state is versioned and correlates one source issue to one
@@ -126,6 +138,8 @@ restricted to that service account.
 - Good, because ideas and decisions can be clarified before implementation.
 - Good, because plans, questions, failures, and handoffs remain on the source issue.
 - Good, because quota pauses preserve work without further model spending.
+- Good, because people can continue saved work in natural language while an
+  explicit negative comment remains non-triggering.
 - Bad, because runner installation, ChatGPT login, persistent storage, and
   sandbox compatibility are operational prerequisites.
 - Bad, because interruption and remote posting are not atomic; the saved
@@ -133,6 +147,9 @@ restricted to that service account.
 - Bad, because legacy session reconstruction cannot restore the original
   ephemeral conversation and therefore depends on the saved issue brief and
   continuation context.
+- Bad, because deterministic intent matching cannot understand every possible
+  natural-language phrasing; manual dispatch and the compatibility shortcut
+  remain fallbacks.
 - Neutral, because this private repository on GitHub Free cannot enforce
   branch protection. Workflow policy does not prevent another credential
   holder from pushing to `main`. Human merge authority remains the policy.
@@ -143,7 +160,8 @@ restricted to that service account.
 
 Test quota failures, exact model selection, mode handoff, clarification,
 interruption, authorization, persistent UUID start/resume, owner-comment
-continuation, legacy reconstruction, and duplicate-event behavior.
+continuation, natural-language recovery intent, negative comments, legacy
+reconstruction, and duplicate-event behavior.
 Run repository tests and quality checks. Verify Codex under `github-runner`
 without generating a turn, then demonstrate a small end-to-end issue after
 human merge and prerequisite setup. Do not claim runtime readiness from unit
@@ -176,6 +194,8 @@ tests alone. This ADR remains provisional until merged into `main`.
 - [GitHub workflow triggers](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
 - [GitHub branch protection availability](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
 - [Issue #18: Restore exact Codex issue continuation](https://github.com/sjefsharp/agentic-delivery/issues/18)
+- [Issue #17: Introduce an issue-driven intake and routing harness](https://github.com/sjefsharp/agentic-delivery/issues/17)
+- [PR #20: Make Codex issue comments actionable](https://github.com/sjefsharp/agentic-delivery/pull/20)
 - [Operation and continuation](../delivery/codex-workflow.md)
 - Revisit when runner isolation, account sharing, automated resumption, or
   publishing credentials change.
