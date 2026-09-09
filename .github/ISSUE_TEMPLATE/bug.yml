@@ -1,0 +1,55 @@
+name: Bug
+description: Report reproducible behavior that does not match expectations.
+title: "Bug: "
+labels:
+  - "type:bug"
+  - "state:needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Give enough detail for someone else to reproduce and diagnose the behavior.
+        Do not include passwords, API keys, personal data, or other secrets.
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: List the smallest reliable steps to reproduce the behavior.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include relevant versions, operating system, runner, or configuration.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence or logs
+      description: Add safe logs, screenshots, or links. Write "None" when no evidence is available.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Who is affected and how severe is the impact?
+    validations:
+      required: true
+

@@ -48,6 +48,11 @@ test('quality workflows use the pinned pnpm action and preserve the infrastructu
     assert.match(workflow, /HOME: \/var\/lib\/github-runner/);
     assert.match(workflow, /CODEX_HOME: \/var\/lib\/github-runner\/\.codex/);
   }
+  const intakeWorkflow = await text('.github/workflows/issue-intake.yml');
+  assert.ok(intakeWorkflow.includes('types: [opened, edited, reopened, labeled, unlabeled, typed, untyped, closed]'));
+  assert.ok(intakeWorkflow.includes('uses: ./.github/workflows/codex-delivery.yml'));
+  assert.ok(codexWorkflow.includes('workflow_call:'));
+  assert.ok(!codexWorkflow.includes('types: [opened]'));
 });
 
 test('the hosted portability matrix is internal-only and tests the frozen install once per platform', async () => {

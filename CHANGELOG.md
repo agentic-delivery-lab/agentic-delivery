@@ -9,6 +9,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- [Issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17) adds deterministic issue intake, work-type classification, lifecycle routing, readiness gating, structured forms, and automatic handoff to the reusable Plan → Implement workflow.
+
 - [Issue #15](https://github.com/sjefsharp/agentic-delivery/issues/15) proposes immediate source issue intake with Codex planning, implementation, issue audit history, review pull requests, and resumable quota pauses on the self-hosted runner.
 
 - [Pull request #2](https://github.com/sjefsharp/agentic-delivery/pull/2) established the issue-driven architecture decision workflow, including MADR records, linked GitHub Issues, feature-branch review and `main` as the official source.

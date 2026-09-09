@@ -26,6 +26,13 @@ test('resume requests are explicit and PR comments cannot trigger intake', () =>
   }
   assert.throws(()=>intakeEvent({action:'opened',issue:{pull_request:{}}},env),/pull request/);
 });
+test('accepts lifecycle events only as downstream delivery inputs', () => {
+  for (const action of ['edited', 'reopened', 'labeled', 'unlabeled', 'typed', 'untyped']) {
+    assert.equal(intakeEvent({action, issue:{}}, {...env, GITHUB_EVENT_NAME:'issues'}).issue, '15');
+  }
+  assert.equal(intakeEvent({issue:{}}, {...env, GITHUB_EVENT_NAME:'workflow_call'}).issue, '15');
+  assert.throws(() => intakeEvent({action:'closed', issue:{}}, {...env, GITHUB_EVENT_NAME:'issues'}), /Unsupported issue activity/);
+});
 test('rejects identifiers and events that could escape the repository boundary', () => {
   for(const value of ['../15','15; command','0','-1']) assert.throws(()=>intakeEvent({action:'opened'},{...env,SOURCE_ISSUE:value}));
   assert.throws(()=>intakeEvent({action:'opened'},{...env,GITHUB_REPOSITORY:'../../elsewhere'}));

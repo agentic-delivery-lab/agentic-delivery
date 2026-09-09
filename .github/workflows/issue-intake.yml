@@ -1,0 +1,66 @@
+name: issue-intake
+
+on:
+  issues:
+    types: [opened, edited, reopened, labeled, unlabeled, typed, untyped, closed]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Open source issue number to classify or recover
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  classify:
+    if: >-
+      !github.event.issue.pull_request &&
+      (github.event_name != 'issue_comment' ||
+       github.event.comment.body == '/codex resume' ||
+       startsWith(github.event.comment.body, '/codex resume '))
+    runs-on: [self-hosted, linux, x64, omarchy]
+    timeout-minutes: 10
+    outputs:
+      issue: ${{ steps.intake.outputs.issue }}
+      route: ${{ steps.intake.outputs.route }}
+      state: ${{ steps.intake.outputs.state }}
+    steps:
+      - name: Check out trusted intake
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Install intake dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Classify and route issue
+        id: intake
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_ISSUE: ${{ inputs.issue || github.event.inputs.issue || github.event.issue.number }}
+        run: node scripts/issue-intake.mjs
+
+  deliver:
+    needs: classify
+    if: needs.classify.result == 'success' && (needs.classify.outputs.route == 'plan' || needs.classify.outputs.route == 'resume')
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    uses: ./.github/workflows/codex-delivery.yml
+    with:
+      issue: ${{ needs.classify.outputs.issue }}
+      route: ${{ needs.classify.outputs.route }}
+    secrets: inherit

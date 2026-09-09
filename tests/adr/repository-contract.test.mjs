@@ -32,6 +32,11 @@ test('repository decision and runner contracts are present', async () => {
     'adr:needed', 'adr:proposed', 'adr:removal', 'adr:rejected',
     'Do not add an `adr:accepted` label',
   ]) assert.ok(decisions.includes(phrase), `missing decision contract: ${phrase}`);
+  assert.ok(decisions.includes('(0010-route-issues-through-deterministic-intake.md)'));
+  const intakeDecision = await text('docs/decisions/0010-route-issues-through-deterministic-intake.md');
+  for (const phrase of ['state:ready-for-plan', 'state:ready-for-agent', 'state:investigating', 'state:parked', 'adr:needed', 'not planned']) {
+    assert.ok(intakeDecision.includes(phrase), `missing intake decision contract: ${phrase}`);
+  }
   const agents = await text('AGENTS.md');
   for (const phrase of ['Closes #', 'never create a pull request from `main`', 'is only the protected base']) {
     assert.ok(agents.includes(phrase), `missing agent contract: ${phrase}`);

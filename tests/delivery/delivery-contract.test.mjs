@@ -19,7 +19,10 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     'scripts/validate-changelog.mjs', 'scripts/validate-main-history.mjs', 'scripts/validate-config-files.mjs',
     'scripts/lib/toolchain.mjs', 'scripts/lib/yaml.mjs', '.agents/skills/delivery-workflow/SKILL.md',
     '.agents/skills/delivery-workflow/agents/openai.yaml', '.github/pull_request_template.md',
-    '.github/workflows/delivery-quality.yml',
+    '.github/workflows/delivery-quality.yml', '.github/workflows/issue-intake.yml',
+    '.github/workflows/codex-delivery.yml', '.github/issue-lifecycle.yml', 'scripts/issue-intake.mjs',
+    'scripts/lib/issue-routing.mjs', '.github/ISSUE_TEMPLATE/bug.yml', '.github/ISSUE_TEMPLATE/feature.yml',
+    '.github/ISSUE_TEMPLATE/idea.yml', '.github/ISSUE_TEMPLATE/task.yml',
   ]) await access(path.join(repositoryRoot, relativePath));
 
   const packageJson = JSON.parse(await text('package.json'));
@@ -46,6 +49,12 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   for (const obsolete of ['npm ci', 'run: npm audit', 'npx commitlint', 'ruby -e', 'validate-changelog.rb', 'validate-source-issue.sh']) {
     assert.ok(!workflow.includes(obsolete), `obsolete workflow reference: ${obsolete}`);
   }
+  const intake = await text('.github/workflows/issue-intake.yml');
+  assert.ok(intake.includes('node scripts/issue-intake.mjs'));
+  assert.ok(intake.includes('state:'));
+  const delivery = await text('.github/workflows/codex-delivery.yml');
+  assert.ok(delivery.includes('workflow_call:'));
+  assert.ok(!delivery.includes('types: [opened]'));
 
   const docs = await text('docs/delivery/README.md');
   assert.ok(docs.includes('pnpm branch:start'));

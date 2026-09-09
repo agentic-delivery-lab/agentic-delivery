@@ -6,12 +6,21 @@ changes, validation, and a review pull request. Its decision is recorded in
 
 ## Start and resume
 
-After the workflow is merged and prerequisites are verified, open an issue.
-An idea, requirements, a decision, or a mixture is acceptable. The triggering
-actor must have repository write permission. Codex starts with GPT-5.6 Sol High
-in Plan mode and asks questions if the outcome is unclear. Answer on the
-source issue, then comment `/codex resume`. GPT-5.6 Luna Max implements a
-completed plan. The workflow records progress and validation on that issue.
+After the workflow is merged and prerequisites are verified, open an issue
+through an intake form or the blank-issue fallback. The intake workflow
+classifies the work type, lifecycle state, and governance metadata before any
+Codex turn. Incomplete, ambiguous, Idea, and Research work remains in
+maturation (`Research` uses `state:investigating`; deferred Idea work uses
+`state:parked`).
+
+Applying a valid `state:ready-for-plan` is the normal authorization for the
+downstream delivery workflow. The classifier's deterministic readiness gate
+must pass before GPT-5.6 Sol High starts Plan mode. After a successful plan,
+the controller records `state:ready-for-agent`, enters `state:in-progress`,
+and automatically invokes GPT-5.6 Luna Max for Implement. A `/codex resume`
+comment or manual dispatch is reserved for a paused continuation or a
+separately configured human gate. The workflow records progress and validation
+on the source issue.
 
 Manual dispatch of `codex-delivery` with the source issue number also resumes
 work. The same event is not processed twice; a new resume comment is an

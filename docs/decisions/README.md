@@ -88,3 +88,4 @@ The template intentionally lives beside README.md and the numbered records. Ever
 | [0007](0007-use-issue-linked-conventional-branch-names.md) | Use issue-linked Conventional branch names | [Issue #11](https://github.com/sjefsharp/agentic-delivery/issues/11) | This review pull request |
 | [0008](0008-use-pnpm-with-delayed-dependency-adoption.md) | Use pnpm with delayed dependency adoption and Node.js automation | [Issue #12](https://github.com/sjefsharp/agentic-delivery/issues/12) | This review pull request |
 | [0009](0009-run-codex-from-source-issues-with-a-budget-boundary.md) | Run Codex from source issues with a budget boundary | [Issue #15](https://github.com/sjefsharp/agentic-delivery/issues/15) | This review pull request |
+| [0010](0010-route-issues-through-deterministic-intake.md) | Route source issues through deterministic intake | [Issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17) | This review pull request |
