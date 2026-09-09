@@ -12,18 +12,55 @@ import { validateBranchName } from './validate-branch-name.mjs';
 
 const executeFile = promisify(execFile);
 const controllerRoot = path.resolve(import.meta.dirname, '..');
+const STATE_VERSION = 2;
+const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function commentId(value) {
+  const id = String(value ?? '');
+  if (!/^[1-9][0-9]*$/.test(id)) throw new Error('Issue comment ID is invalid.');
+  return id;
+}
+
+function canonicalSessionId(value) {
+  if (typeof value !== 'string' || !SESSION_ID_PATTERN.test(value)) throw new Error('Codex session ID is invalid.');
+  return value;
+}
+
+function compareCommentIds(left, right) {
+  return BigInt(left) === BigInt(right) ? 0 : BigInt(left) < BigInt(right) ? -1 : 1;
+}
+
+function trustedOwnerComment(event, repository) {
+  const comment = event.comment;
+  const owner = event.repository?.owner?.login ?? repository.split('/')[0];
+  const user = comment?.user;
+  if (user?.login !== owner || user?.type === 'Bot' || comment?.author_association !== 'OWNER') {
+    throw new Error('Issue comments must come from the trusted repository owner.');
+  }
+  return {
+    id: commentId(comment.id),
+    body: typeof comment.body === 'string' ? comment.body : '',
+    isResumeCommand: comment.body?.trim() === '/codex resume',
+  };
+}
 
 export function intakeEvent(event, env) {
   const issue = String(env.SOURCE_ISSUE ?? event.issue?.number ?? '');
   const repository = env.GITHUB_REPOSITORY;
   if (!/^[1-9][0-9]*$/.test(issue) || !/^[\w.-]+\/[\w.-]+$/.test(repository ?? '')) throw new Error('Invalid source issue or repository.');
+  if (event.repository?.full_name && event.repository.full_name !== repository) throw new Error('Event repository does not match the configured repository.');
   if (event.issue?.pull_request) throw new Error('A pull request cannot be a source issue.');
   if (!['issues', 'issue_comment', 'workflow_dispatch'].includes(env.GITHUB_EVENT_NAME)) throw new Error('Unsupported trigger.');
   if (env.GITHUB_EVENT_NAME === 'issues' && event.action !== 'opened') throw new Error('Only newly opened issues start intake.');
-  if (env.GITHUB_EVENT_NAME === 'issue_comment' && (event.action !== 'created' || !/^\/codex resume(?:\s|$)/.test(event.comment?.body ?? ''))) throw new Error('Comment is not a resume request.');
-  const actor = env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR;
+  let comment;
+  if (env.GITHUB_EVENT_NAME === 'issue_comment') {
+    if (event.action !== 'created') throw new Error('Only newly created issue comments enter intake.');
+    if (event.issue?.number !== undefined && String(event.issue.number) !== issue) throw new Error('Comment issue number does not match SOURCE_ISSUE.');
+    comment = trustedOwnerComment(event, repository);
+  }
+  const actor = comment ? event.comment.user.login : (env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR);
   if (!/^[\w[\]-]+$/.test(actor ?? '')) throw new Error('Missing triggering actor.');
-  return { issue, repository, actor };
+  return { issue, repository, actor, comment };
 }
 
 export function redact(text, env = process.env) {
@@ -42,6 +79,10 @@ export function checkPublicationText(title, summary = '') {
   }
 }
 
+export function deliveryExitCode(status) {
+  return status === 'paused' ? 1 : 0;
+}
+
 async function exists(file) { try { await access(file); return true; } catch { return false; } }
 async function atomic(file, value) {
   await writeFile(`${file}.next`, JSON.stringify(value, null, 2), { mode: 0o600 });
@@ -54,13 +95,23 @@ async function readSavedState(file, issue, repository) {
     const value = JSON.parse(contents);
     const strings = (items) => Array.isArray(items) && items.every((item) => typeof item === 'string');
     const hash = (item) => typeof item === 'string' && /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(item);
+    const legacy = value?.version === undefined;
+    const status = value?.status === 'needs_input' ? 'awaiting-human' : value?.status;
     if (value?.repository !== repository || String(value?.issue) !== issue
+      || (!legacy && value.version !== STATE_VERSION)
       || !['plan','branch','implement','verify','commit','publish'].includes(value.phase)
-      || !['new','running','paused','needs_input','ready'].includes(value.status)
+      || !['new','running','paused','awaiting-human','ready'].includes(status)
       || !strings(value.events) || !strings(value.tasks)
       || (value.outbox !== undefined && !strings(value.outbox))
       || (value.auditCommentIds !== undefined && (!Array.isArray(value.auditCommentIds)
-        || !value.auditCommentIds.every((id) => Number.isSafeInteger(id) && id > 0)))) throw new Error();
+        || !value.auditCommentIds.every((id) => Number.isSafeInteger(id) && id > 0)))
+      || (value.consumedCommentIds !== undefined && (!Array.isArray(value.consumedCommentIds)
+        || !value.consumedCommentIds.every((id) => /^[1-9][0-9]*$/.test(String(id)))))
+      || (value.sessionStarted !== undefined && typeof value.sessionStarted !== 'boolean')
+      || (value.sessionStarted === false && value.sessionId !== undefined)
+      || (value.legacySessionReconstruction !== undefined && typeof value.legacySessionReconstruction !== 'boolean')
+      || (value.sessionId !== undefined && (typeof value.sessionId !== 'string' || !SESSION_ID_PATTERN.test(value.sessionId)))
+      || (value.waitingCommentId !== undefined && !/^(?:0|[1-9][0-9]*)$/.test(String(value.waitingCommentId)))) throw new Error();
     if (value.branch !== undefined) {
       validateBranchName(value.branch);
       if (!value.branch.split('/')[1].startsWith(`issue-${issue}-`)) throw new Error();
@@ -68,7 +119,18 @@ async function readSavedState(file, issue, repository) {
     if (value.plan !== undefined) validateOutcome('plan', JSON.stringify(value.plan));
     if (value.phase !== 'plan' && (!value.branch || !hash(value.base) || value.plan?.status !== 'ready')) throw new Error();
     if (['commit','publish'].includes(value.phase) && !hash(value.validatedTree)) throw new Error();
-    return value;
+    const migrated = {
+      ...value,
+      version: STATE_VERSION,
+      status,
+      consumedCommentIds: value.consumedCommentIds?.map(String) ?? [],
+      sessionStarted: value.sessionStarted ?? value.sessionId !== undefined,
+      legacySessionReconstruction: value.legacySessionReconstruction === true || (legacy && value.sessionId === undefined),
+    };
+    if (migrated.status === 'awaiting-human' && migrated.waitingCommentId === undefined) {
+      migrated.waitingCommentId = String(Math.max(0, ...(value.auditCommentIds ?? [])));
+    }
+    return migrated;
   } catch {
     throw new Error('Invalid saved state; preserve the issue directory for operator inspection.');
   }
@@ -82,7 +144,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   const validateCommits = dependencies.validateCommits ?? validateCommitRange;
   if (!env.GH_TOKEN || !env.GITHUB_EVENT_PATH || !env.RUNNER_WORKSPACE) throw new Error('Run this controller through GitHub Actions.');
   const event = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'));
-  const { issue, repository, actor } = intakeEvent(event, env);
+  const { issue, repository, actor, comment } = intakeEvent(event, env);
   const endpoint = `https://api.github.com/repos/${repository}`;
   const api = async (route, method = 'GET', body) => {
     const response = await fetchApi(`${endpoint}${route}`, {
@@ -95,11 +157,19 @@ export async function deliver(env = process.env, dependencies = {}) {
   const permission = await api(`/collaborators/${encodeURIComponent(actor)}/permission`);
   if (!['admin', 'maintain', 'write'].includes(permission.permission)) throw new Error('Source issue execution requires repository write permission.');
   const source = await api(`/issues/${issue}`);
-  if (source.pull_request || source.state !== 'open') throw new Error('The source issue must still be open.');
+  if (source.pull_request) throw new Error('A pull request cannot be a source issue.');
+  if (source.state !== 'open') {
+    if (env.GITHUB_EVENT_NAME === 'issue_comment') return {status:'ignored', reason:'The source issue is inactive.'};
+    throw new Error('The source issue must still be open.');
+  }
   const stateRoot = path.resolve(env.CODEX_DELIVERY_STATE_DIR || path.join(env.RUNNER_WORKSPACE, '..', '.codex-delivery'));
   const issueRoot = path.join(stateRoot, String(event.repository.id), issue);
-  await mkdir(issueRoot, { recursive: true, mode: 0o700 });
   const stateFile = path.join(issueRoot, 'state.json');
+  const stateWasSaved = await exists(stateFile);
+  if (env.GITHUB_EVENT_NAME === 'issue_comment' && !stateWasSaved) {
+    return {status:'ignored', reason:'No saved continuation state exists for this issue.'};
+  }
+  await mkdir(issueRoot, { recursive: true, mode: 0o700 });
   const workspace = path.join(issueRoot, 'workspace');
   let state;
   const runUrl = `https://github.com/${repository}/actions/runs/${env.GITHUB_RUN_ID}`;
@@ -110,12 +180,15 @@ export async function deliver(env = process.env, dependencies = {}) {
     return writes;
   };
   const flush = async () => {
+    const postedIds = [];
     while (state.outbox?.length) {
       const posted = await api(`/issues/${issue}/comments`, 'POST', { body: state.outbox[0] });
       (state.auditCommentIds ??= []).push(posted.id);
+      postedIds.push(String(posted.id));
       state.outbox.shift();
       await save();
     }
+    return postedIds;
   };
   const audit = async (text) => {
     const body = redact(`${text}\n\n[Workflow run](${runUrl})`, env);
@@ -124,16 +197,21 @@ export async function deliver(env = process.env, dependencies = {}) {
     for (let offset = 0; offset < body.length; offset += 50_000) state.outbox.push(body.slice(offset, offset + 50_000));
     await save();
     await appendFile(path.join(issueRoot, 'audit.jsonl'), `${JSON.stringify({ at: new Date().toISOString(), body })}\n`, { mode: 0o600 });
-    await flush();
+    return flush();
   };
-  const readBrief = async () => {
+  const readBrief = async (excludedCommentId) => {
     const current = await api(`/issues/${issue}`);
     if (current.state !== 'open' || current.pull_request) throw new Error('The source issue must still be open.');
-    const ownComments = new Set(state.auditCommentIds ?? []);
+    const ownComments = new Set((state.auditCommentIds ?? []).map(String));
     const comments = [];
     for (let page = 1; ; page++) {
       const batch = await api(`/issues/${issue}/comments?per_page=100&page=${page}`);
-      comments.push(...batch.filter((item) => !ownComments.has(item.id) && item.body?.trim() !== '/codex resume')
+      comments.push(...batch.filter((item) => {
+        const login = String(item.user?.login ?? '');
+        const bot = item.user?.type === 'Bot' || login.endsWith('[bot]') || login === 'github-actions';
+        return !ownComments.has(String(item.id)) && String(item.id) !== String(excludedCommentId ?? '')
+          && item.body?.trim() !== '/codex resume' && !bot;
+      })
         .map((item) => ({ id:item.id, author:item.user.login, body:item.body })));
       if (batch.length < 100) break;
       if (page >= 10) throw new Error('Issue history exceeds the intake limit; summarize it before resuming.');
@@ -174,15 +252,36 @@ export async function deliver(env = process.env, dependencies = {}) {
   const git = async (args) => (await execute('git', ['-C', workspace, ...args], { env: gitEnv, timeout: 120_000, maxBuffer: 8_000_000 })).stdout.trim();
   try {
     await lock.writeFile(JSON.stringify({ runUrl, issue, pid: process.pid }));
-    state = await exists(stateFile) ? await readSavedState(stateFile, issue, repository) : { issue, repository, phase: 'plan', status: 'new', tasks: [], events: [] };
+    state = stateWasSaved ? await readSavedState(stateFile, issue, repository) : {
+      version: STATE_VERSION, issue, repository, phase: 'plan', status: 'new', tasks: [], events: [], consumedCommentIds: [], sessionStarted: false,
+    };
+    const priorStatus = state.status;
+    const canStartInitialSession = !stateWasSaved
+      || (priorStatus === 'paused' && state.phase === 'plan' && !state.plan && state.sessionStarted === false && !state.sessionId);
     await flush();
-    const eventKey = env.GITHUB_EVENT_NAME === 'issues' ? `opened:${issue}` : env.GITHUB_EVENT_NAME === 'issue_comment' ? `comment:${event.comment.id}` : `dispatch:${env.GITHUB_RUN_ID}`;
-    if (state.status === 'ready' || state.events.includes(eventKey)) return;
-    await audit(`Starting ${state.phase} for source issue #${issue}, requested by ${actor}. Ideas, requirements, and decisions enter the same intake. Questions must be answered before dependent work proceeds.`);
+    if (stateWasSaved && state.legacySessionReconstruction && state.sessionId === undefined) await save();
+    const eventKey = env.GITHUB_EVENT_NAME === 'issues' ? `opened:${issue}` : env.GITHUB_EVENT_NAME === 'issue_comment' ? `comment:${comment.id}` : `dispatch:${env.GITHUB_RUN_ID}`;
+    if (state.status === 'ready' || state.status === 'running' || state.events.includes(eventKey)
+      || (comment && state.consumedCommentIds.includes(comment.id))) return {status:'ignored', reason:'This delivery event is already complete or in progress.'};
+    if (env.GITHUB_EVENT_NAME === 'issue_comment') {
+      if (state.status === 'new') return {status:'ignored', reason:'An issue comment cannot start a new delivery task.'};
+      if (state.status === 'paused' && !comment.isResumeCommand) return {status:'ignored', reason:'Only a bare /codex resume recovers a technical pause.'};
+      if (state.status === 'awaiting-human') {
+        if (comment.isResumeCommand || !comment.body.trim()) return {status:'ignored', reason:'A waiting state requires a human continuation comment.'};
+        if (compareCommentIds(comment.id, state.waitingCommentId ?? '0') <= 0) return {status:'ignored', reason:'The comment is at or before the waiting boundary.'};
+      }
+      if (!['paused','awaiting-human'].includes(state.status)) return {status:'ignored', reason:'The saved state is not eligible for issue-comment continuation.'};
+    }
     state.events.push(eventKey);
+    if (comment) state.consumedCommentIds.push(comment.id);
     state.status = 'running';
     await save();
+    await audit(`Starting ${state.phase} for source issue #${issue}, requested by ${actor}. Ideas, requirements, and decisions enter the same intake. Questions must be answered before dependent work proceeds.`);
     if (!['publish', 'commit'].includes(state.phase)) {
+      if (stateWasSaved && !state.sessionId && !state.legacySessionReconstruction && !canStartInitialSession
+        && ['plan','branch','implement'].includes(state.phase)) {
+        throw new Error('Saved Codex session ID is missing; refusing to start an unrelated replacement thread.');
+      }
       client = createClient({ cwd: controllerRoot, readableFiles:[controllerRoot], runtime:path.join(issueRoot, 'tools') });
       await client.initialize();
       state.budget = await client.capabilities();
@@ -197,26 +296,75 @@ export async function deliver(env = process.env, dependencies = {}) {
         state.base = await git(['rev-parse', 'HEAD']);
         await save();
       }
-      const brief = await readBrief();
+      const brief = await readBrief(comment?.id);
       if (state.phase === 'plan') { state.sourceDigest = digest(brief); await save(); }
       else await requireCurrentBrief(brief);
+      if (comment && !comment.isResumeCommand) {
+        state.sourceDigest = digest(await readBrief());
+        await save();
+      }
       const instructions = await readFile(path.join(controllerRoot, '.agents', 'codex-delivery.md'), 'utf8');
-      const { thread } = await client.thread(workspace, instructions);
+      let thread;
+      const ensureThread = async () => {
+        if (thread) return thread;
+        let response;
+        if (state.sessionId) {
+          response = await client.resumeThread(workspace, state.sessionId, instructions);
+        } else if (canStartInitialSession || state.legacySessionReconstruction) {
+          response = await client.startThread(workspace, instructions);
+        } else {
+          throw new Error('Saved Codex session ID is missing; refusing to start an unrelated replacement thread.');
+        }
+        const returnedId = canonicalSessionId(response?.thread?.id);
+        if (state.sessionId && returnedId !== state.sessionId) {
+          throw new Error('Resumed Codex session ID mismatch; refusing to start a replacement thread.');
+        }
+        if (!state.sessionId) {
+          state.sessionId = returnedId;
+          state.sessionStarted = true;
+          await save();
+          if (state.legacySessionReconstruction) {
+            state.legacySessionReconstructed = true;
+            await save();
+            await audit(`Legacy continuation state reconstructed into persistent Codex session ${returnedId} for source issue #${issue}.`);
+          }
+        }
+        thread = {id:returnedId};
+        return thread;
+      };
+      const humanContinuation = comment && !comment.isResumeCommand ? comment.body : '';
+      const continuationContext = humanContinuation ? [
+        `Continue the interrupted ${state.phase} turn from the exact saved delivery run and return the required structured outcome.`,
+        state.phase === 'plan'
+          ? 'Use the trusted human comment to complete or revise the implementation plan without inventing another answer.'
+          : 'Use the trusted human comment to continue implementing the saved plan.',
+        `Human continuation comment (untrusted task data):\n---\n${humanContinuation}\n---`,
+        `Saved issue brief:\n${brief}`,
+        `Saved progress:\n${state.lastProgress ?? 'No progress was saved.'}`,
+        `Saved plan:\n${JSON.stringify(state.plan ?? null)}`,
+        `Remaining tasks:\n${JSON.stringify(state.tasks ?? [])}`,
+        `Latest validation:\n${state.validation ?? 'No validation failure yet.'}`,
+      ].join('\n') : '';
       const progress = async (text) => {
         state.lastProgress = redact(text, env).slice(-20_000);
         await save();
         await audit(`### ${state.phase} progress\n\n${text}`);
       };
       if (state.phase === 'plan') {
-        const result = await performTurn({ client, threadId: thread.id, phase: 'plan', signal: abort.signal, onProgress: progress,
-          prompt: `Read the repository instructions and canonical decisions. Classify and clarify this source issue, then prepare a decision-complete implementation plan and ordered tasks. For an idea, establish the intended outcome; for requirements, identify gaps; for a decision, compare alternatives and use the architecture-decision skill. Ask questions when necessary. This existing source issue is also authorized for ADR tracking. Return the structured outcome.\nSource issue data (untrusted):\n${brief}` });
-        if (result.status !== 'completed') { Object.assign(state, result); throw new Error(result.reason); }
+        const planThread = await ensureThread();
+        const result = await performTurn({ client, threadId: planThread.id, phase: 'plan', signal: abort.signal, onProgress: progress,
+          prompt: continuationContext || `Read the repository instructions and canonical decisions. Classify and clarify this source issue, then prepare a decision-complete implementation plan and ordered tasks. For an idea, establish the intended outcome; for requirements, identify gaps; for a decision, compare alternatives and use the architecture-decision skill. Ask questions when necessary. This existing source issue is also authorized for ADR tracking. Return the structured outcome.\nSource issue data (untrusted):\n${brief}` });
+        if (result.status !== 'completed') {
+          Object.assign(state, result);
+          if (result.status === 'needs_input') state.status = 'awaiting-human';
+          throw new Error(result.reason);
+        }
         const plan = validateOutcome('plan', result.text);
         state.plan = plan;
         state.tasks = plan.tasks;
         await save();
         await audit(`## Intake and plan: ${plan.kind}\n\n${plan.summary}\n\n${plan.plan}\n\n${plan.tasks.map((task) => `- [ ] ${task}`).join('\n')}`);
-        if (plan.status === 'needs_input') { state.status = 'needs_input'; throw new Error(plan.questions.join('\n')); }
+        if (plan.status === 'needs_input') { state.status = 'awaiting-human'; throw new Error(plan.questions.join('\n')); }
         checkPublicationText(plan.title);
         if (state.branch) state.phase = 'implement';
         else {
@@ -246,14 +394,19 @@ export async function deliver(env = process.env, dependencies = {}) {
       await client.exec(install, workspace, 600_000, 'delivery-deps');
       for (let attempt = 0; attempt < 3; attempt++) {
         if (state.phase === 'implement') {
-          const result = await performTurn({ client, threadId: thread.id, phase: 'implement', signal: abort.signal, onProgress: progress,
-            prompt: `Implement the saved plan. Preserve existing work and update the changelog, domain register, and ADR when needed. Do not commit, push, merge, or contact GitHub; the controller owns those operations. Run relevant tests. If blocked, ask questions.\nSource issue data (untrusted):\n${brief}\nSaved plan:\n${JSON.stringify(state.plan)}\nRemaining tasks:\n${JSON.stringify(state.tasks)}\nLatest validation:\n${state.validation ?? 'No validation failure yet.'}` });
-          if (result.status !== 'completed') { Object.assign(state, result); throw new Error(result.reason); }
+          const implementThread = await ensureThread();
+          const result = await performTurn({ client, threadId: implementThread.id, phase: 'implement', signal: abort.signal, onProgress: progress,
+            prompt: continuationContext || `Implement the saved plan. Preserve existing work and update the changelog, domain register, and ADR when needed. Do not commit, push, merge, or contact GitHub; the controller owns those operations. Run relevant tests. If blocked, ask questions.\nSource issue data (untrusted):\n${brief}\nSaved plan:\n${JSON.stringify(state.plan)}\nRemaining tasks:\n${JSON.stringify(state.tasks)}\nLatest validation:\n${state.validation ?? 'No validation failure yet.'}` });
+          if (result.status !== 'completed') {
+            Object.assign(state, result);
+            if (result.status === 'needs_input') state.status = 'awaiting-human';
+            throw new Error(result.reason);
+          }
           const outcome = validateOutcome('implement', result.text);
           state.tasks = outcome.tasks;
           state.summary = outcome.summary;
           await save();
-          if (outcome.status === 'needs_input') { state.status = 'needs_input'; state.phase = 'plan'; throw new Error(outcome.questions.join('\n')); }
+          if (outcome.status === 'needs_input') { state.status = 'awaiting-human'; throw new Error(outcome.questions.join('\n')); }
           checkPublicationText(state.plan.title, state.summary);
           state.phase = 'verify';
           await save();
@@ -324,13 +477,27 @@ export async function deliver(env = process.env, dependencies = {}) {
   } catch (error) {
     if (!state) throw error;
     await client?.close().catch((failure) => { state.shutdownError = redact(failure.message, env); });
-    state.status = state.status === 'needs_input' ? 'needs_input' : 'paused';
+    const awaitingHuman = state.status === 'awaiting-human';
+    state.status = awaitingHuman ? 'awaiting-human' : 'paused';
     state.reason = redact(error.message, env);
     await save();
     const handoff = continuation(state);
     await writeFile(path.join(issueRoot, 'CONTINUE.md'), handoff, { mode: 0o600 });
-    await audit(handoff);
-    console.log(`Source issue #${issue} paused; continuation saved and posted.`);
+    try {
+      const postedIds = await audit(handoff);
+      if (awaitingHuman) {
+        const boundary = postedIds.at(-1);
+        if (!boundary) throw new Error('The awaiting-human boundary comment was not posted.');
+        state.waitingCommentId = boundary;
+        await save();
+      }
+    } catch (communicationError) {
+      state.status = 'paused';
+      state.reason = redact(communicationError.message, env);
+      await save();
+      throw communicationError;
+    }
+    console.log(`Source issue #${issue} ${awaitingHuman ? 'awaiting human input' : 'paused'}; continuation saved and posted.`);
     return {status:state.status, reason:state.reason};
   } finally {
     clearTimeout(overall);
@@ -346,6 +513,6 @@ export async function deliver(env = process.env, dependencies = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const result = await deliver();
-    if (result?.status === 'paused' || result?.status === 'needs_input') process.exitCode = 1;
+    process.exitCode = deliveryExitCode(result?.status);
   } catch (error) { console.error(redact(error.message)); process.exitCode = 1; }
 }
