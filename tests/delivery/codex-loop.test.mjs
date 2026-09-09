@@ -70,3 +70,17 @@ test('continuation includes source, phase, saved work, and outstanding tasks', (
   const text=continuation({issue:15,phase:'implement',reason:'Quota reserve',branch:'feat/issue-15-change',plan:{plan:'The plan',tasks:['First task']},tasks:['Remaining task'],lastProgress:'Edited controller'});
   for(const value of ['#15','implement','Quota reserve','feat/issue-15-change','Remaining task','Edited controller','/codex resume']) assert.ok(text.includes(value),value);
 });
+
+test('awaiting-human handoffs repeat the canonical session and recovery text', () => {
+  const text = continuation({
+    issue:18, phase:'plan', status:'awaiting-human', sessionId:'019fb023-24b8-7881-9119-509f078b610e',
+    reason:'The model requested a decision.', tasks:['Answer the question.'],
+  });
+  for (const value of [
+    'Codex session ID: `019fb023-24b8-7881-9119-509f078b610e`',
+    'Continuation state: `awaiting-human`',
+    'Issue: `#18`',
+    'Manual recovery:',
+    '`codex resume 019fb023-24b8-7881-9119-509f078b610e`',
+  ]) assert.ok(text.includes(value),value);
+});

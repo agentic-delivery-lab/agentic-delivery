@@ -20,7 +20,9 @@ jobs:
     if: >-
       !github.event.issue.pull_request &&
       (github.event_name != 'issue_comment' ||
-       startsWith(github.event.comment.body, '/codex resume'))
+       (github.event.comment.user.login == github.repository_owner &&
+        github.event.comment.user.type != 'Bot' &&
+        github.event.comment.author_association == 'OWNER'))
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 55
     env:

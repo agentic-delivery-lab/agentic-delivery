@@ -9,6 +9,8 @@ import { deliver } from '../../scripts/codex-delivery.mjs';
 
 const exec = promisify(execFile);
 const plan = {status:'ready', kind:'requirements', summary:'Add the requested file.', plan:'Add result.txt and verify it.', tasks:['Add result.txt.'], questions:[], changeType:'feat', title:'feat: ✨ add requested file'};
+const SESSION_ID = '019fb023-24b8-7881-9119-509f078b610e';
+const REPLACEMENT_SESSION_ID = '019fb023-24b8-7881-9119-509f078b611f';
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'codex-controller-'));
@@ -22,12 +24,12 @@ async function fixture(t) {
   const issueRoot = path.join(stateRoot, '101', '7');
   const workspace = path.join(issueRoot, 'workspace');
   const eventFile = path.join(root, 'event.json');
-  await writeFile(eventFile, JSON.stringify({repository:{id:101}}));
+  await writeFile(eventFile, JSON.stringify({repository:{id:101,full_name:'fixture/repo',owner:{login:'maintainer'}}}));
   const env = {...process.env, GH_TOKEN:'fixture-token', GITHUB_EVENT_PATH:eventFile, RUNNER_WORKSPACE:root,
     CODEX_DELIVERY_STATE_DIR:stateRoot, GITHUB_REPOSITORY:'fixture/repo', GITHUB_ACTOR:'maintainer',
     GITHUB_EVENT_NAME:'workflow_dispatch', GITHUB_RUN_ID:'1', SOURCE_ISSUE:'7'};
-  const calls = {turns:[], commands:[], comments:[], prs:[], clients:0, closes:0};
-  const faults = {permission:'write', sourceState:'open', sourceTitle:'Add a file', sourceBody:'Create result.txt', sourceComments:[]};
+  const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], clients:0, closes:0};
+  const faults = {permission:'write', sourceState:'open', sourceTitle:'Add a file', sourceBody:'Create result.txt', sourceComments:[], startSessionId:SESSION_ID, resumeSessionId:SESSION_ID};
   const dependencies = {
     fetch:async (url, options) => {
       const route = url.replace('https://api.github.com/repos/fixture/repo', '');
@@ -62,7 +64,14 @@ async function fixture(t) {
       return {
         initialize:async () => {},
         capabilities:async () => ({stop:Boolean(faults.quota), reason:'Quota reserve reached.'}),
-        thread:async () => ({thread:{id:'fixture-thread'}}),
+        startThread:async () => {
+          calls.threads.push({method:'start'});
+          return {thread:{id:faults.startSessionId}};
+        },
+        resumeThread:async (_cwd, sessionId) => {
+          calls.threads.push({method:'resume',sessionId});
+          return {thread:{id:faults.resumeSessionId}};
+        },
         exec:async (command, cwd, timeout, profile) => {
           calls.commands.push({command,cwd,profile});
           if (faults.validation && command[1] === 'install') return '';
@@ -72,8 +81,9 @@ async function fixture(t) {
         close:async () => { calls.closes++; if (faults.shutdown) throw new Error('Owned process group is still active'); },
       };
     },
-    runTurn:async ({phase,onProgress}) => {
+    runTurn:async ({phase,threadId,prompt,onProgress}) => {
       calls.turns.push(phase);
+      calls.prompts.push({phase,threadId,prompt});
       if (faults.turnPause) return {status:'paused', reason:'Quota reserve reached.'};
       if (phase === 'plan') return {status:'completed',text:JSON.stringify(faults.questions ? {...plan,status:'needs_input',questions:['Which file?']} : plan)};
       await writeFile(path.join(workspace, 'result.txt'), 'implemented\n');
@@ -92,6 +102,17 @@ async function fixture(t) {
     state:async () => JSON.parse(await readFile(path.join(issueRoot,'state.json'),'utf8')),
     run:async () => deliver(env,dependencies),
     resume:async () => { env.GITHUB_RUN_ID = String(Number(env.GITHUB_RUN_ID)+1); return deliver(env,dependencies); },
+    comment:async ({id=200,body='Continue the saved task.',pullRequest=false,user='maintainer',type='User',association='OWNER'}={}) => {
+      env.GITHUB_EVENT_NAME = 'issue_comment';
+      env.GITHUB_ACTOR = 'rerun-actor';
+      env.GITHUB_TRIGGERING_ACTOR = 'rerun-actor';
+      await writeFile(eventFile, JSON.stringify({
+        repository:{id:101,full_name:'fixture/repo',owner:{login:'maintainer'}},
+        issue:{number:7,...(pullRequest ? {pull_request:{html_url:'https://example.invalid/pr/1'}} : {})},
+        action:'created',
+        comment:{id,body,user:{login:user,type},author_association:association},
+      }));
+    },
   };
 }
 
@@ -99,7 +120,9 @@ test('publishes one recorded branch and PR with a complete issue audit trail', a
   const f = await fixture(t); await f.run();
   const state = await f.state();
   assert.equal(state.status,'ready'); assert.equal(state.phase,'publish');
+  assert.equal(state.version,2); assert.equal(state.sessionId,SESSION_ID);
   assert.deepEqual(f.calls.turns,['plan','implement']); assert.equal(f.calls.prs.length,1);
+  assert.deepEqual(f.calls.threads,[{method:'start'}]);
   assert.match(f.calls.prs[0].body,/Closes #7/);
   assert.equal(f.calls.prs[0].base,'main'); assert.equal(f.calls.prs[0].head,state.branch);
   assert.ok(f.calls.comments.some((text) => text.includes('Intake and plan')));
@@ -209,13 +232,13 @@ test('verification retry does not repeat implementation after a manual repair', 
   assert.equal((await f.state()).status,'ready'); assert.equal(f.calls.turns.length,turns);
 });
 
-test('implementation questions return to planning while preserving the existing branch', async (t) => {
+test('implementation questions preserve the implementation phase and existing branch', async (t) => {
   const f = await fixture(t); f.faults.implementationQuestion = true;
   await f.run(); const first = await f.state();
-  assert.equal(first.phase,'plan'); assert.equal(first.status,'needs_input');
-  f.faults.implementationQuestion = false; await f.resume();
+  assert.equal(first.phase,'implement'); assert.equal(first.status,'awaiting-human');
+  f.faults.implementationQuestion = false; await f.comment({id:209,body:'Use the existing wording.'}); await f.run();
   assert.equal((await f.state()).status,'ready'); assert.equal((await f.state()).branch,first.branch);
-  assert.deepEqual(f.calls.turns,['plan','implement','plan','implement']);
+  assert.deepEqual(f.calls.turns,['plan','implement','implement']);
 });
 
 test('recovers a completed commit without spending quota or creating another commit', async (t) => {
@@ -246,4 +269,165 @@ test('invalid saved state is preserved for inspection without models or publicat
     assert.equal(await readFile(file,'utf8'),saved);
     assert.equal(f.calls.clients,0); assert.equal(f.calls.prs.length,0);
   }
+});
+
+test('trusted owner comments continue the exact waiting session and finish successfully', async (t) => {
+  const f = await fixture(t);
+  f.faults.questions = true;
+  assert.equal((await f.run()).status,'awaiting-human');
+  const waiting = await f.state();
+  assert.equal(waiting.status,'awaiting-human');
+  assert.equal(waiting.sessionId,SESSION_ID);
+  assert.ok(waiting.waitingCommentId);
+  const handoff = await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8');
+  for (const value of [
+    `Codex session ID: \`${SESSION_ID}\``,
+    'Continuation state: `awaiting-human`',
+    'Issue: `#7`',
+    `codex resume ${SESSION_ID}`,
+  ]) assert.ok(handoff.includes(value),value);
+
+  f.faults.questions = false;
+  await f.comment({id:200,body:'Use the existing result file.'});
+  const result = await f.run();
+
+  assert.equal(result?.status,undefined);
+  assert.equal((await f.state()).status,'ready');
+  assert.deepEqual(f.calls.threads,[{method:'start'},{method:'resume',sessionId:SESSION_ID}]);
+  assert.ok(f.calls.prompts.some(({prompt}) => prompt.includes('Use the existing result file.')));
+  assert.ok(f.calls.prompts.some(({prompt}) => prompt.includes('Saved plan:')));
+});
+
+test('bare resume recovers a technical pause, while a plain comment does not', async (t) => {
+  const f = await fixture(t);
+  f.faults.turnPause = true;
+  assert.equal((await f.run()).status,'paused');
+  const pausedTurns = f.calls.turns.length;
+
+  await f.comment({id:201,body:'Please continue.'});
+  assert.equal((await f.run())?.status,'ignored');
+  assert.equal(f.calls.turns.length,pausedTurns);
+
+  f.faults.turnPause = false;
+  await f.comment({id:202,body:'/codex resume'});
+  await f.run();
+  assert.equal((await f.state()).status,'ready');
+  assert.deepEqual(f.calls.threads,[{method:'start'},{method:'resume',sessionId:SESSION_ID}]);
+});
+
+test('manual dispatch remains available for a waiting continuation', async (t) => {
+  const f = await fixture(t);
+  f.faults.questions = true;
+  assert.equal((await f.run()).status,'awaiting-human');
+  f.faults.questions = false;
+  f.env.GITHUB_EVENT_NAME = 'workflow_dispatch';
+  f.env.GITHUB_RUN_ID = '2';
+  assert.equal((await f.run())?.status,undefined);
+  assert.equal((await f.state()).status,'ready');
+  assert.deepEqual(f.calls.threads,[{method:'start'},{method:'resume',sessionId:SESSION_ID}]);
+});
+
+test('missing and inactive continuation state never starts Codex', async (t) => {
+  const missing = await fixture(t);
+  await missing.comment({id:203,body:'Continue.'});
+  assert.equal((await missing.run())?.status,'ignored');
+  assert.equal(missing.calls.clients,0);
+
+  const inactive = await fixture(t);
+  inactive.faults.sourceState = 'closed';
+  await inactive.comment({id:204,body:'Continue.'});
+  assert.equal((await inactive.run())?.status,'ignored');
+  assert.equal(inactive.calls.clients,0);
+});
+
+test('pull-request comments cannot enter controller continuation', async (t) => {
+  const f = await fixture(t);
+  await f.comment({id:205,body:'Continue.',pullRequest:true});
+  await assert.rejects(f.run(),/pull request/);
+  assert.equal(f.calls.clients,0);
+});
+
+test('a missing UUID in versioned waiting state fails without starting a replacement thread', async (t) => {
+  const f = await fixture(t);
+  await mkdir(f.issueRoot,{recursive:true});
+  await writeFile(path.join(f.issueRoot,'state.json'),JSON.stringify({
+    version:2,repository:'fixture/repo',issue:'7',phase:'plan',status:'awaiting-human',
+    waitingCommentId:'100',events:[],consumedCommentIds:[],tasks:[],plan,
+  }));
+  await f.comment({id:206,body:'Continue.'});
+  assert.equal((await f.run())?.status,'paused');
+  assert.equal(f.calls.clients,0);
+  assert.match((await f.state()).reason,/session ID is missing/i);
+});
+
+test('a resumed UUID mismatch fails without falling back to a new thread', async (t) => {
+  const f = await fixture(t);
+  await mkdir(f.issueRoot,{recursive:true});
+  await writeFile(path.join(f.issueRoot,'state.json'),JSON.stringify({
+    version:2,repository:'fixture/repo',issue:'7',phase:'plan',status:'awaiting-human',
+    sessionId:SESSION_ID,waitingCommentId:'100',events:[],consumedCommentIds:[],tasks:[],plan,
+  }));
+  f.faults.resumeSessionId = REPLACEMENT_SESSION_ID;
+  await f.comment({id:207,body:'Continue.'});
+  assert.equal((await f.run())?.status,'paused');
+  assert.deepEqual(f.calls.threads,[{method:'resume',sessionId:SESSION_ID}]);
+  assert.equal(f.calls.turns.length,0);
+  assert.match((await f.state()).reason,/session ID mismatch/i);
+});
+
+test('legacy waiting state is migrated once into a persistent replacement session', async (t) => {
+  const f = await fixture(t);
+  await mkdir(f.issueRoot,{recursive:true});
+  await writeFile(path.join(f.issueRoot,'state.json'),JSON.stringify({
+    repository:'fixture/repo',issue:'7',phase:'plan',status:'needs_input',
+    auditCommentIds:[100],events:[],tasks:[],lastProgress:'The old thread asked a question.',
+  }));
+  await f.comment({id:208,body:'Use result.txt.'});
+  await f.run();
+  const state = await f.state();
+  assert.equal(state.version,2);
+  assert.equal(state.sessionId,SESSION_ID);
+  assert.equal(state.legacySessionReconstructed,true);
+  assert.deepEqual(f.calls.threads,[{method:'start'}]);
+  assert.ok(f.calls.comments.some((body) => body.includes('Legacy continuation state reconstructed')));
+});
+
+test('comments at or before the waiting boundary are ignored without consuming the continuation', async (t) => {
+  const f = await fixture(t);
+  f.faults.questions = true;
+  await f.run();
+  const boundary = BigInt((await f.state()).waitingCommentId);
+  await f.comment({id:String(boundary),body:'A stale answer.'});
+  assert.equal((await f.run())?.status,'ignored');
+  assert.equal((await f.state()).status,'awaiting-human');
+  assert.deepEqual(f.calls.turns,['plan']);
+});
+
+test('a consumed continuation comment cannot run twice after a technical pause', async (t) => {
+  const f = await fixture(t);
+  f.faults.questions = true;
+  await f.run();
+  f.faults.questions = false;
+  f.faults.turnPause = true;
+  await f.comment({id:210,body:'Use result.txt.'});
+  assert.equal((await f.run())?.status,'paused');
+  const turns = f.calls.turns.length;
+  assert.ok((await f.state()).consumedCommentIds.includes('210'));
+  f.faults.turnPause = false;
+  await f.run();
+  assert.equal(f.calls.turns.length,turns);
+  assert.equal((await f.state()).status,'paused');
+});
+
+test('bot comments do not change the saved source digest', async (t) => {
+  const f = await fixture(t);
+  f.faults.failPublish = true;
+  f.faults.sourceComments = [{id:10001,user:{login:'github-actions[bot]',type:'Bot'},body:'bot progress one'}];
+  await f.run();
+  assert.equal((await f.state()).phase,'publish');
+  f.faults.sourceComments[0].body = 'bot progress two';
+  f.faults.failPublish = false;
+  await f.resume();
+  assert.equal((await f.state()).status,'ready');
+  assert.deepEqual(f.calls.turns,['plan','implement']);
 });

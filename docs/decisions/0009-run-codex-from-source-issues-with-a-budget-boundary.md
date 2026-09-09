@@ -1,6 +1,6 @@
 ---
-date: 2026-09-07
-source-issue: https://github.com/sjefsharp/agentic-delivery/issues/15
+date: 2026-09-09
+source-issue: https://github.com/sjefsharp/agentic-delivery/issues/18
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
@@ -10,8 +10,11 @@ informed: None
 
 ## Context and Problem Statement
 
-[Source issue #15](https://github.com/sjefsharp/agentic-delivery/issues/15)
-requests immediate GitHub Issue intake on the existing self-hosted runner,
+[Source issue #18](https://github.com/sjefsharp/agentic-delivery/issues/18)
+amends the continuation design originally tracked by
+[source issue #15](https://github.com/sjefsharp/agentic-delivery/issues/15).
+It requests reliable continuation of the current source-issue workflow on the
+existing self-hosted runner,
 planning with GPT-5.6 Sol High, implementation with GPT-5.6 Luna Max, and a
 review pull request. Issues may contain ideas, requirements, or decisions.
 The source issue must explain how the final change came about.
@@ -29,6 +32,10 @@ delivery run, budget boundary, and continuation prompt.
 - Save resumable progress just before quota exhaustion.
 - Keep credentials and publication outside model-generated commands.
 - Preserve human review, merge, and issue-closing authority.
+- Continue only the exact source issue and persistent Codex session requested by
+  a trusted repository-owner comment.
+- Keep human-input waiting separate from technical failure and prevent comment
+  redelivery or bot feedback loops.
 
 ## Considered Options
 
@@ -43,9 +50,30 @@ its protocol exposes actual collaboration modes, per-turn model settings,
 clarification requests, interruption, and subscription quota telemetry.
 
 An issue opened by a contributor with current repository write permission
-starts intake. A `/codex resume` issue comment or manual dispatch resumes a
-pause. Free-form intake precedes the implementation plan. The source issue
-also serves as ADR tracking when a significant decision is needed.
+starts intake. A newly created issue comment can enter the controller only when
+the payload author is the repository owner with `author_association: OWNER`;
+the controller repeats this check using the comment payload rather than
+`GITHUB_TRIGGERING_ACTOR`. A plain owner comment continues only an existing
+`awaiting-human` state. A bare `/codex resume` comment and manual dispatch
+remain recovery paths for technical `paused` state. Free-form intake precedes
+the implementation plan. The source issue also serves as ADR tracking when a
+significant decision is needed.
+
+New delivery state is versioned and correlates one source issue to one
+persistent Codex app-server thread UUID. The controller starts new threads with
+`ephemeral: false`, saves the returned UUID before the first model turn, and
+uses `thread/resume` with that exact UUID in later processes. It does not use a
+global newest-session lookup or silently start a replacement when a versioned
+UUID is missing or cannot be resumed. An `awaiting-human` state records the
+waiting comment boundary and consumed comment IDs. The accepted owner comment
+is passed directly to the resumed turn with the saved issue brief, progress,
+plan, tasks, and validation context.
+
+State from the historical #17 and #18 runs has no UUID. Its first eligible
+recovery creates one persistent replacement thread, records the one-time
+reconstruction in the audit trail, and uses only that new UUID thereafter.
+Bot-authored comments are excluded from issue snapshots, and duplicate or
+stale comments are rejected before model execution.
 
 The single dedicated runner queues jobs. A persistent account lock prevents
 overlapping controller runs on that host. Do not use Actions concurrency that
@@ -102,6 +130,9 @@ restricted to that service account.
   sandbox compatibility are operational prerequisites.
 - Bad, because interruption and remote posting are not atomic; the saved
   outbox can produce duplicate comments after an ambiguous network failure.
+- Bad, because legacy session reconstruction cannot restore the original
+  ephemeral conversation and therefore depends on the saved issue brief and
+  continuation context.
 - Neutral, because this private repository on GitHub Free cannot enforce
   branch protection. Workflow policy does not prevent another credential
   holder from pushing to `main`. Human merge authority remains the policy.
@@ -111,7 +142,8 @@ restricted to that service account.
 ### Confirmation
 
 Test quota failures, exact model selection, mode handoff, clarification,
-interruption, authorization, continuation, and duplicate-event behavior.
+interruption, authorization, persistent UUID start/resume, owner-comment
+continuation, legacy reconstruction, and duplicate-event behavior.
 Run repository tests and quality checks. Verify Codex under `github-runner`
 without generating a turn, then demonstrate a small end-to-end issue after
 human merge and prerequisite setup. Do not claim runtime readiness from unit
@@ -143,6 +175,7 @@ tests alone. This ADR remains provisional until merged into `main`.
 - [Codex subscription allowance](https://learn.chatgpt.com/docs/pricing)
 - [GitHub workflow triggers](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
 - [GitHub branch protection availability](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
+- [Issue #18: Restore exact Codex issue continuation](https://github.com/sjefsharp/agentic-delivery/issues/18)
 - [Operation and continuation](../delivery/codex-workflow.md)
 - Revisit when runner isolation, account sharing, automated resumption, or
   publishing credentials change.

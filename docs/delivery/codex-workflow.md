@@ -9,20 +9,59 @@ changes, validation, and a review pull request. Its decision is recorded in
 After the workflow is merged and prerequisites are verified, open an issue.
 An idea, requirements, a decision, or a mixture is acceptable. The triggering
 actor must have repository write permission. Codex starts with GPT-5.6 Sol High
-in Plan mode and asks questions if the outcome is unclear. Answer on the
-source issue, then comment `/codex resume`. GPT-5.6 Luna Max implements a
-completed plan. The workflow records progress and validation on that issue.
+in Plan mode and asks questions if the outcome is unclear. GPT-5.6 Luna Max
+implements a completed plan. The workflow records progress and validation on
+the source issue.
 
-Manual dispatch of `codex-delivery` with the source issue number also resumes
-work. The same event is not processed twice; a new resume comment is an
-explicit new attempt. The controller reuses saved changes and a single branch.
-It never merges the review pull request or closes the source issue.
+The `issue_comment` trigger is restricted twice: the workflow accepts only a
+new comment from the repository owner with `author_association: OWNER`, and
+the controller verifies the same payload identity. Pull-request comments,
+bots, rerun actors, and other writers cannot enter continuation. A plain owner
+comment continues only an existing `awaiting-human` continuation state. A bare
+`/codex resume` is reserved for a technical `paused` state; manual dispatch of
+`codex-delivery` remains available for recovery and initial issue execution.
+
+The controller reuses saved changes and a single branch. It never creates a
+new task for a comment on a missing, completed, running, stale, or inactive
+state. It never merges the review pull request or closes the source issue.
+
+## Continuation state and session correlation
+
+Persisted state is versioned and stores the repository, source issue, delivery
+phase, exact Codex session UUID, a waiting comment boundary, and consumed
+comment IDs. New app-server threads are persistent (`ephemeral: false`). The
+controller saves the returned UUID before the first model turn and resumes
+later runs with `thread/resume` for that exact UUID. It does not use
+`codex resume --last`, a global newest-session lookup, or a new-thread fallback
+when a versioned state is missing or has an unresumable UUID.
+
+The `awaiting-human` state is an intentional boundary, not a failed Actions
+job. The handoff and its `CONTINUE.md` copy expose the same persisted identity:
+
+```text
+Codex session ID: <UUID>
+Continuation state: awaiting-human
+Issue: #<number>
+Manual recovery: codex resume <UUID>
+```
+
+The next accepted owner comment is supplied directly to the resumed turn with
+the saved issue brief, progress, implementation plan, remaining tasks, and
+validation context. Comments at or before the waiting boundary and duplicate
+event deliveries are ignored. Bot-authored comments are excluded from issue
+snapshots so automation cannot change the planning digest or create a loop.
+
+Legacy state from the historical #17 and #18 runs had no persistent UUID. On
+its first eligible recovery, the controller starts one persistent replacement
+thread, records that reconstruction in the audit trail, and uses only the new
+UUID thereafter.
 
 The controller checks the source issue title, body, and discussion against the
 saved planning snapshot before resuming dependent work and before publication.
-New, edited, or removed discussion returns the delivery run to planning without
-discarding files. Its own audit comments and bare `/codex resume` commands do
-not invalidate the plan. These checks are snapshots, not a lock on issue edits.
+New, edited, or removed human discussion returns the delivery run to planning
+without discarding files. Its own audit comments, bot-authored comments, and
+bare `/codex resume` commands do not invalidate the plan. These checks are
+snapshots, not a lock on issue edits.
 
 ## Runner prerequisites
 
@@ -33,6 +72,10 @@ not invalidate the plan. These checks are snapshots, not a lock on issue edits.
   official Linux x64 package after SHA-256 verification. The dedicated tool
   cache keeps this installation separate from personal tools. The runner verifies
   both model/effort combinations, ChatGPT login, Plan mode, and quota telemetry.
+  The no-generation smoke check also probes persistent thread start and exact
+  resume; this pinned CLI reports that a brand-new thread has no resumable
+  rollout until its first model turn, so the check records that limitation
+  without spending model quota.
 - ChatGPT login for the installed `codex` executable under that user,
   `github-runner`. Another user's installation/login is not sufficient. For a
   headless runner, use the file-backed credential store so the service does not
@@ -112,14 +155,16 @@ recharging or add credits while a delivery run is active. Other account clients
 and in-flight usage remain outside the controller's control.
 
 Each issue directory contains `state.json`, an append-only `audit.jsonl`, the
-working tree, and `CONTINUE.md` after a pause. The continuation prompt and
-remaining tasks are also posted on the source issue without another model
-call. Answer open questions or wait for the reset, then `/codex resume`.
+working tree, and `CONTINUE.md` after a pause or human-input boundary. The
+continuation prompt and remaining tasks are also posted on the source issue
+without another model call. A technical pause waits for `/codex resume`; an
+`awaiting-human` state waits for a new plain trusted owner comment.
 Saved phases distinguish planning, branch creation, implementation,
 verification, commit, and publication. Commit/publication retries do not start
-a model or require available generation quota. Implementation questions return
-to planning while retaining the existing branch and work. The controller stops
-owned processes before committing and checks the verified tree again.
+a model or require available generation quota. Implementation questions preserve
+the current phase and exact Codex session while retaining the existing branch
+and work. The controller stops owned processes before committing and checks the
+verified tree again.
 
 Publication retries must still match that verified tree, even if somebody has
 made another clean commit locally. Invalid saved state is left untouched for

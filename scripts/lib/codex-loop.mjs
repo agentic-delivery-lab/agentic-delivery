@@ -123,17 +123,29 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
 }
 
 export function continuation(state) {
+  const awaitingHuman = state.status === 'awaiting-human';
+  const sessionDetails = state.sessionId ? [
+    `Codex session ID: \`${state.sessionId}\``,
+    `Continuation state: \`${state.status}\``,
+    `Issue: \`#${state.issue}\``,
+    '',
+    'Manual recovery:',
+    `\`codex resume ${state.sessionId}\``,
+  ] : [];
   return [
     `## Continuation for source issue #${state.issue}`,
     `Reason: ${state.reason ?? 'Work remains.'}`,
     ...(state.shutdownError ? [`Shutdown warning: ${state.shutdownError}. The account lock requires operator inspection.`] : []),
     `Phase: ${state.phase}. Branch: ${state.branch ?? 'not created yet'}.`,
+    ...sessionDetails,
     `Saved progress: ${state.lastProgress ?? 'Intake has not completed.'}`,
     '### Remaining tasks',
     ...(state.tasks?.length ? state.tasks : state.plan?.tasks ?? ['Complete intake and planning.', 'Implement, validate, and open the review pull request.']).map((task) => `- [ ] ${task}`),
     '### Follow-up prompt',
     `Continue source issue #${state.issue} from the saved ${state.phase} phase and existing working tree. Read its plan, questions, comments, and latest validation results. Preserve existing changes. Resolve unanswered questions before implementation. Use Sol High in Plan mode for incomplete planning and Luna Max for implementation. Check subscription quota before model execution. Do not merge or close the source issue.`,
-    'After answering any questions and after the quota resets, comment `/codex resume` on this issue. An agent with repository write permission can also resume. A manual workflow dispatch with this issue number is equivalent.',
+    ...(awaitingHuman
+      ? ['Post a plain trusted repository-owner comment with the human decision or answer to continue this waiting delivery run.']
+      : ['After answering any questions and after the quota resets, comment `/codex resume` on this issue. An agent with repository write permission can also resume. A manual workflow dispatch with this issue number is equivalent.']),
     ...(state.budget?.resetsAt ? [`Reported quota reset: ${new Date(state.budget.resetsAt * 1000).toISOString()}.`] : []),
   ].join('\n\n');
 }
