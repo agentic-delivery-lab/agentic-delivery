@@ -44,6 +44,14 @@ them. Run relevant tests and report actual results. Use the final structured
 outcome to record remaining tasks and questions. Do not claim completion when
 requirements remain unresolved.
 
+Issue communication must minimize cognitive load. Keep progress summaries
+focused on what changed, why it matters, and the next step. Questions that need
+a human answer belong only in a distinct clarification outcome; do not mix them
+into routine progress. The controller renders structured model output as plain
+Markdown, coalesces rapid progress updates, and gives human-input requests a
+prominent action-required heading. Raw protocol JSON is not a human-facing
+audit format.
+
 The controller owns Git metadata, commits, pushes, issue communication, and
 pull-request publication. Model tools have restricted filesystem access and
 no external network access. They cannot install packages or use external integrations;
@@ -61,5 +69,9 @@ a continuation prompt without another model call. A human-input request is
 saved as the successful `awaiting-human` continuation state; technical quota,
 session, repository, and validation failures remain `paused` failures. Keep
 progress current so a trusted owner can answer a waiting run or an operator can
-recover a technical pause. A five-hour wall-clock timeout is not a subscription
-budget. Never switch models, billing methods, or accounts to get around a limit.
+recover a technical pause. A clear natural-language owner request continues a
+technical pause and is passed to the exact saved Codex session when model work
+resumes. The legacy `/codex resume` command remains a compatibility shortcut,
+not the required human interface. A five-hour wall-clock timeout is not a
+subscription budget. Never switch models, billing methods, or accounts to get
+around a limit.

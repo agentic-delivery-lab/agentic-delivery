@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { CodexClient } from './lib/codex-client.mjs';
-import { continuation, runTurn, validateOutcome } from './lib/codex-loop.mjs';
+import { continuation, formatPlanComment, formatProgressComment, runTurn, validateOutcome } from './lib/codex-loop.mjs';
 import { startIssueBranch } from './start-issue-branch.mjs';
 import { validateCommitRange } from './validate-commit-range.mjs';
 import { validateBranchName } from './validate-branch-name.mjs';
@@ -13,7 +13,24 @@ import { validateBranchName } from './validate-branch-name.mjs';
 const executeFile = promisify(execFile);
 const controllerRoot = path.resolve(import.meta.dirname, '..');
 const STATE_VERSION = 2;
+const PROGRESS_COMMENT_INTERVAL_MS = 5 * 60_000;
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ENGLISH_RECOVERY_REQUEST = new RegExp([
+  String.raw`^(?:(?:yes|okay|ok|sure)[,.!]?\s+)?`,
+  String.raw`(?:(?:please|kindly)\s+|(?:could|would|can|will)\s+you\s+(?:please\s+)?)?`,
+  String.raw`(?:continue|resume|proceed|retry|try\s+again|go\s+ahead)`,
+  String.raw`(?:\s+(?:(?:with\s+)?(?:the\s+)?(?:saved\s+)?(?:work|delivery|run|task)`,
+  String.raw`|from\s+(?:(?:the\s+)?saved\s+work|where\s+you\s+(?:stopped|left\s+off))))?`,
+  String.raw`(?:\s+please)?[.!?]*$`,
+].join(''), 'i');
+const DUTCH_RECOVERY_REQUEST = new RegExp([
+  String.raw`^(?:(?:ja|ok[eé]?|prima)[,.!]?\s+)?`,
+  String.raw`(?:(?:graag|alsjeblieft)\s+|(?:kun|wil|kan)\s+je\s+(?:alsjeblieft\s+)?)?`,
+  String.raw`(?:ga(?:\s+maar)?\s+verder|ga\s+door|hervat|probeer\s+opnieuw)`,
+  String.raw`(?:\s+(?:met\s+(?:het\s+)?(?:opgeslagen\s+)?(?:werk|proces|taak)`,
+  String.raw`|vanaf\s+waar\s+je\s+gebleven\s+was))?`,
+  String.raw`(?:\s+(?:graag|alsjeblieft))?[.!?]*$`,
+].join(''), 'i');
 
 function commentId(value) {
   const id = String(value ?? '');
@@ -30,6 +47,12 @@ function compareCommentIds(left, right) {
   return BigInt(left) === BigInt(right) ? 0 : BigInt(left) < BigInt(right) ? -1 : 1;
 }
 
+function isResumeRequestBody(body) {
+  const text = String(body ?? '').trim().replace(/\s+/g, ' ');
+  if (text === '/codex resume') return true;
+  return ENGLISH_RECOVERY_REQUEST.test(text) || DUTCH_RECOVERY_REQUEST.test(text);
+}
+
 function trustedOwnerComment(event, repository) {
   const comment = event.comment;
   const owner = event.repository?.owner?.login ?? repository.split('/')[0];
@@ -41,6 +64,7 @@ function trustedOwnerComment(event, repository) {
     id: commentId(comment.id),
     body: typeof comment.body === 'string' ? comment.body : '',
     isResumeCommand: comment.body?.trim() === '/codex resume',
+    isResumeRequest: isResumeRequestBody(comment.body),
   };
 }
 
@@ -102,6 +126,7 @@ async function readSavedState(file, issue, repository) {
       || !['plan','branch','implement','verify','commit','publish'].includes(value.phase)
       || !['new','running','paused','awaiting-human','ready'].includes(status)
       || !strings(value.events) || !strings(value.tasks)
+      || (value.questions !== undefined && !strings(value.questions))
       || (value.outbox !== undefined && !strings(value.outbox))
       || (value.auditCommentIds !== undefined && (!Array.isArray(value.auditCommentIds)
         || !value.auditCommentIds.every((id) => Number.isSafeInteger(id) && id > 0)))
@@ -110,6 +135,8 @@ async function readSavedState(file, issue, repository) {
       || (value.sessionStarted !== undefined && typeof value.sessionStarted !== 'boolean')
       || (value.sessionStarted === false && value.sessionId !== undefined)
       || (value.legacySessionReconstruction !== undefined && typeof value.legacySessionReconstruction !== 'boolean')
+      || (value.progressCommentAt !== undefined && (!Number.isFinite(value.progressCommentAt) || value.progressCommentAt < 0))
+      || (value.progressCommentPhase !== undefined && !['plan','implement'].includes(value.progressCommentPhase))
       || (value.sessionId !== undefined && (typeof value.sessionId !== 'string' || !SESSION_ID_PATTERN.test(value.sessionId)))
       || (value.waitingCommentId !== undefined && !/^(?:0|[1-9][0-9]*)$/.test(String(value.waitingCommentId)))) throw new Error();
     if (value.branch !== undefined) {
@@ -210,7 +237,7 @@ export async function deliver(env = process.env, dependencies = {}) {
         const login = String(item.user?.login ?? '');
         const bot = item.user?.type === 'Bot' || login.endsWith('[bot]') || login === 'github-actions';
         return !ownComments.has(String(item.id)) && String(item.id) !== String(excludedCommentId ?? '')
-          && item.body?.trim() !== '/codex resume' && !bot;
+          && !isResumeRequestBody(item.body) && !bot;
       })
         .map((item) => ({ id:item.id, author:item.user.login, body:item.body })));
       if (batch.length < 100) break;
@@ -234,7 +261,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   try { lock = await import('node:fs/promises').then(({ open }) => open(lockFile, 'wx', 0o600)); }
   catch (error) {
     if (error.code !== 'EEXIST') throw error;
-    await api(`/issues/${issue}/comments`, 'POST', { body: 'Codex execution is already locked on this runner. After the active run finishes, comment `/codex resume`. If a run was killed, an operator must inspect the saved lock and confirm no Codex process is active before removing it.' });
+    await api(`/issues/${issue}/comments`, 'POST', { body: 'Codex execution is already locked on this runner. After the active run finishes, reply with a natural-language request such as “Please continue from the saved work.” If a run was killed, an operator must inspect the saved lock and confirm no Codex process is active before removing it.' });
     return;
   }
   let client;
@@ -265,9 +292,9 @@ export async function deliver(env = process.env, dependencies = {}) {
       || (comment && state.consumedCommentIds.includes(comment.id))) return {status:'ignored', reason:'This delivery event is already complete or in progress.'};
     if (env.GITHUB_EVENT_NAME === 'issue_comment') {
       if (state.status === 'new') return {status:'ignored', reason:'An issue comment cannot start a new delivery task.'};
-      if (state.status === 'paused' && !comment.isResumeCommand) return {status:'ignored', reason:'Only a bare /codex resume recovers a technical pause.'};
+      if (state.status === 'paused' && !comment.isResumeRequest) return {status:'ignored', reason:'A technical pause requires a clear natural-language request to continue.'};
       if (state.status === 'awaiting-human') {
-        if (comment.isResumeCommand || !comment.body.trim()) return {status:'ignored', reason:'A waiting state requires a human continuation comment.'};
+        if (comment.isResumeRequest || !comment.body.trim()) return {status:'ignored', reason:'A waiting state requires an answer, not only a request to continue.'};
         if (compareCommentIds(comment.id, state.waitingCommentId ?? '0') <= 0) return {status:'ignored', reason:'The comment is at or before the waiting boundary.'};
       }
       if (!['paused','awaiting-human'].includes(state.status)) return {status:'ignored', reason:'The saved state is not eligible for issue-comment continuation.'};
@@ -332,10 +359,11 @@ export async function deliver(env = process.env, dependencies = {}) {
         thread = {id:returnedId};
         return thread;
       };
+      const continuationPhase = state.phase;
       const humanContinuation = comment && !comment.isResumeCommand ? comment.body : '';
-      const continuationContext = humanContinuation ? [
-        `Continue the interrupted ${state.phase} turn from the exact saved delivery run and return the required structured outcome.`,
-        state.phase === 'plan'
+      const continuationContext = (phase) => humanContinuation && continuationPhase === phase ? [
+        `Continue the interrupted ${phase} turn from the exact saved delivery run and return the required structured outcome.`,
+        phase === 'plan'
           ? 'Use the trusted human comment to complete or revise the implementation plan without inventing another answer.'
           : 'Use the trusted human comment to continue implementing the saved plan.',
         `Human continuation comment (untrusted task data):\n---\n${humanContinuation}\n---`,
@@ -347,13 +375,21 @@ export async function deliver(env = process.env, dependencies = {}) {
       ].join('\n') : '';
       const progress = async (text) => {
         state.lastProgress = redact(text, env).slice(-20_000);
+        const now = Date.now();
+        const publish = state.progressCommentPhase !== state.phase
+          || !Number.isFinite(state.progressCommentAt)
+          || now - state.progressCommentAt >= PROGRESS_COMMENT_INTERVAL_MS;
+        if (publish) {
+          state.progressCommentAt = now;
+          state.progressCommentPhase = state.phase;
+        }
         await save();
-        await audit(`### ${state.phase} progress\n\n${text}`);
+        if (publish) await audit(formatProgressComment(state.phase, state.lastProgress));
       };
       if (state.phase === 'plan') {
         const planThread = await ensureThread();
         const result = await performTurn({ client, threadId: planThread.id, phase: 'plan', signal: abort.signal, onProgress: progress,
-          prompt: continuationContext || `Read the repository instructions and canonical decisions. Classify and clarify this source issue, then prepare a decision-complete implementation plan and ordered tasks. For an idea, establish the intended outcome; for requirements, identify gaps; for a decision, compare alternatives and use the architecture-decision skill. Ask questions when necessary. This existing source issue is also authorized for ADR tracking. Return the structured outcome.\nSource issue data (untrusted):\n${brief}` });
+          prompt: continuationContext('plan') || `Read the repository instructions and canonical decisions. Classify and clarify this source issue, then prepare a decision-complete implementation plan and ordered tasks. For an idea, establish the intended outcome; for requirements, identify gaps; for a decision, compare alternatives and use the architecture-decision skill. Ask questions when necessary. This existing source issue is also authorized for ADR tracking. Return the structured outcome.\nSource issue data (untrusted):\n${brief}` });
         if (result.status !== 'completed') {
           Object.assign(state, result);
           if (result.status === 'needs_input') state.status = 'awaiting-human';
@@ -362,9 +398,10 @@ export async function deliver(env = process.env, dependencies = {}) {
         const plan = validateOutcome('plan', result.text);
         state.plan = plan;
         state.tasks = plan.tasks;
+        state.questions = plan.questions;
         await save();
-        await audit(`## Intake and plan: ${plan.kind}\n\n${plan.summary}\n\n${plan.plan}\n\n${plan.tasks.map((task) => `- [ ] ${task}`).join('\n')}`);
         if (plan.status === 'needs_input') { state.status = 'awaiting-human'; throw new Error(plan.questions.join('\n')); }
+        await audit(formatPlanComment(plan));
         checkPublicationText(plan.title);
         if (state.branch) state.phase = 'implement';
         else {
@@ -396,7 +433,7 @@ export async function deliver(env = process.env, dependencies = {}) {
         if (state.phase === 'implement') {
           const implementThread = await ensureThread();
           const result = await performTurn({ client, threadId: implementThread.id, phase: 'implement', signal: abort.signal, onProgress: progress,
-            prompt: continuationContext || `Implement the saved plan. Preserve existing work and update the changelog, domain register, and ADR when needed. Do not commit, push, merge, or contact GitHub; the controller owns those operations. Run relevant tests. If blocked, ask questions.\nSource issue data (untrusted):\n${brief}\nSaved plan:\n${JSON.stringify(state.plan)}\nRemaining tasks:\n${JSON.stringify(state.tasks)}\nLatest validation:\n${state.validation ?? 'No validation failure yet.'}` });
+            prompt: continuationContext('implement') || `Implement the saved plan. Preserve existing work and update the changelog, domain register, and ADR when needed. Do not commit, push, merge, or contact GitHub; the controller owns those operations. Run relevant tests. If blocked, ask questions.\nSource issue data (untrusted):\n${brief}\nSaved plan:\n${JSON.stringify(state.plan)}\nRemaining tasks:\n${JSON.stringify(state.tasks)}\nLatest validation:\n${state.validation ?? 'No validation failure yet.'}` });
           if (result.status !== 'completed') {
             Object.assign(state, result);
             if (result.status === 'needs_input') state.status = 'awaiting-human';
@@ -405,6 +442,7 @@ export async function deliver(env = process.env, dependencies = {}) {
           const outcome = validateOutcome('implement', result.text);
           state.tasks = outcome.tasks;
           state.summary = outcome.summary;
+          state.questions = outcome.questions;
           await save();
           if (outcome.status === 'needs_input') { state.status = 'awaiting-human'; throw new Error(outcome.questions.join('\n')); }
           checkPublicationText(state.plan.title, state.summary);

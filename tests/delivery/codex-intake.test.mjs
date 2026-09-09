@@ -33,18 +33,29 @@ test('trusted owner comments carry their payload identity, including plain conti
   const result=intakeEvent(event,context);
   assert.equal(result.issue,'15');
   assert.equal(result.actor,'owner');
-  assert.deepEqual(result.comment,{id:'42',body:'Please use the second option.',isResumeCommand:false});
+  assert.deepEqual(result.comment,{id:'42',body:'Please use the second option.',isResumeCommand:false,isResumeRequest:false});
 });
 
-test('bare resume commands remain available for technical recovery', () => {
+test('natural-language requests and the legacy command express technical recovery intent', () => {
   const context={...env,GITHUB_EVENT_NAME:'issue_comment'};
-  const event={
+  const event=(id,body)=>({
     action:'created',
     repository:{owner:{login:'owner'},full_name:'owner/repo'},
     issue:{number:15},
-    comment:{id:43,body:'/codex resume',user:{login:'owner',type:'User'},author_association:'OWNER'},
-  };
-  assert.equal(intakeEvent(event,context).comment.isResumeCommand,true);
+    comment:{id,body,user:{login:'owner',type:'User'},author_association:'OWNER'},
+  });
+  const natural=intakeEvent(event(43,'Please continue from the saved work.'),context).comment;
+  assert.equal(natural.isResumeRequest,true);
+  assert.equal(natural.isResumeCommand,false);
+  const dutch=intakeEvent(event(44,'Ga verder met het opgeslagen werk.'),context).comment;
+  assert.equal(dutch.isResumeRequest,true);
+  assert.equal(intakeEvent(event(45,'Yes, could you please resume from where you left off?'),context).comment.isResumeRequest,true);
+  assert.equal(intakeEvent(event(46,'Ja, ga maar verder alsjeblieft.'),context).comment.isResumeRequest,true);
+  const legacy=intakeEvent(event(47,'/codex resume'),context).comment;
+  assert.equal(legacy.isResumeRequest,true);
+  assert.equal(legacy.isResumeCommand,true);
+  assert.equal(intakeEvent(event(48,'Do not continue yet.'),context).comment.isResumeRequest,false);
+  assert.equal(intakeEvent(event(49,'Continue, but remove the changelog first.'),context).comment.isResumeRequest,false);
 });
 
 test('untrusted commenters, bot identities, and pull-request comments cannot enter intake', () => {

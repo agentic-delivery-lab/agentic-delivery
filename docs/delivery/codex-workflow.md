@@ -17,13 +17,32 @@ The `issue_comment` trigger is restricted twice: the workflow accepts only a
 new comment from the repository owner with `author_association: OWNER`, and
 the controller verifies the same payload identity. Pull-request comments,
 bots, rerun actors, and other writers cannot enter continuation. A plain owner
-comment continues only an existing `awaiting-human` continuation state. A bare
-`/codex resume` is reserved for a technical `paused` state; manual dispatch of
-`codex-delivery` remains available for recovery and initial issue execution.
+answer continues an existing `awaiting-human` continuation state. A clear
+natural-language owner request such as “Please continue from the saved work”
+continues a technical `paused` state. The legacy `/codex resume` form remains a
+compatibility shortcut, while manual dispatch of `codex-delivery` remains
+available for recovery and initial issue execution.
 
 The controller reuses saved changes and a single branch. It never creates a
 new task for a comment on a missing, completed, running, stale, or inactive
 state. It never merges the review pull request or closes the source issue.
+
+## Issue communication
+
+Issue comments use three visibly different Markdown formats:
+
+- **Progress update** reports concise, non-blocking work. Rapid updates in the
+  same phase are saved but coalesced to avoid flooding the issue timeline.
+- **Action required: answer Codex** lists only the questions that need a human
+  decision and tells the owner to reply with those answers.
+- **Delivery paused: recovery required** reports a technical or quota pause,
+  states that no decision is requested, and gives the recovery action.
+
+Structured model output remains machine-readable in saved delivery state. The
+controller extracts its summary and next tasks for issue comments instead of
+publishing raw protocol JSON. Full implementation plans, remaining work,
+session correlation, and operator recovery details remain available in
+collapsed Markdown sections when they are needed for review or recovery.
 
 ## Continuation state and session correlation
 
@@ -60,8 +79,11 @@ The controller checks the source issue title, body, and discussion against the
 saved planning snapshot before resuming dependent work and before publication.
 New, edited, or removed human discussion returns the delivery run to planning
 without discarding files. Its own audit comments, bot-authored comments, and
-bare `/codex resume` commands do not invalidate the plan. These checks are
-snapshots, not a lock on issue edits.
+bare `/codex resume` commands do not invalidate the plan. Recognized
+natural-language recovery requests have the same control-message treatment.
+Other owner comments remain part of the source snapshot, so new requirements
+still return the run to planning. These checks are snapshots, not a lock on
+issue edits.
 
 ## Runner prerequisites
 
@@ -157,8 +179,9 @@ and in-flight usage remain outside the controller's control.
 Each issue directory contains `state.json`, an append-only `audit.jsonl`, the
 working tree, and `CONTINUE.md` after a pause or human-input boundary. The
 continuation prompt and remaining tasks are also posted on the source issue
-without another model call. A technical pause waits for `/codex resume`; an
-`awaiting-human` state waits for a new plain trusted owner comment.
+without another model call. A technical pause waits for a clear natural-language
+owner request to continue; an `awaiting-human` state waits for the requested
+answer. The legacy `/codex resume` command remains accepted for compatibility.
 Saved phases distinguish planning, branch creation, implementation,
 verification, commit, and publication. Commit/publication retries do not start
 a model or require available generation quota. Implementation questions preserve
