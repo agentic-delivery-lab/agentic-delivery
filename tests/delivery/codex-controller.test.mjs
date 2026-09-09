@@ -85,7 +85,13 @@ async function fixture(t) {
       calls.turns.push(phase);
       calls.prompts.push({phase,threadId,prompt});
       if (faults.turnPause) return {status:'paused', reason:'Quota reserve reached.'};
-      if (phase === 'plan') return {status:'completed',text:JSON.stringify(faults.questions ? {...plan,status:'needs_input',questions:['Which file?']} : plan)};
+      if (phase === 'plan') {
+        if (faults.progressBurst) {
+          await onProgress(JSON.stringify({...plan,summary:'Inspecting the repository.',tasks:['Inspect files.']}));
+          await onProgress(JSON.stringify({...plan,summary:'Checking the workflow.',tasks:['Check workflow.']}));
+        }
+        return {status:'completed',text:JSON.stringify(faults.questions ? {...plan,status:'needs_input',questions:['Which file?']} : plan)};
+      }
       await writeFile(path.join(workspace, 'result.txt'), 'implemented\n');
       await onProgress('Created result.txt; checking the result.');
       if (faults.closeDuringTurn) faults.sourceState = 'closed';
@@ -125,13 +131,24 @@ test('publishes one recorded branch and PR with a complete issue audit trail', a
   assert.deepEqual(f.calls.threads,[{method:'start'}]);
   assert.match(f.calls.prs[0].body,/Closes #7/);
   assert.equal(f.calls.prs[0].base,'main'); assert.equal(f.calls.prs[0].head,state.branch);
-  assert.ok(f.calls.comments.some((text) => text.includes('Intake and plan')));
+  assert.ok(f.calls.comments.some((text) => text.includes('Plan complete')));
   assert.ok(f.calls.comments.some((text) => text.includes('Review pull request ready')));
   assert.ok(f.calls.commands.some(({command,profile}) => command[1] === 'install' && profile === 'delivery-deps'));
   const validators = f.calls.commands.filter(({command}) => command[1]?.includes('validate-adrs'));
   assert.ok(validators.length); assert.ok(validators.every(({command}) => !command[1].startsWith(f.workspace)));
   await assert.rejects(access(path.join(f.stateRoot,'account.lock')));
   await f.run(); assert.equal(f.calls.prs.length,1); assert.equal(f.calls.turns.length,2);
+});
+
+test('coalesces rapid progress updates within one delivery phase', async (t) => {
+  const f = await fixture(t);
+  f.faults.progressBurst = true;
+  await f.run();
+
+  const planUpdates = f.calls.comments.filter((text) => text.includes('Progress update: Plan'));
+  assert.equal(planUpdates.length,1);
+  assert.match(planUpdates[0],/Inspecting the repository/);
+  assert.doesNotMatch(planUpdates[0],/"status"|"tasks"/);
 });
 
 test('publication retry consumes no model turn or account preflight', async (t) => {
@@ -163,11 +180,16 @@ test('recovers branch creation without repeating a completed plan', async (t) =>
 });
 
 test('questions and quota exhaustion leave a readable continuation without implementation', async (t) => {
-  for (const fault of ['questions','quota','turnPause']) {
+  for (const [fault, heading] of [
+    ['questions', 'Action required: answer Codex'],
+    ['quota', 'Delivery paused: recovery required'],
+    ['turnPause', 'Delivery paused: recovery required'],
+  ]) {
     const f = await fixture(t); f.faults[fault] = true; await f.run();
     assert.notEqual((await f.state()).status,'ready');
     assert.ok(!f.calls.turns.includes('implement')); assert.equal(f.calls.prs.length,0);
-    assert.match(await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8'),/Follow-up prompt/);
+    assert.match(await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8'),new RegExp(heading));
+    if (fault === 'questions') assert.ok(!f.calls.comments.some((comment) => comment.includes('Plan complete')));
   }
 });
 
@@ -296,6 +318,9 @@ test('trusted owner comments continue the exact waiting session and finish succe
   assert.deepEqual(f.calls.threads,[{method:'start'},{method:'resume',sessionId:SESSION_ID}]);
   assert.ok(f.calls.prompts.some(({prompt}) => prompt.includes('Use the existing result file.')));
   assert.ok(f.calls.prompts.some(({prompt}) => prompt.includes('Saved plan:')));
+  const resumedImplementation = f.calls.prompts.find(({phase}) => phase === 'implement');
+  assert.match(resumedImplementation.prompt,/Implement the saved plan/);
+  assert.doesNotMatch(resumedImplementation.prompt,/Continue the interrupted plan turn/);
 });
 
 test('bare resume recovers a technical pause, while a plain comment does not', async (t) => {

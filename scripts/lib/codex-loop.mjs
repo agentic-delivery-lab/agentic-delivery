@@ -33,6 +33,66 @@ export function validateOutcome(phase, text) {
   return value;
 }
 
+const phaseName = (phase) => phase === 'plan' ? 'Plan' : phase === 'implement' ? 'Implement' : String(phase ?? 'Delivery');
+
+function concise(value, limit = 1_200) {
+  const text = String(value ?? '').replace(/\r\n?/g, '\n').trim();
+  if (text.length <= limit) return text;
+  const cut = text.slice(0, limit - 1);
+  const boundary = Math.max(cut.lastIndexOf('\n'), cut.lastIndexOf('. '), cut.lastIndexOf(' '));
+  return `${cut.slice(0, boundary > limit / 2 ? boundary + (cut[boundary] === '.' ? 1 : 0) : undefined).trimEnd()}…`;
+}
+
+function progressData(text) {
+  try {
+    const value = JSON.parse(text);
+    if (value && typeof value === 'object') {
+      return {
+        summary: typeof value.summary === 'string' && value.summary.trim()
+          ? concise(value.summary, 700)
+          : 'Progress was saved to the delivery state.',
+        tasks: Array.isArray(value.tasks) ? value.tasks.filter((task) => typeof task === 'string' && task.trim()) : [],
+      };
+    }
+  } catch {}
+  if (/^\s*[\[{]/.test(String(text))) return { summary: 'Progress was saved to the delivery state.', tasks: [] };
+  return { summary: concise(text), tasks: [] };
+}
+
+export function formatProgressComment(phase, text) {
+  const { summary, tasks } = progressData(text);
+  const next = tasks.slice(0, 3);
+  return [
+    `### Progress update: ${phaseName(phase)}`,
+    summary || 'Work is continuing.',
+    ...(next.length ? ['**Next**', next.map((task) => `- ${concise(task, 300)}`).join('\n')] : []),
+    ...(tasks.length > next.length ? [`_${tasks.length - next.length} more ${tasks.length - next.length === 1 ? 'task' : 'tasks'} saved in the delivery state._`] : []),
+  ].join('\n\n');
+}
+
+function cleanPlan(plan) {
+  return String(plan ?? '')
+    .replace(/^\s*<proposed_plan>\s*/i, '')
+    .replace(/\s*<\/proposed_plan>\s*$/i, '')
+    .trim();
+}
+
+export function formatPlanComment(plan) {
+  return [
+    '## Plan complete',
+    concise(plan.summary),
+    '<details>',
+    '<summary>View implementation plan and tasks</summary>',
+    '',
+    cleanPlan(plan.plan),
+    '',
+    '### Tasks',
+    ...plan.tasks.map((task) => `- [ ] ${task}`),
+    '',
+    '</details>',
+  ].join('\n');
+}
+
 export async function runTurn({ client, threadId, phase, prompt, onProgress, signal, timeoutMs = 20 * 60_000, pollMs = 15_000 }) {
   let budget;
   try { budget = quotaBoundary(await client.request('account/rateLimits/read')); }
@@ -61,9 +121,9 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     signal?.removeEventListener('abort', onAbort);
     progress.then(() => resolveResult(value));
   };
-  const stop = (reason, status = 'paused') => {
+  const stop = (reason, status = 'paused', questions = []) => {
     if (stopped || settled) return;
-    stopped = { status, reason, budget };
+    stopped = { status, reason, budget, questions };
     interruptTimer = setTimeout(() => { closeClient(); finish(stopped); }, 5000);
     if (turnId) client.request('turn/interrupt', { threadId, turnId }).catch(() => { closeClient(); finish(stopped); });
   };
@@ -81,7 +141,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     if (message.id !== undefined && message.method) {
       turnId ??= p.turnId;
       const questions = p.questions?.map((q) => `${q.question}${q.options?.length ? ` Options: ${q.options.map((o) => `${o.label}: ${o.description}`).join('; ')}` : ''}`);
-      stop(questions?.join('\n') || `Human input is required for ${message.method}.`, 'needs_input');
+      stop(questions?.join('\n') || `Human input is required for ${message.method}.`, 'needs_input', questions ?? []);
     }
     if (message.method === 'item/completed' && p.item?.type === 'agentMessage') {
       if (p.item.phase === 'final_answer' || p.item.phase == null) finalText = p.item.text;
@@ -124,28 +184,64 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
 
 export function continuation(state) {
   const awaitingHuman = state.status === 'awaiting-human';
+  const quotaPause = /allowance|budget|credit|quota/i.test(state.reason ?? '');
+  const questions = (state.questions?.length ? state.questions : state.plan?.questions ?? [])
+    .filter((question) => typeof question === 'string' && question.trim());
+  if (awaitingHuman && !questions.length && state.reason) questions.push(state.reason);
+  const { summary: savedProgress } = progressData(state.lastProgress ?? 'Intake has not completed.');
+  const tasks = state.tasks?.length
+    ? state.tasks
+    : state.plan?.tasks ?? ['Complete intake and planning.', 'Implement, validate, and open the review pull request.'];
   const sessionDetails = state.sessionId ? [
     `Codex session ID: \`${state.sessionId}\``,
     `Continuation state: \`${state.status}\``,
     `Issue: \`#${state.issue}\``,
-    '',
-    'Manual recovery:',
-    `\`codex resume ${state.sessionId}\``,
+    `Runner operator recovery: \`codex resume ${state.sessionId}\``,
   ] : [];
-  return [
-    `## Continuation for source issue #${state.issue}`,
-    `Reason: ${state.reason ?? 'Work remains.'}`,
-    ...(state.shutdownError ? [`Shutdown warning: ${state.shutdownError}. The account lock requires operator inspection.`] : []),
-    `Phase: ${state.phase}. Branch: ${state.branch ?? 'not created yet'}.`,
-    ...sessionDetails,
-    `Saved progress: ${state.lastProgress ?? 'Intake has not completed.'}`,
-    '### Remaining tasks',
-    ...(state.tasks?.length ? state.tasks : state.plan?.tasks ?? ['Complete intake and planning.', 'Implement, validate, and open the review pull request.']).map((task) => `- [ ] ${task}`),
-    '### Follow-up prompt',
+  const savedDetails = [
+    '<details>',
+    '<summary>Saved delivery details</summary>',
+    '',
+    `- Phase: **${phaseName(state.phase)}**`,
+    `- Branch: \`${state.branch ?? 'not created yet'}\``,
+    ...sessionDetails.map((line) => line ? `- ${line}` : ''),
+    '',
+    '### Latest progress',
+    '',
+    savedProgress,
+    '',
+    '### Remaining work',
+    '',
+    ...tasks.map((task) => `- [ ] ${task}`),
+    '',
+    '### Agent continuation prompt',
+    '',
     `Continue source issue #${state.issue} from the saved ${state.phase} phase and existing working tree. Read its plan, questions, comments, and latest validation results. Preserve existing changes. Resolve unanswered questions before implementation. Use Sol High in Plan mode for incomplete planning and Luna Max for implementation. Check subscription quota before model execution. Do not merge or close the source issue.`,
-    ...(awaitingHuman
-      ? ['Post a plain trusted repository-owner comment with the human decision or answer to continue this waiting delivery run.']
-      : ['After answering any questions and after the quota resets, comment `/codex resume` on this issue. An agent with repository write permission can also resume. A manual workflow dispatch with this issue number is equivalent.']),
-    ...(state.budget?.resetsAt ? [`Reported quota reset: ${new Date(state.budget.resetsAt * 1000).toISOString()}.`] : []),
-  ].join('\n\n');
+    '',
+    '</details>',
+  ];
+  if (awaitingHuman) return [
+    '## Action required: answer Codex',
+    `Codex is waiting for your input before it can continue **${phaseName(state.phase)}**.`,
+    '',
+    '### Questions',
+    '',
+    questions.map((question, index) => `${index + 1}. ${question}`).join('\n'),
+    '',
+    '**What to do:** Reply with your answers in a new comment. A plain owner comment continues this waiting delivery run.',
+    '',
+    ...savedDetails,
+  ].join('\n');
+  return [
+    '## Delivery paused: recovery required',
+    'No decision is requested from you.',
+    '',
+    `**Why it stopped:** ${state.reason ?? 'Work remains.'}`,
+    ...(state.shutdownError ? [`Shutdown warning: ${state.shutdownError}. The account lock requires operator inspection.`] : []),
+    '',
+    `**What to do:** ${quotaPause ? 'After the reported quota reset, ' : 'After the cause is resolved, '}comment \`/codex resume\` on this issue. Manual workflow dispatch remains available for recovery.`,
+    ...(quotaPause && state.budget?.resetsAt ? ['', `Reported quota reset: ${new Date(state.budget.resetsAt * 1000).toISOString()}.`] : []),
+    '',
+    ...savedDetails,
+  ].join('\n');
 }

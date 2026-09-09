@@ -44,6 +44,14 @@ them. Run relevant tests and report actual results. Use the final structured
 outcome to record remaining tasks and questions. Do not claim completion when
 requirements remain unresolved.
 
+Issue communication must minimize cognitive load. Keep progress summaries
+focused on what changed, why it matters, and the next step. Questions that need
+a human answer belong only in a distinct clarification outcome; do not mix them
+into routine progress. The controller renders structured model output as plain
+Markdown, coalesces rapid progress updates, and gives human-input requests a
+prominent action-required heading. Raw protocol JSON is not a human-facing
+audit format.
+
 The controller owns Git metadata, commits, pushes, issue communication, and
 pull-request publication. Model tools have restricted filesystem access and
 no external network access. They cannot install packages or use external integrations;

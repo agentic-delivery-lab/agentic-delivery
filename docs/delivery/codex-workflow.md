@@ -25,6 +25,23 @@ The controller reuses saved changes and a single branch. It never creates a
 new task for a comment on a missing, completed, running, stale, or inactive
 state. It never merges the review pull request or closes the source issue.
 
+## Issue communication
+
+Issue comments use three visibly different Markdown formats:
+
+- **Progress update** reports concise, non-blocking work. Rapid updates in the
+  same phase are saved but coalesced to avoid flooding the issue timeline.
+- **Action required: answer Codex** lists only the questions that need a human
+  decision and tells the owner to reply with those answers.
+- **Delivery paused: recovery required** reports a technical or quota pause,
+  states that no decision is requested, and gives the recovery action.
+
+Structured model output remains machine-readable in saved delivery state. The
+controller extracts its summary and next tasks for issue comments instead of
+publishing raw protocol JSON. Full implementation plans, remaining work,
+session correlation, and operator recovery details remain available in
+collapsed Markdown sections when they are needed for review or recovery.
+
 ## Continuation state and session correlation
 
 Persisted state is versioned and stores the repository, source issue, delivery

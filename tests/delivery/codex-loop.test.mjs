@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
-import { runTurn, validateOutcome, continuation } from '../../scripts/lib/codex-loop.mjs';
+import {
+  runTurn,
+  validateOutcome,
+  continuation,
+  formatPlanComment,
+  formatProgressComment,
+} from '../../scripts/lib/codex-loop.mjs';
 
 const quota = (usedPercent = 20) => ({rateLimits:{credits:{hasCredits:false,unlimited:false},primary:{usedPercent,windowDurationMins:300,resetsAt:Date.now()/1000+1000}}});
 class FakeCodex extends EventEmitter {
@@ -66,21 +72,71 @@ test('invalid structured plans cannot advance to implementation', () => {
   assert.throws(()=>validateOutcome('implement',JSON.stringify({status:'complete',summary:'done',tasks:[],questions:['Which one?']})),/questions/);
 });
 
-test('continuation includes source, phase, saved work, and outstanding tasks', () => {
-  const text=continuation({issue:15,phase:'implement',reason:'Quota reserve',branch:'feat/issue-15-change',plan:{plan:'The plan',tasks:['First task']},tasks:['Remaining task'],lastProgress:'Edited controller'});
-  for(const value of ['#15','implement','Quota reserve','feat/issue-15-change','Remaining task','Edited controller','/codex resume']) assert.ok(text.includes(value),value);
+test('structured model progress becomes concise Markdown instead of raw JSON', () => {
+  const text = formatProgressComment('plan', JSON.stringify({
+    status:'ready',
+    summary:'The repository contracts are understood.',
+    tasks:['Inspect the controller.', 'Confirm the tests.', 'Write the plan.', 'Do not expose this fourth task.'],
+    questions:[],
+    kind:'requirements',
+    plan:'',
+    changeType:'fix',
+    title:'fix(delivery): 🐛 format comments',
+  }));
+
+  assert.match(text, /^### Progress update: Plan/m);
+  assert.match(text, /The repository contracts are understood\./);
+  assert.match(text, /\*\*Next\*\*/);
+  assert.match(text, /- Inspect the controller\./);
+  assert.doesNotMatch(text, /"status"|"questions"|"changeType"/);
+  assert.doesNotMatch(text, /fourth task/);
+
+  const incomplete = formatProgressComment('implement', '{"status":"running","tasks":[]}');
+  assert.match(incomplete,/Progress was saved to the delivery state/);
+  assert.doesNotMatch(incomplete,/"status"|"tasks"/);
 });
 
-test('awaiting-human handoffs repeat the canonical session and recovery text', () => {
+test('completed plans keep details available without overwhelming the issue timeline', () => {
+  const text = formatPlanComment({
+    ...JSON.parse(JSON.stringify({
+      status:'ready', kind:'requirements', summary:'Use the existing controller.',
+      plan:'<proposed_plan>\n# Detailed plan\n\nImplement the renderer.\n</proposed_plan>',
+      tasks:['Add tests.', 'Implement formatting.'], questions:[], changeType:'fix',
+      title:'fix(delivery): 🐛 format comments',
+    })),
+  });
+
+  assert.match(text, /^## Plan complete/m);
+  assert.match(text, /<details>/);
+  assert.match(text, /<summary>View implementation plan and tasks<\/summary>/);
+  assert.match(text, /# Detailed plan/);
+  assert.doesNotMatch(text, /proposed_plan/);
+  assert.doesNotMatch(text, /"status"|"questions"/);
+});
+
+test('continuation includes source, phase, saved work, and outstanding tasks', () => {
+  const text=continuation({issue:15,status:'paused',phase:'implement',reason:'Quota reserve',branch:'feat/issue-15-change',plan:{plan:'The plan',tasks:['First task']},tasks:['Remaining task'],lastProgress:'Edited controller'});
+  for(const value of ['Delivery paused: recovery required','#15','Implement','Quota reserve','feat/issue-15-change','Remaining task','Edited controller','/codex resume']) assert.ok(text.includes(value),value);
+  assert.match(text,/No decision is requested/);
+});
+
+test('awaiting-human handoffs lead with questions and separate recovery details', () => {
   const text = continuation({
     issue:18, phase:'plan', status:'awaiting-human', sessionId:'019fb023-24b8-7881-9119-509f078b610e',
     reason:'The model requested a decision.', tasks:['Answer the question.'],
+    questions:['Which lifecycle should apply?', 'Should delivery start automatically?'],
   });
   for (const value of [
+    '## Action required: answer Codex',
+    '### Questions',
+    '1. Which lifecycle should apply?',
+    '2. Should delivery start automatically?',
+    'Reply with your answers in a new comment.',
     'Codex session ID: `019fb023-24b8-7881-9119-509f078b610e`',
     'Continuation state: `awaiting-human`',
     'Issue: `#18`',
-    'Manual recovery:',
-    '`codex resume 019fb023-24b8-7881-9119-509f078b610e`',
+    '<summary>Saved delivery details</summary>',
   ]) assert.ok(text.includes(value),value);
+  assert.doesNotMatch(text,/Saved progress: \{/);
+  assert.doesNotMatch(text,/comment `\/codex resume`/);
 });
