@@ -25,15 +25,16 @@ async function fixture(t) {
   const workspace = path.join(issueRoot, 'workspace');
   const eventFile = path.join(root, 'event.json');
   await writeFile(eventFile, JSON.stringify({repository:{id:101,full_name:'fixture/repo',owner:{login:'maintainer'}}}));
-  const env = {...process.env, GH_TOKEN:'fixture-token', GITHUB_EVENT_PATH:eventFile, RUNNER_WORKSPACE:root,
+  const env = {...process.env, GH_TOKEN:'fixture-token', PUBLISH_TOKEN:'fixture-publish-token', GITHUB_EVENT_PATH:eventFile, RUNNER_WORKSPACE:root,
     CODEX_DELIVERY_STATE_DIR:stateRoot, GITHUB_REPOSITORY:'fixture/repo', GITHUB_ACTOR:'maintainer',
     GITHUB_EVENT_NAME:'workflow_dispatch', GITHUB_RUN_ID:'1', SOURCE_ISSUE:'7'};
-  const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], clients:0, closes:0};
+  const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], publishHeaders:[], pushHeaders:[], clients:0, closes:0};
   const faults = {permission:'write', sourceState:'open', sourceTitle:'Add a file', sourceBody:'Create result.txt', sourceComments:[], startSessionId:SESSION_ID, resumeSessionId:SESSION_ID};
   const dependencies = {
     fetch:async (url, options) => {
       const route = url.replace('https://api.github.com/repos/fixture/repo', '');
       const body = options.body ? JSON.parse(options.body) : undefined;
+      if (route.startsWith('/pulls')) calls.publishHeaders.push(options.headers.Authorization);
       let data;
       if (route.startsWith('/collaborators/')) data = {permission:faults.permission};
       else if (route === '/issues/7') data = {state:faults.sourceState, title:faults.sourceTitle, body:faults.sourceBody};
@@ -52,6 +53,7 @@ async function fixture(t) {
     },
     execute:async (command, args, options) => {
       if (command === 'git' && args[0] === 'clone') args = ['clone', '--branch', 'main', origin, workspace];
+      if (command === 'git' && args.includes('push')) calls.pushHeaders.push(options.env.GIT_CONFIG_VALUE_0);
       // Title validation is tested independently with the real trusted tooling.
       if (command === 'node') return {stdout:''};
       const result = await exec(command, args, options);
@@ -207,6 +209,23 @@ test('publication retry consumes no model turn or account preflight', async (t) 
   await f.run();
   assert.equal((await f.state()).status,'ready'); assert.equal(f.calls.clients,1);
   assert.deepEqual(f.calls.turns,['plan','implement']);
+});
+
+test('publishes Git changes with the dedicated workflow-capable credential', async (t) => {
+  const f = await fixture(t);
+  await f.run();
+
+  const expected = Buffer.from('x-access-token:fixture-publish-token').toString('base64');
+  assert.deepEqual(f.calls.pushHeaders,[`AUTHORIZATION: basic ${expected}`]);
+  assert.deepEqual(f.calls.publishHeaders,['Bearer fixture-publish-token','Bearer fixture-publish-token']);
+});
+
+test('requires the dedicated publication credential before model execution', async (t) => {
+  const f = await fixture(t);
+  delete f.env.PUBLISH_TOKEN;
+
+  await assert.rejects(f.run(),/Publication credential/);
+  assert.equal(f.calls.clients,0);
 });
 
 test('publication retry cannot push a clean but unverified replacement commit', async (t) => {

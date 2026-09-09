@@ -52,7 +52,7 @@ test('requires the exact requested models and reasoning efforts', () => {
 });
 
 test('model processes do not inherit publishing, API, or Actions credentials', () => {
-  const env = modelEnvironment({PATH:'/bin', HOME:'/example', GH_TOKEN:'secret', OPENAI_API_KEY:'secret', ACTIONS_RUNTIME_TOKEN:'secret', NODE_OPTIONS:'--import=/malicious.mjs'});
+  const env = modelEnvironment({PATH:'/bin', HOME:'/example', GH_TOKEN:'secret', PUBLISH_TOKEN:'publish-secret', OPENAI_API_KEY:'secret', ACTIONS_RUNTIME_TOKEN:'secret', NODE_OPTIONS:'--import=/malicious.mjs'});
   assert.deepEqual(env, {PATH:'/bin'});
 });
 

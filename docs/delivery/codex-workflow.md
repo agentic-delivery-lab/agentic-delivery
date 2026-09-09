@@ -123,11 +123,14 @@ issue edits.
   `RUNNER_WORKSPACE`. Set repository variable `CODEX_DELIVERY_STATE_DIR` to an
   absolute directory outside disposable checkouts if needed. Restrict access
   to the runner service user and back it up as operational data.
-- Enable **Allow GitHub Actions to create and approve pull requests** in
-  repository Actions settings if using `GITHUB_TOKEN` to create review PRs.
-  The controller creates PRs but never approves them. Verify the setting before
-  activation; creation and approval share one GitHub setting. Keep default
-  workflow permissions read-only and grant writes only in the delivery job.
+- An Actions secret named `CODEX_DELIVERY_PUBLISH_TOKEN` containing a dedicated
+  fine-grained personal access token with repository **Contents: Read and
+  write**, **Workflows: Read and write**, and **Pull requests: Read and write**
+  permissions. The controller uses this credential only to publish Git changes
+  and the review pull request. The built-in `GITHUB_TOKEN` cannot create or
+  update files under `.github/workflows`, and its events do not start most
+  downstream workflows. Use a short expiry and rotate the secret before it
+  expires. A missing secret stops the delivery run before model execution.
 
 Run `self-hosted-runner-smoke` with input `codex=true` for a check without a
 model turn. The setup step supplies the executable without copying
@@ -225,9 +228,10 @@ completed state deliberately, according to the runner's retention policy.
 
 GitHub Free cannot enforce protected branches for this private repository.
 The controller restricts its own publication to its recorded feature branch;
-that is not protection against other credentials. Review PR CI triggered by
-`GITHUB_TOKEN` can require **Approve workflows to run**. A human reviews the
-source issue, changed files, and checks, and separately authorizes the merge.
+that is not protection against other credentials. The dedicated publication
+credential creates the review pull request so its required checks are started.
+A human reviews the source issue, changed files, and checks, and separately
+authorizes the merge.
 
 Review generated workflow and test changes before approving their execution.
 Review PR CI runs repository code directly as the runner service account; it

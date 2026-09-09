@@ -90,7 +90,9 @@ export function intakeEvent(event, env) {
 
 export function redact(text, env = process.env) {
   let value = String(text);
-  for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'OPENAI_API_KEY']) if (env[key]) value = value.split(env[key]).join('[redacted]');
+  const secrets = ['GH_TOKEN', 'PUBLISH_TOKEN', 'GITHUB_TOKEN', 'OPENAI_API_KEY']
+    .map((key) => env[key]).filter(Boolean).sort((left, right) => right.length - left.length);
+  for (const secret of secrets) value = value.split(secret).join('[redacted]');
   return value.replace(/(?:github_pat_|gh[pousr]_|sk-)[A-Za-z0-9_-]{15,}/g, '[redacted]');
 }
 
@@ -171,17 +173,19 @@ export async function deliver(env = process.env, dependencies = {}) {
   const performTurn = dependencies.runTurn ?? runTurn;
   const validateCommits = dependencies.validateCommits ?? validateCommitRange;
   if (!env.GH_TOKEN || !env.GITHUB_EVENT_PATH || !env.RUNNER_WORKSPACE) throw new Error('Run this controller through GitHub Actions.');
+  if (!env.PUBLISH_TOKEN) throw new Error('Publication credential is missing. Configure CODEX_DELIVERY_PUBLISH_TOKEN with workflow and pull-request write access.');
   const event = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'));
   const { issue, repository, actor, comment } = intakeEvent(event, env);
   const endpoint = `https://api.github.com/repos/${repository}`;
-  const api = async (route, method = 'GET', body) => {
+  const api = async (route, method = 'GET', body, token = env.GH_TOKEN) => {
     const response = await fetchApi(`${endpoint}${route}`, {
-      method, headers: { Authorization: `Bearer ${env.GH_TOKEN}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+      method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
       ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) throw new Error(`GitHub ${method} ${route} failed (${response.status}).`);
     return response.status === 204 ? null : response.json();
   };
+  const publishApi = (route, method = 'GET', body) => api(route, method, body, env.PUBLISH_TOKEN);
   const permission = await api(`/collaborators/${encodeURIComponent(actor)}/permission`);
   if (!['admin', 'maintain', 'write'].includes(permission.permission)) throw new Error('Source issue execution requires repository write permission.');
   const source = await api(`/issues/${issue}`);
@@ -274,7 +278,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   const gitEnv = {
     ...env, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null',
     GIT_CONFIG_COUNT: '2', GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
-    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${env.GH_TOKEN}`).toString('base64')}`,
+    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${env.PUBLISH_TOKEN}`).toString('base64')}`,
     GIT_CONFIG_KEY_1: 'core.hooksPath', GIT_CONFIG_VALUE_1: '/dev/null',
   };
   const git = async (args) => (await execute('git', ['-C', workspace, ...args], { env: gitEnv, timeout: 120_000, maxBuffer: 8_000_000 })).stdout.trim();
@@ -529,15 +533,15 @@ export async function deliver(env = process.env, dependencies = {}) {
     await validateCommits({base:state.base, head:'HEAD', repositoryRoot:workspace, toolingRoot:controllerRoot});
     if (!await git(['diff', '--name-only', `${state.base}...HEAD`])) throw new Error('No repository change is ready for a review pull request.');
     await git(['push', 'origin', `HEAD:refs/heads/${state.branch}`]);
-    const existing = await api(`/pulls?state=open&head=${encodeURIComponent(`${repository.split('/')[0]}:${state.branch}`)}&base=main`);
+    const existing = await publishApi(`/pulls?state=open&head=${encodeURIComponent(`${repository.split('/')[0]}:${state.branch}`)}&base=main`);
     const body = `## Summary\n\n${state.summary}\n\nCloses #${issue}\n\n## Verification\n\n${state.validation}\n\nThe source issue contains intake, the plan, progress, and any clarification or continuation history. Human review and merge authorization remain required.\n\n[Workflow run](${runUrl})`;
-    const pr = existing[0] ? await api(`/pulls/${existing[0].number}`, 'PATCH', { title: state.plan.title, body })
-      : await api('/pulls', 'POST', { title: state.plan.title, head: state.branch, base: 'main', body });
+    const pr = existing[0] ? await publishApi(`/pulls/${existing[0].number}`, 'PATCH', { title: state.plan.title, body })
+      : await publishApi('/pulls', 'POST', { title: state.plan.title, head: state.branch, base: 'main', body });
     state.pr = pr.html_url;
     state.status = 'ready';
     state.tasks = [];
     await save();
-    await audit(`## Review pull request ready\n\n${state.pr}\n\n${state.validation}\n\nA human may need to select **Approve workflows to run** for CI created by the workflow token. Review and merge remain human actions.`);
+    await audit(`## Review pull request ready\n\n${state.pr}\n\n${state.validation}\n\nRequired checks have been requested. Review and merge remain human actions.`);
   } catch (error) {
     if (!state) throw error;
     await client?.close().catch((failure) => { state.shutdownError = redact(failure.message, env); });

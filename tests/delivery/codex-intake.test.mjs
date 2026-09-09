@@ -95,7 +95,7 @@ test('rejects identifiers and events that could escape the repository boundary',
   assert.throws(()=>intakeEvent({action:'opened'},{...env,GITHUB_EVENT_NAME:'pull_request_target'}));
 });
 test('redacts known publishing credentials from audit output', () => {
-  assert.equal(redact('token=value',{GH_TOKEN:'value'}),'token=[redacted]');
+  assert.equal(redact('api=value publish=publish-value',{GH_TOKEN:'value',PUBLISH_TOKEN:'publish-value'}),'api=[redacted] publish=[redacted]');
   assert.equal(redact('ghp_12345678901234567890',{}),'[redacted]');
 });
 
