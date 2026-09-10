@@ -196,6 +196,26 @@ test('continuation includes source, phase, saved work, and outstanding tasks', (
   assert.doesNotMatch(text,/comment `\/codex resume`/);
 });
 
+test('validation recovery surfaces the latest error without restoring completed plan tasks', () => {
+  const text = continuation({
+    issue:29,
+    status:'paused',
+    phase:'verify',
+    reason:'Repository validation failed three times. Fix the latest error shown below before resuming.',
+    branch:'feat/issue-29-codex-delivery',
+    plan:{tasks:['Implement the approved plan.']},
+    tasks:[],
+    validation:'ADR check: 0011-example.md breaks the record sequence.',
+    lastProgress:'Implementation is complete.',
+  });
+
+  assert.match(text, /### Latest validation error/);
+  assert.match(text, /Fix the latest error shown below before resuming\./);
+  assert.match(text, /ADR check: 0011-example\.md breaks the record sequence\./);
+  assert.match(text, /No saved tasks remain\./);
+  assert.doesNotMatch(text, /- \[ \] Implement the approved plan\./);
+});
+
 test('awaiting-human handoffs lead with questions and separate recovery details', () => {
   const text = continuation({
     issue:18, phase:'plan', status:'awaiting-human', sessionId:'019fb023-24b8-7881-9119-509f078b610e',

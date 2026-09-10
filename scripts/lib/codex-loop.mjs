@@ -72,6 +72,10 @@ function concise(value, limit = 1_200) {
   return `${cut.slice(0, boundary > limit / 2 ? boundary + (cut[boundary] === '.' ? 1 : 0) : undefined).trimEnd()}…`;
 }
 
+function quoteMarkdown(value, limit = 24_000) {
+  return concise(value, limit).split('\n').map((line) => `> ${line}`).join('\n');
+}
+
 function progressData(text) {
   try {
     const value = JSON.parse(text);
@@ -229,9 +233,15 @@ export function continuation(state) {
     .filter((question) => typeof question === 'string' && question.trim());
   if (awaitingHuman && !questions.length && state.reason) questions.push(state.reason);
   const { summary: savedProgress } = progressData(state.lastProgress ?? 'Intake has not completed.');
-  const tasks = state.tasks?.length
+  const tasks = Array.isArray(state.tasks)
     ? state.tasks
     : state.plan?.tasks ?? ['Complete intake and planning.', 'Implement, validate, and open the review pull request.'];
+  const taskLines = tasks.length
+    ? tasks.map((task) => `- [ ] ${task}`)
+    : ['No saved tasks remain.'];
+  const validationError = state.phase === 'verify' && state.validation
+    ? ['### Latest validation error', '', quoteMarkdown(state.validation), '']
+    : [];
   const sessionDetails = state.sessionId ? [
     `Codex session ID: \`${state.sessionId}\``,
     `Continuation state: \`${state.status}\``,
@@ -252,7 +262,7 @@ export function continuation(state) {
     '',
     '### Remaining work',
     '',
-    ...tasks.map((task) => `- [ ] ${task}`),
+    ...taskLines,
     '',
     '### Agent continuation prompt',
     '',
@@ -279,6 +289,7 @@ export function continuation(state) {
     `**Why it stopped:** ${state.reason ?? 'Work remains.'}`,
     ...(state.shutdownError ? [`Shutdown warning: ${state.shutdownError}. The account lock requires operator inspection.`] : []),
     '',
+    ...validationError,
     `**What to do:** ${quotaPause ? 'After the reported quota reset, ' : 'After the cause is resolved, '}reply with a natural-language request such as “Please continue from the saved work.” Manual workflow dispatch remains available for recovery.`,
     ...(quotaPause && state.budget?.resetsAt ? ['', `Reported quota reset: ${new Date(state.budget.resetsAt * 1000).toISOString()}.`] : []),
     '',

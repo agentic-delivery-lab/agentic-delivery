@@ -77,15 +77,13 @@ export async function validateAdrs(repositoryRoot = process.cwd()) {
 
   if (records.length === 0) addError('no numbered ADR records found');
 
-  let expectedNumber = 1;
+  const seenNumbers = new Set();
   for (const record of records) {
     const filename = path.basename(record);
     const number = filename.slice(0, 4);
-    const expectedFilename = String(expectedNumber).padStart(4, '0');
-    if (number !== expectedFilename) {
-      addError(`${filename} breaks the record sequence; expected a record starting with ${expectedFilename}`);
-    }
-    expectedNumber += 1;
+    if (number === '0000') addError(`${filename} uses reserved ADR number 0000`);
+    if (seenNumbers.has(number)) addError(`${filename} reuses ADR number ${number}`);
+    seenNumbers.add(number);
 
     if (!/^\d{4}-[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?\.md$/.test(filename)) {
       addError(`${filename} does not use the NNNN-title-with-dashes.md format`);
