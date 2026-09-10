@@ -22,6 +22,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- [Issue #26](https://github.com/sjefsharp/agentic-delivery/issues/26) lets issue intake create missing governance metadata labels instead of failing label reconciliation with a GitHub API validation error.
+
 - [Issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17) gives Codex delivery a separate workflow-capable publication credential, so review branches can include GitHub Actions workflow changes, start required checks, and keep the credential away from model tools.
 
 - [Issue #21](https://github.com/sjefsharp/agentic-delivery/issues/21) replaces absolute Codex turn deadlines with quota-led execution, starts the inactivity watchdog only after turn startup, continues multi-turn implementation automatically, and preserves exact tasks when a structured completion is rejected.
