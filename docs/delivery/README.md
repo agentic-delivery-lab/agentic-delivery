@@ -7,6 +7,47 @@ remain repository policy.
 
 This guide describes how people and coding agents move a change through the repository's trunk. It complements [ADR-0004](../decisions/0004-use-trunk-based-delivery.md), [ADR-0005](../decisions/0005-use-conventional-commits-with-gitmoji.md), [ADR-0006](../decisions/0006-curate-a-changelog.md) and [ADR-0007](../decisions/0007-use-issue-linked-conventional-branch-names.md).
 
+## Issue intake and routing
+
+Issues enter through the repository's intake forms or the enabled blank-issue
+fallback. The intake workflow classifies each issue into a work type and keeps
+that type separate from its lifecycle state and governance metadata. Native
+GitHub Issue Types are used when available; the repository-local `type:*`
+labels are the fallback for the same six types: Bug, Feature, Task, Idea,
+Research, and Architecture.
+
+The managed state labels are:
+
+```text
+state:needs-triage → state:needs-info | state:requirements | state:decision-needed
+                  → state:investigating | state:parked | state:ready-for-plan
+state:ready-for-plan → Plan → state:ready-for-agent → Implement
+state:in-progress → state:review → state:done
+```
+
+Research uses `state:investigating`; it is not represented by a state named
+`state:research`. Idea work can use `state:parked` while it is deferred. An
+Idea or Research issue must mature into a delivery-capable work type before it
+can become ready for planning. Rejected or intentionally abandoned work uses
+`state:done` together with GitHub's `not planned` close reason.
+
+`state:ready-for-plan` is the deterministic readiness gate and automatically
+authorizes the downstream Plan workflow. The gate requires one supported work
+type, complete structured intake when a form was used, cleared requirements and
+decision gates, and no unresolved `adr:needed`, `adr:proposed`, or
+`adr:removal` governance label. The intake workflow only hands an eligible
+issue to `codex-delivery`; ambiguous or incomplete issues remain in a
+maturation state without spending model quota.
+
+The existing Plan → Implement controller is a reusable downstream primitive.
+It records `state:ready-for-agent` after a successful plan, enters
+`state:in-progress` before implementation, records `state:needs-info` when a
+clarification is required, and records `state:review` after publishing a
+review pull request. A clear natural-language recovery request, the legacy
+`/codex resume` command, and manual dispatch remain recovery paths for paused
+runs or an intentionally configured human gate. Metadata changes by automation
+are idempotent and do not recursively trigger delivery.
+
 ## Package manager and local preflight
 
 This repository uses the exact pnpm version declared by the `packageManager`

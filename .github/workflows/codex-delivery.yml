@@ -1,10 +1,19 @@
 name: codex-delivery
 
 on:
-  issues:
-    types: [opened]
-  issue_comment:
-    types: [created]
+  workflow_call:
+    inputs:
+      issue:
+        description: Open source issue number to plan or implement
+        required: true
+        type: string
+      route:
+        description: Authorized intake route
+        required: true
+        type: string
+    secrets:
+      CODEX_DELIVERY_PUBLISH_TOKEN:
+        required: true
   workflow_dispatch:
     inputs:
       issue:
@@ -17,12 +26,6 @@ permissions:
 
 jobs:
   deliver:
-    if: >-
-      !github.event.issue.pull_request &&
-      (github.event_name != 'issue_comment' ||
-       (github.event.comment.user.login == github.repository_owner &&
-        github.event.comment.user.type != 'Bot' &&
-        github.event.comment.author_association == 'OWNER'))
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 350
     env:
@@ -31,7 +34,6 @@ jobs:
     permissions:
       contents: read
       issues: write
-      pull-requests: write
     steps:
       - name: Check out trusted controller
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -55,6 +57,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PUBLISH_TOKEN: ${{ secrets.CODEX_DELIVERY_PUBLISH_TOKEN }}
-          SOURCE_ISSUE: ${{ inputs.issue || github.event.issue.number }}
+          SOURCE_ISSUE: ${{ inputs.issue || github.event.inputs.issue }}
+          INTAKE_ROUTE: ${{ inputs.route || 'resume' }}
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
         run: node scripts/codex-delivery.mjs

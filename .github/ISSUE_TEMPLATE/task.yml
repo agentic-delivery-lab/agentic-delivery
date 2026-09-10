@@ -1,0 +1,47 @@
+name: Task / Work Request
+description: Request a bounded piece of work with a clear definition of done.
+title: "Task: "
+labels:
+  - "type:task"
+  - "state:needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe a concrete outcome and its boundaries.
+        Do not include passwords, API keys, personal data, or other secrets.
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Requested outcome
+      description: What should be delivered?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is included and excluded?
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: List relevant technical, security, compatibility, or timing constraints.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      description: What observable conditions complete the task?
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: Relevant references
+      description: Link related issues, files, decisions, or evidence, or write "None".
+    validations:
+      required: true

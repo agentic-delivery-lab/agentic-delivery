@@ -72,8 +72,8 @@ test('untrusted commenters, bot identities, and pull-request comments cannot ent
   assert.throws(() => intakeEvent({action:'created',...base,comment:{id:47,body:'Continue'}},context),/trusted repository owner/);
 });
 
-test('issue comments do not require the resume command before controller eligibility is checked', () => {
-  const workflow = readFile(path.join(repositoryRoot, '.github/workflows/codex-delivery.yml'), 'utf8');
+test('issue comments do not require the resume command before intake eligibility is checked', () => {
+  const workflow = readFile(path.join(repositoryRoot, '.github/workflows/issue-intake.yml'), 'utf8');
   return workflow.then((source) => {
     assert.match(source, /github\.event\.comment\.user\.login == github\.repository_owner/);
     assert.match(source, /github\.event\.comment\.author_association == 'OWNER'/);
@@ -88,6 +88,13 @@ test('comment issue numbers cannot be redirected through SOURCE_ISSUE', () => {
     action:'created',repository:{owner:{login:'owner'},full_name:'owner/repo'},issue:{number:16},
     comment:{id:48,body:'Continue',user:{login:'owner',type:'User'},author_association:'OWNER'},
   },context),/does not match/);
+});
+test('accepts lifecycle events only as downstream delivery inputs', () => {
+  for (const action of ['edited', 'reopened', 'labeled', 'unlabeled', 'typed', 'untyped']) {
+    assert.equal(intakeEvent({action, issue:{}}, {...env, GITHUB_EVENT_NAME:'issues'}).issue, '15');
+  }
+  assert.equal(intakeEvent({issue:{}}, {...env, GITHUB_EVENT_NAME:'workflow_call'}).issue, '15');
+  assert.throws(() => intakeEvent({action:'closed', issue:{}}, {...env, GITHUB_EVENT_NAME:'issues'}), /Unsupported issue activity/);
 });
 test('rejects identifiers and events that could escape the repository boundary', () => {
   for(const value of ['../15','15; command','0','-1']) assert.throws(()=>intakeEvent({action:'opened'},{...env,SOURCE_ISSUE:value}));

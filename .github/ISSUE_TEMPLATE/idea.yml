@@ -1,0 +1,54 @@
+name: Idea
+description: Capture an opportunity that needs discovery before implementation.
+title: "Idea: "
+labels:
+  - "type:idea"
+  - "state:needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An idea is a discovery input, not an implementation authorization.
+        Do not include passwords, API keys, personal data, or other secrets.
+  - type: textarea
+    id: opportunity
+    attributes:
+      label: Idea or opportunity
+      description: What could be improved or explored?
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem being addressed
+      description: What problem or unmet need motivates the idea?
+    validations:
+      required: true
+  - type: textarea
+    id: value
+    attributes:
+      label: Expected value
+      description: What value might this create, and for whom?
+    validations:
+      required: true
+  - type: textarea
+    id: assumptions
+    attributes:
+      label: Assumptions
+      description: Which assumptions should discovery test?
+    validations:
+      required: true
+  - type: textarea
+    id: unknowns
+    attributes:
+      label: Unknowns
+      description: What is not yet known?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Supporting context
+      description: Add safe references, evidence, or related work.
+    validations:
+      required: true

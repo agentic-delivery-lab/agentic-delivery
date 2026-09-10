@@ -29,7 +29,10 @@ async function fixture(t) {
     CODEX_DELIVERY_STATE_DIR:stateRoot, GITHUB_REPOSITORY:'fixture/repo', GITHUB_ACTOR:'maintainer',
     GITHUB_EVENT_NAME:'workflow_dispatch', GITHUB_RUN_ID:'1', SOURCE_ISSUE:'7'};
   const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], publishHeaders:[], pushHeaders:[], clients:0, closes:0};
-  const faults = {permission:'write', sourceState:'open', sourceTitle:'Add a file', sourceBody:'Create result.txt', sourceComments:[], startSessionId:SESSION_ID, resumeSessionId:SESSION_ID};
+  const faults = {
+    permission:'write', sourceState:'open', sourceTitle:'Add a file', sourceBody:'Create result.txt', sourceComments:[],
+    sourceLabels:['type:task', 'state:ready-for-plan'], startSessionId:SESSION_ID, resumeSessionId:SESSION_ID,
+  };
   const dependencies = {
     fetch:async (url, options) => {
       const route = url.replace('https://api.github.com/repos/fixture/repo', '');
@@ -37,7 +40,14 @@ async function fixture(t) {
       if (route.startsWith('/pulls')) calls.publishHeaders.push(options.headers.Authorization);
       let data;
       if (route.startsWith('/collaborators/')) data = {permission:faults.permission};
-      else if (route === '/issues/7') data = {state:faults.sourceState, title:faults.sourceTitle, body:faults.sourceBody};
+      else if (route === '/issues/7') data = {
+        state:faults.sourceState, title:faults.sourceTitle, body:faults.sourceBody,
+        labels:faults.sourceLabels.map((name) => ({name})),
+      };
+      else if (route === '/issues/7/labels' && options.method === 'PUT') {
+        faults.sourceLabels = body.labels;
+        data = faults.sourceLabels.map((name) => ({name}));
+      }
       else if (route.startsWith('/issues/7/comments')) {
         if (options.method === 'POST') {
           if (faults.failComments) return new Response('{}', {status:503});
@@ -142,11 +152,23 @@ test('publishes one recorded branch and PR with a complete issue audit trail', a
   assert.equal(f.calls.prs[0].base,'main'); assert.equal(f.calls.prs[0].head,state.branch);
   assert.ok(f.calls.comments.some((text) => text.includes('Plan complete')));
   assert.ok(f.calls.comments.some((text) => text.includes('Review pull request ready')));
+  assert.ok(f.faults.sourceLabels.includes('state:review'));
   assert.ok(f.calls.commands.some(({command,profile}) => command[1] === 'install' && profile === 'delivery-deps'));
   const validators = f.calls.commands.filter(({command}) => command[1]?.includes('validate-adrs'));
   assert.ok(validators.length); assert.ok(validators.every(({command}) => !command[1].startsWith(f.workspace)));
   await assert.rejects(access(path.join(f.stateRoot,'account.lock')));
   await f.run(); assert.equal(f.calls.prs.length,1); assert.equal(f.calls.turns.length,2);
+});
+
+test('does not start a model turn when the source issue is not ready for planning', async (t) => {
+  const f = await fixture(t);
+  f.faults.sourceLabels = ['type:idea', 'state:needs-triage'];
+  const result = await f.run();
+  assert.equal(result.status, 'paused');
+  assert.equal(f.calls.clients, 0);
+  assert.deepEqual(f.calls.turns, []);
+  assert.equal(f.calls.prs.length, 0);
+  assert.match((await f.state()).reason, /not ready for planning/);
 });
 
 test('continues incomplete implementation turns automatically before verification', async (t) => {
@@ -261,6 +283,20 @@ test('questions and quota exhaustion leave a readable continuation without imple
   }
 });
 
+test('saved planning cannot bypass a newly added governance gate', async (t) => {
+  const f = await fixture(t); f.faults.questions = true;
+  await f.run(); assert.equal((await f.state()).phase, 'plan');
+  const clients = f.calls.clients;
+  const turns = [...f.calls.turns];
+  f.faults.questions = false;
+  f.faults.sourceLabels = ['type:task', 'state:needs-info', 'adr:needed'];
+  const result = await f.resume();
+  assert.equal(result.status, 'awaiting-human');
+  assert.match(result.reason, /not ready for planning/);
+  assert.equal(f.calls.clients, clients);
+  assert.deepEqual(f.calls.turns, turns);
+});
+
 test('retains and flushes a failed mandatory comment outbox on resume', async (t) => {
   const f = await fixture(t); f.faults.failComments = true;
   await assert.rejects(f.run(),/GitHub POST/);
@@ -322,10 +358,24 @@ test('verification retry does not repeat implementation after a manual repair', 
   assert.equal((await f.state()).status,'ready'); assert.equal(f.calls.turns.length,turns);
 });
 
+test('saved verification cannot continue after a lifecycle state change', async (t) => {
+  const f = await fixture(t); f.faults.validation = true;
+  await f.run(); assert.equal((await f.state()).phase,'verify');
+  const clients = f.calls.clients;
+  const turns = [...f.calls.turns];
+  f.faults.sourceLabels = ['type:task', 'state:needs-info'];
+  const result = await f.resume();
+  assert.equal(result.status, 'paused');
+  assert.match(result.reason, /not authorized for verification/);
+  assert.equal(f.calls.clients, clients);
+  assert.deepEqual(f.calls.turns, turns);
+});
+
 test('implementation questions preserve the implementation phase and existing branch', async (t) => {
   const f = await fixture(t); f.faults.implementationQuestion = true;
   await f.run(); const first = await f.state();
   assert.equal(first.phase,'implement'); assert.equal(first.status,'awaiting-human');
+  assert.ok(f.faults.sourceLabels.includes('state:needs-info'));
   f.faults.implementationQuestion = false; await f.comment({id:209,body:'Use the existing wording.'}); await f.run();
   assert.equal((await f.state()).status,'ready'); assert.equal((await f.state()).branch,first.branch);
   assert.deepEqual(f.calls.turns,['plan','implement','implement']);
