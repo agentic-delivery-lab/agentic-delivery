@@ -27,6 +27,7 @@
 - Issue intake classifies work type, lifecycle state and governance metadata before the Codex delivery primitive. A new Plan run requires an open issue with a supported type, cleared deterministic gates and `state:ready-for-plan`; that state automatically authorizes Plan. Successful planning transitions through `state:ready-for-agent` to automatic Implement. Research uses `state:investigating`, deferred Idea work uses `state:parked`, rejected or abandoned work uses `state:done` with GitHub's `not planned` close reason, and the canonical ADR governance label is `adr:needed`.
 
 - For automated source issue execution, read [`.agents/codex-delivery.md`](.agents/codex-delivery.md) and [`docs/delivery/codex-workflow.md`](docs/delivery/codex-workflow.md). Preserve mandatory issue communication, clarification pauses, exact model settings, and the budget boundary.
+- Review pull requests through the read-only Harness Architecture Review when its workflow is available. Treat its deterministic violations as structural failures, and treat semantic findings or unavailable runtime evidence as cited review input rather than proof.
 - GitHub Free does not enforce branch protection for this private repository. The main-branch protection rules below are repository policy; do not describe them as a hosting guarantee.
 
 - Use `$delivery-workflow` for changes that affect branches, commit history, pull requests, releases or `CHANGELOG.md`. The skill is implicitly available.

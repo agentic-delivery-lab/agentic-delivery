@@ -1,0 +1,62 @@
+name: harness-architecture-review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: harness-architecture-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # This repository already limits checked-in code on the dedicated runner
+    # to internal pull requests. Forks remain outside this trust boundary.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, omarchy]
+    timeout-minutes: 30
+    env:
+      HOME: /var/lib/github-runner
+      CODEX_HOME: /var/lib/github-runner/.codex
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      GH_TOKEN: ${{ github.token }}
+      CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
+    steps:
+      - name: Check out the review candidate
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          cache: true
+          install: false
+
+      - name: Validate toolchain and install trusted dependencies
+        run: |
+          node scripts/validate-toolchain.mjs
+          pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Set up pinned Codex CLI
+        run: node scripts/setup-runner-codex.mjs
+
+      - name: Run deterministic and semantic architecture review
+        run: >-
+          node scripts/harness-architecture-review.mjs
+          --base "$BASE_SHA"
+          --head "$HEAD_SHA"
+          --event "$GITHUB_EVENT_PATH"
+          --output "$RUNNER_TEMP/harness-architecture-review.json"
+          --summary "$GITHUB_STEP_SUMMARY"
+          --semantic

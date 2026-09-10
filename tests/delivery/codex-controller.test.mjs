@@ -146,9 +146,15 @@ test('publishes one recorded branch and PR with a complete issue audit trail', a
   const state = await f.state();
   assert.equal(state.status,'ready'); assert.equal(state.phase,'publish');
   assert.equal(state.version,2); assert.equal(state.sessionId,SESSION_ID);
+  assert.equal(state.evidence.schemaVersion, 1);
+  assert.equal(state.evidence.sourceIssue.number, 7);
+  assert.equal(state.evidence.codexSession.id, SESSION_ID);
   assert.deepEqual(f.calls.turns,['plan','implement']); assert.equal(f.calls.prs.length,1);
   assert.deepEqual(f.calls.threads,[{method:'start'}]);
   assert.match(f.calls.prs[0].body,/Closes #7/);
+  assert.match(f.calls.prs[0].body,/codex-delivery-evidence:v1/);
+  const auditLines = (await readFile(path.join(f.issueRoot, 'audit.jsonl'), 'utf8')).trim().split(/\r?\n/).map((line) => JSON.parse(line));
+  assert.ok(auditLines.every((entry) => entry.schemaVersion === 1 && entry.type === 'delivery-audit' && entry.sourceIssue === 7));
   assert.equal(f.calls.prs[0].base,'main'); assert.equal(f.calls.prs[0].head,state.branch);
   assert.ok(f.calls.comments.some((text) => text.includes('Plan complete')));
   assert.ok(f.calls.comments.some((text) => text.includes('Review pull request ready')));

@@ -65,6 +65,8 @@ test('planning and implementation restrict reads and deny tool network access', 
   assert.deepEqual(profiles['delivery-edit'].network.domains, {'registry.npmjs.org':'deny'});
   assert.deepEqual(profiles['delivery-verify'].network.domains, {'registry.npmjs.org':'deny'});
   assert.equal(profiles['delivery-verify'].filesystem[':workspace_roots']['.'], 'read');
+  assert.deepEqual(profiles['delivery-review'].network.domains, {'registry.npmjs.org':'deny'});
+  assert.equal(profiles['delivery-review'].filesystem[':workspace_roots']['.'], 'read');
   assert.deepEqual(profiles['delivery-deps'].network.domains, {'registry.npmjs.org':'allow'});
   assert.equal(profiles['delivery-deps'].network.allow_local_binding, false);
 });

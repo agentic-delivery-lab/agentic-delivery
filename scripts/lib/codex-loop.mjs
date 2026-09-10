@@ -2,6 +2,29 @@ import { MODELS, quotaBoundary } from './codex-client.mjs';
 
 const strings = { type: 'array', items: { type: 'string' } };
 export function outcomeSchema(phase) {
+  if (phase === 'review') return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['status', 'summary', 'affectedAdrs', 'affectedContexts', 'findings', 'evidenceGaps'],
+    properties: {
+      status: { type: 'string', enum: ['aligned', 'findings', 'inconclusive'] },
+      summary: { type: 'string' },
+      affectedAdrs: { type: 'array', items: { type: 'string' } },
+      affectedContexts: { type: 'array', items: { type: 'string' } },
+      findings: { type: 'array', items: {
+        type: 'object', additionalProperties: false,
+        required: ['category', 'severity', 'statement', 'evidence', 'recommendedAction'],
+        properties: {
+          category: { type: 'string' },
+          severity: { type: 'string', enum: ['concern', 'advisory'] },
+          statement: { type: 'string' },
+          evidence: { type: 'array', items: { type: 'string' } },
+          recommendedAction: { type: 'string' },
+        },
+      } },
+      evidenceGaps: { type: 'array', items: { type: 'string' } },
+    },
+  };
   const properties = {
     status: { type: 'string', enum: phase === 'plan' ? ['ready', 'needs_input'] : ['continue', 'complete', 'needs_input'] },
     summary: { type: 'string' }, tasks: strings, questions: strings,
@@ -39,7 +62,7 @@ export function validateOutcome(phase, text) {
   return value;
 }
 
-const phaseName = (phase) => phase === 'plan' ? 'Plan' : phase === 'implement' ? 'Implement' : String(phase ?? 'Delivery');
+const phaseName = (phase) => phase === 'plan' ? 'Plan' : phase === 'implement' ? 'Implement' : phase === 'review' ? 'Architecture review' : String(phase ?? 'Delivery');
 
 function concise(value, limit = 1_200) {
   const text = String(value ?? '').replace(/\r\n?/g, '\n').trim();
@@ -188,7 +211,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     const response = await client.request('turn/start', {
       threadId, input: [{ type: 'text', text: prompt }],
       collaborationMode: { mode: selected.mode, settings: { model: selected.model, reasoning_effort: selected.effort, developer_instructions: null } },
-      permissions: phase === 'plan' ? 'delivery-plan' : 'delivery-edit',
+      permissions: phase === 'plan' ? 'delivery-plan' : phase === 'implement' ? 'delivery-edit' : 'delivery-review',
       approvalPolicy: 'never', serviceTierForTurn: 'default',
       outputSchema: outcomeSchema(phase),
     });
