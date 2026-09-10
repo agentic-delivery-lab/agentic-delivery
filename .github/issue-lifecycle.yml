@@ -128,4 +128,3 @@ forms:
   task:
     headings: ["Requested outcome", "Scope", "Definition of done"]
     required: ["Requested outcome", "Scope", "Constraints", "Definition of done", "Relevant references"]
-

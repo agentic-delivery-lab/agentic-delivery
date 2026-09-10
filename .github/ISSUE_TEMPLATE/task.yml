@@ -45,4 +45,3 @@ body:
       description: Link related issues, files, decisions, or evidence, or write "None".
     validations:
       required: true
-

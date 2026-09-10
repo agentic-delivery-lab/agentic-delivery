@@ -52,4 +52,3 @@ body:
       description: Add safe references, evidence, or related work.
     validations:
       required: true
-

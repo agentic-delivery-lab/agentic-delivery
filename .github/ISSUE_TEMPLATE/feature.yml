@@ -59,4 +59,3 @@ body:
       description: Describe known impact, or write "None known" for triage to assess.
     validations:
       required: true
-
