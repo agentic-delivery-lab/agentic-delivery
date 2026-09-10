@@ -75,6 +75,10 @@ Use four digits and a lowercase dashed name:
 docs/decisions/NNNN-title-with-dashes.md
 ```
 
+An ADR number identifies one historical decision and must not be reused. Removing
+an official ADR leaves an intentional gap; later records keep their existing
+numbers.
+
 The template intentionally lives beside README.md and the numbered records. Every record keeps a source-issue link, including when a separate ADR tracking issue is used.
 
 | Number | Decision | Source | Review/implementation |
