@@ -117,10 +117,11 @@ without another model call. No credits, quota resets, API billing, account
 switching, or silent model substitution is permitted.
 
 Model turns have no independent absolute duration limit. A 20-minute inactivity
-watchdog is reset by activity for the current turn and interrupts only a turn
-that stops producing activity. A 5.5-hour controller timeout and a 350-minute
-Actions timeout are recovery failsafes, not subscription budgets; the gap lets
-the controller save its handoff before Actions stops the job.
+watchdog starts after `turn/start` acknowledges the active turn, is reset by
+activity for that turn, and interrupts only a turn that stops producing
+activity. A 5.5-hour controller timeout and a 350-minute Actions timeout are
+recovery failsafes, not subscription budgets; the gap lets the controller save
+its handoff before Actions stops the job.
 
 Implementation outcomes distinguish `continue`, `complete`, and `needs_input`.
 `continue` carries exact remaining implementation tasks and immediately starts
@@ -141,6 +142,17 @@ and continuation prompt. Issue comments provide a human-readable audit trail.
 The controller uses the repository branch helper, validates changes, and
 publishes the recorded feature branch and review pull request. Validation
 repairs are bounded to three attempts per invocation.
+
+Issue communication and authorization checks use the job's short-lived
+`GITHUB_TOKEN`. Git and review pull-request publication use the separate
+`CODEX_DELIVERY_PUBLISH_TOKEN` Actions secret. The built-in token cannot publish
+changes to files under `.github/workflows`, and events it creates do not start
+most downstream workflows. The publication token must have repository-content,
+workflow-file, and pull-request write access. The controller fails before model
+execution when it is missing, redacts it from diagnostics, and does not expose
+it to model tools. This split gives the broader credential only the publication
+role while allowing review pull requests to include workflow changes and start
+their required checks.
 
 Source issue and discussion snapshots are checked before dependent resumption
 and publication. Changed input returns to planning while preserving files.
@@ -173,8 +185,9 @@ restricted to that service account.
 - Good, because silent turns still stop in time for a recoverable handoff.
 - Good, because people can continue saved work in natural language while an
   explicit negative comment remains non-triggering.
-- Bad, because runner installation, ChatGPT login, persistent storage, and
-  sandbox compatibility are operational prerequisites.
+- Bad, because runner installation, ChatGPT login, persistent storage, a
+  separately managed publication token, and sandbox compatibility are
+  operational prerequisites.
 - Bad, because interruption and remote posting are not atomic; the saved
   outbox can produce duplicate comments after an ambiguous network failure.
 - Bad, because legacy session reconstruction cannot restore the original
@@ -188,8 +201,8 @@ restricted to that service account.
 - Neutral, because this private repository on GitHub Free cannot enforce
   branch protection. Workflow policy does not prevent another credential
   holder from pushing to `main`. Human merge authority remains the policy.
-- Neutral, because PR CI triggered by `GITHUB_TOKEN` can require a human to
-  select **Approve workflows to run**. A GitHub App is a future alternative.
+- Neutral, because the dedicated publication credential starts review PR CI;
+  it does not approve checks, review changes, or authorize a merge.
 
 ### Confirmation
 

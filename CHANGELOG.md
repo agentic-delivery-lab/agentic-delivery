@@ -20,7 +20,9 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- [Issue #21](https://github.com/sjefsharp/agentic-delivery/issues/21) replaces absolute Codex turn deadlines with quota-led execution and an inactivity watchdog, continues multi-turn implementation automatically, and preserves exact tasks when a structured completion is rejected.
+- [Issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17) gives Codex delivery a separate workflow-capable publication credential, so review branches can include GitHub Actions workflow changes, start required checks, and keep the credential away from model tools.
+
+- [Issue #21](https://github.com/sjefsharp/agentic-delivery/issues/21) replaces absolute Codex turn deadlines with quota-led execution, starts the inactivity watchdog only after turn startup, continues multi-turn implementation automatically, and preserves exact tasks when a structured completion is rejected.
 
 - [Issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17) renders Codex progress as concise Markdown, clearly separates human questions from technical pauses, supports natural-language recovery requests, coalesces rapid updates, and prevents a planning-continuation prompt from leaking into implementation.
 

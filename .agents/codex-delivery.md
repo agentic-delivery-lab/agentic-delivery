@@ -58,8 +58,10 @@ prominent action-required heading. Raw protocol JSON is not a human-facing
 audit format.
 
 The controller owns Git metadata, commits, pushes, issue communication, and
-pull-request publication. Model tools have restricted filesystem access and
-no external network access. They cannot install packages or use external integrations;
+pull-request publication. Issue communication uses the job token; publication
+uses a separate workflow-capable credential that model tools never receive.
+Model tools have restricted filesystem access and no external network access.
+They cannot install packages or use external integrations;
 ask when required documentation or another prerequisite is unavailable. The
 controller runs frozen dependency installation and quality checks separately.
 Never weaken the sandbox or tests, read credentials, merge, close the source

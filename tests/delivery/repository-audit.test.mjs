@@ -48,6 +48,7 @@ test('quality workflows use the pinned pnpm action and preserve the infrastructu
     assert.ok(preflight.includes(phrase), `missing persistent-thread preflight check: ${phrase}`);
   }
   const codexWorkflow = await text('.github/workflows/codex-delivery.yml');
+  assert.match(codexWorkflow, /PUBLISH_TOKEN: \$\{\{ secrets\.CODEX_DELIVERY_PUBLISH_TOKEN \}\}/);
   for (const workflow of [smokeWorkflow, codexWorkflow]) {
     assert.match(workflow, /HOME: \/var\/lib\/github-runner/);
     assert.match(workflow, /CODEX_HOME: \/var\/lib\/github-runner\/\.codex/);
