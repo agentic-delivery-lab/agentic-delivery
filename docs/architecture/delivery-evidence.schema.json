@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sjefsharp/agentic-delivery/blob/main/docs/architecture/delivery-evidence.schema.json",
+  "title": "Codex delivery evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "producer",
+    "repository",
+    "sourceIssue",
+    "deliveryRun",
+    "revision",
+    "codexSession",
+    "modelTurns",
+    "architectureContext",
+    "validation",
+    "auditCheckpoint"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "producer": { "const": "codex-delivery" },
+    "repository": { "type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$" },
+    "sourceIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "url"],
+      "properties": {
+        "number": { "type": "integer", "minimum": 1 },
+        "url": { "type": "string", "format": "uri" }
+      }
+    },
+    "deliveryRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "attempt", "url"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[0-9]+$" },
+        "attempt": { "type": "string", "pattern": "^[0-9]+$" },
+        "url": { "type": "string", "format": "uri" }
+      }
+    },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["branch", "commit", "tree"],
+      "properties": {
+        "branch": { "type": "string", "pattern": "^[^\\s]+$" },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "tree": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "codexSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" }
+      }
+    },
+    "modelTurns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["phase", "model", "effort", "mode"],
+        "properties": {
+          "phase": { "enum": ["plan", "implement", "review"] },
+          "model": { "type": "string" },
+          "effort": { "type": "string" },
+          "mode": { "type": "string" }
+        }
+      }
+    },
+    "architectureContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["officialAdrs", "provisionalAdrs", "affectedAdrs", "boundedContexts"],
+      "properties": {
+        "officialAdrs": { "type": "array", "items": { "type": "string", "pattern": "^ADR-[0-9]{4}$" } },
+        "provisionalAdrs": { "type": "array", "items": { "type": "string", "pattern": "^ADR-[0-9]{4}$" } },
+        "affectedAdrs": { "type": "array", "items": { "type": "string", "pattern": "^ADR-[0-9]{4}$" } },
+        "boundedContexts": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "summary"],
+      "properties": {
+        "status": { "enum": ["passed", "failed", "inconclusive"] },
+        "summary": { "type": "string", "minLength": 1 }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxUsedPercent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "subscriptionOnly": { "type": "boolean" },
+        "capturedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "auditCheckpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stateVersion", "entryCount", "sha256"],
+      "properties": {
+        "stateVersion": { "type": "integer", "minimum": 1 },
+        "entryCount": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}

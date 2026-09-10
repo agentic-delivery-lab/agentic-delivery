@@ -29,14 +29,14 @@ class FakeCodex extends EventEmitter {
   }
 }
 
-test('uses actual Plan mode with Sol High, then Luna Max for implementation', async () => {
-  for (const phase of ['plan','implement']) {
+test('uses actual Plan mode, implementation mode, and read-only review mode', async () => {
+  for (const phase of ['plan','implement','review']) {
     const client=new FakeCodex((c)=>c.finish('{"ok":true}'));
     const result=await runTurn({client,threadId:'thread-1',phase,prompt:'assignment',onProgress:async()=>{}});
     assert.equal(result.text,'{"ok":true}');
     const start=client.calls.find(c=>c.method==='turn/start').params;
-    assert.deepEqual(start.collaborationMode,{mode:phase==='plan'?'plan':'default',settings:{model:phase==='plan'?'gpt-5.6-sol':'gpt-5.6-luna',reasoning_effort:phase==='plan'?'high':'max',developer_instructions:null}});
-    assert.equal(start.permissions,phase==='plan'?'delivery-plan':'delivery-edit');
+    assert.deepEqual(start.collaborationMode,{mode:phase==='plan'?'plan':'default',settings:{model:phase==='implement'?'gpt-5.6-luna':'gpt-5.6-sol',reasoning_effort:phase==='implement'?'max':'high',developer_instructions:null}});
+    assert.equal(start.permissions,phase==='plan'?'delivery-plan':phase==='implement'?'delivery-edit':'delivery-review');
     assert.equal(start.environments,undefined,'an empty environment list disables all filesystem tools');
   }
 });

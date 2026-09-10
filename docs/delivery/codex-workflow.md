@@ -37,6 +37,14 @@ The controller reuses saved changes and a single branch. It never creates a
 new task for a comment on a missing, completed, running, stale, or inactive
 state. It never merges the review pull request or closes the source issue.
 
+At publication, the controller derives a version-1 delivery evidence contract
+from saved state, the verified tree, and the audit checkpoint. It stores the
+record with the delivery state and publishes a concise projection in the
+review pull request. The projection connects the source issue, workflow run,
+branch, revision, Codex session, model turns, architecture context, validation,
+bounded telemetry and audit checkpoint. It contains no credentials, hidden
+reasoning or raw tool output and is replaced idempotently on publication retry.
+
 ## Issue communication
 
 Issue comments use three visibly different Markdown formats:
@@ -242,6 +250,14 @@ that is not protection against other credentials. The dedicated publication
 credential creates the review pull request so its required checks are started.
 A human reviews the source issue, changed files, and checks, and separately
 authorizes the merge.
+
+Internal pull requests also run the read-only Harness Architecture Review. The
+deterministic layer compares the merge-base-to-head diff with the official base
+ADRs, provisional head changes, the domain register, and the evidence contract.
+The semantic layer uses a bounded Sol High review turn when quota and runner
+evidence are available. Deterministic violations fail; semantic concerns and
+inconclusive runtime evidence remain cited review findings. The review workflow
+does not comment, modify, merge or close anything.
 
 Review generated workflow and test changes before approving their execution.
 Review PR CI runs repository code directly as the runner service account; it

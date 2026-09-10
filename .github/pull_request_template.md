@@ -44,3 +44,12 @@
 ## Verification
 
 <!-- List the commands or checks that provide evidence for this change. -->
+
+## Architecture evidence
+
+The controller adds a machine-readable `codex-delivery-evidence:v1` projection
+to agent-created pull requests. The Harness Architecture Review reads that
+projection and the source issue; do not copy runner state or hidden model
+reasoning into this pull request. Human-created pull requests may leave the
+projection absent, but must still explain affected ADRs and bounded contexts
+when the change is architectural.

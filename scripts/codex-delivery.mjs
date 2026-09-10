@@ -11,6 +11,7 @@ import { loadLifecycleConfig } from './issue-intake.mjs';
 import { startIssueBranch } from './start-issue-branch.mjs';
 import { validateCommitRange } from './validate-commit-range.mjs';
 import { validateBranchName } from './validate-branch-name.mjs';
+import { deterministicReview, validateEvidenceRecord } from './lib/architecture-review.mjs';
 
 const executeFile = promisify(execFile);
 const controllerRoot = path.resolve(import.meta.dirname, '..');
@@ -84,6 +85,22 @@ export function checkPublicationText(title, summary = '') {
   const plain = `${title}\n${summary}`.replace(/[*_`]/g, '');
   if (/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+(?:[\w.-]+\/[\w.-]+)?#\d+|\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+https:\/\/github\.com\//i.test(plain)) {
     throw new Error('Model publication text must not contain issue-closing directives.');
+  }
+}
+
+function evidenceMarker(evidence) {
+  return `<!-- codex-delivery-evidence:v1\n${JSON.stringify(evidence)}\n-->`;
+}
+
+async function evidenceCheckpoint(auditFile) {
+  try {
+    const source = await readFile(auditFile, 'utf8');
+    return {
+      entryCount: source.split(/\r?\n/).filter(Boolean).length,
+      sha256: createHash('sha256').update(source).digest('hex'),
+    };
+  } catch {
+    return { entryCount: 0, sha256: createHash('sha256').update('').digest('hex') };
   }
 }
 
@@ -226,7 +243,16 @@ export async function deliver(env = process.env, dependencies = {}) {
     state.outbox ??= [];
     for (let offset = 0; offset < body.length; offset += 50_000) state.outbox.push(body.slice(offset, offset + 50_000));
     await save();
-    await appendFile(path.join(issueRoot, 'audit.jsonl'), `${JSON.stringify({ at: new Date().toISOString(), body })}\n`, { mode: 0o600 });
+    await appendFile(path.join(issueRoot, 'audit.jsonl'), `${JSON.stringify({
+      schemaVersion: 1,
+      type: 'delivery-audit',
+      at: new Date().toISOString(),
+      sourceIssue: Number(issue),
+      repository,
+      phase: state.phase,
+      status: state.status,
+      body,
+    })}\n`, { mode: 0o600 });
     return flush();
   };
   const readBrief = async (excludedCommentId) => {
@@ -624,7 +650,68 @@ export async function deliver(env = process.env, dependencies = {}) {
     if (!await git(['diff', '--name-only', `${state.base}...HEAD`])) throw new Error('No repository change is ready for a review pull request.');
     await git(['push', 'origin', `HEAD:refs/heads/${state.branch}`]);
     const existing = await publishApi(`/pulls?state=open&head=${encodeURIComponent(`${repository.split('/')[0]}:${state.branch}`)}&base=main`);
-    const body = `## Summary\n\n${state.summary}\n\nCloses #${issue}\n\n## Verification\n\n${state.validation}\n\nThe source issue contains intake, the plan, progress, and any clarification or continuation history. Human review and merge authorization remain required.\n\n[Workflow run](${runUrl})`;
+    const revision = await git(['rev-parse', 'HEAD']);
+    let architecture;
+    if (await exists(path.join(workspace, 'docs/architecture/harness-review.yml'))) {
+      architecture = await deterministicReview({
+        repositoryRoot: workspace,
+        base: state.base,
+        head: revision,
+        eventPath: undefined,
+      });
+    } else {
+      // Legacy/minimal fixtures may not carry the review baseline. Preserve the
+      // delivery evidence projection while recording that architecture mapping
+      // was unavailable; the dedicated PR review fails closed when its baseline
+      // is missing.
+      architecture = {
+        status: 'inconclusive',
+        affectedAdrs: [],
+        affectedContexts: [],
+        checks: [{ id: 'architecture-baseline', status: 'not-applicable', message: 'No harness review map is present in this repository revision.', evidence: [] }],
+      };
+    }
+    const officialAdrs = (await git(['ls-tree', '-r', '--name-only', state.base, '--', 'docs/decisions']))
+      .split(/\r?\n/).filter((file) => /^docs\/decisions\/\d{4}-.*\.md$/.test(file)).map((file) => `ADR-${file.slice(15, 19)}`);
+    const provisionalAdrs = (await git(['ls-files', 'docs/decisions']))
+      .split(/\r?\n/).filter((file) => /^docs\/decisions\/\d{4}-.*\.md$/.test(file)).map((file) => `ADR-${file.slice(15, 19)}`);
+    const evidence = {
+      schemaVersion: 1,
+      producer: 'codex-delivery',
+      repository,
+      sourceIssue: { number: Number(issue), url: `https://github.com/${repository}/issues/${issue}` },
+      deliveryRun: { id: String(env.GITHUB_RUN_ID ?? '0'), attempt: String(env.GITHUB_RUN_ATTEMPT ?? '1'), url: runUrl },
+      revision: { branch: state.branch, commit: revision, tree: state.validatedTree },
+      codexSession: { id: state.sessionId },
+      modelTurns: [
+        { phase: 'plan', model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
+        { phase: 'implement', model: 'gpt-5.6-luna', effort: 'max', mode: 'default' },
+      ],
+      architectureContext: {
+        officialAdrs: [...new Set(officialAdrs)].sort(),
+        provisionalAdrs: [...new Set(provisionalAdrs)].sort(),
+        affectedAdrs: architecture.affectedAdrs,
+        boundedContexts: architecture.affectedContexts,
+      },
+      validation: { status: 'passed', summary: state.validation },
+      telemetry: {
+        ...(Number.isFinite(state.budget?.usedPercent) ? { maxUsedPercent: state.budget.usedPercent } : {}),
+        subscriptionOnly: state.budget?.stop === false,
+        capturedAt: new Date().toISOString(),
+      },
+      auditCheckpoint: { stateVersion: STATE_VERSION, ...(await evidenceCheckpoint(path.join(issueRoot, 'audit.jsonl'))) },
+    };
+    const evidenceValidation = validateEvidenceRecord(evidence, {
+      repository,
+      issueNumber: Number(issue),
+      head: revision,
+    });
+    if (!evidenceValidation.valid) {
+      throw new Error(`Delivery evidence contract is invalid: ${evidenceValidation.errors.join('; ')}`);
+    }
+    state.evidence = evidence;
+    await save();
+    const body = `## Summary\n\n${state.summary}\n\nCloses #${issue}\n\n## Verification\n\n${state.validation}\n\n## Delivery evidence\n\nThe source issue contains intake, planning, progress, and continuation history. The evidence record below connects this revision to the delivery run, Codex session, architecture context, and validation checkpoint. Human review and merge authorization remain required.\n\n[Workflow run](${runUrl})\n\n${evidenceMarker(evidence)}`;
     const pr = existing[0] ? await publishApi(`/pulls/${existing[0].number}`, 'PATCH', { title: state.plan.title, body })
       : await publishApi('/pulls', 'POST', { title: state.plan.title, head: state.branch, base: 'main', body });
     await transitionState('review', ['in-progress', 'review']);

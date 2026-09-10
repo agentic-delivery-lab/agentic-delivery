@@ -19,7 +19,7 @@ async function newFixture(t) {
 }
 
 test('accepts the repository ADR set', async () => {
-  assert.equal(await validateAdrs(repositoryRoot), 10);
+  assert.equal(await validateAdrs(repositoryRoot), 11);
 });
 
 test('rejects ADRs that define status in frontmatter', async (t) => {

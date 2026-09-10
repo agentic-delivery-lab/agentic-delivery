@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 export const MODELS = Object.freeze({
   plan: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
   implement: { model: 'gpt-5.6-luna', effort: 'max', mode: 'default' },
+  review: { model: 'gpt-5.6-sol', effort: 'high', mode: 'default' },
 });
 
 export const AUTH_STORAGE_CONFIG = 'cli_auth_credentials_store="file"';
@@ -111,13 +112,13 @@ function runtimeFiles(env) {
 }
 
 export function deliveryPermissions(readableFiles = [], runtime) {
-  return Object.fromEntries(['plan', 'edit', 'verify', 'deps'].map((phase) => [`delivery-${phase}`, {
+  return Object.fromEntries(['plan', 'edit', 'verify', 'deps', 'review'].map((phase) => [`delivery-${phase}`, {
     extends: ':read-only',
     filesystem: {
       ':root': 'deny', ':minimal': 'read',
       ...Object.fromEntries(readableFiles.map((file) => [file, 'read'])),
       ...(runtime ? {[runtime]: 'write'} : {}),
-      ':workspace_roots': { '.': ['plan', 'verify'].includes(phase) ? 'read' : 'write', '.git': 'read', '.codex': 'read' },
+      ':workspace_roots': { '.': ['plan', 'verify', 'review'].includes(phase) ? 'read' : 'write', '.git': 'read', '.codex': 'read' },
     },
     // A deny-all managed proxy preserves process-local IPC in the isolated
     // network namespace. The plain network=false seccomp mode blocks Node's
