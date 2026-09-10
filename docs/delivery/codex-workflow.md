@@ -17,21 +17,86 @@ Applying a valid `state:ready-for-plan` is the normal authorization for the
 downstream delivery workflow. The classifier's deterministic readiness gate
 must pass before GPT-5.6 Sol High starts Plan mode. After a successful plan,
 the controller records `state:ready-for-agent`, enters `state:in-progress`,
-and automatically invokes GPT-5.6 Luna Max for Implement. A `/codex resume`
-comment or manual dispatch is reserved for a paused continuation or a
-separately configured human gate. The workflow records progress and validation
-on the source issue.
+and automatically invokes GPT-5.6 Luna Max for Implement. A clear
+natural-language recovery request, the legacy `/codex resume` command, or
+manual dispatch is reserved for a paused continuation or a separately
+configured human gate. The workflow records progress and validation on the
+source issue.
 
-Manual dispatch of `codex-delivery` with the source issue number also resumes
-work. The same event is not processed twice; a new resume comment is an
-explicit new attempt. The controller reuses saved changes and a single branch.
-It never merges the review pull request or closes the source issue.
+The `issue_comment` trigger is restricted twice: the workflow accepts only a
+new comment from the repository owner with `author_association: OWNER`, and
+the controller verifies the same payload identity. Pull-request comments,
+bots, rerun actors, and other writers cannot enter continuation. A plain owner
+answer continues an existing `awaiting-human` continuation state. A clear
+natural-language owner request such as “Please continue from the saved work”
+continues a technical `paused` state. The legacy `/codex resume` form remains a
+compatibility shortcut, while manual dispatch of `codex-delivery` remains
+available for recovery and initial issue execution.
+
+The controller reuses saved changes and a single branch. It never creates a
+new task for a comment on a missing, completed, running, stale, or inactive
+state. It never merges the review pull request or closes the source issue.
+
+## Issue communication
+
+Issue comments use three visibly different Markdown formats:
+
+- **Progress update** reports concise, non-blocking work. Rapid updates in the
+  same phase are saved but coalesced to avoid flooding the issue timeline.
+- **Action required: answer Codex** lists only the questions that need a human
+  decision and tells the owner to reply with those answers.
+- **Delivery paused: recovery required** reports a technical or quota pause,
+  states that no decision is requested, and gives the recovery action.
+
+Structured model output remains machine-readable in saved delivery state. The
+controller extracts its summary and next tasks for issue comments instead of
+publishing raw protocol JSON. Full implementation plans, remaining work,
+session correlation, and operator recovery details remain available in
+collapsed Markdown sections when they are needed for review or recovery.
+
+## Continuation state and session correlation
+
+Persisted state is versioned and stores the repository, source issue, delivery
+phase, exact Codex session UUID, a waiting comment boundary, and consumed
+comment IDs. New app-server threads are persistent (`ephemeral: false`). The
+controller saves the returned UUID before the first model turn and resumes
+later runs with `thread/resume` for that exact UUID. It does not use
+`codex resume --last`, a global newest-session lookup, or a new-thread fallback
+when a versioned state is missing or has an unresumable UUID.
+
+The `awaiting-human` state is an intentional boundary, not a failed Actions
+job. The handoff and its `CONTINUE.md` copy expose the same persisted identity:
+
+```text
+Codex session ID: <UUID>
+Continuation state: awaiting-human
+Issue: #<number>
+Manual recovery: codex resume <UUID>
+```
+
+The next accepted owner comment is supplied directly to the resumed turn with
+the saved issue brief, progress, implementation plan, remaining tasks, and
+validation context. It is consumed by that first resumed turn; any further
+implementation turns continue automatically from saved tasks without replaying
+the comment or asking the owner to comment again. Comments at or before the
+waiting boundary and duplicate event deliveries are ignored. Bot-authored
+comments are excluded from issue
+snapshots so automation cannot change the planning digest or create a loop.
+
+Legacy state from the historical #17 and #18 runs had no persistent UUID. On
+its first eligible recovery, the controller starts one persistent replacement
+thread, records that reconstruction in the audit trail, and uses only the new
+UUID thereafter.
 
 The controller checks the source issue title, body, and discussion against the
 saved planning snapshot before resuming dependent work and before publication.
-New, edited, or removed discussion returns the delivery run to planning without
-discarding files. Its own audit comments and bare `/codex resume` commands do
-not invalidate the plan. These checks are snapshots, not a lock on issue edits.
+New, edited, or removed human discussion returns the delivery run to planning
+without discarding files. Its own audit comments, bot-authored comments, and
+bare `/codex resume` commands do not invalidate the plan. Recognized
+natural-language recovery requests have the same control-message treatment.
+Other owner comments remain part of the source snapshot, so new requirements
+still return the run to planning. These checks are snapshots, not a lock on
+issue edits.
 
 ## Runner prerequisites
 
@@ -42,6 +107,10 @@ not invalidate the plan. These checks are snapshots, not a lock on issue edits.
   official Linux x64 package after SHA-256 verification. The dedicated tool
   cache keeps this installation separate from personal tools. The runner verifies
   both model/effort combinations, ChatGPT login, Plan mode, and quota telemetry.
+  The no-generation smoke check also probes persistent thread start and exact
+  resume; this pinned CLI reports that a brand-new thread has no resumable
+  rollout until its first model turn, so the check records that limitation
+  without spending model quota.
 - ChatGPT login for the installed `codex` executable under that user,
   `github-runner`. Another user's installation/login is not sufficient. For a
   headless runner, use the file-backed credential store so the service does not
@@ -64,11 +133,14 @@ not invalidate the plan. These checks are snapshots, not a lock on issue edits.
   `RUNNER_WORKSPACE`. Set repository variable `CODEX_DELIVERY_STATE_DIR` to an
   absolute directory outside disposable checkouts if needed. Restrict access
   to the runner service user and back it up as operational data.
-- Enable **Allow GitHub Actions to create and approve pull requests** in
-  repository Actions settings if using `GITHUB_TOKEN` to create review PRs.
-  The controller creates PRs but never approves them. Verify the setting before
-  activation; creation and approval share one GitHub setting. Keep default
-  workflow permissions read-only and grant writes only in the delivery job.
+- An Actions secret named `CODEX_DELIVERY_PUBLISH_TOKEN` containing a dedicated
+  fine-grained personal access token with repository **Contents: Read and
+  write**, **Workflows: Read and write**, and **Pull requests: Read and write**
+  permissions. The controller uses this credential only to publish Git changes
+  and the review pull request. The built-in `GITHUB_TOKEN` cannot create or
+  update files under `.github/workflows`, and its events do not start most
+  downstream workflows. Use a short expiry and rotate the secret before it
+  expires. A missing secret stops the delivery run before model execution.
 
 Run `self-hosted-runner-smoke` with input `codex=true` for a check without a
 model turn. The setup step supplies the executable without copying
@@ -107,9 +179,21 @@ environment with its named permissions.
 
 The controller checks all returned usage windows and stops at 98 percent
 usage. It also stops if telemetry cannot be read. Five hours describes the
-subscription window, not a permissible continuous job duration. Each model
-turn has a 20-minute limit; each invocation has a 45-minute controller limit
-inside a 55-minute Actions timeout. Validation repairs are capped at three.
+subscription window and is the normal model-execution boundary. A turn has no
+independent absolute duration limit: its 20-minute inactivity watchdog starts
+after `turn/start` acknowledges the active turn and resets whenever that turn
+produces activity. The 5.5-hour controller timeout and 350-minute Actions
+timeout are recovery failsafes. Their gap gives the controller time to save a
+handoff before Actions stops the job. Validation repairs are capped at three.
+
+Implementation can span multiple model turns in one run. A `continue` outcome
+records exact remaining implementation tasks and starts the next turn without
+human intervention. A `complete` outcome must have no remaining tasks or
+questions. Installation, repository verification, audit, commit, push, and
+pull-request publication are controller-owned work and therefore do not belong
+in the model's remaining task list. If a structured completion is rejected,
+the controller preserves its reported tasks in the handoff instead of showing
+an older plan.
 
 Quota updates are not reservations. Other clients and in-flight requests may
 consume the final reserve. There is no guarantee that arbitrary work completes
@@ -121,14 +205,17 @@ recharging or add credits while a delivery run is active. Other account clients
 and in-flight usage remain outside the controller's control.
 
 Each issue directory contains `state.json`, an append-only `audit.jsonl`, the
-working tree, and `CONTINUE.md` after a pause. The continuation prompt and
-remaining tasks are also posted on the source issue without another model
-call. Answer open questions or wait for the reset, then `/codex resume`.
+working tree, and `CONTINUE.md` after a pause or human-input boundary. The
+continuation prompt and remaining tasks are also posted on the source issue
+without another model call. A technical pause waits for a clear natural-language
+owner request to continue; an `awaiting-human` state waits for the requested
+answer. The legacy `/codex resume` command remains accepted for compatibility.
 Saved phases distinguish planning, branch creation, implementation,
 verification, commit, and publication. Commit/publication retries do not start
-a model or require available generation quota. Implementation questions return
-to planning while retaining the existing branch and work. The controller stops
-owned processes before committing and checks the verified tree again.
+a model or require available generation quota. Implementation questions preserve
+the current phase and exact Codex session while retaining the existing branch
+and work. The controller stops owned processes before committing and checks the
+verified tree again.
 
 Publication retries must still match that verified tree, even if somebody has
 made another clean commit locally. Invalid saved state is left untouched for
@@ -151,9 +238,10 @@ completed state deliberately, according to the runner's retention policy.
 
 GitHub Free cannot enforce protected branches for this private repository.
 The controller restricts its own publication to its recorded feature branch;
-that is not protection against other credentials. Review PR CI triggered by
-`GITHUB_TOKEN` can require **Approve workflows to run**. A human reviews the
-source issue, changed files, and checks, and separately authorizes the merge.
+that is not protection against other credentials. The dedicated publication
+credential creates the review pull request so its required checks are started.
+A human reviews the source issue, changed files, and checks, and separately
+authorizes the merge.
 
 Review generated workflow and test changes before approving their execution.
 Review PR CI runs repository code directly as the runner service account; it

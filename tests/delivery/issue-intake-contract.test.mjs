@@ -42,11 +42,18 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.ok(intakeWorkflow.on.issues.types.includes('closed'));
   assert.ok(intakeWorkflow.jobs.classify);
   assert.ok(intakeWorkflow.jobs.deliver.uses?.includes('codex-delivery.yml'));
-  assert.equal(intakeWorkflow.jobs.deliver.permissions.contents, 'write');
+  assert.equal(intakeWorkflow.jobs.deliver.permissions.contents, 'read');
   assert.equal(intakeWorkflow.jobs.deliver.permissions.issues, 'write');
-  assert.equal(intakeWorkflow.jobs.deliver.permissions['pull-requests'], 'write');
+  assert.equal(intakeWorkflow.jobs.deliver.permissions['pull-requests'], undefined);
+  assert.equal(
+    intakeWorkflow.jobs.deliver.secrets.CODEX_DELIVERY_PUBLISH_TOKEN,
+    '${{ secrets.CODEX_DELIVERY_PUBLISH_TOKEN }}',
+  );
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.issue.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.route.required, true);
+  assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_PUBLISH_TOKEN.required, true);
+  assert.equal(deliveryWorkflow.jobs.deliver.permissions.contents, 'read');
+  assert.equal(deliveryWorkflow.jobs.deliver.permissions['pull-requests'], undefined);
   assert.ok(!deliveryWorkflow.on.issues);
   assert.ok(!deliveryWorkflow.on.issue_comment);
 });

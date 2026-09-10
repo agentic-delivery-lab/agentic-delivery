@@ -22,6 +22,14 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- [Issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17) gives Codex delivery a separate workflow-capable publication credential, so review branches can include GitHub Actions workflow changes, start required checks, and keep the credential away from model tools.
+
+- [Issue #21](https://github.com/sjefsharp/agentic-delivery/issues/21) replaces absolute Codex turn deadlines with quota-led execution, starts the inactivity watchdog only after turn startup, continues multi-turn implementation automatically, and preserves exact tasks when a structured completion is rejected.
+
+- [Issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17) renders Codex progress as concise Markdown, clearly separates human questions from technical pauses, supports natural-language recovery requests, coalesces rapid updates, and prevents a planning-continuation prompt from leaking into implementation.
+
+- [Issue #18](https://github.com/sjefsharp/agentic-delivery/issues/18) restores exact issue continuation with persistent Codex session UUIDs, trusted owner comments, explicit `awaiting-human` state, duplicate-event protection, and one-time legacy session reconstruction.
+
 - Headless runner Codex authentication uses the service account's explicit file-backed credential store. Startup and protocol errors publish safe diagnostic hints without raw authentication data.
 - Paused delivery runs return to planning when the source issue changes, preserve invalid saved state for inspection, and refuse to publish changes that no longer match the verified tree.
 

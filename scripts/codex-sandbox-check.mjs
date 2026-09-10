@@ -31,6 +31,7 @@ try {
       assert.equal(process.cwd(), ${JSON.stringify(workspace)});
       assert.equal(process.env.CODEX_HOME, undefined);
       assert.equal(process.env.GH_TOKEN, undefined);
+      assert.equal(process.env.PUBLISH_TOKEN, undefined);
       assert.equal(process.env.OPENAI_API_KEY, undefined);
       assert.ok(fs.readFileSync('probe.txt', 'utf8'));
       assert.throws(() => fs.readFileSync(${JSON.stringify(sentinel)}));

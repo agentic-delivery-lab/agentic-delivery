@@ -82,8 +82,9 @@ metadata, cleared decision requirements, and no unresolved `adr:needed`,
 invokes the reusable delivery workflow. A successful Plan transition records
 `state:ready-for-agent`, then `state:in-progress` immediately before
 Implement. Clarification records `state:needs-info`; a published review pull
-request records `state:review`. `/codex resume` and manual dispatch remain
-recovery mechanisms for saved or intentionally gated work.
+request records `state:review`. Clear natural-language owner requests and
+manual dispatch remain recovery mechanisms for saved or intentionally gated
+work; `/codex resume` is retained as a compatibility shortcut.
 
 ### Consequences
 
@@ -145,6 +146,7 @@ recovery mechanisms for saved or intentionally gated work.
 ## More Information
 
 - Assignment brief and ADR tracking issue: [GitHub issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17)
+- Review pull request: [GitHub pull request #24](https://github.com/sjefsharp/agentic-delivery/pull/24)
 - Refined decision: [ADR-0009](0009-run-codex-from-source-issues-with-a-budget-boundary.md)
 - Domain register: [`ubiquitous-language.yml`](../domain/ubiquitous-language.yml)
 - Delivery guide: [`docs/delivery/codex-workflow.md`](../delivery/codex-workflow.md)

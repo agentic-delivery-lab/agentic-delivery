@@ -3,6 +3,29 @@ const TITLE_TYPE_PREFIXES = new Map([
   ['idea', 'idea'], ['research', 'research'], ['architecture', 'architecture'], ['adr', 'architecture'],
 ]);
 
+const ENGLISH_RECOVERY_REQUEST = new RegExp([
+  String.raw`^(?:(?:yes|okay|ok|sure)[,.!]?\s+)?`,
+  String.raw`(?:(?:please|kindly)\s+|(?:could|would|can|will)\s+you\s+(?:please\s+)?)?`,
+  String.raw`(?:continue|resume|proceed|retry|try\s+again|go\s+ahead)`,
+  String.raw`(?:\s+(?:(?:with\s+)?(?:the\s+)?(?:saved\s+)?(?:work|delivery|run|task)`,
+  String.raw`|from\s+(?:(?:the\s+)?saved\s+work|where\s+you\s+(?:stopped|left\s+off))))?`,
+  String.raw`(?:\s+please)?[.!?]*$`,
+].join(''), 'i');
+const DUTCH_RECOVERY_REQUEST = new RegExp([
+  String.raw`^(?:(?:ja|ok[eé]?|prima)[,.!]?\s+)?`,
+  String.raw`(?:(?:graag|alsjeblieft)\s+|(?:kun|wil|kan)\s+je\s+(?:alsjeblieft\s+)?)?`,
+  String.raw`(?:ga(?:\s+maar)?\s+verder|ga\s+door|hervat|probeer\s+opnieuw)`,
+  String.raw`(?:\s+(?:met\s+(?:het\s+)?(?:opgeslagen\s+)?(?:werk|proces|taak)`,
+  String.raw`|vanaf\s+waar\s+je\s+gebleven\s+was))?`,
+  String.raw`(?:\s+(?:graag|alsjeblieft))?[.!?]*$`,
+].join(''), 'i');
+
+export function isResumeRequestBody(body) {
+  const text = String(body ?? '').trim().replace(/\s+/g, ' ');
+  if (text === '/codex resume') return true;
+  return ENGLISH_RECOVERY_REQUEST.test(text) || DUTCH_RECOVERY_REQUEST.test(text);
+}
+
 export function normalize(value) {
   return String(value ?? '').trim().toLocaleLowerCase('en-US');
 }

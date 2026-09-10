@@ -100,7 +100,7 @@ governance:
 
 transitions:
   needs-triage: [needs-info, requirements, decision-needed, investigating, parked, ready-for-plan, done]
-  needs-info: [needs-triage, requirements, decision-needed, investigating, parked, ready-for-plan, done]
+  needs-info: [needs-triage, requirements, decision-needed, investigating, parked, ready-for-plan, ready-for-agent, in-progress, done]
   requirements: [needs-info, decision-needed, ready-for-plan, parked, done]
   decision-needed: [needs-info, requirements, investigating, ready-for-plan, done]
   investigating: [needs-info, requirements, decision-needed, ready-for-plan, parked, done]

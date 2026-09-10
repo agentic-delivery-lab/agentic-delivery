@@ -1,6 +1,6 @@
 ---
-date: 2026-09-07
-source-issue: https://github.com/sjefsharp/agentic-delivery/issues/15
+date: 2026-09-09
+source-issue: https://github.com/sjefsharp/agentic-delivery/issues/21
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
@@ -10,11 +10,25 @@ informed: None
 
 ## Context and Problem Statement
 
-[Source issue #15](https://github.com/sjefsharp/agentic-delivery/issues/15)
-requests immediate GitHub Issue intake on the existing self-hosted runner,
+[Source issue #21](https://github.com/sjefsharp/agentic-delivery/issues/21)
+amends the quota and continuation design tracked by
+[source issue #18](https://github.com/sjefsharp/agentic-delivery/issues/18),
+which amended the workflow originally tracked by
+[source issue #15](https://github.com/sjefsharp/agentic-delivery/issues/15).
+[Source issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17)
+later clarified that people must be able to continue a saved run with natural
+language instead of a required slash command.
+It requests reliable continuation of the current source-issue workflow on the
+existing self-hosted runner,
 planning with GPT-5.6 Sol High, implementation with GPT-5.6 Luna Max, and a
 review pull request. Issues may contain ideas, requirements, or decisions.
 The source issue must explain how the final change came about.
+
+Historical issue #17 runs showed that an absolute 20-minute model-turn deadline
+could stop healthy work even while Codex was active and subscription allowance
+remained. They also showed that returning controller-owned verification as an
+unfinished model task could reject a completed implementation and preserve a
+stale task list. A human then had to ask for continuation repeatedly.
 
 The affected bounded context is `agentic-delivery-governance`. Existing terms
 include source issue, agentic primitive, provisional decision, issue-linked
@@ -27,14 +41,27 @@ delivery run, budget boundary, and continuation prompt.
 - Preserve actual Plan mode and the exact requested model and effort settings.
 - Ask for missing requirements and keep mandatory issue communication.
 - Save resumable progress just before quota exhaustion.
+- Let reported subscription usage, rather than elapsed turn time, remain the
+  normal execution boundary while still detecting an unresponsive turn.
+- Continue multi-turn implementation without requiring repeated human comments.
 - Keep credentials and publication outside model-generated commands.
 - Preserve human review, merge, and issue-closing authority.
+- Continue only the exact source issue and persistent Codex session requested by
+  a trusted repository-owner comment.
+- Keep natural language as the primary human continuation interface without
+  letting unrelated or negative comments resume technical work.
+- Keep human-input waiting separate from technical failure and prevent comment
+  redelivery or bot feedback loops.
 
 ## Considered Options
 
 - A small Node.js controller using `codex app-server`.
 - Separate `codex exec` invocations with prompt-based planning.
 - An API-key-based coding action.
+- Keep absolute per-turn deadlines, replace them with an activity watchdog, or
+  remove turn-level failure detection.
+- For technical recovery, recognize clear natural-language continuation intent,
+  require an exact slash command, or treat every owner comment as a resume.
 
 ## Decision Outcome
 
@@ -43,9 +70,35 @@ its protocol exposes actual collaboration modes, per-turn model settings,
 clarification requests, interruption, and subscription quota telemetry.
 
 An issue opened by a contributor with current repository write permission
-starts intake. A `/codex resume` issue comment or manual dispatch resumes a
-pause. Free-form intake precedes the implementation plan. The source issue
-also serves as ADR tracking when a significant decision is needed.
+starts intake. A newly created issue comment can enter the controller only when
+the payload author is the repository owner with `author_association: OWNER`;
+the controller repeats this check using the comment payload rather than
+`GITHUB_TRIGGERING_ACTOR`. A plain owner answer continues an existing
+`awaiting-human` state. A clear natural-language owner request such as “Please
+continue from the saved work” continues a technical `paused` state and is
+passed to the exact saved Codex session when model work resumes. Deterministic
+leading-intent matching accepts common English and Dutch continuation wording
+without treating comments such as “Do not continue yet” as authorization. The
+legacy `/codex resume` comment remains a compatibility shortcut, and manual
+dispatch remains an operator recovery path. Free-form intake precedes the
+implementation plan. The source issue also serves as ADR tracking when a
+significant decision is needed.
+
+New delivery state is versioned and correlates one source issue to one
+persistent Codex app-server thread UUID. The controller starts new threads with
+`ephemeral: false`, saves the returned UUID before the first model turn, and
+uses `thread/resume` with that exact UUID in later processes. It does not use a
+global newest-session lookup or silently start a replacement when a versioned
+UUID is missing or cannot be resumed. An `awaiting-human` state records the
+waiting comment boundary and consumed comment IDs. The accepted owner comment
+is passed directly to the resumed turn with the saved issue brief, progress,
+plan, tasks, and validation context.
+
+State from the historical #17 and #18 runs has no UUID. Its first eligible
+recovery creates one persistent replacement thread, records the one-time
+reconstruction in the audit trail, and uses only that new UUID thereafter.
+Bot-authored comments are excluded from issue snapshots, and duplicate or
+stale comments are rejected before model execution.
 
 The single dedicated runner queues jobs. A persistent account lock prevents
 overlapping controller runs on that host. Do not use Actions concurrency that
@@ -54,12 +107,30 @@ same subscription remain outside this lock and count toward quota telemetry.
 
 The controller stops at 98 percent reported usage in any returned window,
 checks the five-hour window explicitly, and stops on unavailable telemetry.
-It checks every 15 seconds and receives live quota notifications. A two-percent
-finalization reserve supports the request to wrap up near zero. In-flight
+It checks every 15 seconds and receives live quota notifications. A quota
+notification triggers a fresh full telemetry read so a partial notification
+cannot hide another exhausted window. A two-percent finalization reserve
+supports the request to wrap up near zero. In-flight
 usage and other clients can consume that reserve; telemetry is not an atomic
 quota reservation. Finalization writes saved tasks and a continuation prompt
 without another model call. No credits, quota resets, API billing, account
 switching, or silent model substitution is permitted.
+
+Model turns have no independent absolute duration limit. A 20-minute inactivity
+watchdog starts after `turn/start` acknowledges the active turn, is reset by
+activity for that turn, and interrupts only a turn that stops producing
+activity. A 5.5-hour controller timeout and a 350-minute Actions timeout are
+recovery failsafes, not subscription budgets; the gap lets the controller save
+its handoff before Actions stops the job.
+
+Implementation outcomes distinguish `continue`, `complete`, and `needs_input`.
+`continue` carries exact remaining implementation tasks and immediately starts
+another implementation turn in the same run. The trusted owner continuation
+comment is supplied only to the first resumed turn. `complete` is accepted only
+with empty tasks and questions because dependency installation, repository
+verification, audit, commit, push, and pull-request publication belong to the
+controller. When a semantically invalid structured outcome is rejected, its
+reported tasks are saved for an accurate continuation handoff.
 
 Model execution also requires telemetry reporting no spendable or unlimited
 credits. Available credits or missing credit telemetry pause the delivery run.
@@ -71,6 +142,17 @@ and continuation prompt. Issue comments provide a human-readable audit trail.
 The controller uses the repository branch helper, validates changes, and
 publishes the recorded feature branch and review pull request. Validation
 repairs are bounded to three attempts per invocation.
+
+Issue communication and authorization checks use the job's short-lived
+`GITHUB_TOKEN`. Git and review pull-request publication use the separate
+`CODEX_DELIVERY_PUBLISH_TOKEN` Actions secret. The built-in token cannot publish
+changes to files under `.github/workflows`, and events it creates do not start
+most downstream workflows. The publication token must have repository-content,
+workflow-file, and pull-request write access. The controller fails before model
+execution when it is missing, redacts it from diagnostics, and does not expose
+it to model tools. This split gives the broader credential only the publication
+role while allowing review pull requests to include workflow changes and start
+their required checks.
 
 Source issue and discussion snapshots are checked before dependent resumption
 and publication. Changed input returns to planning while preserving files.
@@ -98,20 +180,37 @@ restricted to that service account.
 - Good, because ideas and decisions can be clarified before implementation.
 - Good, because plans, questions, failures, and handoffs remain on the source issue.
 - Good, because quota pauses preserve work without further model spending.
-- Bad, because runner installation, ChatGPT login, persistent storage, and
-  sandbox compatibility are operational prerequisites.
+- Good, because active work can use the available five-hour allowance without
+  repeated continuation comments or an arbitrary per-turn cutoff.
+- Good, because silent turns still stop in time for a recoverable handoff.
+- Good, because people can continue saved work in natural language while an
+  explicit negative comment remains non-triggering.
+- Bad, because runner installation, ChatGPT login, persistent storage, a
+  separately managed publication token, and sandbox compatibility are
+  operational prerequisites.
 - Bad, because interruption and remote posting are not atomic; the saved
   outbox can produce duplicate comments after an ambiguous network failure.
+- Bad, because legacy session reconstruction cannot restore the original
+  ephemeral conversation and therefore depends on the saved issue brief and
+  continuation context.
+- Bad, because deterministic intent matching cannot understand every possible
+  natural-language phrasing; manual dispatch and the compatibility shortcut
+  remain fallbacks.
+- Bad, because an active but unproductive turn can continue until quota or the
+  outer recovery failsafe is reached.
 - Neutral, because this private repository on GitHub Free cannot enforce
   branch protection. Workflow policy does not prevent another credential
   holder from pushing to `main`. Human merge authority remains the policy.
-- Neutral, because PR CI triggered by `GITHUB_TOKEN` can require a human to
-  select **Approve workflows to run**. A GitHub App is a future alternative.
+- Neutral, because the dedicated publication credential starts review PR CI;
+  it does not approve checks, review changes, or authorize a merge.
 
 ### Confirmation
 
 Test quota failures, exact model selection, mode handoff, clarification,
-interruption, authorization, continuation, and duplicate-event behavior.
+interruption, authorization, persistent UUID start/resume, owner-comment
+continuation, automatic multi-turn implementation, activity watchdog resets,
+natural-language recovery intent, negative comments, legacy reconstruction,
+rejected-outcome task persistence, and duplicate-event behavior.
 Run repository tests and quality checks. Verify Codex under `github-runner`
 without generating a turn, then demonstrate a small end-to-end issue after
 human merge and prerequisite setup. Do not claim runtime readiness from unit
@@ -143,6 +242,10 @@ tests alone. This ADR remains provisional until merged into `main`.
 - [Codex subscription allowance](https://learn.chatgpt.com/docs/pricing)
 - [GitHub workflow triggers](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
 - [GitHub branch protection availability](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
+- [Issue #18: Restore exact Codex issue continuation](https://github.com/sjefsharp/agentic-delivery/issues/18)
+- [Issue #21: Replace the fixed Codex turn deadline with quota-led execution](https://github.com/sjefsharp/agentic-delivery/issues/21)
+- [Issue #17: Introduce an issue-driven intake and routing harness](https://github.com/sjefsharp/agentic-delivery/issues/17)
+- [PR #20: Make Codex issue comments actionable](https://github.com/sjefsharp/agentic-delivery/pull/20)
 - [Operation and continuation](../delivery/codex-workflow.md)
 - Revisit when runner isolation, account sharing, automated resumption, or
   publishing credentials change.

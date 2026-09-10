@@ -21,8 +21,9 @@ jobs:
     if: >-
       !github.event.issue.pull_request &&
       (github.event_name != 'issue_comment' ||
-       github.event.comment.body == '/codex resume' ||
-       startsWith(github.event.comment.body, '/codex resume '))
+       (github.event.comment.user.login == github.repository_owner &&
+        github.event.comment.user.type != 'Bot' &&
+        github.event.comment.author_association == 'OWNER'))
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 10
     outputs:
@@ -56,11 +57,11 @@ jobs:
     needs: classify
     if: needs.classify.result == 'success' && (needs.classify.outputs.route == 'plan' || needs.classify.outputs.route == 'resume')
     permissions:
-      contents: write
+      contents: read
       issues: write
-      pull-requests: write
     uses: ./.github/workflows/codex-delivery.yml
     with:
       issue: ${{ needs.classify.outputs.issue }}
       route: ${{ needs.classify.outputs.route }}
-    secrets: inherit
+    secrets:
+      CODEX_DELIVERY_PUBLISH_TOKEN: ${{ secrets.CODEX_DELIVERY_PUBLISH_TOKEN }}

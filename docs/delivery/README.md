@@ -43,9 +43,10 @@ The existing Plan → Implement controller is a reusable downstream primitive.
 It records `state:ready-for-agent` after a successful plan, enters
 `state:in-progress` before implementation, records `state:needs-info` when a
 clarification is required, and records `state:review` after publishing a
-review pull request. `/codex resume` and manual dispatch remain recovery paths
-for paused runs or an intentionally configured human gate. Metadata changes by
-automation are idempotent and do not recursively trigger delivery.
+review pull request. A clear natural-language recovery request, the legacy
+`/codex resume` command, and manual dispatch remain recovery paths for paused
+runs or an intentionally configured human gate. Metadata changes by automation
+are idempotent and do not recursively trigger delivery.
 
 ## Package manager and local preflight
 

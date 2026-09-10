@@ -43,7 +43,12 @@ test('quality workflows use the pinned pnpm action and preserve the infrastructu
   assert.ok(smokeWorkflow.includes('shell: bash'));
   assert.ok(smokeWorkflow.includes('runs-on: [self-hosted, linux, x64, omarchy]'));
   assert.ok(smokeWorkflow.includes('run: node scripts/codex-sandbox-check.mjs'));
+  const preflight = await text('scripts/codex-preflight.mjs');
+  for (const phrase of ['startThread(cwd)', 'resumeThread(cwd, sessionId)', 'no persisted rollout', 'No model turn was started']) {
+    assert.ok(preflight.includes(phrase), `missing persistent-thread preflight check: ${phrase}`);
+  }
   const codexWorkflow = await text('.github/workflows/codex-delivery.yml');
+  assert.match(codexWorkflow, /PUBLISH_TOKEN: \$\{\{ secrets\.CODEX_DELIVERY_PUBLISH_TOKEN \}\}/);
   for (const workflow of [smokeWorkflow, codexWorkflow]) {
     assert.match(workflow, /HOME: \/var\/lib\/github-runner/);
     assert.match(workflow, /CODEX_HOME: \/var\/lib\/github-runner\/\.codex/);

@@ -52,7 +52,7 @@ test('requires the exact requested models and reasoning efforts', () => {
 });
 
 test('model processes do not inherit publishing, API, or Actions credentials', () => {
-  const env = modelEnvironment({PATH:'/bin', HOME:'/example', GH_TOKEN:'secret', OPENAI_API_KEY:'secret', ACTIONS_RUNTIME_TOKEN:'secret', NODE_OPTIONS:'--import=/malicious.mjs'});
+  const env = modelEnvironment({PATH:'/bin', HOME:'/example', GH_TOKEN:'secret', PUBLISH_TOKEN:'publish-secret', OPENAI_API_KEY:'secret', ACTIONS_RUNTIME_TOKEN:'secret', NODE_OPTIONS:'--import=/malicious.mjs'});
   assert.deepEqual(env, {PATH:'/bin'});
 });
 
@@ -89,6 +89,10 @@ test('app-server diagnostics retain safe failure context without exposing creden
   assert.equal(
     appServerFailure(1, null, 'Error: config defines [permissions] profiles but does not set default_permissions'),
     'Codex app-server stopped (1). Diagnostic: A default permission profile is required. Check the controller startup configuration.',
+  );
+  assert.equal(
+    appServerFailure(1, null, 'no rollout found for thread id 019fb023-24b8-7881-9119-509f078b610e'),
+    'Codex app-server stopped (1). Diagnostic: Codex has no persisted rollout for this thread yet.',
   );
   assert.equal(appServerFailure(null, 'SIGTERM', ''), 'Codex app-server stopped (SIGTERM).');
 });
@@ -146,4 +150,35 @@ test('protocol errors use the same safe diagnostic boundary as process errors', 
 test('headless app-server authentication uses the file-backed service credential store', () => {
   assert.equal(AUTH_STORAGE_CONFIG, 'cli_auth_credentials_store="file"');
   assert.equal(DEFAULT_PERMISSION_CONFIG, 'default_permissions="delivery-plan"');
+});
+
+test('starts persistent threads and resumes the exact UUID without a newest-session fallback', async () => {
+  const calls = [];
+  const fakeClient = Object.assign(Object.create(CodexClient.prototype), {
+    permissions: { 'delivery-plan': {} },
+    toolEnv: {},
+    request: async (method, params) => {
+      calls.push({method, params});
+      if (method === 'config/read') return {config:{mcp_servers:{}}};
+      if (method === 'thread/start') return {thread:{id:'019fb023-24b8-7881-9119-509f078b610e'}};
+      if (method === 'thread/resume') return {thread:{id:'019fb023-24b8-7881-9119-509f078b610e'}};
+      throw new Error(`Unexpected request: ${method}`);
+    },
+  });
+
+  const started = await CodexClient.prototype.startThread.call(fakeClient, '/workspace', 'instructions');
+  const resumed = await CodexClient.prototype.resumeThread.call(
+    fakeClient,
+    '/workspace',
+    '019fb023-24b8-7881-9119-509f078b610e',
+    'instructions',
+  );
+
+  assert.equal(started.thread.id, resumed.thread.id);
+  assert.equal(calls[1].method, 'thread/start');
+  assert.equal(calls[1].params.ephemeral, false);
+  assert.equal(calls[3].method, 'thread/resume');
+  assert.equal(calls[3].params.threadId, '019fb023-24b8-7881-9119-509f078b610e');
+  assert.equal(calls[3].params.ephemeral, undefined);
+  assert.equal(calls.filter(({method}) => method === 'thread/list').length, 0);
 });

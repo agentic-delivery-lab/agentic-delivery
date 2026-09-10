@@ -3,7 +3,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { loadLifecycleConfig } from '../../scripts/issue-intake.mjs';
-import { classifyIssue } from '../../scripts/lib/issue-routing.mjs';
+import { classifyIssue, isResumeRequestBody } from '../../scripts/lib/issue-routing.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const config = await loadLifecycleConfig(repositoryRoot);
@@ -174,4 +174,18 @@ test('invalid requested transitions are rejected without changing the current st
   assert.equal(result.state, 'requirements');
   assert.equal(result.route, 'hold');
   assert.match(result.reasons.join(' '), /not allowed/);
+});
+
+test('recognizes bounded natural-language recovery requests', () => {
+  for (const request of [
+    '/codex resume',
+    'Please continue from the saved work.',
+    'Ga verder met het opgeslagen werk.',
+  ]) assert.equal(isResumeRequestBody(request), true);
+
+  for (const request of [
+    'Do not continue yet.',
+    'Continue, but remove the changelog first.',
+    '/codex resume-malicious',
+  ]) assert.equal(isResumeRequestBody(request), false);
 });

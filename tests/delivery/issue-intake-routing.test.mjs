@@ -70,7 +70,7 @@ function apiFixture(issue, permission = 'write') {
     if (route === '/issues/17') return new Response(JSON.stringify(issue), { status: 200 });
     if (route.startsWith('/labels/')) return new Response(JSON.stringify({ name: decodeURIComponent(route.slice('/labels/'.length)) }), { status: 200 });
     if (route === '/issues/17/labels' && options.method === 'PUT') return new Response(JSON.stringify(body.labels.map((name) => ({ name }))), { status: 200 });
-    if (route === '/collaborators/maintainer/permission') return new Response(JSON.stringify({ permission }), { status: 200 });
+    if (route.startsWith('/collaborators/')) return new Response(JSON.stringify({ permission }), { status: 200 });
     throw new Error(`Unexpected route ${route}`);
   };
   return { calls, fetchImpl };
@@ -113,18 +113,59 @@ test('keeps an unauthorized ready issue on hold without changing its requested s
   assert.equal(result.state, 'ready-for-plan');
 });
 
-test('does not treat a near-match comment as a recovery request', async () => {
+test('does not route an untrusted near-match comment to delivery', async () => {
   const fixture = apiFixture({
     state: 'open', title: 'Task: implement routing', body: 'Deliver the routing harness.',
     labels: [{ name: 'type:task' }, { name: 'state:ready-for-plan' }],
   });
   const result = await classifyAndRoute({
     env: { GITHUB_REPOSITORY: 'owner/repo', SOURCE_ISSUE: '17', GH_TOKEN: 'token', GITHUB_ACTOR: 'maintainer', GITHUB_EVENT_NAME: 'issue_comment' },
-    event: { action: 'created', comment: { body: '/codex resume-malicious' }, issue: {} },
+    event: {
+      action: 'created', issue: {},
+      repository: { owner: { login: 'owner' } },
+      comment: { body: '/codex resume-malicious', user: { login: 'contributor', type: 'User' }, author_association: 'CONTRIBUTOR' },
+    },
     fetchImpl: fixture.fetchImpl,
     config,
   });
   assert.equal(result.route, 'hold');
-  assert.match(result.metadata.reasons.join(' '), /explicit/);
+  assert.match(result.metadata.reasons.join(' '), /trusted repository-owner/);
   assert.ok(!fixture.calls.some((call) => call.route.includes('/permission')));
+});
+
+test('preserves natural-language recovery through the intake boundary', async () => {
+  const fixture = apiFixture({
+    state: 'open', title: 'Task: implement routing', body: 'Deliver the routing harness.',
+    labels: [{ name: 'type:task' }, { name: 'state:needs-info' }],
+  });
+  const result = await classifyAndRoute({
+    env: { GITHUB_REPOSITORY: 'owner/repo', SOURCE_ISSUE: '17', GH_TOKEN: 'token', GITHUB_ACTOR: 'maintainer', GITHUB_EVENT_NAME: 'issue_comment' },
+    event: {
+      action: 'created', issue: {},
+      repository: { owner: { login: 'owner' } },
+      comment: { body: 'Please continue from the saved work.', user: { login: 'owner', type: 'User' }, author_association: 'OWNER' },
+    },
+    fetchImpl: fixture.fetchImpl,
+    config,
+  });
+  assert.equal(result.route, 'resume');
+  assert.ok(fixture.calls.some((call) => call.route === '/collaborators/owner/permission'));
+});
+
+test('passes a trusted owner clarification answer to the saved delivery run', async () => {
+  const fixture = apiFixture({
+    state: 'open', title: 'Task: implement routing', body: 'Deliver the routing harness.',
+    labels: [{ name: 'type:task' }, { name: 'state:needs-info' }],
+  });
+  const result = await classifyAndRoute({
+    env: { GITHUB_REPOSITORY: 'owner/repo', SOURCE_ISSUE: '17', GH_TOKEN: 'token', GITHUB_ACTOR: 'maintainer', GITHUB_EVENT_NAME: 'issue_comment' },
+    event: {
+      action: 'created', issue: {},
+      repository: { owner: { login: 'owner' } },
+      comment: { body: 'Use the existing wording.', user: { login: 'owner', type: 'User' }, author_association: 'OWNER' },
+    },
+    fetchImpl: fixture.fetchImpl,
+    config,
+  });
+  assert.equal(result.route, 'resume');
 });

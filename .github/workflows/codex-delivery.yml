@@ -11,6 +11,9 @@ on:
         description: Authorized intake route
         required: true
         type: string
+    secrets:
+      CODEX_DELIVERY_PUBLISH_TOKEN:
+        required: true
   workflow_dispatch:
     inputs:
       issue:
@@ -23,16 +26,14 @@ permissions:
 
 jobs:
   deliver:
-    if: github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, linux, x64, omarchy]
-    timeout-minutes: 55
+    timeout-minutes: 350
     env:
       HOME: /var/lib/github-runner
       CODEX_HOME: /var/lib/github-runner/.codex
     permissions:
-      contents: write
+      contents: read
       issues: write
-      pull-requests: write
     steps:
       - name: Check out trusted controller
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -55,6 +56,7 @@ jobs:
       - name: Run source issue delivery
         env:
           GH_TOKEN: ${{ github.token }}
+          PUBLISH_TOKEN: ${{ secrets.CODEX_DELIVERY_PUBLISH_TOKEN }}
           SOURCE_ISSUE: ${{ inputs.issue || github.event.inputs.issue }}
           INTAKE_ROUTE: ${{ inputs.route || 'resume' }}
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}

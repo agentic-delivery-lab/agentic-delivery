@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
-import { runTurn, validateOutcome, continuation } from '../../scripts/lib/codex-loop.mjs';
+import {
+  runTurn,
+  validateOutcome,
+  continuation,
+  formatPlanComment,
+  formatProgressComment,
+} from '../../scripts/lib/codex-loop.mjs';
 
 const quota = (usedPercent = 20) => ({rateLimits:{credits:{hasCredits:false,unlimited:false},primary:{usedPercent,windowDurationMins:300,resetsAt:Date.now()/1000+1000}}});
 class FakeCodex extends EventEmitter {
@@ -44,9 +50,20 @@ test('interrupts on clarification without inventing an answer', async () => {
 });
 
 test('interrupts near exhaustion and refuses to start when quota is unavailable', async () => {
-  const client=new FakeCodex((c)=>c.emit('message',{method:'account/rateLimits/updated',params:quota(98)}));
+  const client=new FakeCodex((c)=>c.emit('message',{method:'account/rateLimits/updated',params:{rateLimits:{primary:{usedPercent:98}}}}));
+  let reads=0;
+  const request=client.request.bind(client);
+  client.request=async (method,params) => {
+    if(method==='account/rateLimits/read') {
+      client.calls.push({method,params});
+      return reads++ ? quota(98) : quota();
+    }
+    return request(method,params);
+  };
   const result=await runTurn({client,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{}});
   assert.equal(result.status,'paused');
+  assert.match(result.reason,/allowance/i);
+  assert.equal(reads,2,'a sparse notification triggers a full quota read');
   assert.equal(client.calls.filter(c=>c.method==='turn/interrupt').length,1);
   const unavailable=new FakeCodex(()=>assert.fail('must not generate'));
   unavailable.request=async (method)=> {assert.equal(method,'account/rateLimits/read');return {};};
@@ -64,9 +81,138 @@ test('invalid structured plans cannot advance to implementation', () => {
   assert.throws(()=>validateOutcome('plan','plain text'),/structured/);
   assert.throws(()=>validateOutcome('plan',JSON.stringify({status:'ready',questions:['Unanswered']})),/structured/);
   assert.throws(()=>validateOutcome('implement',JSON.stringify({status:'complete',summary:'done',tasks:[],questions:['Which one?']})),/questions/);
+  assert.throws(()=>validateOutcome('implement',JSON.stringify({status:'continue',summary:'working',tasks:[],questions:[]})),/remaining task/);
+  let error;
+  try { validateOutcome('implement',JSON.stringify({status:'complete',summary:'done',tasks:['Run verification.'],questions:[]})); }
+  catch (failure) { error=failure; }
+  assert.match(error.message,/Remaining tasks/);
+  assert.deepEqual(error.outcome.tasks,['Run verification.']);
+});
+
+test('active turns can outlive the stall interval while inactive turns are interrupted', async () => {
+  const active=new FakeCodex((client)=> {
+    setTimeout(()=>client.emit('message',{method:'thread/tokenUsage/updated',params:{threadId:'thread-1',turnId:'turn-1'}}),25);
+    setTimeout(()=>client.finish('{"status":"complete"}'),55);
+  });
+  const completed=await runTurn({
+    client:active,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{},
+    stallTimeoutMs:40,pollMs:1_000,
+  });
+  assert.equal(completed.status,'completed');
+  assert.equal(active.calls.filter(c=>c.method==='turn/interrupt').length,0);
+
+  const inactive=new FakeCodex(()=>{});
+  const paused=await runTurn({
+    client:inactive,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{},
+    stallTimeoutMs:10,pollMs:1_000,
+  });
+  assert.equal(paused.status,'paused');
+  assert.match(paused.reason,/no activity/i);
+  assert.equal(inactive.calls.filter(c=>c.method==='turn/interrupt').length,1);
+
+  let foreignMessages=0;
+  let foreignTimer;
+  const foreign=new FakeCodex((client)=> {
+    foreignTimer=setInterval(()=> {
+      foreignMessages++;
+      client.emit('message',{method:'thread/tokenUsage/updated',params:{threadId:'another-thread',turnId:'another-turn'}});
+    },2);
+  });
+  const foreignPaused=await runTurn({
+    client:foreign,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{},
+    stallTimeoutMs:15,pollMs:1_000,
+  });
+  clearInterval(foreignTimer);
+  assert.equal(foreignPaused.status,'paused');
+  assert.ok(foreignMessages < 15,'another thread cannot keep this turn active');
+});
+
+test('the inactivity watchdog starts after turn startup is acknowledged', async () => {
+  const client=new FakeCodex(()=>{});
+  const request=client.request.bind(client);
+  client.request=async (method,params) => {
+    if(method!=='turn/start') return request(method,params);
+    client.calls.push({method,params});
+    await new Promise((resolve)=>setTimeout(resolve,25));
+    setImmediate(()=>client.finish('{"status":"complete"}'));
+    return {turn:{id:'turn-1'}};
+  };
+
+  const result=await runTurn({
+    client,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{},
+    stallTimeoutMs:10,pollMs:1_000,
+  });
+
+  assert.equal(result.status,'completed');
+  assert.equal(client.calls.filter(c=>c.method==='turn/interrupt').length,0);
+});
+
+test('structured model progress becomes concise Markdown instead of raw JSON', () => {
+  const text = formatProgressComment('plan', JSON.stringify({
+    status:'ready',
+    summary:'The repository contracts are understood.',
+    tasks:['Inspect the controller.', 'Confirm the tests.', 'Write the plan.', 'Do not expose this fourth task.'],
+    questions:[],
+    kind:'requirements',
+    plan:'',
+    changeType:'fix',
+    title:'fix(delivery): 🐛 format comments',
+  }));
+
+  assert.match(text, /^### Progress update: Plan/m);
+  assert.match(text, /The repository contracts are understood\./);
+  assert.match(text, /\*\*Next\*\*/);
+  assert.match(text, /- Inspect the controller\./);
+  assert.doesNotMatch(text, /"status"|"questions"|"changeType"/);
+  assert.doesNotMatch(text, /fourth task/);
+
+  const incomplete = formatProgressComment('implement', '{"status":"running","tasks":[]}');
+  assert.match(incomplete,/Progress was saved to the delivery state/);
+  assert.doesNotMatch(incomplete,/"status"|"tasks"/);
+});
+
+test('completed plans keep details available without overwhelming the issue timeline', () => {
+  const text = formatPlanComment({
+    ...JSON.parse(JSON.stringify({
+      status:'ready', kind:'requirements', summary:'Use the existing controller.',
+      plan:'<proposed_plan>\n# Detailed plan\n\nImplement the renderer.\n</proposed_plan>',
+      tasks:['Add tests.', 'Implement formatting.'], questions:[], changeType:'fix',
+      title:'fix(delivery): 🐛 format comments',
+    })),
+  });
+
+  assert.match(text, /^## Plan complete/m);
+  assert.match(text, /<details>/);
+  assert.match(text, /<summary>View implementation plan and tasks<\/summary>/);
+  assert.match(text, /# Detailed plan/);
+  assert.doesNotMatch(text, /proposed_plan/);
+  assert.doesNotMatch(text, /"status"|"questions"/);
 });
 
 test('continuation includes source, phase, saved work, and outstanding tasks', () => {
-  const text=continuation({issue:15,phase:'implement',reason:'Quota reserve',branch:'feat/issue-15-change',plan:{plan:'The plan',tasks:['First task']},tasks:['Remaining task'],lastProgress:'Edited controller'});
-  for(const value of ['#15','implement','Quota reserve','feat/issue-15-change','Remaining task','Edited controller','/codex resume']) assert.ok(text.includes(value),value);
+  const text=continuation({issue:15,status:'paused',phase:'implement',reason:'Quota reserve',branch:'feat/issue-15-change',plan:{plan:'The plan',tasks:['First task']},tasks:['Remaining task'],lastProgress:'Edited controller'});
+  for(const value of ['Delivery paused: recovery required','#15','Implement','Quota reserve','feat/issue-15-change','Remaining task','Edited controller','Please continue from the saved work.']) assert.ok(text.includes(value),value);
+  assert.match(text,/No decision is requested/);
+  assert.doesNotMatch(text,/comment `\/codex resume`/);
+});
+
+test('awaiting-human handoffs lead with questions and separate recovery details', () => {
+  const text = continuation({
+    issue:18, phase:'plan', status:'awaiting-human', sessionId:'019fb023-24b8-7881-9119-509f078b610e',
+    reason:'The model requested a decision.', tasks:['Answer the question.'],
+    questions:['Which lifecycle should apply?', 'Should delivery start automatically?'],
+  });
+  for (const value of [
+    '## Action required: answer Codex',
+    '### Questions',
+    '1. Which lifecycle should apply?',
+    '2. Should delivery start automatically?',
+    'Reply with your answers in a new comment.',
+    'Codex session ID: `019fb023-24b8-7881-9119-509f078b610e`',
+    'Continuation state: `awaiting-human`',
+    'Issue: `#18`',
+    '<summary>Saved delivery details</summary>',
+  ]) assert.ok(text.includes(value),value);
+  assert.doesNotMatch(text,/Saved progress: \{/);
+  assert.doesNotMatch(text,/comment `\/codex resume`/);
 });

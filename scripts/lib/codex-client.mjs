@@ -17,6 +17,9 @@ function safeCodexDiagnostic(value) {
   // Codex owns authentication. Its errors may contain arbitrary credentials,
   // including fragments whose labels were lost when stderr was truncated.
   // Publish only fixed hints, never a substring of the original diagnostic.
+  if (String(value).includes('no rollout found for thread id')) {
+    return 'Codex has no persisted rollout for this thread yet.';
+  }
   if (String(value).includes('config defines [permissions] profiles but does not set default_permissions')) {
     return 'A default permission profile is required. Check the controller startup configuration.';
   }
@@ -225,13 +228,13 @@ export class CodexClient extends EventEmitter {
     return quotaBoundary(await this.request('account/rateLimits/read'));
   }
 
-  async thread(cwd, developerInstructions = '') {
+  async threadConfig(cwd, developerInstructions = '') {
     const { config } = await this.request('config/read', { includeLayers: false, cwd });
     checkConfiguration(config);
     const mcpServers = Object.fromEntries(Object.keys(config?.mcp_servers ?? {}).map((name) => [name, { enabled: false }]));
-    return this.request('thread/start', {
+    return {
       cwd, model: MODELS.plan.model, modelProvider: 'openai', allowProviderModelFallback: false,
-      permissions: 'delivery-plan', approvalPolicy: 'never', ephemeral: true,
+      permissions: 'delivery-plan', approvalPolicy: 'never',
       developerInstructions,
       config: {
         permissions: this.permissions, mcp_servers: mcpServers, web_search: 'disabled',
@@ -239,7 +242,22 @@ export class CodexClient extends EventEmitter {
         allow_login_shell: false,
         shell_environment_policy: { inherit: 'none', set: this.toolEnv },
       },
-    });
+    };
+  }
+
+  async startThread(cwd, developerInstructions = '') {
+    const params = await this.threadConfig(cwd, developerInstructions);
+    return this.request('thread/start', {...params, ephemeral: false});
+  }
+
+  async resumeThread(cwd, sessionId, developerInstructions = '') {
+    const params = await this.threadConfig(cwd, developerInstructions);
+    const { ephemeral: _ephemeral, ...resumeParams } = params;
+    return this.request('thread/resume', {threadId: sessionId, ...resumeParams});
+  }
+
+  async thread(cwd, developerInstructions = '') {
+    return this.startThread(cwd, developerInstructions);
   }
 
   close() {

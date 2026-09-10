@@ -19,7 +19,7 @@ export async function loadLifecycleConfig(root = repositoryRoot) {
 
 export function intakeMode(event, env = process.env) {
   if (env.INTAKE_MODE) return env.INTAKE_MODE;
-  if (env.GITHUB_EVENT_NAME === 'issue_comment' && /^\/codex resume(?:\s|$)/.test(event.comment?.body ?? '')) return 'resume';
+  if (env.GITHUB_EVENT_NAME === 'issue_comment') return 'resume';
   if (env.GITHUB_EVENT_NAME === 'workflow_dispatch') return 'resume';
   return 'event';
 }
@@ -104,14 +104,20 @@ export async function classifyAndRoute({ env = process.env, event, fetchImpl = f
   const api = githubApi({ repository, token: env.GH_TOKEN, fetchImpl });
   const issue = await api(`/issues/${issueNumber}`);
   if (issue.pull_request) throw new Error('A pull request cannot enter issue intake.');
-  const resumeComment = env.GITHUB_EVENT_NAME !== 'issue_comment'
-    || /^\/codex resume(?:\s|$)/.test(event?.comment?.body ?? '');
-  const mode = resumeComment ? intakeMode(event, env) : 'event';
+  const issueComment = env.GITHUB_EVENT_NAME === 'issue_comment';
+  const owner = event?.repository?.owner?.login ?? repository.split('/')[0];
+  const trustedOwnerComment = !issueComment || (
+    event?.action === 'created'
+    && event?.comment?.user?.login === owner
+    && event.comment.user.type !== 'Bot'
+    && event.comment.author_association === 'OWNER'
+  );
+  const mode = trustedOwnerComment ? intakeMode(event, env) : 'event';
   const requestedState = parseEventRequestedState(event, config);
   const metadata = classifyIssue({ issue, config, requestedState, mode, eventAction: event?.action });
-  if (!resumeComment) {
+  if (!trustedOwnerComment) {
     metadata.route = 'hold';
-    metadata.reasons = [...metadata.reasons, 'Only an explicit /codex resume comment may request recovery.'];
+    metadata.reasons = [...metadata.reasons, 'Only a trusted repository-owner comment may continue delivery.'];
   }
   const labels = await reconcileLabels({ api, issueNumber, issue, config, classification: metadata });
 
@@ -124,7 +130,7 @@ export async function classifyAndRoute({ env = process.env, event, fetchImpl = f
   // before handing it to the delivery workflow; ordinary intake remains open
   // to issue authors and can still reconcile metadata without this check.
   if (metadata.route === 'plan' || metadata.route === 'resume') {
-    const actor = env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR;
+    const actor = issueComment ? event.comment.user.login : env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR;
     if (!actor) {
       metadata.route = 'hold';
       metadata.reasons = [...metadata.reasons, 'A maintainer must authorize downstream delivery.'];
