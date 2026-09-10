@@ -58,7 +58,7 @@ export function labelDefinitions(config) {
   return [
     ...config.types.map((type) => ({ name: type.label, color: '1D76DB', description: `${type.name} work type.` })),
     ...config.states.map(({ label, color, description }) => ({ name: label, color, description })),
-    ...config.governance,
+    ...config.governance.map(({ label, color, description }) => ({ name: label, color, description })),
   ];
 }
 

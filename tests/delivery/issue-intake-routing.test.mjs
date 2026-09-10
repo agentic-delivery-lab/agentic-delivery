@@ -36,6 +36,42 @@ test('reconciles managed labels idempotently while preserving unrelated labels a
   assert.equal(result.changed, false);
 });
 
+test('creates missing governance labels with GitHub API-compatible names', async () => {
+  const calls = [];
+  const api = async (route, method = 'GET', body) => {
+    calls.push({ route, method, body });
+    if (route === '/labels/human-review' && method === 'GET') {
+      const error = new Error('Label not found.');
+      error.status = 404;
+      throw error;
+    }
+    return null;
+  };
+
+  await reconcileLabels({
+    api,
+    issueNumber: '17',
+    issue: { labels: [] },
+    config,
+    classification: {
+      workType: null,
+      workTypeSource: 'unknown',
+      conflict: null,
+      governance: [],
+      stateLabel: null,
+    },
+  });
+
+  assert.deepEqual(
+    calls.find((call) => call.route === '/labels' && call.method === 'POST')?.body,
+    {
+      name: 'human-review',
+      color: '5319E7',
+      description: 'A human review control applies to this work.',
+    },
+  );
+});
+
 test('removes stale managed state and fallback type labels when native type is authoritative', async () => {
   const calls = [];
   const api = async (route, method = 'GET', body) => {
