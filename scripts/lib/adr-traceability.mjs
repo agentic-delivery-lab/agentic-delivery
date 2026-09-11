@@ -14,6 +14,10 @@ const ENFORCEMENTS = new Set(['deterministic', 'instructional', 'semantic']);
 const TEXT_EXTENSIONS = new Set(['.md', '.mjs', '.js', '.yml', '.yaml', '.json', '.jsonc', '.toml', '.txt']);
 const IGNORED_DIRECTORIES = new Set(['.git', 'node_modules', '.codex-delivery', 'coverage']);
 
+export function normalizeRepositoryPath(value) {
+  return String(value).replaceAll('\\', '/');
+}
+
 function frontmatter(source) {
   const lines = String(source).split(/\r?\n/);
   if (lines[0] !== '---') return null;
@@ -71,8 +75,8 @@ async function walk(root, relative = '') {
   for (const entry of entries) {
     if (entry.name.startsWith('.') && !['.github', '.agents'].includes(entry.name)) continue;
     if (entry.isDirectory()) {
-      if (!IGNORED_DIRECTORIES.has(entry.name)) files.push(...await walk(root, path.join(relative, entry.name)));
-    } else if (TEXT_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) files.push(path.join(relative, entry.name));
+      if (!IGNORED_DIRECTORIES.has(entry.name)) files.push(...await walk(root, normalizeRepositoryPath(path.join(relative, entry.name))));
+    } else if (TEXT_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) files.push(normalizeRepositoryPath(path.join(relative, entry.name)));
   }
   return files;
 }
