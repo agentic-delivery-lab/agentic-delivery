@@ -112,8 +112,9 @@ export async function validateAdrs(repositoryRoot = process.cwd()) {
     const filename = path.basename(record);
     const number = filename.slice(0, 4);
     const numericNumber = Number(number);
+    if (number === '0000') addError(`${filename} uses reserved ADR number 0000`);
     if (numericNumber <= previousNumber) addError(`${filename} breaks the record sequence: record numbers must be strictly increasing; removed ADR numbers are not reused`);
-    if (recordNumbers.has(number)) addError(`${filename} duplicates ADR-${number}`);
+    if (recordNumbers.has(number)) addError(`${filename} reuses ADR number ${number}`);
     previousNumber = numericNumber;
     recordNumbers.add(number);
 

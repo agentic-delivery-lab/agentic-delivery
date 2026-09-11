@@ -79,7 +79,10 @@ Issue comments use three visibly different Markdown formats:
 - **Action required: answer Codex** lists only the questions that need a human
   decision and tells a repository writer to reply with those answers.
 - **Delivery paused: recovery required** reports a technical or quota pause,
-  states that no decision is requested, and gives the recovery action.
+  states that no decision is requested, and gives the recovery action. When
+  repository validation exhausts its repair attempts, this comment also shows
+  the latest redacted validation error. Reading runner-local state is not
+  required to identify that failure.
 
 Structured model output remains machine-readable in saved delivery state. The
 controller extracts its summary and next tasks for issue comments instead of
@@ -228,9 +231,10 @@ records exact remaining implementation tasks and starts the next turn without
 human intervention. A `complete` outcome must have no remaining tasks or
 questions. Installation, repository verification, audit, commit, push, and
 pull-request publication are controller-owned work and therefore do not belong
-in the model's remaining task list. If a structured completion is rejected,
-the controller preserves its reported tasks in the handoff instead of showing
-an older plan.
+in the model's remaining task list. A validation pause keeps an empty completed
+task list empty instead of restoring the original plan as unfinished work. If
+a structured completion is rejected, the controller preserves its reported
+tasks in the handoff instead of showing an older plan.
 
 Quota updates are not reservations. Other clients and in-flight requests may
 consume the final reserve. There is no guarantee that arbitrary work completes

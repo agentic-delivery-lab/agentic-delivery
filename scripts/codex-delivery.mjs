@@ -849,7 +849,9 @@ legacy owner-only rule in the base instruction file.`;
           validationAttempts++;
           state.validation = redact(error.message, env).slice(-24_000);
           await audit(`### Validation attempt ${validationAttempts} failed\n\n${state.validation}`);
-          if (validationAttempts === 3) throw new Error('Three validation attempts failed; review the saved diagnostics before resuming.');
+          if (validationAttempts === 3) {
+            throw new Error('Repository validation failed three times. Fix the latest error shown below before resuming.');
+          }
           state.phase = 'implement';
           await save();
         }

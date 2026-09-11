@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -22,6 +22,13 @@ test('accepts the repository ADR set', async () => {
   assert.equal(await validateAdrs(repositoryRoot), 14);
 });
 
+test('accepts historical ADR number gaps after a record is removed', async (t) => {
+  const fixture = await newFixture(t);
+  await unlink(path.join(fixture, 'docs/decisions/0008-use-pnpm-with-delayed-dependency-adoption.md'));
+
+  assert.equal(await validateAdrs(fixture), 13);
+});
+
 test('rejects ADRs that define status in frontmatter', async (t) => {
   const fixture = await newFixture(t);
   const record = path.join(fixture, 'docs/decisions/0001-use-madr-for-architecture-decisions.md');
@@ -35,7 +42,7 @@ test('rejects ADRs that define status in frontmatter', async (t) => {
   });
 });
 
-test('rejects missing required headings, duplicate records, broken sequence and invalid source links', async (t) => {
+test('rejects missing required headings, duplicate record numbers, zero record numbers and invalid source links', async (t) => {
   const cases = [
     async (fixture) => {
       const record = path.join(fixture, 'docs/decisions/0001-use-madr-for-architecture-decisions.md');
@@ -49,11 +56,11 @@ test('rejects missing required headings, duplicate records, broken sequence and 
         path.join(sourceDecisions, '0001-use-madr-for-architecture-decisions.md'),
         path.join(fixture, 'docs/decisions/0001-duplicate.md'),
       );
-      return /breaks the record sequence/;
+      return /reuses ADR number 0001/;
     },
     async (fixture) => {
-      await renameRecord(fixture, '0001-use-madr-for-architecture-decisions.md', '0002-use-madr-for-architecture-decisions.md');
-      return /breaks the record sequence/;
+      await renameRecord(fixture, '0001-use-madr-for-architecture-decisions.md', '0000-use-madr-for-architecture-decisions.md');
+      return /uses reserved ADR number 0000/;
     },
     async (fixture) => {
       const record = path.join(fixture, 'docs/decisions/0001-use-madr-for-architecture-decisions.md');

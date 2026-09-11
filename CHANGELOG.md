@@ -28,6 +28,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- [Issue #29](https://github.com/sjefsharp/agentic-delivery/issues/29) allows intentional gaps after ADR removal and shows the latest validation error in terminal recovery comments without relisting completed plan tasks.
+
 - [Issue #26](https://github.com/sjefsharp/agentic-delivery/issues/26) lets issue intake create missing governance metadata labels instead of failing label reconciliation with a GitHub API validation error.
 
 - [Issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17) established a separate workflow-capable publication boundary; [Issue #29](https://github.com/sjefsharp/agentic-delivery/issues/29) moves that boundary to a repository-scoped GitHub App and keeps the credential away from model tools.
