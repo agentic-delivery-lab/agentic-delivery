@@ -1,7 +1,38 @@
 import { MODELS, quotaBoundary } from './codex-client.mjs';
 
 const strings = { type: 'array', items: { type: 'string' } };
+const REFINEMENT_WORK_TYPES = ['bug', 'feature', 'task', 'architecture', 'implementation', 'validation'];
 export function outcomeSchema(phase) {
+  if (phase === 'refine') return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['status', 'summary', 'workType', 'questions', 'refinedGoal', 'audience', 'requirements', 'constraints', 'acceptanceCriteria', 'affectedContexts', 'unresolvedDecisions', 'workItems'],
+    properties: {
+      status: { type: 'string', enum: ['needs_input', 'refined'] },
+      summary: { type: 'string' },
+      workType: { type: ['string', 'null'], enum: [...REFINEMENT_WORK_TYPES, null] },
+      questions: strings,
+      refinedGoal: { type: 'string' },
+      audience: { type: 'string' },
+      requirements: strings,
+      constraints: strings,
+      acceptanceCriteria: strings,
+      affectedContexts: strings,
+      unresolvedDecisions: strings,
+      workItems: { type: 'array', maxItems: 10, items: {
+        type: 'object', additionalProperties: false,
+        required: ['key', 'kind', 'title', 'goal', 'acceptanceCriteria', 'dependencies'],
+        properties: {
+          key: { type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' },
+          kind: { type: 'string', enum: ['research', 'specification', 'architecture', 'task', 'bug', 'implementation', 'validation'] },
+          title: { type: 'string' },
+          goal: { type: 'string' },
+          acceptanceCriteria: strings,
+          dependencies: strings,
+        },
+      } },
+    },
+  };
   if (phase === 'review') return {
     type: 'object',
     additionalProperties: false,
@@ -62,7 +93,52 @@ export function validateOutcome(phase, text) {
   return value;
 }
 
-const phaseName = (phase) => phase === 'plan' ? 'Plan' : phase === 'implement' ? 'Implement' : phase === 'review' ? 'Architecture review' : String(phase ?? 'Delivery');
+export function validateRefinementOutcome(text) {
+  let value;
+  try { value = JSON.parse(text); } catch { throw new Error('Codex did not return a structured refinement outcome.'); }
+  const allowedKeys = new Set(['status', 'summary', 'workType', 'questions', 'refinedGoal', 'audience', 'requirements', 'constraints', 'acceptanceCriteria', 'affectedContexts', 'unresolvedDecisions', 'workItems']);
+  const requiredStrings = ['summary', 'refinedGoal', 'audience'];
+  const requiredArrays = ['questions', 'requirements', 'constraints', 'acceptanceCriteria', 'affectedContexts', 'unresolvedDecisions', 'workItems'];
+  if (!value || typeof value !== 'object' || !['needs_input', 'refined'].includes(value.status)) throw new Error('Invalid refinement outcome: status.');
+  if (Object.keys(value).some((key) => !allowedKeys.has(key))) throw new Error('Invalid refinement outcome: unexpected property.');
+  if (value.workType !== null && !REFINEMENT_WORK_TYPES.includes(value.workType)) throw new Error('Invalid refinement outcome: workType.');
+  for (const key of requiredStrings) if (typeof value[key] !== 'string') throw new Error(`Invalid refinement outcome: ${key}.`);
+  if (!value.summary.trim()) throw new Error('Invalid refinement outcome: summary.');
+  for (const key of requiredArrays) if (!Array.isArray(value[key]) || (key !== 'workItems' && value[key].some((item) => typeof item !== 'string'))) throw new Error(`Invalid refinement outcome: ${key}.`);
+  if (value.questions.some((question) => typeof question !== 'string' || !question.trim())) throw new Error('Invalid refinement outcome: questions.');
+  if (value.questions.length > 3) throw new Error('A refinement outcome may ask at most three focused questions.');
+  if (value.workItems.length > 10) throw new Error('A refinement outcome may create at most ten work items.');
+  const keys = new Set();
+  for (const item of value.workItems) {
+    if (Object.keys(item ?? {}).some((key) => !['key', 'kind', 'title', 'goal', 'acceptanceCriteria', 'dependencies'].includes(key))) throw new Error(`Invalid refinement work item: unexpected property.`);
+    if (!item || typeof item !== 'object' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.key ?? '')
+      || !['research', 'specification', 'architecture', 'task', 'bug', 'implementation', 'validation'].includes(item.kind)
+      || typeof item.title !== 'string' || !item.title.trim() || item.title.length > 120 || /[\r\n\x00-\x1f]/.test(item.title) || typeof item.goal !== 'string' || !item.goal.trim()
+      || !Array.isArray(item.acceptanceCriteria) || item.acceptanceCriteria.length === 0 || item.acceptanceCriteria.some((criterion) => typeof criterion !== 'string' || !criterion.trim())
+      || !Array.isArray(item.dependencies) || item.dependencies.some((dependency) => typeof dependency !== 'string')) throw new Error(`Invalid refinement work item: ${item?.key ?? 'unknown'}.`);
+    if (keys.has(item.key)) throw new Error(`Duplicate refinement work item: ${item.key}.`);
+    keys.add(item.key);
+  }
+  for (const item of value.workItems) for (const dependency of item.dependencies) if (!keys.has(dependency)) throw new Error(`Unknown refinement dependency: ${dependency}.`);
+  const visiting = new Set();
+  const visited = new Set();
+  const visit = (key) => {
+    if (visiting.has(key)) throw new Error('Refinement work-item dependencies must be acyclic.');
+    if (visited.has(key)) return;
+    visiting.add(key);
+    const item = value.workItems.find((candidate) => candidate.key === key);
+    for (const dependency of item.dependencies) visit(dependency);
+    visiting.delete(key);
+    visited.add(key);
+  };
+  for (const item of value.workItems) visit(item.key);
+  if (value.status === 'needs_input' && value.questions.length === 0) throw new Error('A clarification outcome must include a focused question.');
+  if (value.status === 'refined' && value.questions.length) throw new Error('A refined outcome must not leave clarification questions unanswered.');
+  if (value.status === 'refined' && (!value.workType || !value.refinedGoal.trim() || !value.audience.trim() || value.acceptanceCriteria.length === 0)) throw new Error('A refined outcome must include a work type, goal, audience, and acceptance criteria.');
+  return value;
+}
+
+const phaseName = (phase) => phase === 'refine' ? 'Refinement' : phase === 'plan' ? 'Plan' : phase === 'implement' ? 'Implement' : phase === 'review' ? 'Architecture review' : String(phase ?? 'Delivery');
 
 function concise(value, limit = 1_200) {
   const text = String(value ?? '').replace(/\r\n?/g, '\n').trim();
@@ -120,6 +196,15 @@ export function formatPlanComment(plan) {
     '',
     '</details>',
   ].join('\n');
+}
+
+export function formatRefinementComment(outcome) {
+  const lines = ['## Refined goal', outcome.summary, '', `**Work type:** ${outcome.workType}`, `**Goal:** ${outcome.refinedGoal}`, `**Audience:** ${outcome.audience}`, '', '**Acceptance criteria**', ...outcome.acceptanceCriteria.map((item) => `- ${item}`)];
+  if (outcome.requirements.length) lines.push('', '**Requirements**', ...outcome.requirements.map((item) => `- ${item}`));
+  if (outcome.constraints.length) lines.push('', '**Constraints**', ...outcome.constraints.map((item) => `- ${item}`));
+  if (outcome.unresolvedDecisions.length) lines.push('', '**Unresolved decisions**', ...outcome.unresolvedDecisions.map((item) => `- ${item}`));
+  if (outcome.workItems.length) lines.push('', '**Conditional work items**', ...outcome.workItems.map((item) => `- \`${item.key}\` (${item.kind}): ${item.title}`));
+  return lines.join('\n');
 }
 
 export async function runTurn({ client, threadId, phase, prompt, onProgress, signal, stallTimeoutMs = 20 * 60_000, pollMs = 15_000 }) {
@@ -206,12 +291,12 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
   client.on('message', onMessage);
   client.on('failure', onFailure);
   signal?.addEventListener('abort', onAbort, { once: true });
-  const selected = MODELS[phase];
+    const selected = MODELS[phase];
   try {
     const response = await client.request('turn/start', {
       threadId, input: [{ type: 'text', text: prompt }],
       collaborationMode: { mode: selected.mode, settings: { model: selected.model, reasoning_effort: selected.effort, developer_instructions: null } },
-      permissions: phase === 'plan' ? 'delivery-plan' : phase === 'implement' ? 'delivery-edit' : 'delivery-review',
+      permissions: ['refine', 'plan'].includes(phase) ? 'delivery-plan' : phase === 'implement' ? 'delivery-edit' : 'delivery-review',
       approvalPolicy: 'never', serviceTierForTurn: 'default',
       outputSchema: outcomeSchema(phase),
     });
@@ -268,7 +353,7 @@ export function continuation(state) {
     '',
     questions.map((question, index) => `${index + 1}. ${question}`).join('\n'),
     '',
-    '**What to do:** Reply with your answers in a new comment. A plain owner comment continues this waiting delivery run.',
+    '**What to do:** Reply with your answers in a new comment. A plain repository-writer comment continues this waiting delivery run.',
     '',
     ...savedDetails,
   ].join('\n');
@@ -277,6 +362,13 @@ export function continuation(state) {
     'No decision is requested from you.',
     '',
     `**Why it stopped:** ${state.reason ?? 'Work remains.'}`,
+    ...(state.execution?.lastFailure ? [
+      '',
+      '**Execution evidence**',
+      `- Operation: **${state.execution.lastFailure.operation}**`,
+      `- Run: **${state.execution.lastFailure.runId || 'unavailable'}**`,
+      `- Recoverability: **${state.execution.lastFailure.recoverability}**`,
+    ] : []),
     ...(state.shutdownError ? [`Shutdown warning: ${state.shutdownError}. The account lock requires operator inspection.`] : []),
     '',
     `**What to do:** ${quotaPause ? 'After the reported quota reset, ' : 'After the cause is resolved, '}reply with a natural-language request such as “Please continue from the saved work.” Manual workflow dispatch remains available for recovery.`,

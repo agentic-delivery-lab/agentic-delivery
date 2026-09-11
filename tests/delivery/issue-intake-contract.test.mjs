@@ -13,14 +13,14 @@ async function text(relativePath) {
 
 test('issue intake configuration keeps work type, lifecycle state, and governance separate', async () => {
   const config = parseRepositoryYaml(await text('.github/issue-lifecycle.yml'), 'issue lifecycle configuration');
-  assert.deepEqual(config.types.map((type) => type.name), ['Bug', 'Feature', 'Task', 'Idea', 'Research', 'Architecture']);
+  assert.deepEqual(config.types.map((type) => type.name), ['Bug', 'Feature', 'Task', 'Idea', 'Research', 'Architecture', 'Specification', 'Implementation', 'Validation']);
   assert.ok(config.states.some((state) => state.label === 'state:investigating'));
   assert.ok(config.states.some((state) => state.label === 'state:parked'));
   assert.ok(config.states.some((state) => state.label === 'state:ready-for-plan'));
   assert.ok(config.states.some((state) => state.label === 'state:ready-for-agent'));
   assert.ok(config.governance.some((item) => item.label === 'adr:needed'));
   assert.ok(!config.governance.some((item) => item.label === 'adr:required'));
-  assert.deepEqual(config.readiness.delivery_types, ['bug', 'feature', 'task', 'architecture']);
+  assert.deepEqual(config.readiness.delivery_types, ['bug', 'feature', 'task', 'architecture', 'implementation', 'validation']);
   assert.deepEqual(config.readiness.blocking_governance, ['adr:needed', 'adr:proposed', 'adr:removal']);
 });
 
@@ -45,13 +45,12 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(intakeWorkflow.jobs.deliver.permissions.contents, 'read');
   assert.equal(intakeWorkflow.jobs.deliver.permissions.issues, 'write');
   assert.equal(intakeWorkflow.jobs.deliver.permissions['pull-requests'], undefined);
-  assert.equal(
-    intakeWorkflow.jobs.deliver.secrets.CODEX_DELIVERY_PUBLISH_TOKEN,
-    '${{ secrets.CODEX_DELIVERY_PUBLISH_TOKEN }}',
-  );
+  assert.equal(intakeWorkflow.jobs.deliver.secrets.CODEX_DELIVERY_APP_ID, '${{ secrets.CODEX_DELIVERY_APP_ID }}');
+  assert.equal(intakeWorkflow.jobs.deliver.secrets.CODEX_DELIVERY_APP_PRIVATE_KEY, '${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}');
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.issue.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.route.required, true);
-  assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_PUBLISH_TOKEN.required, true);
+  assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_APP_PRIVATE_KEY.required, true);
+  assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_APP_ID.required, true);
   assert.equal(deliveryWorkflow.jobs.deliver.permissions.contents, 'read');
   assert.equal(deliveryWorkflow.jobs.deliver.permissions['pull-requests'], undefined);
   assert.ok(!deliveryWorkflow.on.issues);

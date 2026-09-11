@@ -21,9 +21,7 @@ jobs:
     if: >-
       !github.event.issue.pull_request &&
       (github.event_name != 'issue_comment' ||
-       (github.event.comment.user.login == github.repository_owner &&
-        github.event.comment.user.type != 'Bot' &&
-        github.event.comment.author_association == 'OWNER'))
+       (github.event.comment.user.type != 'Bot'))
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 10
     outputs:
@@ -55,7 +53,7 @@ jobs:
 
   deliver:
     needs: classify
-    if: needs.classify.result == 'success' && (needs.classify.outputs.route == 'plan' || needs.classify.outputs.route == 'resume')
+    if: needs.classify.result == 'success' && (needs.classify.outputs.route == 'plan' || needs.classify.outputs.route == 'resume' || needs.classify.outputs.route == 'refine' || needs.classify.outputs.route == 'coordinate')
     permissions:
       contents: read
       issues: write
@@ -64,4 +62,6 @@ jobs:
       issue: ${{ needs.classify.outputs.issue }}
       route: ${{ needs.classify.outputs.route }}
     secrets:
-      CODEX_DELIVERY_PUBLISH_TOKEN: ${{ secrets.CODEX_DELIVERY_PUBLISH_TOKEN }}
+      CODEX_DELIVERY_APP_ID: ${{ secrets.CODEX_DELIVERY_APP_ID }}
+      CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
+      CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ secrets.CODEX_DELIVERY_APP_INSTALLATION_ID }}

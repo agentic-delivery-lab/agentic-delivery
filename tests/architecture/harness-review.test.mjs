@@ -38,6 +38,9 @@ test('the current architecture map covers the official ADR set and emits a conci
   assert.equal(review.status, 'pass');
   assert.equal(review.mergeBase, revision);
   assert.equal(review.checks.find((item) => item.id === 'adr-map-coverage').status, 'pass');
+  for (const id of ['traceability-index-equality', 'primitive-reference-integrity', 'adr-domain-compatibility', 'adr-required-enforcement', 'runtime-context-minimal']) {
+    assert.equal(review.checks.find((item) => item.id === id).status, 'pass', id);
+  }
   assert.equal(review.checks.find((item) => item.id === 'bounded-context-map').status, 'pass');
   assert.match(formatReviewMarkdown(review), /Harness Architecture Review/);
   assert.match(formatReviewMarkdown(review), /adr-map-coverage/);
@@ -148,6 +151,7 @@ test('the evidence contract validates the complete projection and rejects mismat
 
   const schema = JSON.parse(await readFile(path.join(repositoryRoot, 'docs/architecture/delivery-evidence.schema.json'), 'utf8'));
   assert.deepEqual(schema.required, ['schemaVersion', 'producer', 'repository', 'sourceIssue', 'deliveryRun', 'revision', 'codexSession', 'modelTurns', 'architectureContext', 'validation', 'auditCheckpoint']);
+  assert.ok(schema.properties.modelTurns.items.properties.phase.enum.includes('refine'));
   assert.ok(schema.properties.modelTurns.items.properties.phase.enum.includes('implement'));
   assert.ok(schema.properties.modelTurns.items.properties.phase.enum.includes('review'));
 });

@@ -1,5 +1,7 @@
 # Changelog
 
+<!-- agentic-primitive: {"id":"curated-changelog","kind":"instruction","enforcement":"instructional","adrs":["ADR-0006"],"domains":["agentic-delivery-governance"]} -->
+
 All notable changes to this repository are documented here.
 
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
@@ -8,6 +10,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+
+- [Issue #29](https://github.com/sjefsharp/agentic-delivery/issues/29) adds GitHub-controlled iterative refinement and conditional decomposition, deterministic lifecycle transition validation, separated work and execution state, generated ADR-to-primitive traceability, repository-scoped App publication credentials, and per-issue runner isolation.
 
 - [Issue #25](https://github.com/sjefsharp/agentic-delivery/issues/25) adds a baseline architecture-conformance review, a versioned delivery evidence contract, and a read-only layered Harness Architecture Review for internal pull requests.
 
@@ -26,7 +30,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 - [Issue #26](https://github.com/sjefsharp/agentic-delivery/issues/26) lets issue intake create missing governance metadata labels instead of failing label reconciliation with a GitHub API validation error.
 
-- [Issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17) gives Codex delivery a separate workflow-capable publication credential, so review branches can include GitHub Actions workflow changes, start required checks, and keep the credential away from model tools.
+- [Issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17) established a separate workflow-capable publication boundary; [Issue #29](https://github.com/sjefsharp/agentic-delivery/issues/29) moves that boundary to a repository-scoped GitHub App and keeps the credential away from model tools.
 
 - [Issue #21](https://github.com/sjefsharp/agentic-delivery/issues/21) replaces absolute Codex turn deadlines with quota-led execution, starts the inactivity watchdog only after turn startup, continues multi-turn implementation automatically, and preserves exact tasks when a structured completion is rejected.
 

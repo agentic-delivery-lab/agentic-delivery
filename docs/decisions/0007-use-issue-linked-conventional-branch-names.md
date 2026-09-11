@@ -4,6 +4,10 @@ source-issue: https://github.com/sjefsharp/agentic-delivery/issues/11
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
+domains:
+  - agentic-delivery-governance
+required-enforcement:
+  - deterministic
 ---
 
 # Use issue-linked Conventional branch names

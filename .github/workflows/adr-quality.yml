@@ -14,6 +14,7 @@ on:
       - .node-version
       - commitlint.config.mjs
       - docs/decisions/**
+      - docs/architecture/**
       - docs/delivery/**
       - docs/domain/**
       - package.json
@@ -37,6 +38,7 @@ on:
       - .node-version
       - commitlint.config.mjs
       - docs/decisions/**
+      - docs/architecture/**
       - docs/delivery/**
       - docs/domain/**
       - package.json
@@ -84,6 +86,9 @@ jobs:
 
       - name: Validate domain-language structure
         run: node scripts/validate-domain-language.mjs "$GITHUB_WORKSPACE"
+
+      - name: Validate ADR primitive traceability index
+        run: node scripts/generate-adr-primitive-index.mjs --check
 
       - name: Validate configuration files
         run: node scripts/validate-config-files.mjs "$GITHUB_WORKSPACE"

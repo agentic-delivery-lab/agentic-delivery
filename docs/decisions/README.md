@@ -75,6 +75,11 @@ Use four digits and a lowercase dashed name:
 docs/decisions/NNNN-title-with-dashes.md
 ```
 
+Record numbers are never reused. A removed record may leave a numeric gap;
+the validator checks ordering and base-branch history rather than requiring a
+contiguous sequence. This keeps Git history as the record of removed
+decisions without retaining obsolete architectural context on `main`.
+
 The template intentionally lives beside README.md and the numbered records. Every record keeps a source-issue link, including when a separate ADR tracking issue is used.
 
 | Number | Decision | Source | Review/implementation |
@@ -88,5 +93,8 @@ The template intentionally lives beside README.md and the numbered records. Ever
 | [0007](0007-use-issue-linked-conventional-branch-names.md) | Use issue-linked Conventional branch names | [Issue #11](https://github.com/sjefsharp/agentic-delivery/issues/11) | This review pull request |
 | [0008](0008-use-pnpm-with-delayed-dependency-adoption.md) | Use pnpm with delayed dependency adoption and Node.js automation | [Issue #12](https://github.com/sjefsharp/agentic-delivery/issues/12) | This review pull request |
 | [0009](0009-run-codex-from-source-issues-with-a-budget-boundary.md) | Run Codex from source issues with a budget boundary | [Issue #21](https://github.com/sjefsharp/agentic-delivery/issues/21), amending [Issue #18](https://github.com/sjefsharp/agentic-delivery/issues/18) and [Issue #15](https://github.com/sjefsharp/agentic-delivery/issues/15) | [PR #16](https://github.com/sjefsharp/agentic-delivery/pull/16), [PR #19](https://github.com/sjefsharp/agentic-delivery/pull/19), [PR #20](https://github.com/sjefsharp/agentic-delivery/pull/20), [PR #22](https://github.com/sjefsharp/agentic-delivery/pull/22), and [PR #23](https://github.com/sjefsharp/agentic-delivery/pull/23) |
-| [0010](0010-route-issues-through-deterministic-intake.md) | Route source issues through deterministic intake | [Issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17) | [PR #24](https://github.com/sjefsharp/agentic-delivery/pull/24) |
 | [0011](0011-run-layered-harness-architecture-reviews.md) | Run layered harness architecture reviews on pull requests | [Issue #25](https://github.com/sjefsharp/agentic-delivery/issues/25) | This review pull request |
+| [0012](0012-use-github-as-the-lifecycle-control-plane.md) | Use GitHub as the lifecycle control plane | [Issue #29](https://github.com/sjefsharp/agentic-delivery/issues/29) | This review pull request |
+| [0013](0013-derive-adr-traceability-from-agentic-primitives.md) | Derive ADR traceability from agentic primitives | [Issue #29](https://github.com/sjefsharp/agentic-delivery/issues/29) | This review pull request |
+| [0014](0014-use-a-repository-scoped-github-app.md) | Use a repository-scoped GitHub App for event-producing mutations | [Issue #29](https://github.com/sjefsharp/agentic-delivery/issues/29) | This review pull request |
+| [0015](0015-isolate-resumable-runner-execution.md) | Isolate resumable runner execution by source issue | [Issue #29](https://github.com/sjefsharp/agentic-delivery/issues/29) | This review pull request |

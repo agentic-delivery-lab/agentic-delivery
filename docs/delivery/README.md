@@ -18,14 +18,15 @@ Issues enter through the repository's intake forms or the enabled blank-issue
 fallback. The intake workflow classifies each issue into a work type and keeps
 that type separate from its lifecycle state and governance metadata. Native
 GitHub Issue Types are used when available; the repository-local `type:*`
-labels are the fallback for the same six types: Bug, Feature, Task, Idea,
-Research, and Architecture.
+labels are the fallback for Bug, Feature, Task, Idea, Research, Architecture,
+Specification, Implementation, and Validation work.
 
 The managed state labels are:
 
 ```text
 state:needs-triage → state:needs-info | state:requirements | state:decision-needed
-                  → state:investigating | state:parked | state:ready-for-plan
+                  → state:investigating | state:decomposing | state:parked | state:ready-for-plan
+state:decomposing → state:coordinating → state:acceptance
 state:ready-for-plan → Plan → state:ready-for-agent → Implement
 state:in-progress → state:review → state:done
 ```
@@ -37,12 +38,21 @@ can become ready for planning. Rejected or intentionally abandoned work uses
 `state:done` together with GitHub's `not planned` close reason.
 
 `state:ready-for-plan` is the deterministic readiness gate and automatically
-authorizes the downstream Plan workflow. The gate requires one supported work
-type, complete structured intake when a form was used, cleared requirements and
-decision gates, and no unresolved `adr:needed`, `adr:proposed`, or
-`adr:removal` governance label. The intake workflow only hands an eligible
-issue to `codex-delivery`; ambiguous or incomplete issues remain in a
-maturation state without spending model quota.
+authorizes the downstream Plan workflow. A blank issue first enters iterative
+refinement: Codex can ask one to three focused questions, and a later comment
+continues the same issue conversation. A refined outcome selects a
+delivery-capable parent work type. Multiple actionable work items are
+conditionally decomposed into idempotent child issues; the parent remains the
+lineage root and reaches `state:acceptance` only after its required children
+are complete. An atomic goal continues from the parent without a fixed child
+checklist. The gate requires one supported work type, complete
+structured intake when a form was used, cleared requirements and decision
+gates, and no unresolved `adr:needed`, `adr:proposed`, or `adr:removal`
+governance label. The intake workflow only hands an eligible issue to
+`codex-delivery`; ambiguous or incomplete issues remain in a maturation state
+without spending model quota. A repository-writer comment on a coordinating
+lineage root can request a later refinement wave after research, specification,
+or decision children provide new evidence.
 
 The existing Plan → Implement controller is a reusable downstream primitive.
 It records `state:ready-for-agent` after a successful plan, enters
@@ -51,7 +61,10 @@ clarification is required, and records `state:review` after publishing a
 review pull request. A clear natural-language recovery request, the legacy
 `/codex resume` command, and manual dispatch remain recovery paths for paused
 runs or an intentionally configured human gate. Metadata changes by automation
-are idempotent and do not recursively trigger delivery.
+are idempotent and do not recursively trigger delivery. GitHub labels are
+authoritative work state; the runner records execution state and typed failure
+evidence separately, so a failed Action or Codex session does not advance the
+work item.
 
 ## Package manager and local preflight
 

@@ -65,7 +65,7 @@
         "additionalProperties": false,
         "required": ["phase", "model", "effort", "mode"],
         "properties": {
-          "phase": { "enum": ["plan", "implement", "review"] },
+          "phase": { "enum": ["refine", "plan", "implement", "review"] },
           "model": { "type": "string" },
           "effort": { "type": "string" },
           "mode": { "type": "string" }

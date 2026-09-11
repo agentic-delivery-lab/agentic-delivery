@@ -6,6 +6,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 
 export const MODELS = Object.freeze({
+  refine: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
   plan: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
   implement: { model: 'gpt-5.6-luna', effort: 'max', mode: 'default' },
   review: { model: 'gpt-5.6-sol', effort: 'high', mode: 'default' },
@@ -143,8 +144,9 @@ export class CodexClient extends EventEmitter {
     this.timeoutMs = timeoutMs;
     this.runtime = runtime ?? mkdtempSync(path.join(tmpdir(), 'codex-delivery-tools-'));
     for (const dir of ['home', 'tmp', 'cache', 'data']) mkdirSync(path.join(this.runtime, dir), {recursive:true, mode:0o700});
-    this.toolEnv = modelEnvironment(env, this.runtime);
-    this.permissions = deliveryPermissions([...runtimeFiles(env), ...readableFiles], this.runtime);
+    this.processEnv = serverEnvironment(env);
+    this.toolEnv = modelEnvironment(this.processEnv, this.runtime);
+    this.permissions = deliveryPermissions([...runtimeFiles(this.processEnv), ...readableFiles], this.runtime);
     this.stderr = '';
     this.child = spawn(command, [...args, '-c', AUTH_STORAGE_CONFIG, '-c', DEFAULT_PERMISSION_CONFIG,
       '-c', `permissions=${tomlValue(this.permissions)}`,
@@ -152,7 +154,7 @@ export class CodexClient extends EventEmitter {
       '-c', 'allow_login_shell=false', '-c', 'features.plugins=false', '-c', 'features.apps=false',
       '-c', 'features.network_proxy=true',
       '-c', 'features.remote_plugin=false', 'app-server', '--listen', 'stdio://'], {
-      cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32',
+      cwd, env: this.processEnv, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32',
     });
     this.child.on('error', () => this.fail(new Error('Codex CLI could not start; check the runner installation.')));
     this.child.stderr.on('data', (chunk) => {

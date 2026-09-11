@@ -1,41 +1,8 @@
-version: 1
+version: 2
 
-# This is an impact index, not a second decision log. ADR rationale and
-# invariant meaning remain canonical in docs/decisions/*.md.
-adrs:
-  - id: ADR-0001
-    file: docs/decisions/0001-use-madr-for-architecture-decisions.md
-    paths: [docs/decisions/**, .agents/skills/architecture-decision/**, .github/ISSUE_TEMPLATE/architecture-decision.yml, scripts/validate-adrs.mjs, tests/adr/**]
-  - id: ADR-0002
-    file: docs/decisions/0002-use-plain-language-for-human-agent-communication.md
-    paths: [AGENTS.md, .agents/skills/plain-language-communication/**, docs/**/*.md, tests/communication/**]
-  - id: ADR-0003
-    file: docs/decisions/0003-use-context-scoped-ubiquitous-language.md
-    paths: [docs/domain/**, .agents/skills/ubiquitous-language/**, scripts/validate-domain-language.mjs, tests/domain/**]
-  - id: ADR-0004
-    file: docs/decisions/0004-use-trunk-based-delivery.md
-    paths: [.github/workflows/**, .github/pull_request_template.md, scripts/validate-main-history.mjs, scripts/validate-pull-request-branch.mjs, tests/delivery/workflow-controls.test.mjs]
-  - id: ADR-0005
-    file: docs/decisions/0005-use-conventional-commits-with-gitmoji.md
-    paths: [commitlint.config.mjs, scripts/validate-commit-range.mjs, scripts/validate-gitmoji.mjs, scripts/validate-pull-request-title.mjs, tests/delivery/gitmoji.test.mjs, tests/delivery/validate-commit-range.test.mjs]
-  - id: ADR-0006
-    file: docs/decisions/0006-curate-a-changelog.md
-    paths: [CHANGELOG.md, scripts/validate-changelog.mjs, tests/delivery/validate-changelog.test.mjs]
-  - id: ADR-0007
-    file: docs/decisions/0007-use-issue-linked-conventional-branch-names.md
-    paths: [scripts/start-issue-branch.mjs, scripts/validate-branch-name.mjs, scripts/validate-source-issue.mjs, scripts/validate-pull-request-branch.mjs, tests/delivery/start-issue-branch.test.mjs, tests/delivery/validate-branch-name.test.mjs, tests/delivery/validate-source-issue.test.mjs]
-  - id: ADR-0008
-    file: docs/decisions/0008-use-pnpm-with-delayed-dependency-adoption.md
-    paths: [package.json, pnpm-lock.yaml, pnpm-workspace.yaml, scripts/lib/toolchain.mjs, scripts/validate-toolchain.mjs, .github/workflows/**, tests/delivery/package-policy.test.mjs, tests/delivery/toolchain-wiring.test.mjs]
-  - id: ADR-0009
-    file: docs/decisions/0009-run-codex-from-source-issues-with-a-budget-boundary.md
-    paths: [.agents/codex-delivery.md, docs/delivery/**, scripts/codex-delivery.mjs, scripts/lib/codex-client.mjs, scripts/lib/codex-loop.mjs, scripts/setup-runner-codex.mjs, scripts/codex-preflight.mjs, scripts/codex-sandbox-check.mjs, .github/workflows/codex-delivery.yml, .github/workflows/self-hosted-runner-smoke.yml, tests/delivery/codex-*.test.mjs]
-  - id: ADR-0010
-    file: docs/decisions/0010-route-issues-through-deterministic-intake.md
-    paths: [.github/issue-lifecycle.yml, .github/ISSUE_TEMPLATE/**, .github/workflows/issue-intake.yml, scripts/issue-intake.mjs, scripts/lib/issue-routing.mjs, tests/delivery/issue-*.test.mjs]
-  - id: ADR-0011
-    file: docs/decisions/0011-run-layered-harness-architecture-reviews.md
-    paths: [docs/architecture/**, scripts/lib/architecture-review.mjs, scripts/harness-architecture-review.mjs, .github/workflows/harness-architecture-review.yml, tests/architecture/**]
+# ADR relationships are derived from primitive references into
+# docs/architecture/adr-primitive-index.json. This file maps only runtime
+# surfaces and bounded-context paths used to select review evidence.
 
 bounded-contexts:
   - id: agentic-delivery-governance

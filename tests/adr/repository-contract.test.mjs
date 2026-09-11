@@ -32,10 +32,14 @@ test('repository decision and runner contracts are present', async () => {
     'adr:needed', 'adr:proposed', 'adr:removal', 'adr:rejected',
     'Do not add an `adr:accepted` label',
   ]) assert.ok(decisions.includes(phrase), `missing decision contract: ${phrase}`);
-  assert.ok(decisions.includes('(0010-route-issues-through-deterministic-intake.md)'));
-  const intakeDecision = await text('docs/decisions/0010-route-issues-through-deterministic-intake.md');
-  for (const phrase of ['state:ready-for-plan', 'state:ready-for-agent', 'state:investigating', 'state:parked', 'adr:needed', 'not planned']) {
-    assert.ok(intakeDecision.includes(phrase), `missing intake decision contract: ${phrase}`);
+  assert.ok(decisions.includes('(0012-use-github-as-the-lifecycle-control-plane.md)'));
+  const lifecycleDecision = await text('docs/decisions/0012-use-github-as-the-lifecycle-control-plane.md');
+  for (const phrase of ['state:ready-for-plan', 'state:ready-for-agent', 'state:investigating', 'state:parked', 'adr:needed', 'not planned', 'execution state']) {
+    assert.ok(lifecycleDecision.includes(phrase), `missing lifecycle decision contract: ${phrase}`);
+  }
+  for (const record of ['0013-derive-adr-traceability-from-agentic-primitives.md', '0014-use-a-repository-scoped-github-app.md', '0015-isolate-resumable-runner-execution.md']) {
+    await assertFile(`docs/decisions/${record}`);
+    assert.ok(decisions.includes(`(${record})`));
   }
   const agents = await text('AGENTS.md');
   for (const phrase of ['Closes #', 'never create a pull request from `main`', 'is only the protected base']) {

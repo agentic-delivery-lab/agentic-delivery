@@ -4,6 +4,10 @@ source-issue: https://github.com/sjefsharp/agentic-delivery/issues/3
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
+domains:
+  - agentic-delivery-governance
+required-enforcement:
+  - instructional
 ---
 
 # Use plain language for human-agent communication

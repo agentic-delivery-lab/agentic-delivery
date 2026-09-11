@@ -129,6 +129,19 @@ test('classifies and hands off a ready issue only after metadata reconciliation 
   assert.ok(fixture.calls.some((call) => call.route === '/collaborators/maintainer/permission'));
 });
 
+test('does not refine an already-ready decomposed implementation child', async () => {
+  const fixture = apiFixture({
+    state: 'open', title: 'Implement: child work', body: '<!-- codex-lineage:v1 parent=17 key=implementation -->\nDeliver the child.',
+    labels: [{ name: 'type:implementation' }, { name: 'state:ready-for-plan' }],
+  });
+  const result = await classifyAndRoute({
+    env: { GITHUB_REPOSITORY: 'owner/repo', SOURCE_ISSUE: '17', GH_TOKEN: 'token', GITHUB_ACTOR: 'maintainer', GITHUB_EVENT_NAME: 'issues' },
+    event: { action: 'opened', issue: {} }, fetchImpl: fixture.fetchImpl, config,
+  });
+  assert.equal(result.route, 'plan');
+  assert.equal(result.state, 'ready-for-plan');
+});
+
 test('keeps an unauthorized ready issue on hold without changing its requested state', async () => {
   const fixture = apiFixture({
     state: 'open', title: 'Task: implement routing', body: 'Deliver the routing harness.',
@@ -149,7 +162,7 @@ test('keeps an unauthorized ready issue on hold without changing its requested s
   assert.equal(result.state, 'ready-for-plan');
 });
 
-test('does not route an untrusted near-match comment to delivery', async () => {
+test('does not route a bot near-match comment to delivery', async () => {
   const fixture = apiFixture({
     state: 'open', title: 'Task: implement routing', body: 'Deliver the routing harness.',
     labels: [{ name: 'type:task' }, { name: 'state:ready-for-plan' }],
@@ -159,13 +172,13 @@ test('does not route an untrusted near-match comment to delivery', async () => {
     event: {
       action: 'created', issue: {},
       repository: { owner: { login: 'owner' } },
-      comment: { body: '/codex resume-malicious', user: { login: 'contributor', type: 'User' }, author_association: 'CONTRIBUTOR' },
+      comment: { body: '/codex resume-malicious', user: { login: 'contributor', type: 'Bot' }, author_association: 'BOT' },
     },
     fetchImpl: fixture.fetchImpl,
     config,
   });
   assert.equal(result.route, 'hold');
-  assert.match(result.metadata.reasons.join(' '), /trusted repository-owner/);
+  assert.match(result.metadata.reasons.join(' '), /non-bot/);
   assert.ok(!fixture.calls.some((call) => call.route.includes('/permission')));
 });
 
@@ -188,7 +201,7 @@ test('preserves natural-language recovery through the intake boundary', async ()
   assert.ok(fixture.calls.some((call) => call.route === '/collaborators/owner/permission'));
 });
 
-test('passes a trusted owner clarification answer to the saved delivery run', async () => {
+test('routes a repository-writer clarification answer into refinement', async () => {
   const fixture = apiFixture({
     state: 'open', title: 'Task: implement routing', body: 'Deliver the routing harness.',
     labels: [{ name: 'type:task' }, { name: 'state:needs-info' }],
@@ -203,5 +216,47 @@ test('passes a trusted owner clarification answer to the saved delivery run', as
     fetchImpl: fixture.fetchImpl,
     config,
   });
-  assert.equal(result.route, 'resume');
+  assert.equal(result.route, 'refine');
+});
+
+test('allows a writer to request a later refinement wave from a coordinating parent', async () => {
+  const fixture = apiFixture({
+    state: 'open', title: 'Feature: coordinate work', body: 'Use the research findings.',
+    labels: [{ name: 'type:feature' }, { name: 'state:coordinating' }],
+  });
+  const result = await classifyAndRoute({
+    env: { GITHUB_REPOSITORY: 'owner/repo', SOURCE_ISSUE: '17', GH_TOKEN: 'token', GITHUB_ACTOR: 'maintainer', GITHUB_EVENT_NAME: 'issue_comment' },
+    event: {
+      action: 'created', issue: {},
+      comment: { body: 'The research is complete; refine the parent with those findings.', user: { login: 'owner', type: 'User' }, author_association: 'OWNER' },
+    }, fetchImpl: fixture.fetchImpl, config,
+  });
+  assert.equal(result.route, 'refine');
+  assert.equal(result.state, 'coordinating');
+});
+
+test('routes a changed child issue to its coordinating lineage root', async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    const route = url.replace('https://api.github.com/repos/owner/repo', '');
+    calls.push({ route, method: options.method });
+    if (route === '/issues/42') return new Response(JSON.stringify({
+      number: 42, state: 'closed', body: '<!-- codex-lineage:v1 parent=17 key=implementation -->', labels: [{ name: 'type:implementation' }],
+    }), { status: 200 });
+    if (route === '/issues/17') return new Response(JSON.stringify({
+      number: 17, state: 'open', title: 'Feature: coordinate work', body: 'Deliver the result.',
+      labels: [{ name: 'type:feature' }, { name: 'state:coordinating' }],
+    }), { status: 200 });
+    if (route === '/collaborators/maintainer/permission') return new Response(JSON.stringify({ permission: 'write' }), { status: 200 });
+    throw new Error(`Unexpected route ${route}`);
+  };
+  const result = await classifyAndRoute({
+    env: { GITHUB_REPOSITORY: 'owner/repo', SOURCE_ISSUE: '42', GH_TOKEN: 'token', GITHUB_TRIGGERING_ACTOR: 'maintainer', GITHUB_EVENT_NAME: 'issues' },
+    event: { action: 'closed', issue: { number: 42 } }, fetchImpl, config,
+  });
+  assert.equal(result.issue, '17');
+  assert.equal(result.route, 'coordinate');
+  assert.equal(result.state, 'coordinating');
+  assert.ok(calls.some((call) => call.route === '/issues/17'));
+  assert.ok(!calls.some((call) => call.method === 'PUT'));
 });

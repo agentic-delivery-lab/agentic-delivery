@@ -4,6 +4,11 @@ source-issue: https://github.com/sjefsharp/agentic-delivery/issues/25
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
+domains:
+  - agentic-delivery-governance
+required-enforcement:
+  - deterministic
+  - semantic
 ---
 
 # Run layered harness architecture reviews on pull requests
@@ -52,16 +57,19 @@ without pretending that model judgment is mathematical proof.
 
 The repository will run a dedicated internal pull-request workflow. It loads
 official ADRs from the base revision, provisional ADR changes from the head,
-the merge-base-to-head diff, the domain register, the architecture impact map,
-the source issue and safe runtime evidence when available. It produces one
+the merge-base-to-head diff, the generated ADR-to-primitive traceability index,
+the domain register, the architecture impact map, the source issue and safe
+runtime evidence when available. It produces one
 machine-readable result and one concise check summary. It does not post issue
 comments, modify the pull request, merge, close issues or silently repair
 findings.
 
-The deterministic layer validates the evidence schema, ADR/index relationships,
-domain-register structure, source-issue and branch correlation, required
-durable-artifact relationships, and permission/state invariants. It fails the
-check only for a clear violation. The semantic layer uses GPT-5.6 Sol with
+The deterministic layer validates the evidence schema, generated
+ADR/primitive relationships, domain applicability, required deterministic
+enforcement, source-issue and branch correlation, required durable-artifact
+relationships, deletion outcomes, supersession, and permission/state
+invariants. It fails the check only for a clear violation. The semantic layer
+uses GPT-5.6 Sol with
 high reasoning effort, read-only `delivery-review` permissions, the existing
 subscription-only budget boundary and no external network. It must cite exact
 repository, issue, run or session evidence. Findings, invalid semantic output,
@@ -84,8 +92,9 @@ reference and is replaced idempotently on publication retry.
 - Good, because read-only permissions preserve human and controller ownership.
 - Bad, because semantic review consumes subscription allowance and can be
   inconclusive when quota or runtime evidence is unavailable.
-- Bad, because the impact map must be maintained when architectural surfaces
-  move, although it does not duplicate ADR rationale.
+- Bad, because the runtime-surface impact map must be maintained when
+  architectural surfaces move, although it does not duplicate ADR rationale
+  or the generated ADR-to-primitive relationship.
 - Neutral, because GitHub Free still cannot technically prevent every direct
   push or bypass by another credential holder.
 
@@ -130,6 +139,6 @@ evidence rather than treating tests or documentation as runtime proof.
 
 - Baseline: [`docs/architecture/harness-conformance-review.md`](../architecture/harness-conformance-review.md)
 - Domain register: [`ubiquitous-language.yml`](../domain/ubiquitous-language.yml)
-- Related decisions: [ADR-0001](0001-use-madr-for-architecture-decisions.md), [ADR-0003](0003-use-context-scoped-ubiquitous-language.md), [ADR-0009](0009-run-codex-from-source-issues-with-a-budget-boundary.md), [ADR-0010](0010-route-issues-through-deterministic-intake.md)
+- Related decisions: [ADR-0001](0001-use-madr-for-architecture-decisions.md), [ADR-0003](0003-use-context-scoped-ubiquitous-language.md), [ADR-0009](0009-run-codex-from-source-issues-with-a-budget-boundary.md), [ADR-0012](0012-use-github-as-the-lifecycle-control-plane.md), and [ADR-0013](0013-derive-adr-traceability-from-agentic-primitives.md)
 - This decision is provisional on its feature branch and becomes official only
   after its review pull request is merged into `main`.

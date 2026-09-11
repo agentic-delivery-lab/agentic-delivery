@@ -1,21 +1,24 @@
+// agentic-primitive: {"id":"codex-delivery-controller","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0009","ADR-0012","ADR-0015"],"domains":["agentic-delivery-governance"]}
 import { execFile } from 'node:child_process';
-import { appendFile, mkdir, readFile, rename, writeFile, access, unlink } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { CodexClient } from './lib/codex-client.mjs';
-import { continuation, formatPlanComment, formatProgressComment, runTurn, validateOutcome } from './lib/codex-loop.mjs';
+import { continuation, formatPlanComment, formatProgressComment, formatRefinementComment, runTurn, validateOutcome, validateRefinementOutcome } from './lib/codex-loop.mjs';
 import { classifyIssue, isResumeRequestBody, stateLabel } from './lib/issue-routing.mjs';
 import { loadLifecycleConfig } from './issue-intake.mjs';
 import { startIssueBranch } from './start-issue-branch.mjs';
 import { validateCommitRange } from './validate-commit-range.mjs';
 import { validateBranchName } from './validate-branch-name.mjs';
 import { deterministicReview, validateEvidenceRecord } from './lib/architecture-review.mjs';
+import { validateTransition } from './lib/lifecycle-transitions.mjs';
+import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
 
 const executeFile = promisify(execFile);
 const controllerRoot = path.resolve(import.meta.dirname, '..');
-const STATE_VERSION = 2;
+const STATE_VERSION = 3;
 const PROGRESS_COMMENT_INTERVAL_MS = 5 * 60_000;
 const OVERALL_TIMEOUT_MS = 5.5 * 60 * 60_000;
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -37,10 +40,9 @@ function compareCommentIds(left, right) {
 
 function trustedOwnerComment(event, repository) {
   const comment = event.comment;
-  const owner = event.repository?.owner?.login ?? repository.split('/')[0];
   const user = comment?.user;
-  if (user?.login !== owner || user?.type === 'Bot' || comment?.author_association !== 'OWNER') {
-    throw new Error('Issue comments must come from the trusted repository owner.');
+  if (!user?.login || user.type === 'Bot' || user.login.endsWith('[bot]') || comment?.author_association === 'BOT') {
+    throw new Error('Issue comments must come from a non-bot repository user.');
   }
   return {
     id: commentId(comment.id),
@@ -58,7 +60,7 @@ export function intakeEvent(event, env) {
   if (event.issue?.pull_request) throw new Error('A pull request cannot be a source issue.');
   if (!['issues', 'issue_comment', 'workflow_dispatch', 'workflow_call'].includes(env.GITHUB_EVENT_NAME)) throw new Error('Unsupported trigger.');
   if (env.GITHUB_EVENT_NAME === 'issues'
-    && !['opened', 'edited', 'reopened', 'labeled', 'unlabeled', 'typed', 'untyped'].includes(event.action)) throw new Error('Unsupported issue activity.');
+    && !['opened', 'edited', 'reopened', 'labeled', 'unlabeled', 'typed', 'untyped', 'closed'].includes(event.action)) throw new Error('Unsupported issue activity.');
   let comment;
   if (env.GITHUB_EVENT_NAME === 'issue_comment' || event.comment) {
     if (event.action !== 'created') throw new Error('Only newly created issue comments enter intake.');
@@ -72,7 +74,7 @@ export function intakeEvent(event, env) {
 
 export function redact(text, env = process.env) {
   let value = String(text);
-  const secrets = ['GH_TOKEN', 'PUBLISH_TOKEN', 'GITHUB_TOKEN', 'OPENAI_API_KEY']
+  const secrets = ['GH_TOKEN', 'PUBLISH_TOKEN', 'GITHUB_TOKEN', 'OPENAI_API_KEY', 'CODEX_DELIVERY_APP_PRIVATE_KEY']
     .map((key) => env[key]).filter(Boolean).sort((left, right) => right.length - left.length);
   for (const secret of secrets) value = value.split(secret).join('[redacted]');
   return value.replace(/(?:github_pat_|gh[pousr]_|sk-)[A-Za-z0-9_-]{15,}/g, '[redacted]');
@@ -108,7 +110,18 @@ export function deliveryExitCode(status) {
   return status === 'paused' ? 1 : 0;
 }
 
-async function exists(file) { try { await access(file); return true; } catch { return false; } }
+function failureRecoverability(error, operation) {
+  const message = String(error?.message ?? '');
+  if (/invalid saved state|operator inspection|unexpected changes|verified tree changed|session id mismatch|unrelated replacement/i.test(message)) {
+    return 'operator-inspection';
+  }
+  if (/quota|allowance|telemetry|timeout|timed out|network|GitHub .* failed \(5\d\d\)|app-server stopped/i.test(message)) {
+    return 'retryable';
+  }
+  return operation === 'publish' || operation === 'commit' ? 'operator-inspection' : 'owner-action';
+}
+
+async function exists(file) { try { await import('node:fs/promises').then(({ access }) => access(file)); return true; } catch { return false; } }
 async function atomic(file, value) {
   await writeFile(`${file}.next`, JSON.stringify(value, null, 2), { mode: 0o600 });
   await rename(`${file}.next`, file);
@@ -123,8 +136,8 @@ async function readSavedState(file, issue, repository) {
     const legacy = value?.version === undefined;
     const status = value?.status === 'needs_input' ? 'awaiting-human' : value?.status;
     if (value?.repository !== repository || String(value?.issue) !== issue
-      || (!legacy && value.version !== STATE_VERSION)
-      || !['plan','branch','implement','verify','commit','publish'].includes(value.phase)
+      || (!legacy && ![2, STATE_VERSION].includes(value.version))
+      || !['refine','plan','coordinate','branch','implement','verify','commit','publish'].includes(value.phase)
       || !['new','running','paused','awaiting-human','ready'].includes(status)
       || !strings(value.events) || !strings(value.tasks)
       || (value.questions !== undefined && !strings(value.questions))
@@ -137,20 +150,37 @@ async function readSavedState(file, issue, repository) {
       || (value.sessionStarted === false && value.sessionId !== undefined)
       || (value.legacySessionReconstruction !== undefined && typeof value.legacySessionReconstruction !== 'boolean')
       || (value.progressCommentAt !== undefined && (!Number.isFinite(value.progressCommentAt) || value.progressCommentAt < 0))
-      || (value.progressCommentPhase !== undefined && !['plan','implement'].includes(value.progressCommentPhase))
+      || (value.progressCommentPhase !== undefined && !['refine','plan','implement'].includes(value.progressCommentPhase))
       || (value.sessionId !== undefined && (typeof value.sessionId !== 'string' || !SESSION_ID_PATTERN.test(value.sessionId)))
-      || (value.waitingCommentId !== undefined && !/^(?:0|[1-9][0-9]*)$/.test(String(value.waitingCommentId)))) throw new Error();
+      || (value.waitingCommentId !== undefined && !/^(?:0|[1-9][0-9]*)$/.test(String(value.waitingCommentId)))
+      || (value.execution !== undefined && (!value.execution || typeof value.execution !== 'object'
+        || !['idle', 'running', 'paused', 'awaiting-human', 'completed'].includes(value.execution.status)
+        || (value.execution.operation !== null && typeof value.execution.operation !== 'string')
+        || (value.execution.run !== null && (!value.execution.run || !/^\d+$/.test(String(value.execution.run.id ?? ''))
+          || !/^\d+$/.test(String(value.execution.run.attempt ?? '')) || typeof value.execution.run.url !== 'string'))
+        || (value.execution.lastFailure !== null && (!value.execution.lastFailure
+          || typeof value.execution.lastFailure.operation !== 'string'
+          || typeof value.execution.lastFailure.runId !== 'string'
+          || typeof value.execution.lastFailure.reason !== 'string'
+          || !['retryable', 'owner-action', 'operator-inspection'].includes(value.execution.lastFailure.recoverability)))))) throw new Error();
     if (value.branch !== undefined) {
       validateBranchName(value.branch);
       if (!value.branch.split('/')[1].startsWith(`issue-${issue}-`)) throw new Error();
     }
+    if (value.refined !== undefined) validateRefinementOutcome(JSON.stringify(value.refined));
     if (value.plan !== undefined) validateOutcome('plan', JSON.stringify(value.plan));
-    if (value.phase !== 'plan' && (!value.branch || !hash(value.base) || value.plan?.status !== 'ready')) throw new Error();
+    if (!['refine', 'plan', 'coordinate'].includes(value.phase) && (!value.branch || !hash(value.base) || value.plan?.status !== 'ready')) throw new Error();
     if (['commit','publish'].includes(value.phase) && !hash(value.validatedTree)) throw new Error();
     const migrated = {
       ...value,
       version: STATE_VERSION,
       status,
+      execution: value.execution ?? {
+        status: status === 'ready' ? 'completed' : status === 'running' ? 'running' : status,
+        operation: value.phase,
+        run: null,
+        lastFailure: value.reason ? { operation: value.phase, runId: '', reason: value.reason, recoverability: 'owner-action' } : null,
+      },
       consumedCommentIds: value.consumedCommentIds?.map(String) ?? [],
       sessionStarted: value.sessionStarted ?? value.sessionId !== undefined,
       legacySessionReconstruction: value.legacySessionReconstruction === true || (legacy && value.sessionId === undefined),
@@ -171,7 +201,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   const performTurn = dependencies.runTurn ?? runTurn;
   const validateCommits = dependencies.validateCommits ?? validateCommitRange;
   if (!env.GH_TOKEN || !env.GITHUB_EVENT_PATH || !env.RUNNER_WORKSPACE) throw new Error('Run this controller through GitHub Actions.');
-  if (!env.PUBLISH_TOKEN) throw new Error('Publication credential is missing. Configure CODEX_DELIVERY_PUBLISH_TOKEN with workflow and pull-request write access.');
+  if (!env.PUBLISH_TOKEN && !(env.CODEX_DELIVERY_APP_ID && env.CODEX_DELIVERY_APP_PRIVATE_KEY)) throw new Error('Publication credential is missing. Configure the repository-scoped GitHub App credentials.');
   const event = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'));
   const { issue, repository, actor, comment } = intakeEvent(event, env);
   const endpoint = `https://api.github.com/repos/${repository}`;
@@ -183,9 +213,21 @@ export async function deliver(env = process.env, dependencies = {}) {
     if (!response.ok) throw new Error(`GitHub ${method} ${route} failed (${response.status}).`);
     return response.status === 204 ? null : response.json();
   };
-  const publishApi = (route, method = 'GET', body) => api(route, method, body, env.PUBLISH_TOKEN);
-  const permission = await api(`/collaborators/${encodeURIComponent(actor)}/permission`);
-  if (!['admin', 'maintain', 'write'].includes(permission.permission)) throw new Error('Source issue execution requires repository write permission.');
+  const appProvider = env.CODEX_DELIVERY_APP_ID && env.CODEX_DELIVERY_APP_PRIVATE_KEY
+    ? new GithubAppTokenProvider({ repository, ...appConfiguration(env), permissions: { contents: 'write', issues: 'write', pull_requests: 'write', workflows: 'write' } })
+    : null;
+  const publicationToken = async () => appProvider ? appProvider.token() : env.PUBLISH_TOKEN;
+  const publishApi = async (route, method = 'GET', body) => api(route, method, body, await publicationToken());
+  const deliveryRoute = env.INTAKE_ROUTE
+    || (comment || env.GITHUB_EVENT_NAME === 'workflow_dispatch' ? 'resume' : 'manual');
+  if (!['refine', 'plan', 'resume', 'manual', 'coordinate'].includes(deliveryRoute)) throw new Error('Invalid intake route.');
+  const internalCoordination = deliveryRoute === 'coordinate' && actor === 'github-actions[bot]';
+  const permission = internalCoordination
+    ? { permission: 'write' }
+    : await api(`/collaborators/${encodeURIComponent(actor)}/permission`);
+  if (!['admin', 'maintain', 'write'].includes(permission.permission)) {
+    throw new Error('Source issue execution requires repository write permission.');
+  }
   const source = await api(`/issues/${issue}`);
   if (source.pull_request) throw new Error('A pull request cannot be a source issue.');
   if (source.state !== 'open') {
@@ -193,9 +235,6 @@ export async function deliver(env = process.env, dependencies = {}) {
     throw new Error('The source issue must still be open.');
   }
   const lifecycleConfig = await loadLifecycleConfig(controllerRoot);
-  const deliveryRoute = env.INTAKE_ROUTE
-    || (comment || env.GITHUB_EVENT_NAME === 'workflow_dispatch' ? 'resume' : 'manual');
-  if (!['plan', 'resume', 'manual'].includes(deliveryRoute)) throw new Error('Invalid intake route.');
   const deliveryMetadataSafe = (metadata) => {
     const blockedGovernance = metadata.governance
       .filter((label) => lifecycleConfig.readiness.blocking_governance.includes(label));
@@ -218,6 +257,11 @@ export async function deliver(env = process.env, dependencies = {}) {
   }
   await mkdir(issueRoot, { recursive: true, mode: 0o700 });
   const workspace = path.join(issueRoot, 'workspace');
+  const codexHome = path.join(issueRoot, 'codex-home');
+  const authBridge = path.join(codexHome, 'auth.json');
+  const serviceAuth = path.join(env.CODEX_AUTH_HOME || '/var/lib/github-runner/.codex', 'auth.json');
+  let runTools;
+  const runHome = path.join(issueRoot, 'run-home');
   let state;
   const runUrl = `https://github.com/${repository}/actions/runs/${env.GITHUB_RUN_ID}`;
   let writes = Promise.resolve();
@@ -295,23 +339,39 @@ export async function deliver(env = process.env, dependencies = {}) {
     await api(`/issues/${issue}/comments`, 'POST', { body: 'Codex execution is already locked on this runner. After the active run finishes, reply with a natural-language request such as “Please continue from the saved work.” If a run was killed, an operator must inspect the saved lock and confirm no Codex process is active before removing it.' });
     return;
   }
+  runTools = await mkdtemp(path.join(issueRoot, 'run-tools-'));
+  for (const entry of await readdir(issueRoot, { withFileTypes: true })) {
+    if (entry.name.startsWith('run-tools-') && path.join(issueRoot, entry.name) !== runTools) {
+      await rm(path.join(issueRoot, entry.name), { recursive: true, force: true });
+    }
+  }
+  await rm(runHome, { recursive: true, force: true }).catch(() => {});
+  await unlink(authBridge).catch(() => {});
   let client;
   const abort = new AbortController();
   const cancel = () => { abort.abort(); client?.close().catch(() => {}); };
   process.once('SIGTERM', cancel);
   process.once('SIGINT', cancel);
   const overall = setTimeout(cancel, OVERALL_TIMEOUT_MS);
-  const gitEnv = {
-    ...env, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null',
-    GIT_CONFIG_COUNT: '2', GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
-    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${env.PUBLISH_TOKEN}`).toString('base64')}`,
-    GIT_CONFIG_KEY_1: 'core.hooksPath', GIT_CONFIG_VALUE_1: '/dev/null',
+  const gitEnv = (token) => {
+    const { GH_TOKEN: _ghToken, GITHUB_TOKEN: _githubToken, PUBLISH_TOKEN: _publishToken,
+      OPENAI_API_KEY: _openAiKey, CODEX_DELIVERY_APP_PRIVATE_KEY: _privateKey, ...safeEnv } = env;
+    return {
+      ...safeEnv,
+      GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null',
+      GIT_CONFIG_COUNT: '2', GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+      GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
+      GIT_CONFIG_KEY_1: 'core.hooksPath', GIT_CONFIG_VALUE_1: '/dev/null',
+    };
   };
-  const git = async (args) => (await execute('git', ['-C', workspace, ...args], { env: gitEnv, timeout: 120_000, maxBuffer: 8_000_000 })).stdout.trim();
+  const git = async (args, options = {}) => {
+    const token = options.publish ? await publicationToken() : env.GH_TOKEN;
+    return (await execute('git', ['-C', workspace, ...args], { env: gitEnv(token), timeout: 120_000, maxBuffer: 8_000_000 })).stdout.trim();
+  };
   try {
     await lock.writeFile(JSON.stringify({ runUrl, issue, pid: process.pid }));
     state = stateWasSaved ? await readSavedState(stateFile, issue, repository) : {
-      version: STATE_VERSION, issue, repository, phase: 'plan', status: 'new', tasks: [], events: [], consumedCommentIds: [], sessionStarted: false,
+      version: STATE_VERSION, issue, repository, phase: deliveryRoute === 'refine' ? 'refine' : 'plan', status: 'new', execution: { status: 'idle', operation: null, run: null, lastFailure: null }, tasks: [], events: [], consumedCommentIds: [], sessionStarted: false,
     };
     const priorStatus = state.status;
     const canStartInitialSession = !stateWasSaved
@@ -323,9 +383,13 @@ export async function deliver(env = process.env, dependencies = {}) {
       : event.issue && event.action
         ? `${event.action}:${issue}`
         : `dispatch:${env.GITHUB_RUN_ID}`;
-    if (state.status === 'ready' || state.status === 'running' || state.events.includes(eventKey)
+    const coordinateRetry = state.phase === 'coordinate' && state.status === 'ready'
+      && (deliveryRoute === 'resume' || deliveryRoute === 'manual' || deliveryRoute === 'coordinate');
+    const refinementWave = state.phase === 'coordinate' && state.status === 'ready' && deliveryRoute === 'refine';
+    const coordinationContinuation = coordinateRetry || refinementWave;
+    if ((state.status === 'ready' && !coordinationContinuation) || state.status === 'running' || state.events.includes(eventKey)
       || (comment && state.consumedCommentIds.includes(comment.id))) return {status:'ignored', reason:'This delivery event is already complete or in progress.'};
-    if (comment) {
+    if (comment && !coordinationContinuation) {
       if (state.status === 'new') return {status:'ignored', reason:'An issue comment cannot start a new delivery task.'};
       if (state.status === 'paused' && !comment.isResumeRequest) return {status:'ignored', reason:'A technical pause requires a clear natural-language request to continue.'};
       if (state.status === 'awaiting-human') {
@@ -334,12 +398,28 @@ export async function deliver(env = process.env, dependencies = {}) {
       }
       if (!['paused','awaiting-human'].includes(state.status)) return {status:'ignored', reason:'The saved state is not eligible for issue-comment continuation.'};
     }
-    transitionState = async (target, allowedCurrentStates) => {
+    transitionState = async (target, allowedCurrentStates, dependencies = []) => {
       const current = await api(`/issues/${issue}`);
       if (current.state !== 'open' || current.pull_request) throw new Error('The source issue must still be open.');
       const currentMetadata = classifyIssue({ issue: current, config: lifecycleConfig });
       if (allowedCurrentStates && !allowedCurrentStates.includes(currentMetadata.state)) {
         throw new Error(`The source issue is in state ${currentMetadata.state ?? 'unknown'}; it cannot transition to ${target}.`);
+      }
+      const transition = validateTransition({
+        config: lifecycleConfig,
+        from: currentMetadata.state,
+        to: target,
+        workType: currentMetadata.workType,
+        governance: currentMetadata.governance,
+        issueState: current.state,
+        dependencies,
+      });
+      if (!transition.allowed) throw new Error(`Lifecycle transition rejected: ${transition.reasons.join(' ')}`);
+      if (target === 'ready-for-plan') {
+        const targetMetadata = classifyIssue({ issue: current, config: lifecycleConfig, requestedState: target });
+        if (targetMetadata.state !== target || !targetMetadata.readiness.ok) {
+          throw new Error(`Lifecycle transition rejected: ${targetMetadata.readiness.reasons.join(' ')}`);
+        }
       }
       if (['ready-for-agent', 'in-progress', 'review'].includes(target) && !deliveryMetadataSafe(currentMetadata)) {
         throw new Error('The source issue no longer satisfies the implementation readiness contract.');
@@ -352,7 +432,12 @@ export async function deliver(env = process.env, dependencies = {}) {
       if (labels.length !== next.length || labels.some((label, index) => label !== next[index])) {
         await api(`/issues/${issue}/labels`, 'PUT', { labels: next });
       }
-      state.lifecycleState = target;
+      const observed = await api(`/issues/${issue}`);
+      const observedMetadata = classifyIssue({ issue: observed, config: lifecycleConfig });
+      if (observedMetadata.state !== target) {
+        throw new Error(`Lifecycle transition to ${target} was not observed after the GitHub label update.`);
+      }
+      state.workState = { value: target, observedAt: new Date().toISOString(), source: 'github-label' };
       await save();
     };
     const requireDeliveryMetadata = async (allowedStates) => {
@@ -369,9 +454,17 @@ export async function deliver(env = process.env, dependencies = {}) {
     };
     const metadataSource = await api(`/issues/${issue}`);
     if (metadataSource.state !== 'open' || metadataSource.pull_request) throw new Error('The source issue must still be open.');
-    const metadata = classifyIssue({ issue: metadataSource, config: lifecycleConfig, mode: deliveryRoute === 'resume' ? 'resume' : 'event' });
+    let metadata = classifyIssue({ issue: metadataSource, config: lifecycleConfig, mode: deliveryRoute === 'resume' ? 'resume' : 'event' });
+    if (refinementWave) {
+      await transitionState('requirements', ['coordinating']);
+      state.phase = 'refine';
+      await save();
+    }
     const savedRecovery = state.status !== 'new' || state.phase !== 'plan' || state.events.length > 0;
     if (state.phase === 'plan') {
+      const planningIssue = await api(`/issues/${issue}`);
+      if (planningIssue.state !== 'open' || planningIssue.pull_request) throw new Error('The source issue must still be open.');
+      metadata = classifyIssue({ issue: planningIssue, config: lifecycleConfig, mode: deliveryRoute === 'resume' ? 'resume' : 'event' });
       if (!['ready-for-plan', 'needs-info'].includes(metadata.state)) {
         throw new Error(`The source issue is not ready for planning: it is in state ${metadata.state ?? 'unknown'}; planning requires state:ready-for-plan or state:needs-info recovery.`);
       }
@@ -405,22 +498,62 @@ export async function deliver(env = process.env, dependencies = {}) {
     if (state.phase === 'publish' && (!['in-progress', 'review'].includes(metadata.state) || !deliveryMetadataSafe(metadata))) {
       throw new Error('The source issue is not authorized for publication.');
     }
+    if (state.phase === 'coordinate') {
+      if (metadata.state === 'acceptance') {
+        state.execution = { ...(state.execution ?? {}), status: 'completed', operation: 'coordinate', run: { id: String(env.GITHUB_RUN_ID ?? ''), attempt: String(env.GITHUB_RUN_ATTEMPT ?? '1'), url: runUrl }, lastFailure: null };
+        state.status = 'ready';
+        state.tasks = [];
+        await save();
+        return { status: 'ready' };
+      }
+      const children = await Promise.all((state.childIssues ?? []).map(async (child) => {
+        const issueValue = await api(`/issues/${child.number}`);
+        return { ...child, state: classifyIssue({ issue: issueValue, config: lifecycleConfig }).state };
+      }));
+      const incomplete = children.filter((child) => child.state !== 'done');
+      if (!incomplete.length && children.length) {
+        await transitionState('acceptance', ['coordinating'], children);
+        state.execution = { ...(state.execution ?? {}), status: 'completed', operation: 'coordinate', run: { id: String(env.GITHUB_RUN_ID ?? ''), attempt: String(env.GITHUB_RUN_ATTEMPT ?? '1'), url: runUrl }, lastFailure: null };
+        state.status = 'ready';
+        state.tasks = [];
+        await save();
+        await audit('## Child work complete\n\nAll required child issues are complete. The lineage root is now awaiting human acceptance; Codex will not close it.');
+        return { status: 'ready' };
+      }
+      state.execution = { ...(state.execution ?? {}), status: 'completed', operation: 'coordinate', run: { id: String(env.GITHUB_RUN_ID ?? ''), attempt: String(env.GITHUB_RUN_ATTEMPT ?? '1'), url: runUrl }, lastFailure: null };
+      state.status = 'ready';
+      state.tasks = incomplete.map((child) => `${child.key}: waiting for child issue #${child.number} (${child.state})`);
+      await save();
+      return { status: 'ready' };
+    }
     state.events.push(eventKey);
     if (comment) state.consumedCommentIds.push(comment.id);
     state.status = 'running';
+    state.execution = {
+      ...(state.execution ?? {}),
+      status: 'running',
+      operation: state.phase,
+      run: { id: String(env.GITHUB_RUN_ID ?? ''), attempt: String(env.GITHUB_RUN_ATTEMPT ?? '1'), url: runUrl },
+      lastFailure: null,
+    };
     await save();
     await audit(`Starting ${state.phase} for source issue #${issue}, requested by ${actor}. Ideas, requirements, and decisions enter the same intake. Questions must be answered before dependent work proceeds.`);
-    if (!['publish', 'commit'].includes(state.phase)) {
+    const needsModel = !['publish', 'commit', 'coordinate'].includes(state.phase) || refinementWave;
+    if (needsModel) {
       if (stateWasSaved && !state.sessionId && !state.legacySessionReconstruction && !canStartInitialSession
         && ['plan','branch','implement'].includes(state.phase)) {
         throw new Error('Saved Codex session ID is missing; refusing to start an unrelated replacement thread.');
       }
-      client = createClient({ cwd: controllerRoot, readableFiles:[controllerRoot], runtime:path.join(issueRoot, 'tools') });
+      await mkdir(codexHome, { recursive: true, mode: 0o700 });
+      await mkdir(runHome, { recursive: true, mode: 0o700 });
+      if (!(await exists(authBridge)) && await exists(serviceAuth)) await symlink(serviceAuth, authBridge);
+      const codexEnvironment = { ...env, HOME: runHome, CODEX_HOME: codexHome, CODEX_AUTH_HOME: undefined };
+      client = createClient({ cwd: controllerRoot, env: codexEnvironment, readableFiles:[controllerRoot], runtime:runTools });
       await client.initialize();
       state.budget = await client.capabilities();
       if (state.budget.stop && state.phase !== 'verify') throw new Error(state.budget.reason);
       if (!(await exists(workspace))) {
-        await execute('git', ['clone', '--branch', 'main', `https://github.com/${repository}.git`, workspace], { env: gitEnv, timeout: 120_000 });
+        await execute('git', ['clone', '--branch', 'main', `https://github.com/${repository}.git`, workspace], { env: gitEnv(env.GH_TOKEN), timeout: 120_000 });
         state.base = await git(['rev-parse', 'HEAD']);
         await save();
       }
@@ -430,13 +563,18 @@ export async function deliver(env = process.env, dependencies = {}) {
         await save();
       }
       const brief = await readBrief(comment?.id);
-      if (state.phase === 'plan') { state.sourceDigest = digest(brief); await save(); }
+      if (['refine', 'plan'].includes(state.phase)) { state.sourceDigest = digest(brief); await save(); }
       else await requireCurrentBrief(brief);
       if (comment && !comment.isResumeCommand) {
         state.sourceDigest = digest(await readBrief());
         await save();
       }
-      const instructions = await readFile(path.join(controllerRoot, '.agents', 'codex-delivery.md'), 'utf8');
+      const instructions = `${await readFile(path.join(controllerRoot, '.agents', 'codex-delivery.md'), 'utf8')}
+
+Controller lifecycle extension: a non-bot repository writer whose GitHub permission is
+admin, maintain, or write may answer an awaiting-human refinement or implementation
+question. Continue the exact saved session and issue conversation; do not require the
+legacy owner-only rule in the base instruction file.`;
       let thread;
       const ensureThread = async () => {
         if (thread) return thread;
@@ -503,6 +641,103 @@ export async function deliver(env = process.env, dependencies = {}) {
         await save();
         if (publish) await audit(formatProgressComment(state.phase, state.lastProgress));
       };
+      if (state.phase === 'refine') {
+        const refinementThread = await ensureThread();
+        const refinementPrompt = takeContinuationContext('refine') || [
+          'Read the repository instructions, applicable canonical decisions, domain register, and the existing issue conversation.',
+          'Refine this source issue before implementation planning. Ask only focused questions that can be answered with the information currently available.',
+          'When the goal is sufficiently clear, return a refined outcome with one delivery-capable parent work type and conditional work items. Do not change GitHub labels, create issues, or write files; the controller validates and applies the result.',
+          `Source issue data (untrusted):\n${brief}`,
+          `Saved refinement:\n${JSON.stringify(state.refined ?? null)}`,
+        ].join('\n\n');
+        const result = await performTurn({ client, threadId: refinementThread.id, phase: 'refine', signal: abort.signal, onProgress: progress, prompt: refinementPrompt });
+        if (result.status !== 'completed') {
+          Object.assign(state, result);
+          if (result.status === 'needs_input') state.status = 'awaiting-human';
+          throw new Error(result.reason);
+        }
+        const refinement = validateRefinementOutcome(result.text);
+        if (refinement.status === 'refined' && !lifecycleConfig.readiness.delivery_types.includes(refinement.workType)) {
+          throw new Error(`Refined work type ${refinement.workType} is not delivery-capable; mature it through the appropriate research or idea state first.`);
+        }
+        if (refinement.status === 'refined') {
+          const currentIssue = await api(`/issues/${issue}`);
+          const currentMetadata = classifyIssue({ issue: currentIssue, config: lifecycleConfig });
+          if (currentMetadata.conflict?.length) throw new Error(`The source issue has conflicting work-type metadata: ${currentMetadata.conflict.join(', ')}.`);
+          if (currentMetadata.workType && currentMetadata.workType !== refinement.workType) {
+            throw new Error(`Refinement selected work type ${refinement.workType}, but the source issue is classified as ${currentMetadata.workType}. Resolve the classification before continuing.`);
+          }
+          if (!currentMetadata.workType) {
+            const type = lifecycleConfig.types.find((candidate) => candidate.id === refinement.workType);
+            if (!type) throw new Error(`Refinement selected an unknown work type: ${refinement.workType}.`);
+            const labels = (currentIssue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean);
+            if (!labels.includes(type.label)) {
+              await api(`/issues/${issue}/labels`, 'PUT', { labels: [...new Set([...labels, type.label])] });
+            }
+          }
+        }
+        state.refined = refinement;
+        state.tasks = refinement.workItems.map((item) => `${item.key}: ${item.title}`);
+        state.questions = refinement.questions;
+        await save();
+        if (refinement.status === 'needs_input') {
+          await transitionState('needs-info');
+          state.status = 'awaiting-human';
+          throw new Error(refinement.questions.join('\n'));
+        }
+        await audit(formatRefinementComment(refinement));
+        if (refinement.workItems.length > 1) {
+          await transitionState('decomposing');
+          const typeForKind = new Map([
+            ['research', 'research'], ['specification', 'specification'], ['architecture', 'architecture'],
+            ['task', 'task'], ['bug', 'bug'], ['implementation', 'implementation'], ['validation', 'validation'],
+          ]);
+          const childIssues = [];
+          for (const item of refinement.workItems) {
+            const childType = lifecycleConfig.types.find((candidate) => candidate.id === typeForKind.get(item.kind)) ?? lifecycleConfig.types.find((candidate) => candidate.id === 'task');
+            const marker = `<!-- codex-lineage:v1 parent=${issue} key=${item.key} -->`;
+            const body = [marker, '', `Parent issue: #${issue}`, `Work item: ${item.key}`, `Kind: ${item.kind}`, '', `## Goal\n\n${item.goal}`, '', '## Acceptance criteria', ...item.acceptanceCriteria.map((criterion) => `- ${criterion}`), ...(item.dependencies.length ? ['', '## Dependencies', ...item.dependencies.map((dependency) => `- ${dependency}`)] : [])].join('\n');
+            const existing = [];
+            for (let page = 1; page <= 10; page += 1) {
+              const batch = await publishApi(page === 1 ? '/issues?state=all&per_page=100' : `/issues?state=all&per_page=100&page=${page}`);
+              if (!Array.isArray(batch)) break;
+              existing.push(...batch);
+              if (batch.length < 100) break;
+            }
+            const match = existing.find((candidate) => typeof candidate.body === 'string' && candidate.body.includes(marker));
+            const child = match ?? await publishApi('/issues', 'POST', {
+              title: item.title,
+              body,
+              labels: [childType.label, stateLabel(lifecycleConfig, childType.initial_state)].filter(Boolean),
+            });
+            if (!match) {
+              try { await publishApi(`/issues/${issue}/sub_issues`, 'POST', { sub_issue_id: child.id }); } catch (error) {
+                throw new Error(`Child issue ${child.number} was created but could not be linked to parent #${issue}: ${error.message}`);
+              }
+            }
+            childIssues.push({ key: item.key, number: child.number, id: child.id, kind: item.kind });
+          }
+          state.childIssues = childIssues;
+          await save();
+          await transitionState('coordinating', ['decomposing']);
+          state.phase = 'coordinate';
+          state.status = 'ready';
+          state.execution = {
+            ...(state.execution ?? {}),
+            status: 'completed',
+            operation: 'decomposition',
+            run: { id: String(env.GITHUB_RUN_ID ?? ''), attempt: String(env.GITHUB_RUN_ATTEMPT ?? '1'), url: runUrl },
+            lastFailure: null,
+          };
+          state.tasks = [];
+          await save();
+          await audit(`## Decomposition complete\n\nCreated or reused ${childIssues.length} conditional child issue(s). The parent remains the lineage root; child work and human acceptance are tracked in GitHub.`);
+          return { status: 'ready' };
+        }
+        await transitionState('ready-for-plan', ['needs-triage', 'needs-info', 'requirements', 'decision-needed', 'investigating', 'ready-for-plan']);
+        state.phase = 'plan';
+        await save();
+      }
       if (state.phase === 'plan') {
         const planThread = await ensureThread();
         const result = await performTurn({ client, threadId: planThread.id, phase: 'plan', signal: abort.signal, onProgress: progress,
@@ -538,7 +773,7 @@ export async function deliver(env = process.env, dependencies = {}) {
         const currentBranch = await git(['branch', '--show-current']);
         if (currentBranch !== state.branch) {
           await startIssueBranch({branchType:state.plan.changeType, issueNumber:issue, summary:'codex-delivery', repositoryRoot:workspace,
-            env, execFileImpl:(command, args, options) => execute(command, args, {...options, env:gitEnv, timeout:60_000}),
+            env, execFileImpl:(command, args, options) => execute(command, args, {...options, env:gitEnv(env.GH_TOKEN), timeout:60_000}),
             sourceIssueValidator:async () => {
               if ((await api(`/issues/${issue}`)).state !== 'open') throw new Error('Source issue is no longer open.');
             },
@@ -634,7 +869,9 @@ export async function deliver(env = process.env, dependencies = {}) {
       }
       const changes = await git(['status', '--porcelain']);
       if (changes) {
-        await execute('node', [path.join(controllerRoot, 'scripts/validate-pull-request-title.mjs')], { cwd: controllerRoot, env: { ...env, PR_TITLE: state.plan.title }, timeout: 30_000 });
+        const { GH_TOKEN: _ghToken, GITHUB_TOKEN: _githubToken, PUBLISH_TOKEN: _publishToken,
+          OPENAI_API_KEY: _openAiKey, CODEX_DELIVERY_APP_PRIVATE_KEY: _privateKey, ...safeControllerEnv } = env;
+        await execute('node', [path.join(controllerRoot, 'scripts/validate-pull-request-title.mjs')], { cwd: controllerRoot, env: { ...safeControllerEnv, PR_TITLE: state.plan.title }, timeout: 30_000 });
         await git(['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', '-c', 'commit.gpgsign=false', 'commit', '-m', state.plan.title]);
       }
       state.phase = 'publish';
@@ -648,7 +885,7 @@ export async function deliver(env = process.env, dependencies = {}) {
     if (await git(['write-tree']) !== state.validatedTree) throw new Error('The publish checkpoint no longer matches the verified tree; operator inspection is required.');
     await validateCommits({base:state.base, head:'HEAD', repositoryRoot:workspace, toolingRoot:controllerRoot});
     if (!await git(['diff', '--name-only', `${state.base}...HEAD`])) throw new Error('No repository change is ready for a review pull request.');
-    await git(['push', 'origin', `HEAD:refs/heads/${state.branch}`]);
+    await git(['push', 'origin', `HEAD:refs/heads/${state.branch}`], { publish: true });
     const existing = await publishApi(`/pulls?state=open&head=${encodeURIComponent(`${repository.split('/')[0]}:${state.branch}`)}&base=main`);
     const revision = await git(['rev-parse', 'HEAD']);
     let architecture;
@@ -684,6 +921,7 @@ export async function deliver(env = process.env, dependencies = {}) {
       revision: { branch: state.branch, commit: revision, tree: state.validatedTree },
       codexSession: { id: state.sessionId },
       modelTurns: [
+        ...(state.refined ? [{ phase: 'refine', model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' }] : []),
         { phase: 'plan', model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
         { phase: 'implement', model: 'gpt-5.6-luna', effort: 'max', mode: 'default' },
       ],
@@ -717,6 +955,13 @@ export async function deliver(env = process.env, dependencies = {}) {
     await transitionState('review', ['in-progress', 'review']);
     state.pr = pr.html_url;
     state.status = 'ready';
+    state.execution = {
+      ...(state.execution ?? {}),
+      status: 'completed',
+      operation: 'publish',
+      run: { id: String(env.GITHUB_RUN_ID ?? ''), attempt: String(env.GITHUB_RUN_ATTEMPT ?? '1'), url: runUrl },
+      lastFailure: null,
+    };
     state.tasks = [];
     await save();
     await audit(`## Review pull request ready\n\n${state.pr}\n\n${state.validation}\n\nRequired checks have been requested. Review and merge remain human actions.`);
@@ -724,8 +969,22 @@ export async function deliver(env = process.env, dependencies = {}) {
     if (!state) throw error;
     await client?.close().catch((failure) => { state.shutdownError = redact(failure.message, env); });
     const awaitingHuman = state.status === 'awaiting-human';
+    const failedOperation = state.phase;
     state.status = awaitingHuman ? 'awaiting-human' : 'paused';
     state.reason = redact(error.message, env);
+    state.execution = {
+      ...(state.execution ?? {}),
+      status: awaitingHuman ? 'awaiting-human' : 'paused',
+      operation: failedOperation,
+      run: { id: String(env.GITHUB_RUN_ID ?? ''), attempt: String(env.GITHUB_RUN_ATTEMPT ?? '1'), url: runUrl },
+      lastFailure: awaitingHuman ? null : {
+        operation: failedOperation,
+        runId: String(env.GITHUB_RUN_ID ?? ''),
+        reason: state.reason,
+        recoverability: failureRecoverability(error, failedOperation),
+        at: new Date().toISOString(),
+      },
+    };
     await save();
     const handoff = continuation(state);
     await writeFile(path.join(issueRoot, 'CONTINUE.md'), handoff, { mode: 0o600 });
@@ -751,7 +1010,17 @@ export async function deliver(env = process.env, dependencies = {}) {
     process.off('SIGINT', cancel);
     // If shutdown cannot be confirmed, deliberately retain the account lock.
     try { await client?.close(); await writes; }
-    finally { await lock.close(); }
+    finally {
+      await appProvider?.revoke();
+      await unlink(authBridge).catch(() => {});
+      if (runTools) await rm(runTools, { recursive: true, force: true }).catch(() => {});
+      await rm(runHome, { recursive: true, force: true }).catch(() => {});
+      if (state?.status === 'ready') {
+        await rm(workspace, { recursive: true, force: true }).catch(() => {});
+        await rm(codexHome, { recursive: true, force: true }).catch(() => {});
+      }
+      await lock.close();
+    }
     await unlink(lockFile);
   }
 }

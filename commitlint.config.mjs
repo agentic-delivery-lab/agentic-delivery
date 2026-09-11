@@ -1,3 +1,4 @@
+// agentic-primitive: {"id":"commit-format-validator","kind":"validator","enforcement":"deterministic","adrs":["ADR-0005"],"domains":["agentic-delivery-governance"]}
 import conventionalConfig from '@commitlint/config-conventional';
 
 // The conventional preset's parser package is ESM-only. Keep its rules while

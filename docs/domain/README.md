@@ -6,6 +6,11 @@ This repository defines a reliable way for people and coding agents to deliver c
 
 The canonical model vocabulary is stored in [`ubiquitous-language.yml`](ubiquitous-language.yml). Use the registered term and definition when discussing a modeled concept in documentation, agent instructions, issue or pull-request communication, and domain-bearing code.
 
+The control plane is GitHub: Issues, pull requests, lifecycle metadata, and
+deterministic Actions own work state. The execution plane is Codex and the
+self-hosted runner: it performs bounded operations and records execution state
+but cannot decide or apply lifecycle transitions.
+
 ## Repository boundary
 
 The initial bounded context is `agentic-delivery-governance`. It covers the repository's rules and agentic primitives for proposing, reviewing, validating and recording delivery work. The repository currently has no runtime application model.
@@ -31,6 +36,11 @@ An `avoid` entry names wording that can hide or confuse the intended meaning. It
 
 Automation cannot prove that prose or code expresses the intended model. Agents and human reviewers must check semantic consistency, ambiguity and context. The repository deliberately does not scan all text for forbidden words.
 
+Agentic primitives carry a small `primitive reference` comment naming their
+governing ADRs and bounded contexts. The generated traceability index is
+derived from those comments; it is not a second editable decision map and its
+presence does not load complete ADRs into a model context.
+
 ## Sources
 
 - [Eric Evans, *Domain-Driven Design Reference* (2015)](https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf): Bounded Context, Ubiquitous Language and Continuous Integration.
@@ -40,3 +50,7 @@ Automation cannot prove that prose or code expresses the intended model. Agents 
 - [ADR-0004: Use trunk-based delivery with short-lived feature branches](../decisions/0004-use-trunk-based-delivery.md).
 - [ADR-0005: Use Conventional Commits with Gitmoji](../decisions/0005-use-conventional-commits-with-gitmoji.md).
 - [ADR-0006: Curate a human-readable changelog](../decisions/0006-curate-a-changelog.md).
+- [ADR-0012: Use GitHub as the lifecycle control plane](../decisions/0012-use-github-as-the-lifecycle-control-plane.md).
+- [ADR-0013: Derive ADR traceability from agentic primitives](../decisions/0013-derive-adr-traceability-from-agentic-primitives.md).
+- [ADR-0014: Use a repository-scoped GitHub App](../decisions/0014-use-a-repository-scoped-github-app.md).
+- [ADR-0015: Isolate resumable runner execution](../decisions/0015-isolate-resumable-runner-execution.md).

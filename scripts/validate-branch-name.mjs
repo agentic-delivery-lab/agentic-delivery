@@ -1,3 +1,4 @@
+// agentic-primitive: {"id":"issue-branch-name-validator","kind":"validator","enforcement":"deterministic","adrs":["ADR-0007"],"domains":["agentic-delivery-governance"]}
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 

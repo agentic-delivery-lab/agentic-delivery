@@ -58,26 +58,21 @@ test('natural-language requests and the legacy command express technical recover
   assert.equal(intakeEvent(event(49,'Continue, but remove the changelog first.'),context).comment.isResumeRequest,false);
 });
 
-test('untrusted commenters, bot identities, and pull-request comments cannot enter intake', () => {
+test('bot identities and pull-request comments cannot enter intake while repository users may answer', () => {
   const context={...env,GITHUB_EVENT_NAME:'issue_comment'};
   const base={action:'created',repository:{owner:{login:'owner'},full_name:'owner/repo'},issue:{number:15}};
-  for (const comment of [
-    {id:44,body:'Continue',user:{login:'other',type:'User'},author_association:'COLLABORATOR'},
-    {id:45,body:'Continue',user:{login:'owner',type:'Bot'},author_association:'OWNER'},
-    {id:46,body:'Continue',user:{login:'owner',type:'User'},author_association:'COLLABORATOR'},
-  ]) {
-    assert.throws(() => intakeEvent({...base,comment},context),/trusted repository owner/);
-  }
+  assert.doesNotThrow(() => intakeEvent({...base,comment:{id:44,body:'Continue',user:{login:'other',type:'User'},author_association:'COLLABORATOR'}},context));
+  assert.throws(() => intakeEvent({...base,comment:{id:45,body:'Continue',user:{login:'owner',type:'Bot'},author_association:'OWNER'}},context),/non-bot repository user/);
+  assert.doesNotThrow(() => intakeEvent({...base,comment:{id:46,body:'Continue',user:{login:'owner',type:'User'},author_association:'COLLABORATOR'}},context));
   assert.throws(() => intakeEvent({...base,issue:{number:15,pull_request:{html_url:'https://example.invalid'}}},context),/pull request/);
-  assert.throws(() => intakeEvent({action:'created',...base,comment:{id:47,body:'Continue'}},context),/trusted repository owner/);
+  assert.throws(() => intakeEvent({action:'created',...base,comment:{id:47,body:'Continue'}},context),/non-bot repository user/);
 });
 
 test('issue comments do not require the resume command before intake eligibility is checked', () => {
   const workflow = readFile(path.join(repositoryRoot, '.github/workflows/issue-intake.yml'), 'utf8');
   return workflow.then((source) => {
-    assert.match(source, /github\.event\.comment\.user\.login == github\.repository_owner/);
-    assert.match(source, /github\.event\.comment\.author_association == 'OWNER'/);
     assert.match(source, /github\.event\.comment\.user\.type != 'Bot'/);
+    assert.match(source, /needs\.classify\.outputs\.route == 'refine'/);
     assert.doesNotMatch(source, /startsWith\(github\.event\.comment\.body, '\/codex resume'\)/);
   });
 });
@@ -90,11 +85,10 @@ test('comment issue numbers cannot be redirected through SOURCE_ISSUE', () => {
   },context),/does not match/);
 });
 test('accepts lifecycle events only as downstream delivery inputs', () => {
-  for (const action of ['edited', 'reopened', 'labeled', 'unlabeled', 'typed', 'untyped']) {
+  for (const action of ['edited', 'reopened', 'labeled', 'unlabeled', 'typed', 'untyped', 'closed']) {
     assert.equal(intakeEvent({action, issue:{}}, {...env, GITHUB_EVENT_NAME:'issues'}).issue, '15');
   }
   assert.equal(intakeEvent({issue:{}}, {...env, GITHUB_EVENT_NAME:'workflow_call'}).issue, '15');
-  assert.throws(() => intakeEvent({action:'closed', issue:{}}, {...env, GITHUB_EVENT_NAME:'issues'}), /Unsupported issue activity/);
 });
 test('rejects identifiers and events that could escape the repository boundary', () => {
   for(const value of ['../15','15; command','0','-1']) assert.throws(()=>intakeEvent({action:'opened'},{...env,SOURCE_ISSUE:value}));

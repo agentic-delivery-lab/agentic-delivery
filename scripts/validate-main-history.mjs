@@ -1,3 +1,4 @@
+// agentic-primitive: {"id":"main-history-validator","kind":"validator","enforcement":"deterministic","adrs":["ADR-0004"],"domains":["agentic-delivery-governance"]}
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

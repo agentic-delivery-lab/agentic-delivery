@@ -12,7 +12,9 @@ external enforcement.
 The cutoff deliberately precedes the implementation proposed in section I.
 Therefore references to ten ADRs, human-readable audit entries and missing
 pull-request evidence describe the reviewed `main` baseline, not the
-provisional ADR-0011 and automation files added by this source-issue change.
+provisional ADR-0011 and automation files added by the earlier review issue or
+the provisional ADR-0012 through ADR-0015 and automation files added by source
+issue #29.
 
 ## A. Executive architecture assessment
 
@@ -53,7 +55,12 @@ observation.
 | ADR-0007 Issue-linked branch names | `<type>/issue-<number>-<summary>`; open source issue check before supported branch creation and in CI | branch starter, syntax/API validators, PR workflow, tests | `scripts/start-issue-branch.mjs`; `scripts/validate-branch-name.mjs`; `scripts/validate-source-issue.mjs`; `scripts/validate-pull-request-branch.mjs`; focused tests | Current branch `feat/issue-25-codex-delivery` is concrete local evidence; remote issue state is unavailable | Raw `git switch -c` can bypass the local helper until CI; API enforcement is not externally preventive | Live issue state, PR validation results and bypass attempts unavailable | structural and policy | strong locally, moderate overall | partially aligned | keep; recurring review should report helper-versus-CI boundary |
 | ADR-0008 pnpm/release age/Node.js | Exact pnpm and lockfile, 2,880-minute strict age policy, frozen ignore-scripts install, Node ESM portability, Linux runner exception | package files, toolchain preflight, validators, portability workflow/tests | `package.json`; `pnpm-workspace.yaml`; `pnpm-lock.yaml`; `scripts/validate-toolchain.mjs`; `tests/delivery/package-policy.test.mjs`; portability job | No successful install/audit/matrix run is available in this sandbox; current dependency directory is absent | Planning-time install/test attempts were blocked by unavailable dependencies and sandbox network restrictions, not a repository failure | CI matrix, registry timestamps and audit result unavailable | structural; runtime portability unobserved | moderate | partially aligned | investigate runtime observation; keep decision |
 | ADR-0009 Codex issue execution/budget | Source issue controls run; Sol High plans, Luna Max implements; exact persistent session; owner continuation; 98% quota boundary; safe sandbox; human merge | workflows, controller, Codex client/loop, state, issue comments, tests, runner smoke | `.github/workflows/codex-delivery.yml`; `.agents/codex-delivery.md`; `docs/delivery/codex-workflow.md`; `scripts/codex-delivery.mjs`; `scripts/lib/codex-client.mjs`; `scripts/lib/codex-loop.mjs`; controller/client/loop tests | No state directory, audit file, Actions run, issue comments or Codex session metadata is readable | `audit.jsonl` currently stores human comment bodies rather than a typed machine evidence contract; session/tool evidence is not published to PRs | Real issue-to-PR run, usage telemetry, exact session resume, tool calls, validation repair and publication evidence unavailable | encoded and structural; runtime/traceability unverified | moderate for implementation, weak for observation | partially aligned | amend with evidence contract and observability boundary |
-| ADR-0010 Deterministic intake | Work type, lifecycle, governance and readiness are separate; only `state:ready-for-plan` authorizes delivery; non-ready work consumes no model quota | lifecycle config, issue forms, intake workflow/router, controller handoff/tests | `.github/issue-lifecycle.yml`; `.github/workflows/issue-intake.yml`; `scripts/issue-intake.mjs`; `scripts/lib/issue-routing.mjs`; intake/routing/controller tests | No live issue event or label transition is available | Native Issue Type and GitHub label/API behavior are external and unobserved; classifier semantics are review-sensitive | Actual issue labels, event deliveries, state transitions and run correlation unavailable | structural and policy; runtime unverified | strong for code/tests, moderate overall | partially aligned | keep; add traceability checks around the boundary |
+| ADR-0010 Deterministic intake (baseline) | Work type, lifecycle, governance and readiness are separate; only `state:ready-for-plan` authorizes delivery; non-ready work consumes no model quota | lifecycle config, issue forms, intake workflow/router, controller handoff/tests | Baseline `main` contained `.github/issue-lifecycle.yml`; `.github/workflows/issue-intake.yml`; `scripts/issue-intake.mjs`; `scripts/lib/issue-routing.mjs`; intake/routing/controller tests | No live issue event or label transition was available | Its deterministic-only intake rule is superseded by ADR-0012's validated refinement boundary | Actual issue labels, event deliveries, state transitions and run correlation were unavailable | structural and policy; runtime unverified | strong for baseline code/tests | superseded and removed provisionally by ADR-0012 | retain history in Git; do not load as active context |
+| ADR-0011 Layered architecture review | Deterministic checks are the failure gate; semantic review is advisory and cites bounded evidence | review map, deterministic/semantic scripts, read-only workflow | `scripts/lib/architecture-review.mjs`; `scripts/lib/architecture-review-agent.mjs`; `.github/workflows/harness-architecture-review.yml`; architecture tests | No live review run or Codex session evidence is available | None found in the baseline | Runtime review results and human findings unavailable | deterministic plus semantic advisory | moderate | aligned for declared/encoded behavior; runtime unverified | keep and extend with generated traceability |
+| ADR-0012 GitHub lifecycle control plane | GitHub owns work state; Codex proposes; deterministic transition validation gates mutations; refinement and conditional child lineage are iterative; execution failures do not advance work state | lifecycle config, transition validator, refinement schema, controller state v3, coordination | `.github/issue-lifecycle.yml`; `scripts/lib/lifecycle-transitions.mjs`; `scripts/lib/codex-loop.mjs`; `scripts/codex-delivery.mjs`; lifecycle tests | No live issue or Actions run is available | Real GitHub labels, sub-issue linkage, and parent acceptance remain unobserved | End-to-end `boe` intake and child coordination | deterministic and policy; runtime unverified | strong for structural tests | provisional and awaiting review | keep on feature branch; verify after merge |
+| ADR-0013 Primitive-owned ADR traceability | Primitives reference ADRs/domains locally; reverse index is generated; required enforcement and deletion outcomes are deterministic | metadata parser, generated index, review checks | `scripts/lib/adr-traceability.mjs`; `scripts/generate-adr-primitive-index.mjs`; `docs/architecture/adr-primitive-index.json`; traceability tests | No independent index regeneration run in CI is available at the cutoff | None found in the provisional tree | PR deletion/remapping scenarios and semantic intent review | deterministic plus semantic policy | strong for local generation/tests | provisional and awaiting review | keep on feature branch; fail stale/dangling indexes |
+| ADR-0014 Repository-scoped GitHub App | App tokens are short-lived and least privilege; GITHUB_TOKEN remains default where sufficient; credentials never reach model tools | App provider, workflow secrets, publication boundary | `scripts/lib/github-app.mjs`; `.github/workflows/codex-delivery.yml`; `scripts/codex-delivery.mjs`; authentication tests | App installation and token refresh are unavailable in this environment | Legacy PAT compatibility remains in controller code but is not configured by workflows | Real installation permissions, rotation, event triggering, and revocation | deterministic security boundary; runtime unverified | moderate | provisional and awaiting installation smoke test | remove compatibility fallback after operational migration if desired |
+| ADR-0015 Isolated resumable runner execution | Per-issue state and per-run temporary tools/home; auth bridge is ephemeral; completion cleans sensitive execution material | controller path isolation, cleanup, state migration | `scripts/codex-delivery.mjs`; `scripts/lib/codex-client.mjs`; `docs/delivery/codex-workflow.md`; controller tests | No live runner process or retained state directory is available | Shared service login remains only as the protected source for a temporary auth bridge | Kill/retry cleanup and self-hosted smoke evidence | deterministic security boundary; runtime unverified | strong for focused tests | provisional and awaiting smoke test | keep on feature branch; inspect runner retention |
 
 ## C. Domain-model conformance review
 
@@ -79,17 +86,19 @@ meaning questions to a separate advisory semantic pass.
 
 ## D. Issue-driven harness conformance review
 
-The encoded lifecycle is:
+The encoded baseline lifecycle is:
 
 `source issue` → `.github/workflows/issue-intake.yml` → deterministic
 classification/readiness → `codex-delivery.yml` → Sol High Plan → persistent
 thread UUID → Luna Max Implement → bounded verification → recorded branch and
 review pull request → human merge.
 
-Owner continuation is guarded by the workflow and controller payload identity,
-repository-owner association, saved-state lookup, comment boundary,
-consumed-comment IDs and exact `thread/resume`. The controller rejects stale,
-duplicate, bot and pull-request comments. Tests cover these boundaries.
+At the baseline cutoff, owner continuation was guarded by workflow and
+controller payload identity, repository-owner association, saved-state lookup,
+comment boundary, consumed-comment IDs and exact `thread/resume`. The
+provisional source-issue change broadens this to non-bot repository writers
+after deterministic permission checking and adds iterative refinement and
+conditional child coordination.
 
 The traceability chain breaks at observation and publication. `state.json` can
 hold the source issue, phase, session UUID, branch, validation and PR, while
@@ -107,8 +116,12 @@ to prove that the intended chain works end to end.
 - ADR-0009 should be amended with the evidence contract and the fact that
   runner-local state/session detail is not independently observable unless
   projected to a review pull request.
-- ADR-0010 remains the correct deterministic intake decision; its runtime
-  confirmation needs recurring traceability evidence.
+- ADR-0010 was the deterministic intake baseline and is now superseded by
+  ADR-0012. Its history remains in Git, but it must not remain active runtime
+  context after the replacement is merged.
+- ADR-0012 through ADR-0015 are provisional on the source-issue branch. Their
+  generated primitive index and deterministic checks are structural evidence;
+  real GitHub App, runner cleanup, and end-to-end issue evidence remain open.
 - ADR-0002, ADR-0005, ADR-0006, ADR-0007 and ADR-0008 remain aligned locally;
   their runtime or semantic confirmation is incomplete rather than contradicted.
 - No unsupported ADR `status` field, automatic acceptance workflow, duplicate
@@ -175,3 +188,22 @@ and duplicate synchronization comments.
 | domain, agent, delivery and PR documentation | Explain terms and reviewer contract | ADR-0002/0003/0009/0011 | documentation | high |
 | `tests/architecture/**` and affected delivery tests | Prove schemas, mapping, redaction, review outcomes and workflow permissions | ADR-0011 | structural/semantic test evidence | high |
 | `CHANGELOG.md` | Record the new review capability | ADR-0006 | documentation | medium |
+
+## J. Source issue #29 implementation boundary
+
+The source-issue branch extends this historical baseline with four provisional
+decisions. `docs/architecture/adr-primitive-index.json` is derived from the
+primitive-local metadata comments and is checked for exact regeneration. The
+review now orders deterministic checks as ADR validity, generated traceability,
+domain compatibility, required enforcement, removal outcomes, dangling
+references, supersession, and minimal runtime context before its advisory
+semantic pass.
+
+The branch also keeps GitHub labels as work state and stores execution failures
+separately, accepts iterative refinement and validated conditional child
+issues, uses a repository-scoped App for event-producing operations, and gives
+each source issue an isolated resumable state directory with per-run temporary
+homes, tools, and authentication bridges. These controls are ready for
+controller-owned dependency, installation, and self-hosted end-to-end
+verification; they do not claim that GitHub, App installation, or runner
+retention has been observed in this sandbox.
