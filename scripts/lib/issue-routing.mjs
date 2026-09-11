@@ -1,3 +1,6 @@
+// agentic-primitive: {"id":"issue-classifier","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012"],"domains":["agentic-delivery-governance"]}
+import { validateTransition } from './lifecycle-transitions.mjs';
+
 const TITLE_TYPE_PREFIXES = new Map([
   ['bug', 'bug'], ['feature', 'feature'], ['request', 'feature'], ['task', 'task'],
   ['idea', 'idea'], ['research', 'research'], ['architecture', 'architecture'], ['adr', 'architecture'],
@@ -190,8 +193,7 @@ function requiredFormFields(config, type, body, source = 'unknown') {
 }
 
 function transitionAllowed(config, from, to) {
-  if (!from || from === to) return true;
-  return (config.transitions?.[from] ?? []).includes(to);
+  return validateTransition({ config, from, to }).allowed;
 }
 
 function readiness(config, { issue, type, state, governance, form, conflict }) {

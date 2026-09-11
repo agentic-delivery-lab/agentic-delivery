@@ -1,3 +1,4 @@
+// agentic-primitive: {"id":"domain-language-validator","kind":"validator","enforcement":"deterministic","adrs":["ADR-0003"],"domains":["agentic-delivery-governance"]}
 import { access, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

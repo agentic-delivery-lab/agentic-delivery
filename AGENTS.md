@@ -1,5 +1,7 @@
 # Repository instructions
 
+<!-- agentic-primitive: {"id":"repository-governance-instructions","kind":"instruction","enforcement":"instructional","adrs":["ADR-0001","ADR-0002","ADR-0003","ADR-0004","ADR-0007","ADR-0012","ADR-0013","ADR-0014","ADR-0015"],"domains":["agentic-delivery-governance"]} -->
+
 ## Architectural decisions
 
 - For a costly, cross-cutting, repository-wide, security-sensitive or otherwise significant choice, read [`docs/decisions/README.md`](docs/decisions/README.md) and use `$architecture-decision`.
@@ -24,6 +26,15 @@
 
 ## Delivery workflow
 
+- GitHub Issues, labels, pull requests and Actions are the control plane and
+  authoritative work-state record. Codex and the self-hosted runner are the
+  execution plane. Treat model output as an untrusted transition proposal and
+  require the deterministic transition validator before changing GitHub state.
+- Blank issues may enter iterative refinement without a template. Ask only
+  focused questions that are answerable from the current conversation. A
+  repository writer's answer continues the same issue and saved session; a
+  refined goal may create only the validated child work items it needs, while
+  the parent remains the lineage root.
 - Issue intake classifies work type, lifecycle state and governance metadata before the Codex delivery primitive. A new Plan run requires an open issue with a supported type, cleared deterministic gates and `state:ready-for-plan`; that state automatically authorizes Plan. Successful planning transitions through `state:ready-for-agent` to automatic Implement. Research uses `state:investigating`, deferred Idea work uses `state:parked`, rejected or abandoned work uses `state:done` with GitHub's `not planned` close reason, and the canonical ADR governance label is `adr:needed`.
 
 - For automated source issue execution, read [`.agents/codex-delivery.md`](.agents/codex-delivery.md) and [`docs/delivery/codex-workflow.md`](docs/delivery/codex-workflow.md). Preserve mandatory issue communication, clarification pauses, exact model settings, and the budget boundary.

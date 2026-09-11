@@ -1,8 +1,22 @@
+<!-- agentic-primitive: {"id":"codex-delivery-workflow-guide","kind":"instruction","enforcement":"instructional","adrs":["ADR-0009","ADR-0012","ADR-0014","ADR-0015"],"domains":["agentic-delivery-governance"]} -->
+
 # Codex source issue workflow
 
 The proposed workflow turns an open source issue into an implementation plan,
 changes, validation, and a review pull request. Its decision is recorded in
 [ADR-0009](../decisions/0009-run-codex-from-source-issues-with-a-budget-boundary.md).
+The control-plane, traceability, App, and runner-isolation extensions are
+recorded in [ADR-0012](../decisions/0012-use-github-as-the-lifecycle-control-plane.md),
+[ADR-0013](../decisions/0013-derive-adr-traceability-from-agentic-primitives.md),
+[ADR-0014](../decisions/0014-use-a-repository-scoped-github-app.md), and
+[ADR-0015](../decisions/0015-isolate-resumable-runner-execution.md).
+
+GitHub is the control plane: issue labels, child-issue lineage, pull requests,
+and Actions own work state. Codex and the self-hosted runner are the execution
+plane. Model output is an untrusted transition proposal; deterministic
+validation approves it before GitHub state changes. A run's execution state
+(operation, Actions run identity, failure reason, and recoverability) is stored
+separately, so retries do not silently advance or corrupt the work item.
 
 ## Start and resume
 
@@ -12,6 +26,16 @@ classifies the work type, lifecycle state, and governance metadata before any
 Codex turn. Incomplete, ambiguous, Idea, and Research work remains in
 maturation (`Research` uses `state:investigating`; deferred Idea work uses
 `state:parked`).
+
+A blank issue can enter iterative refinement: Codex asks one to three focused
+questions, and a later repository-writer comment continues the same
+conversation and saved session. A refined outcome selects one
+delivery-capable parent work type and may contain multiple actionable work
+items; those items are conditionally decomposed into at most ten idempotent
+children. The parent remains the lineage root. An atomic goal continues from
+the parent without a fixed child checklist. After discovery children provide
+new evidence, a repository-writer comment can request another refinement wave
+on the coordinating parent.
 
 Applying a valid `state:ready-for-plan` is the normal authorization for the
 downstream delivery workflow. The classifier's deterministic readiness gate
@@ -24,11 +48,12 @@ configured human gate. The workflow records progress and validation on the
 source issue.
 
 The `issue_comment` trigger is restricted twice: the workflow accepts only a
-new comment from the repository owner with `author_association: OWNER`, and
-the controller verifies the same payload identity. Pull-request comments,
-bots, rerun actors, and other writers cannot enter continuation. A plain owner
-answer continues an existing `awaiting-human` continuation state. A clear
-natural-language owner request such as “Please continue from the saved work”
+new non-bot issue comment, and the intake controller verifies repository
+write/maintain/admin permission before handing it to delivery. The controller
+also verifies the same payload identity. Pull-request comments, bots, rerun
+actors, and unauthorized writers cannot enter continuation. A plain
+writer answer continues an existing `awaiting-human` continuation state. A
+clear natural-language request such as “Please continue from the saved work”
 continues a technical `paused` state. The legacy `/codex resume` form remains a
 compatibility shortcut, while manual dispatch of `codex-delivery` remains
 available for recovery and initial issue execution.
@@ -52,7 +77,7 @@ Issue comments use three visibly different Markdown formats:
 - **Progress update** reports concise, non-blocking work. Rapid updates in the
   same phase are saved but coalesced to avoid flooding the issue timeline.
 - **Action required: answer Codex** lists only the questions that need a human
-  decision and tells the owner to reply with those answers.
+  decision and tells a repository writer to reply with those answers.
 - **Delivery paused: recovery required** reports a technical or quota pause,
   states that no decision is requested, and gives the recovery action. When
   repository validation exhausts its repair attempts, this comment also shows
@@ -68,8 +93,11 @@ collapsed Markdown sections when they are needed for review or recovery.
 ## Continuation state and session correlation
 
 Persisted state is versioned and stores the repository, source issue, delivery
-phase, exact Codex session UUID, a waiting comment boundary, and consumed
-comment IDs. New app-server threads are persistent (`ephemeral: false`). The
+phase, exact Codex session UUID, a waiting comment boundary, consumed comment
+IDs, and a separate execution record. The execution record contains the
+operation, Actions run ID/attempt/URL, recoverability, and redacted failure
+reason; it is evidence, not lifecycle authority. New app-server threads are
+persistent (`ephemeral: false`). The
 controller saves the returned UUID before the first model turn and resumes
 later runs with `thread/resume` for that exact UUID. It does not use
 `codex resume --last`, a global newest-session lookup, or a new-thread fallback
@@ -85,11 +113,12 @@ Issue: #<number>
 Manual recovery: codex resume <UUID>
 ```
 
-The next accepted owner comment is supplied directly to the resumed turn with
+The next accepted repository-writer comment is supplied directly to the resumed
+turn with
 the saved issue brief, progress, implementation plan, remaining tasks, and
 validation context. It is consumed by that first resumed turn; any further
 implementation turns continue automatically from saved tasks without replaying
-the comment or asking the owner to comment again. Comments at or before the
+the comment or asking the writer to comment again. Comments at or before the
 waiting boundary and duplicate event deliveries are ignored. Bot-authored
 comments are excluded from issue
 snapshots so automation cannot change the planning digest or create a loop.
@@ -105,7 +134,7 @@ New, edited, or removed human discussion returns the delivery run to planning
 without discarding files. Its own audit comments, bot-authored comments, and
 bare `/codex resume` commands do not invalidate the plan. Recognized
 natural-language recovery requests have the same control-message treatment.
-Other owner comments remain part of the source snapshot, so new requirements
+Other repository-writer comments remain part of the source snapshot, so new requirements
 still return the run to planning. These checks are snapshots, not a lock on
 issue edits.
 
@@ -144,14 +173,14 @@ issue edits.
   `RUNNER_WORKSPACE`. Set repository variable `CODEX_DELIVERY_STATE_DIR` to an
   absolute directory outside disposable checkouts if needed. Restrict access
   to the runner service user and back it up as operational data.
-- An Actions secret named `CODEX_DELIVERY_PUBLISH_TOKEN` containing a dedicated
-  fine-grained personal access token with repository **Contents: Read and
-  write**, **Workflows: Read and write**, and **Pull requests: Read and write**
-  permissions. The controller uses this credential only to publish Git changes
-  and the review pull request. The built-in `GITHUB_TOKEN` cannot create or
-  update files under `.github/workflows`, and its events do not start most
-  downstream workflows. Use a short expiry and rotate the secret before it
-  expires. A missing secret stops the delivery run before model execution.
+- GitHub App secrets `CODEX_DELIVERY_APP_ID` and
+  `CODEX_DELIVERY_APP_PRIVATE_KEY`, with optional secret
+  `CODEX_DELIVERY_APP_INSTALLATION_ID`. Install the App only on this repository
+  with Metadata read plus Issues, Contents, Pull requests, and Workflows write.
+  The controller mints short-lived installation tokens only for child issue
+  creation and publication. It keeps the private key and token in memory,
+  redacts them, and never exposes them to Codex. `GITHUB_TOKEN` remains the
+  default for reads, permission checks, labels, and comments.
 
 Run `self-hosted-runner-smoke` with input `codex=true` for a check without a
 model turn. The setup step supplies the executable without copying
@@ -216,12 +245,16 @@ credit telemetry pause model execution. Do not enable automatic credit
 recharging or add credits while a delivery run is active. Other account clients
 and in-flight usage remain outside the controller's control.
 
-Each issue directory contains `state.json`, an append-only `audit.jsonl`, the
-working tree, and `CONTINUE.md` after a pause or human-input boundary. The
-continuation prompt and remaining tasks are also posted on the source issue
-without another model call. A technical pause waits for a clear natural-language
-owner request to continue; an `awaiting-human` state waits for the requested
-answer. The legacy `/codex resume` command remains accepted for compatibility.
+Each issue directory retains `state.json`, an append-only `audit.jsonl`, and
+the outbox. A working tree, Codex session home, and `CONTINUE.md` exist only
+while a run is active or deliberately recoverable after a pause or human-input
+boundary. Successful publication or explicit abandonment removes the checkout,
+session home, temporary tools, and authentication bridge after the outbox is
+flushed. The continuation prompt and remaining tasks are also posted on the
+source issue without another model call. A technical pause waits for a clear
+natural-language writer request to continue; an `awaiting-human` state waits
+for the requested answer. The legacy `/codex resume` command remains accepted
+for compatibility.
 Saved phases distinguish planning, branch creation, implementation,
 verification, commit, and publication. Commit/publication retries do not start
 a model or require available generation quota. Implementation questions preserve
@@ -242,9 +275,10 @@ operator; never paste credential-bearing output into the audit trail.
 If issue posting fails, the outbox remains in state for another attempt. A
 hard process kill may leave `account.lock`; inspect the referenced run and
 confirm that no Codex process is still active before removing that exact lock.
-Do not delete issue workspaces to clear a lock. Retain active state until the
-review pull request is merged or the work is abandoned; archive or remove
-completed state deliberately, according to the runner's retention policy.
+Do not delete issue workspaces to clear a lock. Retain lifecycle state and
+audit history until the review pull request is merged or the work is abandoned;
+archive or remove completed state deliberately, according to the runner's
+retention policy.
 
 ## Review boundary
 

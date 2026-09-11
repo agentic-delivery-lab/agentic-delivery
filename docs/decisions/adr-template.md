@@ -4,6 +4,12 @@ source-issue: https://github.com/owner/repository/issues/NNN
 decision-makers: Name(s)
 consulted: Name(s) or "None"
 informed: Name(s) or "None"
+domains:
+  - bounded-context-id
+required-enforcement:
+  - deterministic
+# supersedes:
+#   - ADR-NNNN
 ---
 
 # Short, solution-focused title

@@ -23,8 +23,7 @@ jobs:
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 30
     env:
-      HOME: /var/lib/github-runner
-      CODEX_HOME: /var/lib/github-runner/.codex
+      CODEX_AUTH_HOME: /var/lib/github-runner/.codex
       BASE_SHA: ${{ github.event.pull_request.base.sha }}
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       GH_TOKEN: ${{ github.token }}

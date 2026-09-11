@@ -81,6 +81,9 @@ jobs:
       - name: Validate configuration files
         run: node scripts/validate-config-files.mjs "$GITHUB_WORKSPACE"
 
+      - name: Validate ADR primitive traceability index
+        run: node scripts/generate-adr-primitive-index.mjs --check
+
       - name: Audit dependencies
         run: pnpm audit --audit-level=high
 

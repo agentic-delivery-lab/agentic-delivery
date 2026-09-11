@@ -5,10 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { parseRepositoryYaml } from './lib/yaml.mjs';
 import {
   classifyIssue,
+  isResumeRequestBody,
   labelDefinitions,
   managedLabels,
   parseEventRequestedState,
+  stateByLabel,
 } from './lib/issue-routing.mjs';
+import { validateTransition } from './lib/lifecycle-transitions.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '..');
 
@@ -49,6 +52,11 @@ export function githubApi({ repository, token, fetchImpl = fetch }) {
   };
 }
 
+function lineageParent(issue) {
+  const match = /^<!--\s*codex-lineage:v1\s+parent=([1-9][0-9]*)\s+key=[a-z0-9]+(?:-[a-z0-9]+)*\s*-->/.exec(String(issue?.body ?? '').trim());
+  return match ? match[1] : null;
+}
+
 async function upsertLabels(api, config) {
   for (const definition of labelDefinitions(config)) {
     try {
@@ -67,6 +75,19 @@ export async function reconcileLabels({ api, issueNumber, issue, config, classif
   const managed = managedLabels(config);
   const preserved = existing.filter((label) => !managed.has(label));
   const currentManaged = existing.filter((label) => managed.has(label));
+  const currentStates = existing.map((label) => stateByLabel(config, label)?.id).filter(Boolean);
+  const targetState = stateByLabel(config, classification.stateLabel)?.id;
+  if (currentStates.length === 1 && targetState && currentStates[0] !== targetState) {
+    const transition = validateTransition({
+      config,
+      from: currentStates[0],
+      to: targetState,
+      workType: classification.workType,
+      governance: classification.governance,
+      issueState: issue.state,
+    });
+    if (!transition.allowed) throw new Error(`Lifecycle transition rejected: ${transition.reasons.join(' ')}`);
+  }
   const desiredManaged = [...classification.governance];
   if (classification.workType && classification.workTypeSource !== 'native' && !classification.conflict?.length) {
     const type = config.types.find((candidate) => candidate.id === classification.workType);
@@ -105,21 +126,62 @@ export async function classifyAndRoute({ env = process.env, event, fetchImpl = f
   const issue = await api(`/issues/${issueNumber}`);
   if (issue.pull_request) throw new Error('A pull request cannot enter issue intake.');
   const issueComment = env.GITHUB_EVENT_NAME === 'issue_comment';
-  const owner = event?.repository?.owner?.login ?? repository.split('/')[0];
-  const trustedOwnerComment = !issueComment || (
+  const trustedComment = !issueComment || (
     event?.action === 'created'
-    && event?.comment?.user?.login === owner
-    && event.comment.user.type !== 'Bot'
-    && event.comment.author_association === 'OWNER'
+    && event?.comment?.user?.type !== 'Bot'
+    && !String(event?.comment?.user?.login ?? '').endsWith('[bot]')
   );
-  const mode = trustedOwnerComment ? intakeMode(event, env) : 'event';
+  const mode = trustedComment ? intakeMode(event, env) : 'event';
   const requestedState = parseEventRequestedState(event, config);
-  const metadata = classifyIssue({ issue, config, requestedState, mode, eventAction: event?.action });
-  if (!trustedOwnerComment) {
+  let metadata = classifyIssue({ issue, config, requestedState, mode, eventAction: event?.action });
+  if (!trustedComment) {
     metadata.route = 'hold';
-    metadata.reasons = [...metadata.reasons, 'Only a trusted repository-owner comment may continue delivery.'];
+    metadata.reasons = [...metadata.reasons, 'Only a newly created non-bot comment may continue refinement or delivery.'];
+  }
+  const existingStates = [...new Set((issue.labels ?? [])
+    .map((label) => typeof label === 'string' ? label : label?.name)
+    .map((label) => stateByLabel(config, label)?.id)
+    .filter(Boolean))];
+  if (existingStates.length === 1 && existingStates[0] !== metadata.state) {
+    const transition = validateTransition({
+      config,
+      from: existingStates[0],
+      to: metadata.state,
+      workType: metadata.workType,
+      governance: metadata.governance,
+      issueState: issue.state,
+    });
+    if (!transition.allowed) throw new Error(`Lifecycle transition rejected: ${transition.reasons.join(' ')}`);
+  }
+  const parentNumber = !issueComment && ['edited', 'closed', 'reopened', 'labeled', 'unlabeled', 'typed', 'untyped'].includes(event?.action)
+    ? lineageParent(issue) : null;
+  if (parentNumber) {
+    const parent = await api(`/issues/${parentNumber}`);
+    const parentMetadata = classifyIssue({ issue: parent, config });
+    const actor = env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR;
+    let actorAllowed = false;
+    if (typeof actor === 'string' && (actor === 'github-actions[bot]' || actor.endsWith('[bot]'))) actorAllowed = true;
+    else if (actor) {
+      try { actorAllowed = ['admin', 'maintain', 'write'].includes((await api(`/collaborators/${encodeURIComponent(actor)}/permission`)).permission); } catch (error) {
+        if (error.status !== 404) throw error;
+      }
+    }
+    if (actorAllowed && parent.state === 'open' && parentMetadata.state === 'coordinating') {
+      metadata = { ...parentMetadata, route: 'coordinate', reasons: [...parentMetadata.reasons, `Child issue #${issueNumber} changed; coordinate parent #${parentNumber}.`] };
+      const result = { issue: parentNumber, route: metadata.route, state: metadata.state, metadata, labels: (parent.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean) };
+      await writeOutputs(result, env);
+      return result;
+    }
   }
   const labels = await reconcileLabels({ api, issueNumber, issue, config, classification: metadata });
+
+  const refinementEvent = issue.state === 'open' && (
+    (!issueComment && event?.action === 'opened' && ['needs-triage', 'needs-info', 'requirements', 'decision-needed', 'investigating'].includes(metadata.state))
+    || (trustedComment && issueComment
+      && !isResumeRequestBody(event.comment?.body)
+      && ['needs-triage', 'needs-info', 'requirements', 'decision-needed', 'investigating', 'coordinating'].includes(metadata.state))
+  );
+  if (refinementEvent && trustedComment) metadata.route = 'refine';
 
   if (metadata.route === 'resume' && issue.state !== 'open') {
     metadata.route = 'hold';
@@ -129,7 +191,7 @@ export async function classifyAndRoute({ env = process.env, event, fetchImpl = f
   // A ready route is an authorization boundary. Check the triggering actor
   // before handing it to the delivery workflow; ordinary intake remains open
   // to issue authors and can still reconcile metadata without this check.
-  if (metadata.route === 'plan' || metadata.route === 'resume') {
+  if (metadata.route === 'plan' || metadata.route === 'resume' || metadata.route === 'refine') {
     const actor = issueComment ? event.comment.user.login : env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR;
     if (!actor) {
       metadata.route = 'hold';

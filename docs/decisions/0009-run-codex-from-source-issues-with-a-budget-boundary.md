@@ -4,6 +4,11 @@ source-issue: https://github.com/sjefsharp/agentic-delivery/issues/21
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
+domains:
+  - agentic-delivery-governance
+required-enforcement:
+  - instructional
+  - deterministic
 ---
 
 # Run Codex from source issues with a budget boundary
@@ -143,19 +148,21 @@ The controller uses the repository branch helper, validates changes, and
 publishes the recorded feature branch and review pull request. Validation
 repairs are bounded to three attempts per invocation.
 
-Issue communication and authorization checks use the job's short-lived
-`GITHUB_TOKEN`. Git and review pull-request publication use the separate
-`CODEX_DELIVERY_PUBLISH_TOKEN` Actions secret. The built-in token cannot publish
-changes to files under `.github/workflows`, and events it creates do not start
-most downstream workflows. The publication token must have repository-content,
-workflow-file, and pull-request write access. The controller fails before model
-execution when it is missing, redacts it from diagnostics, and does not expose
-it to model tools. This split gives the broader credential only the publication
-role while allowing review pull requests to include workflow changes and start
-their required checks.
+Issue communication, authorization checks, labels, and ordinary reads use the
+job's short-lived `GITHUB_TOKEN`. Child-issue creation, Git publication, and
+review pull-request publication use the repository-scoped GitHub App described
+by ADR-0014. The controller mints installation tokens just in time, redacts
+them, and does not expose them to model tools. This split preserves the
+workflow token's least-privilege role while allowing App-generated events to
+start required downstream checks.
 
 Source issue and discussion snapshots are checked before dependent resumption
 and publication. Changed input returns to planning while preserving files.
+
+ADR-0012 refines the intake boundary: iterative refinement answers may come
+from a non-bot repository writer whose write, maintain, or admin permission is
+validated by the control plane. Exact-session continuation, execution-state
+evidence, and human review/merge authority remain unchanged.
 Publication retries must match the verified tree. Invalid saved state remains
 untouched for operator inspection. Authentication-bearing Codex errors are
 replaced with fixed diagnostic hints before publication.

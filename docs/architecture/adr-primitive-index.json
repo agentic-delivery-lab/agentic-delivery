@@ -1,0 +1,523 @@
+{
+  "version": 1,
+  "source": "primitive-references",
+  "adrs": [
+    {
+      "id": "ADR-0001",
+      "file": "docs/decisions/0001-use-madr-for-architecture-decisions.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "instructional"
+      ],
+      "primitives": [
+        "adr-structure-validator",
+        "repository-governance-instructions"
+      ]
+    },
+    {
+      "id": "ADR-0002",
+      "file": "docs/decisions/0002-use-plain-language-for-human-agent-communication.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "instructional"
+      ],
+      "primitives": [
+        "repository-governance-instructions"
+      ]
+    },
+    {
+      "id": "ADR-0003",
+      "file": "docs/decisions/0003-use-context-scoped-ubiquitous-language.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "instructional"
+      ],
+      "primitives": [
+        "domain-language-validator",
+        "repository-governance-instructions"
+      ]
+    },
+    {
+      "id": "ADR-0004",
+      "file": "docs/decisions/0004-use-trunk-based-delivery.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "instructional"
+      ],
+      "primitives": [
+        "main-history-validator",
+        "repository-governance-instructions"
+      ]
+    },
+    {
+      "id": "ADR-0005",
+      "file": "docs/decisions/0005-use-conventional-commits-with-gitmoji.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ],
+      "primitives": [
+        "commit-format-validator"
+      ]
+    },
+    {
+      "id": "ADR-0006",
+      "file": "docs/decisions/0006-curate-a-changelog.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "instructional"
+      ],
+      "primitives": [
+        "changelog-structure-validator",
+        "curated-changelog"
+      ]
+    },
+    {
+      "id": "ADR-0007",
+      "file": "docs/decisions/0007-use-issue-linked-conventional-branch-names.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ],
+      "primitives": [
+        "issue-branch-name-validator",
+        "repository-governance-instructions"
+      ]
+    },
+    {
+      "id": "ADR-0008",
+      "file": "docs/decisions/0008-use-pnpm-with-delayed-dependency-adoption.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ],
+      "primitives": [
+        "toolchain-policy-validator"
+      ]
+    },
+    {
+      "id": "ADR-0009",
+      "file": "docs/decisions/0009-run-codex-from-source-issues-with-a-budget-boundary.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "instructional"
+      ],
+      "primitives": [
+        "codex-delivery-controller",
+        "codex-delivery-workflow-guide"
+      ]
+    },
+    {
+      "id": "ADR-0011",
+      "file": "docs/decisions/0011-run-layered-harness-architecture-reviews.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "semantic"
+      ],
+      "primitives": [
+        "harness-architecture-review",
+        "semantic-architecture-review"
+      ]
+    },
+    {
+      "id": "ADR-0012",
+      "file": "docs/decisions/0012-use-github-as-the-lifecycle-control-plane.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ],
+      "supersedes": [
+        "ADR-0010"
+      ],
+      "primitives": [
+        "codex-delivery-controller",
+        "codex-delivery-workflow-guide",
+        "issue-classifier",
+        "lifecycle-transition-rules",
+        "lifecycle-transition-validator",
+        "repository-governance-instructions"
+      ]
+    },
+    {
+      "id": "ADR-0013",
+      "file": "docs/decisions/0013-derive-adr-traceability-from-agentic-primitives.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ],
+      "primitives": [
+        "adr-traceability-generator",
+        "harness-architecture-review",
+        "repository-governance-instructions"
+      ]
+    },
+    {
+      "id": "ADR-0014",
+      "file": "docs/decisions/0014-use-a-repository-scoped-github-app.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ],
+      "primitives": [
+        "codex-delivery-workflow-guide",
+        "github-app-publication-boundary",
+        "github-app-token-provider",
+        "repository-governance-instructions"
+      ]
+    },
+    {
+      "id": "ADR-0015",
+      "file": "docs/decisions/0015-isolate-resumable-runner-execution.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ],
+      "primitives": [
+        "codex-delivery-controller",
+        "codex-delivery-workflow-guide",
+        "repository-governance-instructions"
+      ]
+    }
+  ],
+  "domains": [
+    {
+      "id": "agentic-delivery-governance",
+      "adrs": [
+        "ADR-0001",
+        "ADR-0002",
+        "ADR-0003",
+        "ADR-0004",
+        "ADR-0005",
+        "ADR-0006",
+        "ADR-0007",
+        "ADR-0008",
+        "ADR-0009",
+        "ADR-0011",
+        "ADR-0012",
+        "ADR-0013",
+        "ADR-0014",
+        "ADR-0015"
+      ],
+      "primitives": [
+        "adr-structure-validator",
+        "adr-traceability-generator",
+        "changelog-structure-validator",
+        "codex-delivery-controller",
+        "codex-delivery-workflow-guide",
+        "commit-format-validator",
+        "curated-changelog",
+        "domain-language-validator",
+        "github-app-publication-boundary",
+        "github-app-token-provider",
+        "harness-architecture-review",
+        "issue-branch-name-validator",
+        "issue-classifier",
+        "lifecycle-transition-rules",
+        "lifecycle-transition-validator",
+        "main-history-validator",
+        "repository-governance-instructions",
+        "semantic-architecture-review",
+        "toolchain-policy-validator"
+      ]
+    }
+  ],
+  "primitives": [
+    {
+      "id": "adr-structure-validator",
+      "path": "scripts/validate-adrs.mjs",
+      "location": "scripts/validate-adrs.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0001"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "adr-traceability-generator",
+      "path": "scripts/generate-adr-primitive-index.mjs",
+      "location": "scripts/generate-adr-primitive-index.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0013"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "changelog-structure-validator",
+      "path": "scripts/validate-changelog.mjs",
+      "location": "scripts/validate-changelog.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0006"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "codex-delivery-controller",
+      "path": "scripts/codex-delivery.mjs",
+      "location": "scripts/codex-delivery.mjs",
+      "kind": "state-machine",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0012",
+        "ADR-0015"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "codex-delivery-workflow-guide",
+      "path": "docs/delivery/codex-workflow.md",
+      "location": "docs/delivery/codex-workflow.md",
+      "kind": "instruction",
+      "enforcement": "instructional",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0012",
+        "ADR-0014",
+        "ADR-0015"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "commit-format-validator",
+      "path": "commitlint.config.mjs",
+      "location": "commitlint.config.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0005"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "curated-changelog",
+      "path": "CHANGELOG.md",
+      "anchor": "#changelog",
+      "location": "CHANGELOG.md#changelog",
+      "kind": "instruction",
+      "enforcement": "instructional",
+      "adrs": [
+        "ADR-0006"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "domain-language-validator",
+      "path": "scripts/validate-domain-language.mjs",
+      "location": "scripts/validate-domain-language.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0003"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "github-app-publication-boundary",
+      "path": ".github/workflows/codex-delivery.yml",
+      "location": ".github/workflows/codex-delivery.yml",
+      "kind": "workflow",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0014"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "github-app-token-provider",
+      "path": "scripts/lib/github-app.mjs",
+      "location": "scripts/lib/github-app.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0014"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "harness-architecture-review",
+      "path": "scripts/lib/architecture-review.mjs",
+      "location": "scripts/lib/architecture-review.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0011",
+        "ADR-0013"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "issue-branch-name-validator",
+      "path": "scripts/validate-branch-name.mjs",
+      "location": "scripts/validate-branch-name.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0007"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "issue-classifier",
+      "path": "scripts/lib/issue-routing.mjs",
+      "location": "scripts/lib/issue-routing.mjs",
+      "kind": "state-machine",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0012"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "lifecycle-transition-rules",
+      "path": ".github/issue-lifecycle.yml",
+      "location": ".github/issue-lifecycle.yml",
+      "kind": "state-machine",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0012"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "lifecycle-transition-validator",
+      "path": "scripts/lib/lifecycle-transitions.mjs",
+      "location": "scripts/lib/lifecycle-transitions.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0012"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "main-history-validator",
+      "path": "scripts/validate-main-history.mjs",
+      "location": "scripts/validate-main-history.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0004"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "repository-governance-instructions",
+      "path": "AGENTS.md",
+      "anchor": "#repository-instructions",
+      "location": "AGENTS.md#repository-instructions",
+      "kind": "instruction",
+      "enforcement": "instructional",
+      "adrs": [
+        "ADR-0001",
+        "ADR-0002",
+        "ADR-0003",
+        "ADR-0004",
+        "ADR-0007",
+        "ADR-0012",
+        "ADR-0013",
+        "ADR-0014",
+        "ADR-0015"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "semantic-architecture-review",
+      "path": "scripts/lib/architecture-review-agent.mjs",
+      "location": "scripts/lib/architecture-review-agent.mjs",
+      "kind": "customization",
+      "enforcement": "semantic",
+      "adrs": [
+        "ADR-0011"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "toolchain-policy-validator",
+      "path": "scripts/lib/toolchain.mjs",
+      "location": "scripts/lib/toolchain.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0008"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    }
+  ]
+}

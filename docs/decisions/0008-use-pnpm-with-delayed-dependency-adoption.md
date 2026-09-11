@@ -4,6 +4,10 @@ source-issue: https://github.com/sjefsharp/agentic-delivery/issues/12
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
+domains:
+  - agentic-delivery-governance
+required-enforcement:
+  - deterministic
 ---
 
 # Use pnpm with delayed dependency adoption and Node.js automation

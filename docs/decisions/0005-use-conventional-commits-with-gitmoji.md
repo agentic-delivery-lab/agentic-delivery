@@ -4,6 +4,10 @@ source-issue: https://github.com/sjefsharp/agentic-delivery/issues/7
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
+domains:
+  - agentic-delivery-governance
+required-enforcement:
+  - deterministic
 ---
 
 # Use Conventional Commits with Gitmoji

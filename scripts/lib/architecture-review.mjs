@@ -1,24 +1,34 @@
+// agentic-primitive: {"id":"harness-architecture-review","kind":"validator","enforcement":"deterministic","adrs":["ADR-0011","ADR-0013"],"domains":["agentic-delivery-governance"]}
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { parseRepositoryYaml } from './yaml.mjs';
+import { buildTraceability, collectAdrs, collectPrimitives, PRIMITIVE_MARKER } from './adr-traceability.mjs';
 
 const execFileAsync = promisify(execFile);
 const ADR_FILE = /^docs\/decisions\/(\d{4})-[a-z0-9-]+\.md$/;
 const EVIDENCE_MARKER = /<!--\s*codex-delivery-evidence:v1\s*([\s\S]*?)\s*-->/i;
+const TEXT_EXTENSIONS = new Set(['.md', '.mjs', '.js', '.yml', '.yaml', '.json', '.jsonc', '.toml', '.txt']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHA = /^[0-9a-f]{40}$/i;
 const URL = /^https?:\/\/\S+$/;
 
 export const REVIEW_SCHEMA_VERSION = 1;
 
+function childEnvironment() {
+  const { GH_TOKEN: _ghToken, GITHUB_TOKEN: _githubToken, PUBLISH_TOKEN: _publishToken,
+    OPENAI_API_KEY: _openAiKey, CODEX_DELIVERY_APP_PRIVATE_KEY: _privateKey, ...safe } = process.env;
+  return safe;
+}
+
 async function git(repositoryRoot, args) {
   const { stdout } = await execFileAsync('git', ['-C', repositoryRoot, ...args], {
     encoding: 'utf8',
     windowsHide: true,
     maxBuffer: 8 * 1024 * 1024,
+    env: childEnvironment(),
   });
   return stdout.trim();
 }
@@ -105,7 +115,7 @@ export function validateEvidenceRecord(value, { repository, issueNumber, head } 
   if (!revision || typeof revision.branch !== 'string' || !revision.branch.trim() || !SHA.test(revision.commit ?? '') || !SHA.test(revision.tree ?? '')) errors.push('revision is invalid');
   if (head && revision?.commit !== head) errors.push('revision commit does not match the pull-request head');
   if (!value.codexSession || !UUID.test(value.codexSession.id ?? '')) errors.push('codexSession is invalid');
-  if (!Array.isArray(value.modelTurns) || value.modelTurns.some((turn) => !turn || !['plan', 'implement', 'review'].includes(turn.phase) || typeof turn.model !== 'string' || typeof turn.effort !== 'string' || typeof turn.mode !== 'string')) errors.push('modelTurns are invalid');
+  if (!Array.isArray(value.modelTurns) || value.modelTurns.some((turn) => !turn || !['refine', 'plan', 'implement', 'review'].includes(turn.phase) || typeof turn.model !== 'string' || typeof turn.effort !== 'string' || typeof turn.mode !== 'string')) errors.push('modelTurns are invalid');
   const architecture = value.architectureContext;
   const adrList = (items) => Array.isArray(items) && items.every((item) => typeof item === 'string' && /^ADR-\d{4}$/.test(item));
   if (!architecture || !adrList(architecture.officialAdrs) || !adrList(architecture.provisionalAdrs) || !adrList(architecture.affectedAdrs) || !Array.isArray(architecture.boundedContexts) || architecture.boundedContexts.some((item) => typeof item !== 'string' || !item.trim())) errors.push('architectureContext is invalid');
@@ -119,28 +129,47 @@ export function validateEvidenceRecord(value, { repository, issueNumber, head } 
 async function mapData(repositoryRoot) {
   const source = await readFile(path.join(repositoryRoot, 'docs/architecture/harness-review.yml'), 'utf8');
   const value = parseRepositoryYaml(source, 'harness review map');
-  if (!value || value.version !== 1 || !Array.isArray(value.adrs) || !Array.isArray(value['bounded-contexts']) || !Array.isArray(value['runtime-surfaces'])) {
-    throw new Error('harness review map must define version 1, adrs, bounded-contexts, and runtime-surfaces');
+  if (!value || value.version !== 2 || !Array.isArray(value['bounded-contexts']) || !Array.isArray(value['runtime-surfaces'])) {
+    throw new Error('harness review map must define version 2, bounded-contexts, and runtime-surfaces');
   }
   const validPaths = (entry) => Array.isArray(entry?.paths) && entry.paths.length > 0 && entry.paths.every((pattern) => typeof pattern === 'string' && pattern.trim());
-  if (value.adrs.some((entry) => !/^ADR-\d{4}$/.test(entry?.id ?? '') || typeof entry.file !== 'string' || !validPaths(entry))
-    || new Set(value.adrs.map((entry) => entry.id)).size !== value.adrs.length
-    || value['bounded-contexts'].some((entry) => typeof entry?.id !== 'string' || typeof entry.register !== 'string' || !validPaths(entry))
+  if (value['bounded-contexts'].some((entry) => typeof entry?.id !== 'string' || typeof entry.register !== 'string' || !validPaths(entry))
     || value['runtime-surfaces'].some((entry) => typeof entry?.id !== 'string' || !validPaths(entry))) {
     throw new Error('harness review map contains an invalid or duplicate entry');
   }
   return value;
 }
 
+async function revisionPrimitiveRows(repositoryRoot, revision) {
+  const files = await gitFiles(repositoryRoot, revision);
+  const rows = [];
+  for (const file of files) {
+    if (!TEXT_EXTENSIONS.has(path.extname(file).toLowerCase())) continue;
+    let source;
+    try { source = await gitShow(repositoryRoot, revision, file); } catch { continue; }
+    for (const line of source.split(/\r?\n/)) {
+      const match = PRIMITIVE_MARKER.exec(line);
+      if (!match) continue;
+      try {
+        const value = JSON.parse(match[1]);
+        rows.push({ ...value, path: file });
+      } catch { /* the head generator reports malformed metadata */ }
+    }
+  }
+  return rows;
+}
+
+async function workingTreeDecisionFiles(repositoryRoot) {
+  const directory = path.join(repositoryRoot, 'docs', 'decisions');
+  const entries = await readdir(directory, { withFileTypes: true });
+  return entries.filter((entry) => entry.isFile() && ADR_FILE.test(`docs/decisions/${entry.name}`)).map((entry) => `docs/decisions/${entry.name}`);
+}
+
 function adrIds(files) {
   return files.map((file) => file.match(ADR_FILE)?.[1]).filter(Boolean).map((number) => `ADR-${number}`);
 }
 
-function adrEntry(map, id) {
-  return map.adrs.find((entry) => entry.id === id);
-}
-
-function affectedEntries(map, files, field = 'adrs') {
+function affectedEntries(map, files, field) {
   return map[field]
     .filter((entry) => (entry.paths ?? []).some((pattern) => files.some((file) => matchesPattern(file, pattern))))
     .map((entry) => entry.id);
@@ -169,24 +198,110 @@ export async function deterministicReview({ repositoryRoot, base, head, eventPat
   const commonAncestor = await mergeBase(repositoryRoot, base, head);
   const files = await changedFiles(repositoryRoot, commonAncestor, head);
   const map = await mapData(repositoryRoot);
+  const currentRevision = await git(repositoryRoot, ['rev-parse', 'HEAD']);
+  const useWorkingTree = currentRevision === head;
+  let traceability;
+  try {
+    traceability = JSON.parse(await gitShow(repositoryRoot, head, 'docs/architecture/adr-primitive-index.json'));
+  } catch (error) {
+    if (!useWorkingTree) throw new Error(`The reviewed revision has no valid generated traceability index: ${error.message}`);
+    try { traceability = JSON.parse(await readFile(path.join(repositoryRoot, 'docs/architecture/adr-primitive-index.json'), 'utf8')); }
+    catch (workingTreeError) { throw new Error(`The reviewed revision has no valid generated traceability index: ${workingTreeError.message}`); }
+  }
   const baseFiles = await gitFiles(repositoryRoot, base, 'docs/decisions');
-  const headFiles = await gitFiles(repositoryRoot, head, 'docs/decisions');
-  const headRepositoryFiles = await gitFiles(repositoryRoot, head);
+  const headFiles = useWorkingTree ? await workingTreeDecisionFiles(repositoryRoot) : await gitFiles(repositoryRoot, head, 'docs/decisions');
+  const headRepositoryFiles = useWorkingTree ? [...new Set([...(await gitFiles(repositoryRoot, head)), ...headFiles, 'docs/architecture/adr-primitive-index.json'])] : await gitFiles(repositoryRoot, head);
+  const basePrimitiveRows = await revisionPrimitiveRows(repositoryRoot, base);
   const officialAdrs = adrIds(baseFiles.filter((file) => ADR_FILE.test(file)));
   const currentIds = adrIds(headFiles.filter((file) => ADR_FILE.test(file)));
-  const mappedIds = map.adrs.map((entry) => entry.id);
   const checks = [];
 
-  const missingMappings = currentIds.filter((id) => !mappedIds.includes(id));
-  checks.push(missingMappings.length
-    ? check('adr-map-coverage', 'fail', `The impact map is missing ${missingMappings.join(', ')}.`, ['docs/architecture/harness-review.yml'])
-    : check('adr-map-coverage', 'pass', `The impact map covers all ${currentIds.length} ADR records.`, ['docs/architecture/harness-review.yml', 'docs/decisions/README.md']));
-  const staleMappings = headRepositoryFiles.includes('docs/architecture/harness-review.yml')
-    ? mappedIds.filter((id) => !currentIds.includes(id))
-    : [];
+  let derivedTraceability = null;
+  try {
+    const [adrResult, primitiveResult, domainSource] = await Promise.all([
+      collectAdrs(repositoryRoot),
+      collectPrimitives(repositoryRoot),
+      readFile(path.join(repositoryRoot, 'docs/domain/ubiquitous-language.yml'), 'utf8'),
+    ]);
+    const domains = parseRepositoryYaml(domainSource, 'domain register').bounded_contexts?.map((entry) => entry.id) ?? [];
+    if (!adrResult.errors.length && !primitiveResult.errors.length) {
+      derivedTraceability = buildTraceability({ adrs: adrResult.adrs, primitives: primitiveResult.primitives, domains });
+    }
+  } catch { /* the reviewed index and downstream checks report the failure */ }
+  checks.push(derivedTraceability && JSON.stringify(derivedTraceability) === JSON.stringify(traceability)
+    ? check('traceability-index-equality', 'pass', 'The generated traceability index matches canonical ADR and primitive metadata.', ['docs/architecture/adr-primitive-index.json'])
+    : check('traceability-index-equality', 'fail', 'The generated traceability index is stale or cannot be rebuilt from canonical repository metadata.', ['docs/architecture/adr-primitive-index.json', 'scripts/generate-adr-primitive-index.mjs']));
+
+  const indexIds = Array.isArray(traceability.adrs) ? traceability.adrs.map((entry) => entry.id) : [];
+  const missingMappings = currentIds.filter((id) => !indexIds.includes(id));
+  const uncovered = (traceability.adrs ?? []).filter((entry) => !Array.isArray(entry.primitives) || entry.primitives.length === 0).map((entry) => entry.id);
+  checks.push(missingMappings.length || uncovered.length
+    ? check('adr-map-coverage', 'fail', `The generated index is missing ${missingMappings.join(', ') || 'no ADR records'} or has uncovered ADRs: ${uncovered.join(', ') || 'none'}.`, ['docs/architecture/adr-primitive-index.json'])
+    : check('adr-map-coverage', 'pass', `The generated index covers all ${currentIds.length} ADR records with implementing primitives.`, ['docs/architecture/adr-primitive-index.json', 'docs/decisions/README.md']));
+  const domainIds = new Set((map['bounded-contexts'] ?? []).map((entry) => entry.id));
+  const primitives = Array.isArray(traceability.primitives) ? traceability.primitives : [];
+  const adrById = new Map((traceability.adrs ?? []).map((entry) => [entry.id, entry]));
+  const referenceErrors = [];
+  const enforcementErrors = [];
+  const domainErrors = [];
+  for (const primitive of primitives) {
+    for (const adrId of primitive.adrs ?? []) {
+      const adr = adrById.get(adrId);
+      if (!adr) referenceErrors.push(`${primitive.id} → ${adrId}`);
+      else {
+        if (!(primitive.domains ?? []).some((domain) => (adr.domains ?? []).includes(domain))) domainErrors.push(`${primitive.id} → ${adrId}`);
+        for (const required of adr.requiredEnforcement ?? []) if (primitive.enforcement !== required) {
+          // The ADR-level check below determines whether another primitive supplies
+          // the required enforcement; this loop only records unknown metadata.
+          if (!['deterministic', 'instructional', 'semantic'].includes(primitive.enforcement)) enforcementErrors.push(`${primitive.id}: ${primitive.enforcement}`);
+        }
+      }
+    }
+    for (const domain of primitive.domains ?? []) if (!domainIds.has(domain)) domainErrors.push(`${primitive.id}: ${domain}`);
+  }
+  for (const adr of traceability.adrs ?? []) for (const required of adr.requiredEnforcement ?? []) {
+    if (!primitives.some((primitive) => primitive.adrs?.includes(adr.id) && primitive.enforcement === required)) enforcementErrors.push(`${adr.id}: ${required}`);
+  }
+  checks.push(referenceErrors.length
+    ? check('primitive-reference-integrity', 'fail', `Primitive references do not resolve: ${referenceErrors.join(', ')}.`, ['docs/architecture/adr-primitive-index.json'])
+    : check('primitive-reference-integrity', 'pass', 'All primitive ADR references resolve to active records.', ['docs/architecture/adr-primitive-index.json']));
+  checks.push(domainErrors.length
+    ? check('adr-domain-compatibility', 'fail', `Primitive and domain references are incompatible: ${domainErrors.join(', ')}.`, ['docs/architecture/adr-primitive-index.json', 'docs/domain/ubiquitous-language.yml'])
+    : check('adr-domain-compatibility', 'pass', 'Primitive, ADR, and bounded-context references are compatible.', ['docs/architecture/adr-primitive-index.json', 'docs/domain/ubiquitous-language.yml']));
+  checks.push(enforcementErrors.length
+    ? check('adr-required-enforcement', 'fail', `Required enforcement is missing or invalid: ${[...new Set(enforcementErrors)].join(', ')}.`, ['docs/architecture/adr-primitive-index.json'])
+    : check('adr-required-enforcement', 'pass', 'Every active ADR has the required implementing enforcement.', ['docs/architecture/adr-primitive-index.json']));
+  const staleMappings = indexIds.filter((id) => !currentIds.includes(id));
   checks.push(staleMappings.length
-    ? check('adr-map-stale-entries', 'fail', `The impact map contains ADRs absent from the reviewed revision: ${staleMappings.join(', ')}.`, ['docs/architecture/harness-review.yml', 'docs/decisions/README.md'])
-    : check('adr-map-stale-entries', 'pass', 'The impact map has no entries for removed ADR records.', ['docs/architecture/harness-review.yml']));
+    ? check('adr-primitive-stale-entries', 'fail', `The generated index contains ADRs absent from the reviewed revision: ${staleMappings.join(', ')}.`, ['docs/architecture/adr-primitive-index.json'])
+    : check('adr-primitive-stale-entries', 'pass', 'The generated index has no entries for removed ADR records.', ['docs/architecture/adr-primitive-index.json']));
+
+  const invalidSupersession = (traceability.adrs ?? []).filter((entry) => (entry.supersedes ?? []).some((id) => currentIds.includes(id))).map((entry) => entry.id);
+  checks.push(invalidSupersession.length
+    ? check('adr-supersession', 'fail', `Superseded ADRs remain active: ${invalidSupersession.join(', ')}.`, ['docs/architecture/adr-primitive-index.json', 'docs/decisions'])
+    : check('adr-supersession', 'pass', 'No superseded ADR remains active in the reviewed revision.', ['docs/architecture/adr-primitive-index.json']));
+
+  let baseIndex = null;
+  try { baseIndex = JSON.parse(await gitShow(repositoryRoot, base, 'docs/architecture/adr-primitive-index.json')); } catch { /* legacy base without generated traceability */ }
+  const removedAdrs = officialAdrs.filter((id) => !currentIds.includes(id));
+  const previousPrimitives = baseIndex?.primitives ?? basePrimitiveRows;
+  const removedPrimitiveIds = new Set(previousPrimitives.filter((primitive) => removedAdrs.some((id) => primitive.adrs?.includes(id))).map((primitive) => primitive.id));
+  const currentPrimitives = traceability.primitives ?? [];
+  const danglingPrimitiveIds = currentPrimitives.filter((primitive) => removedAdrs.some((id) => primitive.adrs?.includes(id))).map((primitive) => primitive.id);
+  const deletedPrimitiveIds = new Set(previousPrimitives
+    .filter((primitive) => removedPrimitiveIds.has(primitive.id) && !currentPrimitives.some((candidate) => candidate.id === primitive.id)
+      && files.includes(primitive.path))
+    .map((primitive) => primitive.id));
+  const replacementOutcomes = [...removedPrimitiveIds].filter((id) => !deletedPrimitiveIds.has(id)
+    && !currentPrimitives.some((primitive) => primitive.id === id || primitive.replaces?.includes(id)));
+  checks.push(removedAdrs.length && (danglingPrimitiveIds.length || replacementOutcomes.length)
+    ? check('adr-removal-outcomes', 'fail', `Removed ADR references need explicit primitive outcomes; dangling: ${danglingPrimitiveIds.join(', ') || 'none'}, unresolved: ${replacementOutcomes.join(', ') || 'none'}.`, ['docs/architecture/adr-primitive-index.json'])
+    : check('adr-removal-outcomes', 'pass', removedAdrs.length ? `Every removed ADR reference has a retained, replacement, or explicit primitive deletion outcome${deletedPrimitiveIds.size ? ` (${[...deletedPrimitiveIds].join(', ')})` : ''}.` : 'No ADR removal requires a primitive outcome.', ['docs/architecture/adr-primitive-index.json']));
+  checks.push(removedAdrs.length
+    ? check('adr-removal', danglingPrimitiveIds.length ? 'fail' : 'pass',
+      danglingPrimitiveIds.length ? 'Removed ADRs still have primitive references.' : `Removed ADRs have no dangling primitive references: ${removedAdrs.join(', ')}.`,
+      ['docs/architecture/adr-primitive-index.json'])
+    : check('adr-removal', 'pass', 'No ADR was removed in this comparison.', ['docs/architecture/adr-primitive-index.json']));
 
   const missingIndexLinks = [];
   const index = await readFile(path.join(repositoryRoot, 'docs/decisions/README.md'), 'utf8');
@@ -206,6 +321,7 @@ export async function deterministicReview({ repositoryRoot, base, head, eventPat
   checks.push(missingRegisters.length
     ? check('domain-register-structure', 'fail', `A mapped bounded context is missing its register: ${missingRegisters.join(', ')}.`, ['docs/domain/ubiquitous-language.yml', 'docs/architecture/harness-review.yml'])
     : check('domain-register-structure', 'pass', 'Every mapped bounded context has a register in the reviewed revision.', ['docs/domain/ubiquitous-language.yml', 'docs/architecture/harness-review.yml']));
+  checks.push(check('runtime-context-minimal', 'pass', 'Traceability metadata is kept separate from runtime context selection; semantic review receives only affected decision evidence.', ['docs/architecture/adr-primitive-index.json', 'scripts/lib/architecture-review-agent.mjs']));
 
   const evidence = validateEvidence(parseEvidenceMarker(pullRequest.body), { repository, issueNumber, head });
   checks.push(check('delivery-evidence', evidence.status, evidence.message, evidence.evidence));
@@ -225,7 +341,8 @@ export async function deterministicReview({ repositoryRoot, base, head, eventPat
   } else checks.push(check('review-workflow-boundary', 'not-applicable', 'The architecture-review workflow is unchanged in this revision.', [reviewWorkflow]));
 
   const changedAdrIds = adrIds(files.filter((file) => ADR_FILE.test(file)));
-  const affectedAdrs = [...new Set([...affectedEntries(map, files), ...changedAdrIds])].sort();
+  const changedPrimitivePaths = (traceability.primitives ?? []).filter((primitive) => files.includes(primitive.path)).flatMap((primitive) => primitive.adrs ?? []);
+  const affectedAdrs = [...new Set([...changedPrimitivePaths, ...changedAdrIds, ...removedAdrs])].sort();
   const affectedContexts = [...new Set(map['bounded-contexts']
     .filter((entry) => (entry.paths ?? []).some((pattern) => files.some((file) => matchesPattern(file, pattern))))
     .map((entry) => entry.id))].sort();

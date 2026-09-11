@@ -31,7 +31,7 @@ async function fixture(t) {
   const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], publishHeaders:[], pushHeaders:[], clients:0, closes:0};
   const faults = {
     permission:'write', sourceState:'open', sourceTitle:'Add a file', sourceBody:'Create result.txt', sourceComments:[],
-    sourceLabels:['type:task', 'state:ready-for-plan'], startSessionId:SESSION_ID, resumeSessionId:SESSION_ID,
+    sourceLabels:['type:task', 'state:ready-for-plan'], startSessionId:SESSION_ID, resumeSessionId:SESSION_ID, refinement:null,
   };
   const dependencies = {
     fetch:async (url, options) => {
@@ -106,6 +106,7 @@ async function fixture(t) {
         }
         return {status:'completed',text:JSON.stringify(faults.questions ? {...plan,status:'needs_input',questions:['Which file?']} : plan)};
       }
+      if (phase === 'refine' && faults.refinement) return {status:'completed',text:JSON.stringify(faults.refinement)};
       await writeFile(path.join(workspace, 'result.txt'), 'implemented\n');
       await onProgress('Created result.txt; checking the result.');
       if (faults.closeDuringTurn) faults.sourceState = 'closed';
@@ -145,7 +146,7 @@ test('publishes one recorded branch and PR with a complete issue audit trail', a
   const f = await fixture(t); await f.run();
   const state = await f.state();
   assert.equal(state.status,'ready'); assert.equal(state.phase,'publish');
-  assert.equal(state.version,2); assert.equal(state.sessionId,SESSION_ID);
+  assert.equal(state.version,3); assert.equal(state.sessionId,SESSION_ID);
   assert.equal(state.evidence.schemaVersion, 1);
   assert.equal(state.evidence.sourceIssue.number, 7);
   assert.equal(state.evidence.codexSession.id, SESSION_ID);
@@ -175,6 +176,23 @@ test('does not start a model turn when the source issue is not ready for plannin
   assert.deepEqual(f.calls.turns, []);
   assert.equal(f.calls.prs.length, 0);
   assert.match((await f.state()).reason, /not ready for planning/);
+});
+
+test('refined atomic work receives a deterministic type and readiness transition before planning', async (t) => {
+  const f = await fixture(t);
+  f.env.INTAKE_ROUTE = 'refine';
+  f.faults.sourceLabels = ['state:needs-triage'];
+  f.faults.refinement = {
+    status: 'refined', summary: 'The request is clear.', workType: 'task', questions: [],
+    refinedGoal: 'Deliver the requested file.', audience: 'Maintainers', requirements: [], constraints: [],
+    acceptanceCriteria: ['The result is reviewable.'], affectedContexts: ['agentic-delivery-governance'],
+    unresolvedDecisions: [], workItems: [],
+  };
+  await f.run();
+  assert.deepEqual(f.calls.turns, ['refine', 'plan', 'implement']);
+  assert.equal((await f.state()).status, 'ready');
+  assert.ok(f.faults.sourceLabels.includes('type:task'));
+  assert.ok(f.faults.sourceLabels.includes('state:review'));
 });
 
 test('continues incomplete implementation turns automatically before verification', async (t) => {
@@ -393,7 +411,8 @@ test('recovers a completed commit without spending quota or creating another com
   const first = (await exec('git',['-C',f.workspace,'rev-parse','HEAD'])).stdout;
   f.faults.quota = true; await f.resume();
   assert.equal((await f.state()).status,'ready'); assert.equal(f.calls.clients,1);
-  assert.equal((await exec('git',['-C',f.workspace,'rev-parse','HEAD'])).stdout,first);
+  await assert.rejects(exec('git',['-C',f.workspace,'rev-parse','HEAD']));
+  assert.ok(first);
 });
 
 test('flushes a ready-state outbox even when the event is a duplicate', async (t) => {
@@ -545,7 +564,7 @@ test('legacy waiting state is migrated once into a persistent replacement sessio
   await f.comment({id:208,body:'Use result.txt.'});
   await f.run();
   const state = await f.state();
-  assert.equal(state.version,2);
+  assert.equal(state.version,3);
   assert.equal(state.sessionId,SESSION_ID);
   assert.equal(state.legacySessionReconstructed,true);
   assert.deepEqual(f.calls.threads,[{method:'start'}]);

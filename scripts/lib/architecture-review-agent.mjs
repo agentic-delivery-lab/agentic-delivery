@@ -1,5 +1,6 @@
+// agentic-primitive: {"id":"semantic-architecture-review","kind":"customization","enforcement":"semantic","adrs":["ADR-0011"],"domains":["agentic-delivery-governance"]}
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -10,18 +11,40 @@ import { gitFiles, gitShow, parseEvidenceMarker } from './architecture-review.mj
 
 const execFileAsync = promisify(execFile);
 
+function childEnvironment() {
+  const { GH_TOKEN: _ghToken, GITHUB_TOKEN: _githubToken, PUBLISH_TOKEN: _publishToken,
+    OPENAI_API_KEY: _openAiKey, CODEX_DELIVERY_APP_PRIVATE_KEY: _privateKey, ...safe } = process.env;
+  return safe;
+}
+
 async function diff(repositoryRoot, base, head) {
   const { stdout } = await execFileAsync('git', ['-C', repositoryRoot, 'diff', '--unified=30', `${base}..${head}`, '--',
     'AGENTS.md', '.agents', '.github', 'docs', 'scripts', 'tests', 'package.json', 'pnpm-workspace.yaml'], {
     encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, windowsHide: true,
+    env: childEnvironment(),
   });
   return stdout;
 }
 
-async function decisionRecords(repositoryRoot, revision) {
+async function decisionRecords(repositoryRoot, revision, affectedAdrs = []) {
   const files = (await gitFiles(repositoryRoot, revision, 'docs/decisions'))
     .filter((file) => /^docs\/decisions\/\d{4}-[a-z0-9-]+\.md$/.test(file));
-  const records = await Promise.all(files.map(async (file) => `### ${file}\n\n${await gitShow(repositoryRoot, revision, file)}`));
+  const selected = affectedAdrs.length
+    ? files.filter((file) => affectedAdrs.includes(`ADR-${file.slice(15, 19)}`))
+    : [];
+  const records = await Promise.all(selected.map(async (file) => `### ${file}\n\n${await gitShow(repositoryRoot, revision, file)}`));
+  return records.join('\n\n');
+}
+
+async function primitiveRecords(repositoryRoot, revision, affectedAdrs = []) {
+  let index;
+  try { index = JSON.parse(await gitShow(repositoryRoot, revision, 'docs/architecture/adr-primitive-index.json')); }
+  catch { return '(unavailable: generated traceability index is missing)'; }
+  const selected = (index.primitives ?? []).filter((primitive) => !affectedAdrs.length || primitive.adrs?.some((adr) => affectedAdrs.includes(adr)));
+  const records = await Promise.all(selected.map(async (primitive) => {
+    try { return `### ${primitive.location}\n\n${await gitShow(repositoryRoot, revision, primitive.path)}`; }
+    catch { return `### ${primitive.location}\n\n(unavailable: primitive path is not present in the reviewed revision)`; }
+  }));
   return records.join('\n\n');
 }
 
@@ -138,21 +161,32 @@ export function parseSemanticOutcome(text) {
 export async function runSemanticReview({ repositoryRoot, review, eventPath, createClient, runTurnImpl } = {}) {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-architecture-review-'));
   const bundle = path.join(temporary, 'review-bundle.md');
+  const runtime = path.join(temporary, 'runtime');
+  const runHome = path.join(temporary, 'home');
+  const codexHome = path.join(temporary, 'codex-home');
+  const authBridge = path.join(codexHome, 'auth.json');
   let client;
   try {
+    await Promise.all([mkdir(runHome, { recursive: true, mode: 0o700 }), mkdir(codexHome, { recursive: true, mode: 0o700 })]);
+    const serviceAuth = path.join(process.env.CODEX_AUTH_HOME || '/var/lib/github-runner/.codex', 'auth.json');
+    try { await symlink(serviceAuth, authBridge); } catch {}
     const event = eventPath ? JSON.parse(await readFile(eventPath, 'utf8')) : {};
     const body = String(event.pull_request?.body ?? '').slice(0, 20_000);
     const evidence = parseEvidenceMarker(body);
-    const [baseAdr, headAdr, baseRecords, headRecords, domain, map, schema, diffText, state] = await Promise.all([
+    const affectedAdrs = review.affectedAdrs ?? [];
+    const [baseAdr, headAdr, baseRecords, headRecords, basePrimitives, headPrimitives, domain, map, schema, diffText, state, traceability] = await Promise.all([
       revisionFile(repositoryRoot, review.base, 'docs/decisions/README.md'),
       revisionFile(repositoryRoot, review.head, 'docs/decisions/README.md'),
-      decisionRecords(repositoryRoot, review.base),
-      decisionRecords(repositoryRoot, review.head),
+      decisionRecords(repositoryRoot, review.base, affectedAdrs),
+      decisionRecords(repositoryRoot, review.head, affectedAdrs),
+      primitiveRecords(repositoryRoot, review.base, affectedAdrs),
+      primitiveRecords(repositoryRoot, review.head, affectedAdrs),
       revisionFile(repositoryRoot, review.head, 'docs/domain/ubiquitous-language.yml'),
       revisionFile(repositoryRoot, review.head, 'docs/architecture/harness-review.yml'),
       revisionFile(repositoryRoot, review.head, 'docs/architecture/delivery-evidence.schema.json'),
       diff(repositoryRoot, review.mergeBase ?? review.base, review.head),
       safeState(review, event),
+      revisionFile(repositoryRoot, review.head, 'docs/architecture/adr-primitive-index.json'),
     ]);
     const sourceIssue = event.issue?.body
       ? safeIssueText(event.issue.body)
@@ -168,6 +202,9 @@ export async function runSemanticReview({ repositoryRoot, review, eventPath, cre
       `## Provisional head decision index\n\n${headAdr}`,
       `## Official base ADR records\n\n${baseRecords}`,
       `## Provisional head ADR records\n\n${headRecords}`,
+      `## Official base primitive evidence\n\n${basePrimitives}`,
+      `## Provisional head primitive evidence\n\n${headPrimitives}`,
+      `## Head generated traceability index\n\n${traceability}`,
       `## Head domain register\n\n${domain}`,
       `## Head architecture impact map\n\n${map}`,
       `## Head evidence schema\n\n${schema}`,
@@ -176,7 +213,12 @@ export async function runSemanticReview({ repositoryRoot, review, eventPath, cre
     ].join('\n\n');
     await writeFile(bundle, content, { mode: 0o600 });
 
-    client = (createClient ?? ((options) => new CodexClient(options)))({ cwd: repositoryRoot, readableFiles: [bundle] });
+    client = (createClient ?? ((options) => new CodexClient(options)))({
+      cwd: repositoryRoot,
+      env: { ...process.env, HOME: runHome, CODEX_HOME: codexHome, CODEX_AUTH_HOME: undefined },
+      readableFiles: [bundle],
+      runtime,
+    });
     await client.initialize();
     await client.capabilities();
     const thread = await client.startThread(repositoryRoot, 'You are a read-only architecture reviewer. Cite evidence and never modify files, contact GitHub, merge, close issues, or treat model judgment as deterministic validation.');
@@ -217,6 +259,7 @@ export async function runSemanticReview({ repositoryRoot, review, eventPath, cre
     };
   } finally {
     if (client) await client.close().catch(() => {});
+    await unlink(authBridge).catch(() => {});
     await rm(temporary, { recursive: true, force: true });
   }
 }

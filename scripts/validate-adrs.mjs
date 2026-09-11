@@ -1,6 +1,13 @@
+// agentic-primitive: {"id":"adr-structure-validator","kind":"validator","enforcement":"deterministic","adrs":["ADR-0001"],"domains":["agentic-delivery-governance"]}
+import { execFile } from 'node:child_process';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { parseRepositoryYaml } from './lib/yaml.mjs';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 const requiredHeadings = [
   '## Context and Problem Statement',
@@ -77,13 +84,39 @@ export async function validateAdrs(repositoryRoot = process.cwd()) {
 
   if (records.length === 0) addError('no numbered ADR records found');
 
-  const seenNumbers = new Set();
+  // A removed ADR number is historical identity, not a reusable slot. When
+  // Git history is available, reject a current record whose number previously
+  // named a different file. Fixture roots without Git history remain valid.
+  try {
+    const { stdout } = await execFileAsync('git', ['-C', root, 'log', '--all', '--format=', '--name-only', '--', 'docs/decisions'], { encoding: 'utf8' });
+    const historicalNames = new Map();
+    for (const file of stdout.split(/\r?\n/).filter((value) => /^docs\/decisions\/\d{4}-[a-z0-9-]+\.md$/.test(value))) {
+      const number = file.slice('docs/decisions/'.length, 'docs/decisions/'.length + 4);
+      const names = historicalNames.get(number) ?? new Set();
+      names.add(path.basename(file));
+      historicalNames.set(number, names);
+    }
+    for (const record of records) {
+      const filename = path.basename(record);
+      const number = filename.slice(0, 4);
+      const priorNames = historicalNames.get(number);
+      if (priorNames && [...priorNames].some((name) => name !== filename)) {
+        addError(`${filename} reuses ADR-${number}, previously assigned to ${[...priorNames].filter((name) => name !== filename).join(', ')}`);
+      }
+    }
+  } catch { /* A non-Git fixture cannot prove historical reuse. */ }
+
+  let previousNumber = 0;
+  const recordNumbers = new Set();
   for (const record of records) {
     const filename = path.basename(record);
     const number = filename.slice(0, 4);
+    const numericNumber = Number(number);
     if (number === '0000') addError(`${filename} uses reserved ADR number 0000`);
-    if (seenNumbers.has(number)) addError(`${filename} reuses ADR number ${number}`);
-    seenNumbers.add(number);
+    if (numericNumber <= previousNumber) addError(`${filename} breaks the record sequence: record numbers must be strictly increasing; removed ADR numbers are not reused`);
+    if (recordNumbers.has(number)) addError(`${filename} reuses ADR number ${number}`);
+    previousNumber = numericNumber;
+    recordNumbers.add(number);
 
     if (!/^\d{4}-[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?\.md$/.test(filename)) {
       addError(`${filename} does not use the NNNN-title-with-dashes.md format`);
@@ -107,15 +140,33 @@ export async function validateAdrs(repositoryRoot = process.cwd()) {
       continue;
     }
 
-    const metadata = parsedFrontmatter.content;
-    if (/^status:/m.test(metadata)) {
+    let metadata;
+    try {
+      metadata = parseRepositoryYaml(parsedFrontmatter.content, `${filename} frontmatter`);
+    } catch (error) {
+      addError(`${filename} has invalid YAML frontmatter: ${error.message}`);
+      metadata = {};
+    }
+    if (Object.hasOwn(metadata, 'status')) {
       addError(`${filename} must not define status in frontmatter; the main branch defines official ADR state`);
     }
-    if (!/^date: \d{4}-\d{2}-\d{2}$/m.test(metadata)) {
+    if (typeof metadata?.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(metadata.date)) {
       addError(`${filename} has no ISO date in its frontmatter`);
     }
-    if (!/^source-issue: https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/\d+$/m.test(metadata)) {
+    if (typeof metadata?.['source-issue'] !== 'string' || !/^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/\d+$/.test(metadata['source-issue'])) {
       addError(`${filename} has no valid GitHub source-issue URL in its frontmatter`);
+    }
+    const domains = metadata?.domains;
+    if (!Array.isArray(domains) || domains.length === 0 || domains.some((domain) => typeof domain !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(domain))) {
+      addError(`${filename} must declare one or more valid domains in frontmatter`);
+    }
+    const enforcement = metadata?.['required-enforcement'];
+    if (!Array.isArray(enforcement) || enforcement.length === 0 || enforcement.some((item) => !['deterministic', 'instructional', 'semantic'].includes(item))) {
+      addError(`${filename} must declare valid required-enforcement values in frontmatter`);
+    }
+    if (metadata?.supersedes !== undefined && (!Array.isArray(metadata.supersedes)
+      || metadata.supersedes.some((item) => typeof item !== 'string' || !/^ADR-\d{4}$/.test(item)))) {
+      addError(`${filename} has invalid supersedes metadata`);
     }
 
     for (const heading of requiredHeadings) {

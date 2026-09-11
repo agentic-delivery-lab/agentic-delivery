@@ -4,6 +4,11 @@ source-issue: https://github.com/sjefsharp/agentic-delivery/issues/5
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
+domains:
+  - agentic-delivery-governance
+required-enforcement:
+  - instructional
+  - deterministic
 ---
 
 # Use context-scoped ubiquitous language

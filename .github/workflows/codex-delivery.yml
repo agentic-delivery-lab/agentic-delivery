@@ -1,5 +1,7 @@
 name: codex-delivery
 
+# agentic-primitive: {"id":"github-app-publication-boundary","kind":"workflow","enforcement":"deterministic","adrs":["ADR-0014"],"domains":["agentic-delivery-governance"]}
+
 on:
   workflow_call:
     inputs:
@@ -12,8 +14,12 @@ on:
         required: true
         type: string
     secrets:
-      CODEX_DELIVERY_PUBLISH_TOKEN:
+      CODEX_DELIVERY_APP_PRIVATE_KEY:
         required: true
+      CODEX_DELIVERY_APP_ID:
+        required: true
+      CODEX_DELIVERY_APP_INSTALLATION_ID:
+        required: false
   workflow_dispatch:
     inputs:
       issue:
@@ -29,8 +35,7 @@ jobs:
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 350
     env:
-      HOME: /var/lib/github-runner
-      CODEX_HOME: /var/lib/github-runner/.codex
+      CODEX_AUTH_HOME: /var/lib/github-runner/.codex
     permissions:
       contents: read
       issues: write
@@ -56,7 +61,9 @@ jobs:
       - name: Run source issue delivery
         env:
           GH_TOKEN: ${{ github.token }}
-          PUBLISH_TOKEN: ${{ secrets.CODEX_DELIVERY_PUBLISH_TOKEN }}
+          CODEX_DELIVERY_APP_ID: ${{ secrets.CODEX_DELIVERY_APP_ID }}
+          CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
+          CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ secrets.CODEX_DELIVERY_APP_INSTALLATION_ID }}
           SOURCE_ISSUE: ${{ inputs.issue || github.event.inputs.issue }}
           INTAKE_ROUTE: ${{ inputs.route || 'resume' }}
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}

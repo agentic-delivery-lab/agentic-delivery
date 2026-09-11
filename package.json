@@ -15,7 +15,8 @@
     "prelint:commits": "node scripts/validate-toolchain.mjs",
     "lint:commits": "node scripts/validate-commit-range.mjs",
     "pretest": "node scripts/validate-toolchain.mjs",
-    "test": "node --test \"tests/**/*.test.mjs\""
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "traceability:check": "node scripts/generate-adr-primitive-index.mjs --check"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.2",

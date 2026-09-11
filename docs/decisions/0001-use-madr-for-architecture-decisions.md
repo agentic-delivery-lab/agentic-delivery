@@ -2,6 +2,11 @@
 date: 2026-09-05
 source-issue: https://github.com/sjefsharp/agentic-delivery/issues/1
 decision-makers: Sjef Jenniskens
+domains:
+  - agentic-delivery-governance
+required-enforcement:
+  - instructional
+  - deterministic
 ---
 
 # Use MADR and GitHub Issues for architectural decisions

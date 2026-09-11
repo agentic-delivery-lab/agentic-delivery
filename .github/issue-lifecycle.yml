@@ -1,4 +1,5 @@
-version: 1
+# agentic-primitive: {"id":"lifecycle-transition-rules","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012"],"domains":["agentic-delivery-governance"]}
+version: 2
 
 types:
   - id: bug
@@ -31,6 +32,21 @@ types:
     label: "type:architecture"
     initial_state: decision-needed
     delivery: true
+  - id: specification
+    name: Specification
+    label: "type:specification"
+    initial_state: requirements
+    delivery: false
+  - id: implementation
+    name: Implementation
+    label: "type:implementation"
+    initial_state: ready-for-plan
+    delivery: true
+  - id: validation
+    name: Validation
+    label: "type:validation"
+    initial_state: ready-for-plan
+    delivery: true
 
 states:
   - id: needs-triage
@@ -45,6 +61,10 @@ states:
     label: "state:requirements"
     color: "FBCA04"
     description: "The desired outcome and acceptance conditions need refinement."
+  - id: decomposing
+    label: "state:decomposing"
+    color: "FBCA04"
+    description: "A refined goal is being conditionally split into work items."
   - id: decision-needed
     label: "state:decision-needed"
     color: "B60205"
@@ -73,6 +93,14 @@ states:
     label: "state:review"
     color: "5319E7"
     description: "A review pull request is ready for human review."
+  - id: coordinating
+    label: "state:coordinating"
+    color: "1D76DB"
+    description: "A lineage root is waiting for or integrating child work."
+  - id: acceptance
+    label: "state:acceptance"
+    color: "5319E7"
+    description: "Required implementation and validation are complete and human acceptance is pending."
   - id: done
     label: "state:done"
     color: "6E7781"
@@ -99,20 +127,23 @@ governance:
     description: "A security review control applies to this work."
 
 transitions:
-  needs-triage: [needs-info, requirements, decision-needed, investigating, parked, ready-for-plan, done]
-  needs-info: [needs-triage, requirements, decision-needed, investigating, parked, ready-for-plan, ready-for-agent, in-progress, done]
-  requirements: [needs-info, decision-needed, ready-for-plan, parked, done]
-  decision-needed: [needs-info, requirements, investigating, ready-for-plan, done]
-  investigating: [needs-info, requirements, decision-needed, ready-for-plan, parked, done]
+  needs-triage: [needs-info, requirements, decision-needed, investigating, decomposing, ready-for-plan, done]
+  needs-info: [needs-triage, requirements, decision-needed, investigating, decomposing, parked, ready-for-plan, ready-for-agent, in-progress, done]
+  requirements: [needs-triage, needs-info, decision-needed, investigating, decomposing, ready-for-plan, parked, done]
+  decision-needed: [needs-triage, needs-info, requirements, investigating, decomposing, ready-for-plan, done]
+  investigating: [needs-triage, needs-info, requirements, decision-needed, decomposing, ready-for-plan, parked, done]
+  decomposing: [needs-triage, needs-info, requirements, coordinating, ready-for-plan, done]
   parked: [needs-triage, requirements, investigating, done]
-  ready-for-plan: [needs-info, ready-for-agent, in-progress, done]
-  ready-for-agent: [needs-info, in-progress, done]
-  in-progress: [needs-info, ready-for-plan, review, done]
-  review: [in-progress, done]
+  ready-for-plan: [needs-triage, needs-info, ready-for-agent, in-progress, coordinating, done]
+  ready-for-agent: [needs-triage, needs-info, in-progress, done]
+  in-progress: [needs-triage, needs-info, ready-for-plan, review, coordinating, done]
+  review: [needs-triage, in-progress, acceptance, coordinating, done]
+  coordinating: [needs-triage, requirements, decomposing, ready-for-plan, acceptance, done]
+  acceptance: [needs-triage, coordinating, done]
   done: [needs-triage, requirements, investigating, decision-needed, parked]
 
 readiness:
-  delivery_types: [bug, feature, task, architecture]
+  delivery_types: [bug, feature, task, architecture, implementation, validation]
   blocking_governance: ["adr:needed", "adr:proposed", "adr:removal"]
 
 forms:
