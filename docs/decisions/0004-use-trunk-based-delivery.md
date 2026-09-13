@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-source-issue: https://github.com/sjefsharp/agentic-delivery/issues/7
+source-issue: https://github.com/agentic-delivery-lab/agentic-delivery/issues/7
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
@@ -15,7 +15,7 @@ required-enforcement:
 
 ## Context and Problem Statement
 
-Issue [#7](https://github.com/sjefsharp/agentic-delivery/issues/7) asks the repository to introduce trunk-based development. The repository needs a delivery model that keeps `main` deployable, gives a review pull request a clear head and base, and does not leave parallel branch histories to drift.
+Issue [#7](https://github.com/agentic-delivery-lab/agentic-delivery/issues/7) asks the repository to introduce trunk-based development. The repository needs a delivery model that keeps `main` deployable, gives a review pull request a clear head and base, and does not leave parallel branch histories to drift.
 
 The repository is maintained by people and coding agents. Agents need an explicit boundary for branch creation, review and merge actions. A branch-local change is provisional until its review pull request is merged into `main`; the contents of `main` remain the official repository context.
 
@@ -82,7 +82,7 @@ The policy follows the [Trunk Based Development guidance](https://trunkbaseddeve
 
 ## More Information
 
-- Assignment brief: [GitHub issue #7](https://github.com/sjefsharp/agentic-delivery/issues/7)
+- Assignment brief: [GitHub issue #7](https://github.com/agentic-delivery-lab/agentic-delivery/issues/7)
 - Source: [Trunk Based Development](https://trunkbaseddevelopment.com/)
 - Related decisions: [ADR-0001](0001-use-madr-for-architecture-decisions.md), [ADR-0003](0003-use-context-scoped-ubiquitous-language.md)
 - Delivery guidance: [`docs/delivery/README.md`](../delivery/README.md)

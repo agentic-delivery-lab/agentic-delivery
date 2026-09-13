@@ -16,7 +16,9 @@
     "lint:commits": "node scripts/validate-commit-range.mjs",
     "pretest": "node scripts/validate-toolchain.mjs",
     "test": "node --test \"tests/**/*.test.mjs\"",
-    "traceability:check": "node scripts/generate-adr-primitive-index.mjs --check"
+    "traceability:check": "node scripts/generate-adr-primitive-index.mjs --check",
+    "metadata:check": "node scripts/validate-config-files.mjs",
+    "metadata:migrate": "node scripts/migrate-issue-metadata.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.2",

@@ -161,8 +161,15 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "issue-classifier",
-        "lifecycle-transition-rules",
+        "issue-field-controller-boundary",
+        "issue-metadata-contract",
+        "issue-metadata-migration",
+        "issue-metadata-migration-command",
+        "issue-metadata-resolver",
         "lifecycle-transition-validator",
+        "orchestration-policy-catalog",
+        "orchestration-policy-validator",
+        "organization-metadata-runbook",
         "repository-governance-instructions",
         "semantic-issue-router"
       ]
@@ -179,6 +186,11 @@
       "primitives": [
         "adr-traceability-generator",
         "harness-architecture-review",
+        "issue-metadata-contract",
+        "issue-metadata-migration",
+        "issue-metadata-migration-command",
+        "issue-metadata-resolver",
+        "organization-metadata-runbook",
         "repository-governance-instructions"
       ]
     },
@@ -210,6 +222,10 @@
       "primitives": [
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
+        "issue-field-controller-boundary",
+        "orchestration-policy-catalog",
+        "orchestration-policy-validator",
+        "organization-metadata-runbook",
         "repository-governance-instructions"
       ]
     }
@@ -247,9 +263,16 @@
         "harness-architecture-review",
         "issue-branch-name-validator",
         "issue-classifier",
-        "lifecycle-transition-rules",
+        "issue-field-controller-boundary",
+        "issue-metadata-contract",
+        "issue-metadata-migration",
+        "issue-metadata-migration-command",
+        "issue-metadata-resolver",
         "lifecycle-transition-validator",
         "main-history-validator",
+        "orchestration-policy-catalog",
+        "orchestration-policy-validator",
+        "organization-metadata-runbook",
         "repository-governance-instructions",
         "semantic-architecture-review",
         "semantic-issue-router",
@@ -435,13 +458,70 @@
       ]
     },
     {
-      "id": "lifecycle-transition-rules",
-      "path": ".github/issue-lifecycle.yml",
-      "location": ".github/issue-lifecycle.yml",
+      "id": "issue-field-controller-boundary",
+      "path": "scripts/lib/issue-field-api.mjs",
+      "location": "scripts/lib/issue-field-api.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0012",
+        "ADR-0015"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "issue-metadata-contract",
+      "path": ".github/issue-metadata.yml",
+      "location": ".github/issue-metadata.yml",
       "kind": "state-machine",
       "enforcement": "deterministic",
       "adrs": [
-        "ADR-0012"
+        "ADR-0012",
+        "ADR-0013"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "issue-metadata-migration",
+      "path": "scripts/lib/issue-metadata-migration.mjs",
+      "location": "scripts/lib/issue-metadata-migration.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0012",
+        "ADR-0013"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "issue-metadata-migration-command",
+      "path": "scripts/migrate-issue-metadata.mjs",
+      "location": "scripts/migrate-issue-metadata.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0012",
+        "ADR-0013"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "issue-metadata-resolver",
+      "path": "scripts/lib/issue-metadata.mjs",
+      "location": "scripts/lib/issue-metadata.mjs",
+      "kind": "state-machine",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0012",
+        "ADR-0013"
       ],
       "domains": [
         "agentic-delivery-governance"
@@ -468,6 +548,49 @@
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0004"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "orchestration-policy-catalog",
+      "path": ".github/orchestration-policy.yml",
+      "location": ".github/orchestration-policy.yml",
+      "kind": "state-machine",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0012",
+        "ADR-0015"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "orchestration-policy-validator",
+      "path": "scripts/lib/orchestration-policy.mjs",
+      "location": "scripts/lib/orchestration-policy.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0012",
+        "ADR-0015"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "organization-metadata-runbook",
+      "path": "docs/delivery/organization-metadata.md",
+      "location": "docs/delivery/organization-metadata.md",
+      "kind": "instruction",
+      "enforcement": "instructional",
+      "adrs": [
+        "ADR-0012",
+        "ADR-0013",
+        "ADR-0015"
       ],
       "domains": [
         "agentic-delivery-governance"

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-10
-source-issue: https://github.com/sjefsharp/agentic-delivery/issues/29
+source-issue: https://github.com/agentic-delivery-lab/agentic-delivery/issues/29
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-source-issue: https://github.com/sjefsharp/agentic-delivery/issues/3
+source-issue: https://github.com/agentic-delivery-lab/agentic-delivery/issues/3
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
@@ -14,7 +14,7 @@ required-enforcement:
 
 ## Context and Problem Statement
 
-Issue [#3](https://github.com/sjefsharp/agentic-delivery/issues/3) asks the repository to study ISO 24495-1 and ISO 9241-210, then define how people and agents communicate. The repository has no shared rule for the language of interactive replies or for the language of new documentation. Different agents could therefore choose different languages or write text that is hard to use.
+Issue [#3](https://github.com/agentic-delivery-lab/agentic-delivery/issues/3) asks the repository to study ISO 24495-1 and ISO 9241-210, then define how people and agents communicate. The repository has no shared rule for the language of interactive replies or for the language of new documentation. Different agents could therefore choose different languages or write text that is hard to use.
 
 Public information describes ISO 24495-1:2023 as a standard for plain-language documents. Its four governing outcomes are that readers get what they need, find it, understand it and use it. ISO 9241-210:2019 describes human-centred design activities across the life cycle of interactive systems. The ISO catalogue lists both editions as published; the 9241-210 page says the 2019 edition was reviewed and confirmed in 2025.
 
@@ -91,9 +91,9 @@ ISO 24495-1 is used as the text-quality lens. ISO 9241-210 is used as the design
 
 ## More Information
 
-- Assignment brief: [GitHub issue #3](https://github.com/sjefsharp/agentic-delivery/issues/3)
+- Assignment brief: [GitHub issue #3](https://github.com/agentic-delivery-lab/agentic-delivery/issues/3)
 - Plain-language source: [ISO 24495-1:2023](https://www.iso.org/standard/78907.html)
 - Human-centred design source: [ISO 9241-210:2019](https://www.iso.org/standard/77520.html)
 - Public summary of the four plain-language principles: [International Plain Language Federation](https://www.iplfederation.org/iso-standard/)
-- Implementation and review: [pull request #4](https://github.com/sjefsharp/agentic-delivery/pull/4)
+- Implementation and review: [pull request #4](https://github.com/agentic-delivery-lab/agentic-delivery/pull/4)
 - Revisit this decision if the source standards change, user feedback shows repeated language errors or the repository adopts a different primary documentation language.

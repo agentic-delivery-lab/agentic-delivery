@@ -1,0 +1,45 @@
+name: Research
+description: Investigate a question and record evidence before deciding or implementing.
+type: Research
+title: "Research: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Research produces evidence, inferences, uncertainties, and recommendations. It does not authorize implementation by itself.
+        Do not include passwords, API keys, personal data, or other secrets.
+  - type: textarea
+    id: question
+    attributes:
+      label: Research question
+      description: What question must the investigation answer?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What prompted this question and what decision or outcome depends on it?
+    validations:
+      required: true
+  - type: textarea
+    id: unknowns
+    attributes:
+      label: Known unknowns
+      description: What is uncertain or needs comparison?
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Evidence constraints
+      description: Which sources, time limits, privacy rules, or evidence standards apply?
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Desired output
+      description: What evidence-backed result should the issue contain?
+    validations:
+      required: true

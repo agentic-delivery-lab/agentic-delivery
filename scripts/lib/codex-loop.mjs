@@ -69,6 +69,52 @@ export function outcomeSchema(phase) {
   return { type: 'object', additionalProperties: false, required: Object.keys(properties), properties };
 }
 
+export function orchestrationOutcomeSchema(phase, stages = []) {
+  const strings = { type: 'array', maxItems: 50, items: { type: 'string', maxLength: 2_000 } };
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['status', 'summary', 'evidence', 'inferences', 'uncertainties', 'recommendations', 'questions', 'nextStage'],
+    properties: {
+      status: { type: 'string', enum: ['complete', 'needs_input', 'blocked'] },
+      summary: { type: 'string', minLength: 1, maxLength: 2_000 },
+      evidence: strings,
+      inferences: strings,
+      uncertainties: strings,
+      recommendations: strings,
+      questions: { ...strings, maxItems: 3 },
+      nextStage: { type: ['string', 'null'], enum: [...stages, null] },
+      requirements: strings,
+      acceptanceCriteria: strings,
+      affectedContexts: strings,
+      unresolvedDecisions: strings,
+      alternatives: strings,
+      drivers: strings,
+      consequences: strings,
+      adr: { type: ['string', 'null'], maxLength: 100_000 },
+      checks: strings,
+    },
+  };
+}
+
+export function validateOrchestrationOutcome(text) {
+  let value;
+  try { value = JSON.parse(text); } catch { throw new Error('Codex did not return a structured orchestration outcome.'); }
+  const allowed = ['status', 'summary', 'evidence', 'inferences', 'uncertainties', 'recommendations', 'questions', 'nextStage',
+    'requirements', 'acceptanceCriteria', 'affectedContexts', 'unresolvedDecisions', 'alternatives', 'drivers', 'consequences', 'adr', 'checks'];
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some((key) => !allowed.includes(key))) throw new Error('Invalid orchestration outcome: unexpected property.');
+  if (!['complete', 'needs_input', 'blocked'].includes(value.status) || typeof value.summary !== 'string' || !value.summary.trim()) throw new Error('Invalid orchestration outcome: status or summary.');
+  for (const key of allowed.filter((key) => key !== 'status' && key !== 'summary' && key !== 'nextStage' && key !== 'adr')) {
+    if (value[key] !== undefined && (!Array.isArray(value[key]) || value[key].some((item) => typeof item !== 'string' || !item.trim()))) throw new Error(`Invalid orchestration outcome: ${key}.`);
+  }
+  value.questions ??= [];
+  if (value.questions.length > 3) throw new Error('An orchestration outcome may ask at most three focused questions.');
+  if (value.status === 'needs_input' && value.questions.length === 0) throw new Error('A clarification orchestration outcome must include a focused question.');
+  if (value.nextStage !== null && (typeof value.nextStage !== 'string' || !value.nextStage.trim())) throw new Error('Invalid orchestration outcome: nextStage.');
+  if (value.adr !== undefined && value.adr !== null && (typeof value.adr !== 'string' || !value.adr.trim())) throw new Error('Invalid orchestration outcome: adr.');
+  return value;
+}
+
 export function validateOutcome(phase, text) {
   let value;
   try { value = JSON.parse(text); } catch { throw new Error('Codex did not return a structured outcome.'); }
@@ -138,7 +184,7 @@ export function validateRefinementOutcome(text) {
   return value;
 }
 
-const phaseName = (phase) => phase === 'refine' ? 'Refinement' : phase === 'plan' ? 'Plan' : phase === 'implement' ? 'Implement' : phase === 'review' ? 'Architecture review' : String(phase ?? 'Delivery');
+const phaseName = (phase) => phase === 'refine' ? 'Refinement' : phase === 'research' ? 'Research' : phase === 'requirements' ? 'Requirements' : phase === 'architecture' ? 'Architecture decision' : phase === 'plan' ? 'Plan' : phase === 'implement' ? 'Implement' : phase === 'validate' ? 'Validation' : phase === 'review' ? 'Architecture review' : String(phase ?? 'Delivery');
 
 function concise(value, limit = 1_200) {
   const text = String(value ?? '').replace(/\r\n?/g, '\n').trim();
@@ -301,7 +347,10 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     const response = await client.request('turn/start', {
       threadId, input: [{ type: 'text', text: prompt }],
       collaborationMode: { mode: selected.mode, settings: { model: selected.model, reasoning_effort: selected.effort, developer_instructions: null } },
-      permissions: ['route', 'refine', 'plan'].includes(phase) ? 'delivery-plan' : phase === 'implement' ? 'delivery-edit' : 'delivery-review',
+      permissions: ['route', 'refine', 'plan', 'requirements', 'architecture'].includes(phase)
+        ? (phase === 'research' ? 'delivery-research' : 'delivery-plan')
+        : phase === 'research' ? 'delivery-research'
+          : phase === 'implement' ? 'delivery-edit' : 'delivery-review',
       approvalPolicy: 'never', serviceTierForTurn: 'default',
       outputSchema: schema,
     });
@@ -324,7 +373,7 @@ export function continuation(state) {
     `**Why:** ${phaseName(state.phase)} needs your answer to continue.`,
     '**Answer:**',
     questions.map((question, index) => `${index + 1}. ${question}`).join('\n'),
-    '**Next:** Reply with the answers. Do not add or remove labels.',
+    '**Next:** Reply with the answers. Do not change lifecycle fields or governance metadata.',
   ].join('\n');
   const validation = state.phase === 'verify' && state.validation
     ? `\n\n**Latest check failure:**\n${quoteMarkdown(state.validation, 1_200)}`
@@ -336,6 +385,6 @@ export function continuation(state) {
     '## Delivery paused',
     `**Stopped at:** ${phaseName(state.phase)}`,
     `**Why:** ${concise(state.reason ?? 'The workflow could not continue.', 700)}${validation}`,
-    `**Next:** ${next} Do not change labels or post a continuation comment.`,
+    `**Next:** ${next} Do not change lifecycle fields or post a continuation comment.`,
   ].join('\n\n');
 }

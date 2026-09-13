@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { parseRepositoryYaml, YamlParseError } from './lib/yaml.mjs';
+import { validateIssueMetadataConfig } from './lib/issue-metadata.mjs';
+import { validateOrchestrationPolicy } from './lib/orchestration-policy.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -22,11 +24,18 @@ async function gitFiles(repositoryRoot) {
       encoding: 'utf8',
       windowsHide: true,
     });
-    return stdout
+    const tracked = stdout
       .split(/\r?\n/)
       .filter((file) => /\.(?:json|ya?ml)$/.test(file))
       .filter((file) => file !== 'pnpm-lock.yaml')
       .filter((file) => !/^tests\/.*\/fixtures\//.test(file));
+    for (const file of ['.github/issue-metadata.yml', '.github/orchestration-policy.yml']) {
+      if (!tracked.includes(file)) tracked.push(file);
+    }
+    // This repository-local file was replaced by organization issue fields.
+    // A deleted-but-not-yet-staged path can still appear in `git ls-files`.
+    const obsolete = '.github/issue-lifecycle.yml';
+    return tracked.filter((file) => file !== obsolete);
   } catch {
     throw new ConfigValidationError('Configuration check: repository root is not a Git repository.', 2);
   }
@@ -49,6 +58,14 @@ export async function validateConfigFiles({ repositoryRoot = path.resolve(path.d
         JSON.parse(source);
       } else {
         parseRepositoryYaml(source, relativeFile);
+      }
+      if (relativeFile === '.github/issue-metadata.yml') {
+        const result = validateIssueMetadataConfig(parseRepositoryYaml(source, relativeFile));
+        if (!result.valid) errors.push(`${relativeFile}: ${result.errors.join('; ')}`);
+      }
+      if (relativeFile === '.github/orchestration-policy.yml') {
+        const result = validateOrchestrationPolicy(parseRepositoryYaml(source, relativeFile));
+        if (!result.valid) errors.push(`${relativeFile}: ${result.errors.join('; ')}`);
       }
     } catch (error) {
       if (error instanceof YamlParseError) {

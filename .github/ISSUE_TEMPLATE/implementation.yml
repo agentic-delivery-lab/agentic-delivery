@@ -1,0 +1,38 @@
+name: Implementation
+description: Execute an already authorized implementation plan.
+type: Implementation
+title: "Implementation: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form only when an implementation plan exists or is expected to be prepared by the orchestration policy.
+        Do not include passwords, API keys, personal data, or other secrets.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Implementation goal
+      description: What repository outcome is required?
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Approved plan
+      description: Link or summarize the approved plan and its source issue.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: What observable conditions must pass before review?
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: What must the implementer preserve or avoid?
+    validations:
+      required: true

@@ -1,9 +1,7 @@
 name: Idea
 description: Capture an opportunity that needs discovery before implementation.
+type: Idea
 title: "Idea: "
-labels:
-  - "type:idea"
-  - "state:needs-triage"
 body:
   - type: markdown
     attributes:

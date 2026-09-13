@@ -1,0 +1,52 @@
+name: Requirements
+description: Turn a goal or evidence into requirements and acceptance criteria.
+type: Requirements
+title: "Requirements: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for requirements and specification work. Planning or implementation is selected only when the deterministic policy authorizes it.
+        Do not include passwords, API keys, personal data, or other secrets.
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should be true when this work is complete?
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: List functional and non-functional requirements, or explain what remains unknown.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: List compatibility, security, performance, timing, or operational constraints.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: What observable conditions demonstrate that the requirements are met?
+    validations:
+      required: true
+  - type: textarea
+    id: contexts
+    attributes:
+      label: Affected contexts
+      description: List bounded-context IDs and relevant domain terms, or write "None known".
+    validations:
+      required: true
+  - type: textarea
+    id: decisions
+    attributes:
+      label: Unresolved decisions
+      description: List decisions that need architecture or human review, or write "None".
+    validations:
+      required: true

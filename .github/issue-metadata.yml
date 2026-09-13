@@ -1,0 +1,254 @@
+# agentic-primitive: {"id":"issue-metadata-contract","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012","ADR-0013"],"domains":["agentic-delivery-governance"]}
+version: 1
+
+organization: agentic-delivery-lab
+
+authority:
+  issue_type: organization-native
+  lifecycle: organization-issue-field
+  governance: labels
+  execution_state: runner-local
+
+issue_types:
+  - id: idea
+    name: Idea
+    native_name: Idea
+    legacy_label: "type:idea"
+    initial_stage: intake
+    initial_readiness: not-ready
+    delivery: false
+    requires_plan: false
+  - id: research
+    name: Research
+    native_name: Research
+    legacy_label: "type:research"
+    initial_stage: discovery
+    initial_readiness: not-ready
+    delivery: false
+    requires_plan: false
+  - id: feature
+    name: Feature / Outcome
+    native_name: Feature
+    legacy_label: "type:feature"
+    initial_stage: definition
+    initial_readiness: not-ready
+    delivery: true
+    requires_plan: true
+  - id: bug
+    name: Bug
+    native_name: Bug
+    legacy_label: "type:bug"
+    initial_stage: definition
+    initial_readiness: not-ready
+    delivery: true
+    requires_plan: true
+  - id: task
+    name: Task
+    native_name: Task
+    legacy_label: "type:task"
+    initial_stage: intake
+    initial_readiness: not-ready
+    delivery: true
+    requires_plan: true
+  - id: requirements
+    name: Requirements
+    native_name: Requirements
+    legacy_label: "type:specification"
+    aliases: [specification]
+    initial_stage: definition
+    initial_readiness: not-ready
+    delivery: false
+    requires_plan: false
+  - id: architecture
+    name: Architecture Decision
+    native_name: Architecture Decision
+    legacy_label: "type:architecture"
+    aliases: [architecture-decision]
+    initial_stage: decision
+    initial_readiness: not-ready
+    delivery: false
+    requires_plan: false
+  - id: implementation
+    name: Implementation
+    native_name: Implementation
+    legacy_label: "type:implementation"
+    initial_stage: planning
+    initial_readiness: ready
+    delivery: true
+    requires_plan: true
+  - id: validation
+    name: Validation
+    native_name: Validation
+    legacy_label: "type:validation"
+    initial_stage: validation
+    initial_readiness: ready
+    delivery: false
+    requires_plan: false
+
+fields:
+  lifecycle_stage:
+    id: lifecycle-stage
+    name: Lifecycle Stage
+    kind: single-select
+    authority: lifecycle
+    required: true
+    pinned_to: [all-issue-types, issues-without-type]
+    options:
+      - id: intake
+        name: Intake
+        description: The issue is awaiting classification or an initial route.
+      - id: discovery
+        name: Discovery
+        description: Evidence and unknowns are being investigated.
+      - id: definition
+        name: Definition
+        description: Requirements, constraints, and acceptance conditions are being clarified.
+      - id: decision
+        name: Decision
+        description: An architecture or governance decision is being analyzed or reviewed.
+      - id: planning
+        name: Planning
+        description: An implementation plan is being prepared or is ready to authorize execution.
+      - id: execution
+        name: Execution
+        description: Authorized repository work is being performed.
+      - id: validation
+        name: Validation
+        description: Deterministic or independent semantic checks are being performed.
+      - id: acceptance
+        name: Acceptance
+        description: Required work is complete and human acceptance or lineage coordination is pending.
+      - id: done
+        name: Done
+        description: The issue has reached its final disposition.
+      - id: parked
+        name: Parked
+        description: The issue is intentionally deferred without being completed.
+  readiness:
+    id: delivery-readiness
+    name: Delivery Readiness
+    kind: single-select
+    authority: readiness
+    required: true
+    pinned_to: [all-issue-types, issues-without-type]
+    options:
+      - id: not-ready
+        name: Not ready
+        description: The next route is not yet authorized.
+      - id: needs-info
+        name: Needs information
+        description: A focused human answer or missing evidence is required.
+      - id: ready
+        name: Ready
+        description: The selected next operation is authorized by deterministic gates.
+      - id: working
+        name: Working
+        description: The authorized operation is executing.
+      - id: waiting
+        name: Waiting
+        description: The issue waits for a dependency, child outcome, or external capability.
+      - id: awaiting-human
+        name: Awaiting human
+        description: Human review, acceptance, or clarification is required.
+      - id: blocked
+        name: Blocked
+        description: Execution stopped and requires an actionable recovery.
+
+lifecycle:
+  transitions:
+    intake: [discovery, definition, decision, planning, done, parked]
+    discovery: [intake, definition, decision, planning, validation, done, parked]
+    definition: [intake, discovery, decision, planning, execution, done, parked]
+    decision: [intake, discovery, definition, planning, execution, validation, done]
+    planning: [intake, definition, decision, execution, validation, done]
+    execution: [intake, planning, validation, acceptance, done]
+    validation: [intake, execution, acceptance, done]
+    acceptance: [intake, execution, validation, done]
+    parked: [intake, discovery, definition, done]
+    done: [intake, discovery, definition, decision, parked]
+
+governance:
+  labels:
+    - name: "adr:needed"
+      color: "B60205"
+      description: An architecture decision record is needed.
+    - name: "adr:proposed"
+      color: "B60205"
+      description: An architecture decision record is provisional on a branch or pull request.
+    - name: "adr:removal"
+      color: "B60205"
+      description: The provisional architecture change removes a record.
+    - name: "adr:rejected"
+      color: "6E7781"
+      description: The proposed architecture decision was rejected.
+    - name: "human-review"
+      color: "5319E7"
+      description: A human review control applies.
+    - name: "security-review"
+      color: "B60205"
+      description: A security review control applies.
+    - name: "external-evidence-required"
+      color: "1D76DB"
+      description: The route requires approved external research evidence.
+
+readiness:
+  planning_types: [bug, feature, task, implementation]
+  blocking_governance: ["adr:needed", "adr:proposed", "adr:removal"]
+  human_governance: ["human-review", "security-review"]
+
+legacy:
+  migration_mode: read-only-compatibility
+  type_labels:
+    "type:idea": idea
+    "type:research": research
+    "type:feature": feature
+    "type:bug": bug
+    "type:task": task
+    "type:specification": requirements
+    "type:architecture": architecture
+    "type:implementation": implementation
+    "type:validation": validation
+  state_labels:
+    "state:needs-triage": {stage: intake, readiness: not-ready}
+    "state:needs-info": {stage: intake, readiness: needs-info}
+    "state:requirements": {stage: definition, readiness: not-ready}
+    "state:decomposing": {stage: definition, readiness: waiting}
+    "state:decision-needed": {stage: decision, readiness: needs-info}
+    "state:investigating": {stage: discovery, readiness: working}
+    "state:parked": {stage: parked, readiness: waiting}
+    "state:ready-for-plan": {stage: planning, readiness: ready}
+    "state:ready-for-agent": {stage: execution, readiness: ready}
+    "state:in-progress": {stage: execution, readiness: working}
+    "state:review": {stage: validation, readiness: awaiting-human}
+    "state:coordinating": {stage: acceptance, readiness: waiting}
+    "state:acceptance": {stage: acceptance, readiness: awaiting-human}
+    "state:done": {stage: done, readiness: awaiting-human}
+
+forms:
+  bug:
+    headings: [Observed behavior, Expected behavior, Reproduction steps]
+    required: [Observed behavior, Expected behavior, Reproduction steps, Environment, Evidence or logs, Impact]
+  feature:
+    headings: [Problem, Desired outcome, Beneficiary or user]
+    required: [Problem, Desired outcome, Beneficiary or user, Current behavior, Constraints, Acceptance signals, Known architectural impact]
+  idea:
+    headings: [Idea or opportunity, Problem being addressed, Expected value]
+    required: [Idea or opportunity, Problem being addressed, Expected value, Assumptions, Unknowns, Supporting context]
+  task:
+    headings: [Requested outcome, Scope, Definition of done]
+    required: [Requested outcome, Scope, Constraints, Definition of done, Relevant references]
+  research:
+    headings: [Research question, Context, Known unknowns]
+    required: [Research question, Context, Known unknowns, Evidence constraints, Desired output]
+  requirements:
+    headings: [Desired outcome, Requirements, Acceptance criteria]
+    required: [Desired outcome, Requirements, Constraints, Acceptance criteria, Affected contexts, Unresolved decisions]
+  implementation:
+    headings: [Implementation goal, Approved plan, Acceptance criteria]
+    required: [Implementation goal, Approved plan, Acceptance criteria, Constraints]
+  validation:
+    headings: [Validation target, Evidence to inspect, Acceptance criteria]
+    required: [Validation target, Evidence to inspect, Acceptance criteria, Known limitations]
+  architecture:
+    headings: [Context and problem, ADR operation, Scope and affected areas]
+    required: [Context and problem, ADR operation, Scope and affected areas, Affected bounded contexts and domain terms, Decision drivers and constraints, Known options, Reversibility and impact, Related work and evidence, Affected ADR files]

@@ -11,24 +11,48 @@ async function text(relativePath) {
   return readFile(path.join(repositoryRoot, relativePath), 'utf8');
 }
 
-test('issue intake configuration keeps work type, lifecycle state, and governance separate', async () => {
-  const config = parseRepositoryYaml(await text('.github/issue-lifecycle.yml'), 'issue lifecycle configuration');
-  assert.deepEqual(config.types.map((type) => type.name), ['Bug', 'Feature', 'Task', 'Idea', 'Research', 'Architecture', 'Specification', 'Implementation', 'Validation']);
-  assert.ok(config.states.some((state) => state.label === 'state:investigating'));
-  assert.ok(config.states.some((state) => state.label === 'state:parked'));
-  assert.ok(config.states.some((state) => state.label === 'state:ready-for-plan'));
-  assert.ok(config.states.some((state) => state.label === 'state:ready-for-agent'));
-  assert.ok(config.governance.some((item) => item.label === 'adr:needed'));
-  assert.ok(!config.governance.some((item) => item.label === 'adr:required'));
-  assert.deepEqual(config.readiness.delivery_types, ['bug', 'feature', 'task', 'architecture', 'implementation', 'validation']);
+test('issue intake configuration keeps issue type, lifecycle stage, readiness, and governance separate', async () => {
+  const config = parseRepositoryYaml(await text('.github/issue-metadata.yml'), 'issue metadata configuration');
+  assert.deepEqual(config.issue_types.map((type) => type.name), [
+    'Idea', 'Research', 'Feature / Outcome', 'Bug', 'Task', 'Requirements',
+    'Architecture Decision', 'Implementation', 'Validation',
+  ]);
+  assert.ok(config.issue_types.every((type) => type.native_name));
+  assert.deepEqual(config.fields.lifecycle_stage.options.map((option) => option.id), [
+    'intake', 'discovery', 'definition', 'decision', 'planning', 'execution',
+    'validation', 'acceptance', 'done', 'parked',
+  ]);
+  assert.deepEqual(config.fields.readiness.options.map((option) => option.id), [
+    'not-ready', 'needs-info', 'ready', 'working', 'waiting', 'awaiting-human', 'blocked',
+  ]);
+  assert.deepEqual(config.fields.lifecycle_stage.pinned_to, ['all-issue-types', 'issues-without-type']);
+  assert.deepEqual(config.fields.readiness.pinned_to, ['all-issue-types', 'issues-without-type']);
+  assert.ok(config.governance.labels.some((item) => item.name === 'adr:needed'));
+  assert.ok(!config.governance.labels.some((item) => item.name === 'adr:required'));
+  assert.deepEqual(config.readiness.planning_types, ['bug', 'feature', 'task', 'implementation']);
   assert.deepEqual(config.readiness.blocking_governance, ['adr:needed', 'adr:proposed', 'adr:removal']);
+  assert.equal(config.authority.issue_type, 'organization-native');
+  assert.equal(config.authority.lifecycle, 'organization-issue-field');
+  assert.equal(config.authority.execution_state, 'runner-local');
 });
 
 test('structured issue forms and generic fallback are present', async () => {
   const templateRoot = path.join(repositoryRoot, '.github', 'ISSUE_TEMPLATE');
-  for (const template of ['bug.yml', 'feature.yml', 'idea.yml', 'task.yml']) {
+  const expectedTypes = {
+    'bug.yml': 'Bug',
+    'feature.yml': 'Feature',
+    'idea.yml': 'Idea',
+    'task.yml': 'Task',
+    'research.yml': 'Research',
+    'requirements.yml': 'Requirements',
+    'architecture-decision.yml': 'Architecture Decision',
+    'implementation.yml': 'Implementation',
+    'validation.yml': 'Validation',
+  };
+  for (const template of Object.keys(expectedTypes)) {
     await access(path.join(templateRoot, template));
     const form = parseRepositoryYaml(await text(`.github/ISSUE_TEMPLATE/${template}`), template);
+    assert.equal(form.type, expectedTypes[template]);
     assert.ok(Array.isArray(form.body) && form.body.length > 1);
   }
   const issueConfig = parseRepositoryYaml(await text('.github/ISSUE_TEMPLATE/config.yml'), 'issue template config');
@@ -42,6 +66,8 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.ok(intakeWorkflow.on.issues.types.includes('closed'));
   assert.ok(intakeWorkflow.jobs.classify);
   assert.ok(intakeWorkflow.jobs.deliver.uses?.includes('codex-delivery.yml'));
+  assert.ok(intakeWorkflow.jobs.classify.outputs.lifecycle_stage);
+  assert.ok(intakeWorkflow.jobs.classify.outputs.readiness);
   assert.equal(intakeWorkflow.jobs.deliver.permissions.contents, 'read');
   assert.equal(intakeWorkflow.jobs.deliver.permissions.issues, 'write');
   assert.equal(intakeWorkflow.jobs.deliver.permissions['pull-requests'], undefined);

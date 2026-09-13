@@ -1,6 +1,6 @@
 ---
 date: 2026-09-09
-source-issue: https://github.com/sjefsharp/agentic-delivery/issues/21
+source-issue: https://github.com/agentic-delivery-lab/agentic-delivery/issues/21
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
@@ -15,12 +15,12 @@ required-enforcement:
 
 ## Context and Problem Statement
 
-[Source issue #21](https://github.com/sjefsharp/agentic-delivery/issues/21)
+[Source issue #21](https://github.com/agentic-delivery-lab/agentic-delivery/issues/21)
 amends the quota and continuation design tracked by
-[source issue #18](https://github.com/sjefsharp/agentic-delivery/issues/18),
+[source issue #18](https://github.com/agentic-delivery-lab/agentic-delivery/issues/18),
 which amended the workflow originally tracked by
-[source issue #15](https://github.com/sjefsharp/agentic-delivery/issues/15).
-[Source issue #17](https://github.com/sjefsharp/agentic-delivery/issues/17)
+[source issue #15](https://github.com/agentic-delivery-lab/agentic-delivery/issues/15).
+[Source issue #17](https://github.com/agentic-delivery-lab/agentic-delivery/issues/17)
 later clarified that people must be able to continue a saved run with natural
 language instead of a required slash command.
 It requests reliable continuation of the current source-issue workflow on the
@@ -221,7 +221,7 @@ without generating a turn, then demonstrate a small end-to-end issue after
 human merge and prerequisite setup. Do not claim runtime readiness from unit
 tests alone. This ADR remains provisional until merged into `main`.
 
-Amendment source: [issue #32](https://github.com/sjefsharp/agentic-delivery/issues/32)
+Amendment source: [issue #32](https://github.com/agentic-delivery-lab/agentic-delivery/issues/32)
 
 ## Pros and Cons of the Options
 
@@ -249,10 +249,10 @@ Amendment source: [issue #32](https://github.com/sjefsharp/agentic-delivery/issu
 - [Codex subscription allowance](https://learn.chatgpt.com/docs/pricing)
 - [GitHub workflow triggers](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
 - [GitHub branch protection availability](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
-- [Issue #18: Restore exact Codex issue continuation](https://github.com/sjefsharp/agentic-delivery/issues/18)
-- [Issue #21: Replace the fixed Codex turn deadline with quota-led execution](https://github.com/sjefsharp/agentic-delivery/issues/21)
-- [Issue #17: Introduce an issue-driven intake and routing harness](https://github.com/sjefsharp/agentic-delivery/issues/17)
-- [PR #20: Make Codex issue comments actionable](https://github.com/sjefsharp/agentic-delivery/pull/20)
+- [Issue #18: Restore exact Codex issue continuation](https://github.com/agentic-delivery-lab/agentic-delivery/issues/18)
+- [Issue #21: Replace the fixed Codex turn deadline with quota-led execution](https://github.com/agentic-delivery-lab/agentic-delivery/issues/21)
+- [Issue #17: Introduce an issue-driven intake and routing harness](https://github.com/agentic-delivery-lab/agentic-delivery/issues/17)
+- [PR #20: Make Codex issue comments actionable](https://github.com/agentic-delivery-lab/agentic-delivery/pull/20)
 - [Operation and continuation](../delivery/codex-workflow.md)
 - Revisit when runner isolation, account sharing, automated resumption, or
   publishing credentials change.

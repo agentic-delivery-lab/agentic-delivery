@@ -1,0 +1,38 @@
+name: Validation
+description: Independently validate deterministic evidence and acceptance criteria.
+type: Validation
+title: "Validation: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Validation can run independently from implementation. Record evidence and findings; do not change repository files from this issue form.
+        Do not include passwords, API keys, personal data, or other secrets.
+  - type: textarea
+    id: target
+    attributes:
+      label: Validation target
+      description: Which issue, change, revision, or outcome is being validated?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence to inspect
+      description: List deterministic checks, files, builds, security results, or links to inspect.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: What conditions must the validator confirm?
+    validations:
+      required: true
+  - type: textarea
+    id: limitations
+    attributes:
+      label: Known limitations
+      description: Identify unavailable evidence or uncertainty, or write "None known".
+    validations:
+      required: true

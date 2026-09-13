@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-source-issue: https://github.com/sjefsharp/agentic-delivery/issues/7
+source-issue: https://github.com/agentic-delivery-lab/agentic-delivery/issues/7
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
@@ -15,7 +15,7 @@ required-enforcement:
 
 ## Context and Problem Statement
 
-Issue [#7](https://github.com/sjefsharp/agentic-delivery/issues/7) asks the repository to introduce a changelog. A raw commit log is useful for development but does not explain user impact, group related changes or identify release boundaries. The repository also has no release tags, so inventing a version for the first entry would be misleading.
+Issue [#7](https://github.com/agentic-delivery-lab/agentic-delivery/issues/7) asks the repository to introduce a changelog. A raw commit log is useful for development but does not explain user impact, group related changes or identify release boundaries. The repository also has no release tags, so inventing a version for the first entry would be misleading.
 
 ## Decision Drivers
 
@@ -77,7 +77,7 @@ The changelog follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1
 
 ## More Information
 
-- Assignment brief: [GitHub issue #7](https://github.com/sjefsharp/agentic-delivery/issues/7)
+- Assignment brief: [GitHub issue #7](https://github.com/agentic-delivery-lab/agentic-delivery/issues/7)
 - Source: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/)
 - Versioning reference: [Semantic Versioning 2.0.0](https://semver.org/)
 - Related decision: [ADR-0003](0003-use-context-scoped-ubiquitous-language.md)

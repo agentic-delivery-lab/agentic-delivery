@@ -184,3 +184,27 @@ test('starts persistent threads and resumes the exact UUID without a newest-sess
   assert.equal(calls[3].params.ephemeral, undefined);
   assert.equal(calls.filter(({method}) => method === 'thread/list').length, 0);
 });
+
+test('enables only explicitly inventoried MCP servers approved by the selected profile', async () => {
+  const calls = [];
+  const fakeClient = Object.assign(Object.create(CodexClient.prototype), {
+    permissions: { 'delivery-research': {} },
+    toolEnv: {},
+    availableMcpServers: new Set(['firecrawl', 'context7']),
+    approvedMcpServers: new Set(['firecrawl']),
+    request: async (method, params) => {
+      calls.push({ method, params });
+      if (method === 'config/read') return { config: { mcp_servers: { firecrawl: {}, context7: {}, chrome: {} } } };
+      throw new Error(`Unexpected request: ${method}`);
+    },
+  });
+
+  const result = await CodexClient.prototype.threadConfig.call(fakeClient, '/workspace', 'instructions', 'research');
+
+  assert.deepEqual(result.config.mcp_servers, {
+    firecrawl: { enabled: true },
+    context7: { enabled: false },
+    chrome: { enabled: false },
+  });
+  assert.equal(calls[0].method, 'config/read');
+});

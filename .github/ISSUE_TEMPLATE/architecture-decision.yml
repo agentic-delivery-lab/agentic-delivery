@@ -1,10 +1,9 @@
 name: Architecture decision
 description: Start a traceable investigation for an ADR or ADR removal.
+type: Architecture Decision
 title: "ADR: "
 labels:
   - "adr:needed"
-  - "type:architecture"
-  - "state:decision-needed"
 body:
   - type: markdown
     attributes:

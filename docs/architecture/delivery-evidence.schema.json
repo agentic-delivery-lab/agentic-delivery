@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/sjefsharp/agentic-delivery/blob/main/docs/architecture/delivery-evidence.schema.json",
+  "$id": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/docs/architecture/delivery-evidence.schema.json",
   "title": "Codex delivery evidence",
   "type": "object",
   "additionalProperties": false,
@@ -65,7 +65,7 @@
         "additionalProperties": false,
         "required": ["phase", "model", "effort", "mode"],
         "properties": {
-          "phase": { "enum": ["refine", "plan", "implement", "review"] },
+          "phase": { "enum": ["refine", "research", "requirements", "architecture", "plan", "implement", "validate", "review"] },
           "model": { "type": "string" },
           "effort": { "type": "string" },
           "mode": { "type": "string" }

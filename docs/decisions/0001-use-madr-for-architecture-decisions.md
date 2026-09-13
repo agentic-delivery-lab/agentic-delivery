@@ -1,6 +1,6 @@
 ---
 date: 2026-09-05
-source-issue: https://github.com/sjefsharp/agentic-delivery/issues/1
+source-issue: https://github.com/agentic-delivery-lab/agentic-delivery/issues/1
 decision-makers: Sjef Jenniskens
 domains:
   - agentic-delivery-governance
@@ -13,7 +13,7 @@ required-enforcement:
 
 ## Context and Problem Statement
 
-Issue [#1](https://github.com/sjefsharp/agentic-delivery/issues/1) asks how this repository should record architectural decisions and how ChatGPT and Codex CLI should work with them. An issue is an assignment brief and audit trail, not automatically an ADR. A decision may emerge during triage, refining or implementation.
+Issue [#1](https://github.com/agentic-delivery-lab/agentic-delivery/issues/1) asks how this repository should record architectural decisions and how ChatGPT and Codex CLI should work with them. An issue is an assignment brief and audit trail, not automatically an ADR. A decision may emerge during triage, refining or implementation.
 
 The repository needs a small convention that keeps reasons close to the code, gives agents reliable context and records additions and removals. A branch may need a decision before that decision is official for the whole repository. The default branch must therefore be the only source of official ADR context.
 
@@ -101,8 +101,8 @@ ADR files have no lifecycle status in their YAML frontmatter. No GitHub Action a
 
 ## More Information
 
-- Assignment brief: [GitHub issue #1](https://github.com/sjefsharp/agentic-delivery/issues/1)
-- Review and implementation: [pull request #2](https://github.com/sjefsharp/agentic-delivery/pull/2)
+- Assignment brief: [GitHub issue #1](https://github.com/agentic-delivery-lab/agentic-delivery/issues/1)
+- Review and implementation: [pull request #2](https://github.com/agentic-delivery-lab/agentic-delivery/pull/2)
 - Format reference: [MADR](https://adr.github.io/madr/)
 - Agent instruction loading: [OpenAI Docs — AGENTS.md](https://developers.openai.com/codex/guides/agents-md)
 - Reusable agent skills: [OpenAI Docs — Build skills](https://developers.openai.com/codex/skills)

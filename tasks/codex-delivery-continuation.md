@@ -1,8 +1,8 @@
 # Continue source issue #15
 
-Review pull request: [#16](https://github.com/sjefsharp/agentic-delivery/pull/16).
+Review pull request: [#16](https://github.com/agentic-delivery-lab/agentic-delivery/pull/16).
 Branch: `feat/issue-15-codex-issue-to-pr`.
-Source and ADR tracking issue: [#15](https://github.com/sjefsharp/agentic-delivery/issues/15).
+Source and ADR tracking issue: [#15](https://github.com/agentic-delivery-lab/agentic-delivery/issues/15).
 Reviewed code checkpoint: `fc468fc` (2026-09-08).
 
 The workflow is not activated until its authorized merge to `main`. The code
@@ -27,18 +27,18 @@ A new chat is optional because this record supports context compaction.
 - A separate zero-generation process probe confirmed that client shutdown
   stops both the app-server leader and a SIGTERM-resistant descendant.
 - Runner login is complete. Earlier smoke
-  [34268627089](https://github.com/sjefsharp/agentic-delivery/actions/runs/34268627089)
+  [34268627089](https://github.com/agentic-delivery-lab/agentic-delivery/actions/runs/34268627089)
   passed as `github-runner` with pinned Codex 0.153.4, ChatGPT authentication,
   exact models/efforts, Plan mode, and named permission profiles. It did not
   execute a model turn or check tool isolation.
 - The updated smoke
-  [34275454928](https://github.com/sjefsharp/agentic-delivery/actions/runs/34275454928)
+  [34275454928](https://github.com/agentic-delivery-lab/agentic-delivery/actions/runs/34275454928)
   passed as `github-runner`, including authentication, credit/quota checks,
   exact model capabilities, and all three actual tool-isolation profiles.
   It started no model turn. Fixture: `/tmp/codex-delivery-boundary-DiOqdL`.
 - Latest code-checkpoint CI:
-  [delivery and portability](https://github.com/sjefsharp/agentic-delivery/actions/runs/34275417022)
-  and [ADR checks](https://github.com/sjefsharp/agentic-delivery/actions/runs/34275416973).
+  [delivery and portability](https://github.com/agentic-delivery-lab/agentic-delivery/actions/runs/34275417022)
+  and [ADR checks](https://github.com/agentic-delivery-lab/agentic-delivery/actions/runs/34275416973).
   Both passed, including Linux, macOS, Windows, Markdown, and security checks.
   Inspect the current PR head checks again before merge.
 - Actions PR creation is enabled. A read-back verified
@@ -121,7 +121,7 @@ This preview is not yet a created issue or permission to merge.
 
 ## Follow-up prompt
 
-Continue source issue #15 and PR #16 in sjefsharp/agentic-delivery. Read this
+Continue source issue #15 and PR #16 in agentic-delivery-lab/agentic-delivery. Read this
 record, the latest issue comments, AGENTS.md, applicable skills, the domain
 register, and ADR-0009. Preserve existing work. Check current subscription
 quota first and throughout; stop before exhaustion and save tasks and the
