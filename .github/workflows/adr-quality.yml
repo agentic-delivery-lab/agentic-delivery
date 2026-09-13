@@ -6,7 +6,6 @@ on:
     paths:
       - AGENTS.md
       - .agents/skills/**
-      - .github/ISSUE_TEMPLATE/architecture-decision.yml
       - .github/pull_request_template.md
       - .github/workflows/adr-quality.yml
       - .markdownlint-cli2.jsonc
@@ -30,7 +29,6 @@ on:
     paths:
       - AGENTS.md
       - .agents/skills/**
-      - .github/ISSUE_TEMPLATE/architecture-decision.yml
       - .github/pull_request_template.md
       - .github/workflows/adr-quality.yml
       - .markdownlint-cli2.jsonc

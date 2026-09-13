@@ -14,14 +14,25 @@ This guide describes how people and coding agents move a change through the repo
 
 ## Issue intake and routing
 
-Issues enter through organization defaults, repository-local forms during the
-migration window, or the enabled blank-issue fallback. A read-only routing
-model interprets each eligible issue or human comment in context and proposes
-an issue type, lifecycle stage, readiness value, governance metadata, and
+Issues enter through the canonical organization defaults in
+`agentic-delivery-lab/.github` or the enabled blank-issue fallback. This
+repository has no local issue-form override. A read-only routing model
+interprets each eligible issue or human comment in context and proposes an
+issue type, lifecycle stage, readiness value, governance metadata, and
 orchestration pattern. Deterministic code validates the proposal against
 `.github/issue-metadata.yml`, `.github/orchestration-policy.yml`, and the
 transition rules before applying it. It does not assign intent from title
 words, form headings, keywords, or regular expressions.
+
+The organization issue forms are published in the
+[`agentic-delivery-lab/.github` repository](https://github.com/agentic-delivery-lab/.github/tree/main/.github/ISSUE_TEMPLATE/).
+CI fetches and validates all nine forms and their `config.yml` from the live
+raw source at
+`https://raw.githubusercontent.com/agentic-delivery-lab/.github/main/.github/ISSUE_TEMPLATE/`.
+The forms' availability is therefore a live CI dependency: an unreachable,
+malformed, incomplete, or invalid source fails the contract tests. Blank
+issues remain enabled for incomplete or untyped work that needs semantic
+refinement.
 
 The organization-wide taxonomy is: Idea, Research, Feature, Bug, Task,
 Requirements, Architecture Decision, Implementation, and Validation. Native

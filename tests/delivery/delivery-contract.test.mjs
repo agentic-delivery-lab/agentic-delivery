@@ -22,10 +22,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     '.github/workflows/delivery-quality.yml', '.github/workflows/issue-intake.yml',
     '.github/workflows/codex-delivery.yml', '.github/issue-metadata.yml', '.github/orchestration-policy.yml',
     'scripts/issue-intake.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
-    'scripts/lib/orchestration-policy.mjs', '.github/ISSUE_TEMPLATE/bug.yml', '.github/ISSUE_TEMPLATE/feature.yml',
-    '.github/ISSUE_TEMPLATE/idea.yml', '.github/ISSUE_TEMPLATE/task.yml', '.github/ISSUE_TEMPLATE/research.yml',
-    '.github/ISSUE_TEMPLATE/requirements.yml', '.github/ISSUE_TEMPLATE/implementation.yml',
-    '.github/ISSUE_TEMPLATE/validation.yml', '.github/ISSUE_TEMPLATE/architecture-decision.yml',
+    'scripts/lib/orchestration-policy.mjs', 'tests/helpers/organization-issue-forms.mjs',
   ]) await access(path.join(repositoryRoot, relativePath));
 
   const packageJson = JSON.parse(await text('package.json'));

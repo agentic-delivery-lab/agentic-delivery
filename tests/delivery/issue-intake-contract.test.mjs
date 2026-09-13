@@ -4,6 +4,10 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
+import {
+  EXPECTED_ORGANIZATION_ISSUE_FORMS,
+  loadOrganizationIssueForms,
+} from '../helpers/organization-issue-forms.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -37,26 +41,21 @@ test('issue intake configuration keeps issue type, lifecycle stage, readiness, a
 });
 
 test('structured issue forms and generic fallback are present', async () => {
-  const templateRoot = path.join(repositoryRoot, '.github', 'ISSUE_TEMPLATE');
-  const expectedTypes = {
-    'bug.yml': 'Bug',
-    'feature.yml': 'Feature',
-    'idea.yml': 'Idea',
-    'task.yml': 'Task',
-    'research.yml': 'Research',
-    'requirements.yml': 'Requirements',
-    'architecture-decision.yml': 'Architecture Decision',
-    'implementation.yml': 'Implementation',
-    'validation.yml': 'Validation',
-  };
-  for (const template of Object.keys(expectedTypes)) {
-    await access(path.join(templateRoot, template));
-    const form = parseRepositoryYaml(await text(`.github/ISSUE_TEMPLATE/${template}`), template);
-    assert.equal(form.type, expectedTypes[template]);
+  const { forms, config } = await loadOrganizationIssueForms();
+  for (const [template, expectedType] of Object.entries(EXPECTED_ORGANIZATION_ISSUE_FORMS)) {
+    const form = forms[template];
+    assert.ok(form);
+    assert.equal(form.type, expectedType);
     assert.ok(Array.isArray(form.body) && form.body.length > 1);
   }
-  const issueConfig = parseRepositoryYaml(await text('.github/ISSUE_TEMPLATE/config.yml'), 'issue template config');
-  assert.equal(issueConfig.blank_issues_enabled, true);
+  assert.equal(config.blank_issues_enabled, true);
+});
+
+test('repository has no local issue-form override', async () => {
+  await assert.rejects(
+    access(path.join(repositoryRoot, '.github', 'ISSUE_TEMPLATE')),
+    (error) => error.code === 'ENOENT',
+  );
 });
 
 test('issue events invoke intake and only an authorized route invokes reusable delivery', async () => {
