@@ -11,6 +11,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- [Issue #32](https://github.com/sjefsharp/agentic-delivery/issues/32) lets Codex interpret each eligible issue and comment in context, then checks its proposed route and labels against the approved catalog before applying them. People do not need to add labels or use special phrases to continue normal work.
+
 - [Issue #29](https://github.com/sjefsharp/agentic-delivery/issues/29) adds GitHub-controlled iterative refinement and conditional decomposition, deterministic lifecycle transition validation, separated work and execution state, generated ADR-to-primitive traceability, repository-scoped App publication credentials, and per-issue runner isolation.
 
 - [Issue #25](https://github.com/sjefsharp/agentic-delivery/issues/25) adds a baseline architecture-conformance review, a versioned delivery evidence contract, and a read-only layered Harness Architecture Review for internal pull requests.
@@ -27,6 +29,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 - [Issue #12](https://github.com/sjefsharp/agentic-delivery/issues/12) adopts exact pnpm tooling with a strict 48-hour dependency release-age policy and portable Node.js ESM governance commands.
 
 ### Fixed
+
+- [Issue #32](https://github.com/sjefsharp/agentic-delivery/issues/32) makes delivery pauses short and actionable, and reviews changed ADRs from the pull-request branch rather than the reviewer's working tree.
 
 - [Issue #29](https://github.com/sjefsharp/agentic-delivery/issues/29) allows intentional gaps after ADR removal and shows the latest validation error in terminal recovery comments without relisting completed plan tasks.
 

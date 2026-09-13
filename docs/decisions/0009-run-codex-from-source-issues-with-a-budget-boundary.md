@@ -51,10 +51,10 @@ delivery run, budget boundary, and continuation prompt.
 - Continue multi-turn implementation without requiring repeated human comments.
 - Keep credentials and publication outside model-generated commands.
 - Preserve human review, merge, and issue-closing authority.
-- Continue only the exact source issue and persistent Codex session requested by
-  a trusted repository-owner comment.
-- Keep natural language as the primary human continuation interface without
-  letting unrelated or negative comments resume technical work.
+- Continue only the exact source issue and persistent Codex session selected by
+  a validated semantic routing proposal from a trusted repository writer.
+- Interpret natural language in its full issue context without letting fixed
+  words, unrelated comments, or negative instructions resume technical work.
 - Keep human-input waiting separate from technical failure and prevent comment
   redelivery or bot feedback loops.
 
@@ -65,8 +65,8 @@ delivery run, budget boundary, and continuation prompt.
 - An API-key-based coding action.
 - Keep absolute per-turn deadlines, replace them with an activity watchdog, or
   remove turn-level failure detection.
-- For technical recovery, recognize clear natural-language continuation intent,
-  require an exact slash command, or treat every owner comment as a resume.
+- For issue and comment routing, use contextual model reasoning with a closed
+  deterministic validator, keyword matching, or unconditional continuation.
 
 ## Decision Outcome
 
@@ -74,20 +74,19 @@ Chosen option: **A small Node.js controller using `codex app-server`**, because
 its protocol exposes actual collaboration modes, per-turn model settings,
 clarification requests, interruption, and subscription quota telemetry.
 
-An issue opened by a contributor with current repository write permission
-starts intake. A newly created issue comment can enter the controller only when
-the payload author is the repository owner with `author_association: OWNER`;
-the controller repeats this check using the comment payload rather than
-`GITHUB_TRIGGERING_ACTOR`. A plain owner answer continues an existing
-`awaiting-human` state. A clear natural-language owner request such as “Please
-continue from the saved work” continues a technical `paused` state and is
-passed to the exact saved Codex session when model work resumes. Deterministic
-leading-intent matching accepts common English and Dutch continuation wording
-without treating comments such as “Do not continue yet” as authorization. The
-legacy `/codex resume` comment remains a compatibility shortcut, and manual
-dispatch remains an operator recovery path. Free-form intake precedes the
-implementation plan. The source issue also serves as ADR tracking when a
-significant decision is needed.
+An issue or newly created comment can enter semantic routing only after
+deterministic repository, issue, event, bot, and repository-writer checks pass.
+The routing model receives the current issue conversation and proposes the next
+route and approved metadata as structured data. The validator rejects unknown
+labels, illegal transitions, and inconsistent readiness before GitHub state or
+the delivery controller changes. The controller therefore receives an already
+validated route and never assigns intent from comment words. Any human wording,
+including `/codex resume`, remains ordinary task data for model interpretation.
+A validated answer or continuation instruction is passed to the exact saved
+Codex session when model work resumes. Manual workflow dispatch with current
+approved labels remains an explicit break-glass recovery path. Free-form intake
+precedes the implementation plan. The source issue also serves as ADR tracking
+when a significant decision is needed.
 
 New delivery state is versioned and correlates one source issue to one
 persistent Codex app-server thread UUID. The controller starts new threads with
@@ -130,11 +129,11 @@ its handoff before Actions stops the job.
 
 Implementation outcomes distinguish `continue`, `complete`, and `needs_input`.
 `continue` carries exact remaining implementation tasks and immediately starts
-another implementation turn in the same run. The trusted owner continuation
+another implementation turn in the same run. The validated repository-writer
 comment is supplied only to the first resumed turn. `complete` is accepted only
 with empty tasks and questions because dependency installation, repository
-verification, audit, commit, push, and pull-request publication belong to the
-controller. When a semantically invalid structured outcome is rejected, its
+verification, audit, commit, push, and pull-request publication are performed
+by the workflow after model implementation. When a semantically invalid structured outcome is rejected, its
 reported tasks are saved for an accurate continuation handoff.
 
 Model execution also requires telemetry reporting no spendable or unlimited
@@ -190,8 +189,8 @@ restricted to that service account.
 - Good, because active work can use the available five-hour allowance without
   repeated continuation comments or an arbitrary per-turn cutoff.
 - Good, because silent turns still stop in time for a recoverable handoff.
-- Good, because people can continue saved work in natural language while an
-  explicit negative comment remains non-triggering.
+- Good, because model reasoning interprets continuation, questions, objections,
+  and scope changes from the full issue context without a phrase list.
 - Bad, because runner installation, ChatGPT login, persistent storage, a
   separately managed publication token, and sandbox compatibility are
   operational prerequisites.
@@ -200,9 +199,8 @@ restricted to that service account.
 - Bad, because legacy session reconstruction cannot restore the original
   ephemeral conversation and therefore depends on the saved issue brief and
   continuation context.
-- Bad, because deterministic intent matching cannot understand every possible
-  natural-language phrasing; manual dispatch and the compatibility shortcut
-  remain fallbacks.
+- Bad, because semantic routing consumes subscription allowance and can be
+  unavailable; manual dispatch remains a rare break-glass fallback.
 - Bad, because an active but unproductive turn can continue until quota or the
   outer recovery failsafe is reached.
 - Neutral, because this private repository on GitHub Free cannot enforce
@@ -214,14 +212,16 @@ restricted to that service account.
 ### Confirmation
 
 Test quota failures, exact model selection, mode handoff, clarification,
-interruption, authorization, persistent UUID start/resume, owner-comment
+interruption, authorization, persistent UUID start/resume, repository-writer
 continuation, automatic multi-turn implementation, activity watchdog resets,
-natural-language recovery intent, negative comments, legacy reconstruction,
+semantic routing proposals, negative comments, legacy reconstruction,
 rejected-outcome task persistence, and duplicate-event behavior.
 Run repository tests and quality checks. Verify Codex under `github-runner`
 without generating a turn, then demonstrate a small end-to-end issue after
 human merge and prerequisite setup. Do not claim runtime readiness from unit
 tests alone. This ADR remains provisional until merged into `main`.
+
+Amendment source: [issue #32](https://github.com/sjefsharp/agentic-delivery/issues/32)
 
 ## Pros and Cons of the Options
 

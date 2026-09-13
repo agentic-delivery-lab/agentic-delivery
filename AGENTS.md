@@ -28,14 +28,16 @@
 
 - GitHub Issues, labels, pull requests and Actions are the control plane and
   authoritative work-state record. Codex and the self-hosted runner are the
-  execution plane. Treat model output as an untrusted transition proposal and
-  require the deterministic transition validator before changing GitHub state.
+  execution plane. An LLM interprets every eligible issue or human comment and
+  proposes the route and managed labels. Deterministic code checks permission,
+  schema, the versioned label catalog and allowed transitions before changing
+  GitHub state; it must not infer intent from words or phrases.
 - Blank issues may enter iterative refinement without a template. Ask only
   focused questions that are answerable from the current conversation. A
   repository writer's answer continues the same issue and saved session; a
   refined goal may create only the validated child work items it needs, while
   the parent remains the lineage root.
-- Issue intake classifies work type, lifecycle state and governance metadata before the Codex delivery primitive. A new Plan run requires an open issue with a supported type, cleared deterministic gates and `state:ready-for-plan`; that state automatically authorizes Plan. Successful planning transitions through `state:ready-for-agent` to automatic Implement. Research uses `state:investigating`, deferred Idea work uses `state:parked`, rejected or abandoned work uses `state:done` with GitHub's `not planned` close reason, and the canonical ADR governance label is `adr:needed`.
+- Issue intake applies only a validated routing proposal before the Codex delivery primitive. People do not add lifecycle labels during normal work; manual intake dispatch using current approved labels is a rare break-glass recovery when semantic routing is unavailable. A new Plan run requires an open issue with a supported type, cleared deterministic gates and `state:ready-for-plan`; that state automatically authorizes Plan. Successful planning transitions through `state:ready-for-agent` to automatic Implement. Research uses `state:investigating`, deferred Idea work uses `state:parked`, rejected or abandoned work uses `state:done` with GitHub's `not planned` close reason, and the canonical ADR governance label is `adr:needed`.
 
 - For automated source issue execution, read [`.agents/codex-delivery.md`](.agents/codex-delivery.md) and [`docs/delivery/codex-workflow.md`](docs/delivery/codex-workflow.md). Preserve mandatory issue communication, clarification pauses, exact model settings, and the budget boundary.
 - Review pull requests through the read-only Harness Architecture Review when its workflow is available. Treat its deterministic violations as structural failures, and treat semantic findings or unavailable runtime evidence as cited review input rather than proof.

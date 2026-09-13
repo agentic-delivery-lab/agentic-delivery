@@ -1,11 +1,11 @@
 // agentic-primitive: {"id":"harness-architecture-review","kind":"validator","enforcement":"deterministic","adrs":["ADR-0011","ADR-0013"],"domains":["agentic-delivery-governance"]}
 import { execFile } from 'node:child_process';
-import { readdir, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { parseRepositoryYaml } from './yaml.mjs';
-import { buildTraceability, collectAdrs, collectPrimitives, PRIMITIVE_MARKER } from './adr-traceability.mjs';
+import { buildTraceability, collectAdrsFromSources, collectPrimitivesFromSources, PRIMITIVE_MARKER } from './adr-traceability.mjs';
 
 const execFileAsync = promisify(execFile);
 const ADR_FILE = /^docs\/decisions\/(\d{4})-[a-z0-9-]+\.md$/;
@@ -126,8 +126,8 @@ export function validateEvidenceRecord(value, { repository, issueNumber, head } 
   return { valid: errors.length === 0, errors };
 }
 
-async function mapData(repositoryRoot) {
-  const source = await readFile(path.join(repositoryRoot, 'docs/architecture/harness-review.yml'), 'utf8');
+async function mapData(repositoryRoot, revision) {
+  const source = await gitShow(repositoryRoot, revision, 'docs/architecture/harness-review.yml');
   const value = parseRepositoryYaml(source, 'harness review map');
   if (!value || value.version !== 2 || !Array.isArray(value['bounded-contexts']) || !Array.isArray(value['runtime-surfaces'])) {
     throw new Error('harness review map must define version 2, bounded-contexts, and runtime-surfaces');
@@ -157,12 +157,6 @@ async function revisionPrimitiveRows(repositoryRoot, revision) {
     }
   }
   return rows;
-}
-
-async function workingTreeDecisionFiles(repositoryRoot) {
-  const directory = path.join(repositoryRoot, 'docs', 'decisions');
-  const entries = await readdir(directory, { withFileTypes: true });
-  return entries.filter((entry) => entry.isFile() && ADR_FILE.test(`docs/decisions/${entry.name}`)).map((entry) => `docs/decisions/${entry.name}`);
 }
 
 function adrIds(files) {
@@ -197,20 +191,16 @@ export async function deterministicReview({ repositoryRoot, base, head, eventPat
   const issueNumber = issueNumberFromBranch(branch);
   const commonAncestor = await mergeBase(repositoryRoot, base, head);
   const files = await changedFiles(repositoryRoot, commonAncestor, head);
-  const map = await mapData(repositoryRoot);
-  const currentRevision = await git(repositoryRoot, ['rev-parse', 'HEAD']);
-  const useWorkingTree = currentRevision === head;
+  const map = await mapData(repositoryRoot, head);
   let traceability;
   try {
     traceability = JSON.parse(await gitShow(repositoryRoot, head, 'docs/architecture/adr-primitive-index.json'));
   } catch (error) {
-    if (!useWorkingTree) throw new Error(`The reviewed revision has no valid generated traceability index: ${error.message}`);
-    try { traceability = JSON.parse(await readFile(path.join(repositoryRoot, 'docs/architecture/adr-primitive-index.json'), 'utf8')); }
-    catch (workingTreeError) { throw new Error(`The reviewed revision has no valid generated traceability index: ${workingTreeError.message}`); }
+    throw new Error(`The reviewed revision has no valid generated traceability index: ${error.message}`);
   }
   const baseFiles = await gitFiles(repositoryRoot, base, 'docs/decisions');
-  const headFiles = useWorkingTree ? await workingTreeDecisionFiles(repositoryRoot) : await gitFiles(repositoryRoot, head, 'docs/decisions');
-  const headRepositoryFiles = useWorkingTree ? [...new Set([...(await gitFiles(repositoryRoot, head)), ...headFiles, 'docs/architecture/adr-primitive-index.json'])] : await gitFiles(repositoryRoot, head);
+  const headFiles = await gitFiles(repositoryRoot, head, 'docs/decisions');
+  const headRepositoryFiles = await gitFiles(repositoryRoot, head);
   const basePrimitiveRows = await revisionPrimitiveRows(repositoryRoot, base);
   const officialAdrs = adrIds(baseFiles.filter((file) => ADR_FILE.test(file)));
   const currentIds = adrIds(headFiles.filter((file) => ADR_FILE.test(file)));
@@ -218,11 +208,13 @@ export async function deterministicReview({ repositoryRoot, base, head, eventPat
 
   let derivedTraceability = null;
   try {
-    const [adrResult, primitiveResult, domainSource] = await Promise.all([
-      collectAdrs(repositoryRoot),
-      collectPrimitives(repositoryRoot),
-      readFile(path.join(repositoryRoot, 'docs/domain/ubiquitous-language.yml'), 'utf8'),
-    ]);
+    const sourceFiles = headRepositoryFiles.filter((file) => TEXT_EXTENSIONS.has(path.extname(file).toLowerCase()));
+    const sources = await Promise.all(sourceFiles.map(async (file) => ({ path: file, source: await gitShow(repositoryRoot, head, file) })));
+    const [adrResult, primitiveResult, domainSource] = [
+      collectAdrsFromSources(sources),
+      collectPrimitivesFromSources(sources),
+      await gitShow(repositoryRoot, head, 'docs/domain/ubiquitous-language.yml'),
+    ];
     const domains = parseRepositoryYaml(domainSource, 'domain register').bounded_contexts?.map((entry) => entry.id) ?? [];
     if (!adrResult.errors.length && !primitiveResult.errors.length) {
       derivedTraceability = buildTraceability({ adrs: adrResult.adrs, primitives: primitiveResult.primitives, domains });
@@ -304,7 +296,7 @@ export async function deterministicReview({ repositoryRoot, base, head, eventPat
     : check('adr-removal', 'pass', 'No ADR was removed in this comparison.', ['docs/architecture/adr-primitive-index.json']));
 
   const missingIndexLinks = [];
-  const index = await readFile(path.join(repositoryRoot, 'docs/decisions/README.md'), 'utf8');
+  const index = await gitShow(repositoryRoot, head, 'docs/decisions/README.md');
   for (const file of headFiles.filter((candidate) => ADR_FILE.test(candidate))) if (!index.includes(`(${path.basename(file)})`)) missingIndexLinks.push(file);
   checks.push(missingIndexLinks.length
     ? check('adr-index-links', 'fail', `The decision index does not link ${missingIndexLinks.join(', ')}.`, ['docs/decisions/README.md'])

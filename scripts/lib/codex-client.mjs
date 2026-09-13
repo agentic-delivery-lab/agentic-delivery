@@ -6,6 +6,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 
 export const MODELS = Object.freeze({
+  route: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
   refine: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
   plan: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
   implement: { model: 'gpt-5.6-luna', effort: 'max', mode: 'default' },

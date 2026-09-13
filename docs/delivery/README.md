@@ -15,8 +15,12 @@ This guide describes how people and coding agents move a change through the repo
 ## Issue intake and routing
 
 Issues enter through the repository's intake forms or the enabled blank-issue
-fallback. The intake workflow classifies each issue into a work type and keeps
-that type separate from its lifecycle state and governance metadata. Native
+fallback. A read-only routing model interprets each eligible issue or human
+comment in context and proposes its route, work type, lifecycle state, and
+governance metadata (including any governance labels). Deterministic code validates the proposal against the
+versioned label catalog and transition table before applying it. It does not
+assign intent from title words, form headings, keywords, or regular
+expressions. Native
 GitHub Issue Types are used when available; the repository-local `type:*`
 labels are the fallback for Bug, Feature, Task, Idea, Research, Architecture,
 Specification, Implementation, and Validation work.
@@ -38,7 +42,9 @@ can become ready for planning. Rejected or intentionally abandoned work uses
 `state:done` together with GitHub's `not planned` close reason.
 
 `state:ready-for-plan` is the deterministic readiness gate and automatically
-authorizes the downstream Plan workflow. A blank issue first enters iterative
+authorizes the downstream Plan workflow after the model proposes it and the
+validator accepts it. People do not manage lifecycle labels during normal work.
+A blank issue first enters iterative
 refinement: Codex can ask one to three focused questions, and a later comment
 continues the same issue conversation. A refined outcome selects a
 delivery-capable parent work type. Multiple actionable work items are
@@ -48,9 +54,9 @@ are complete. An atomic goal continues from the parent without a fixed child
 checklist. The gate requires one supported work type, complete
 structured intake when a form was used, cleared requirements and decision
 gates, and no unresolved `adr:needed`, `adr:proposed`, or `adr:removal`
-governance label. The intake workflow only hands an eligible issue to
-`codex-delivery`; ambiguous or incomplete issues remain in a maturation state
-without spending model quota. A repository-writer comment on a coordinating
+governance label, except that Architecture work may resolve its own ADR labels.
+The intake workflow only hands a validated proposal to `codex-delivery`;
+ambiguous or incomplete issues remain in a maturation state. A repository-writer comment on a coordinating
 lineage root can request a later refinement wave after research, specification,
 or decision children provide new evidence.
 
@@ -58,9 +64,10 @@ The existing Plan → Implement controller is a reusable downstream primitive.
 It records `state:ready-for-agent` after a successful plan, enters
 `state:in-progress` before implementation, records `state:needs-info` when a
 clarification is required, and records `state:review` after publishing a
-review pull request. A clear natural-language recovery request, the legacy
-`/codex resume` command, and manual dispatch remain recovery paths for paused
-runs or an intentionally configured human gate. Metadata changes by automation
+review pull request. Every eligible human comment is interpreted by the routing
+model, and the delivery controller receives the validated result without
+parsing the comment text. Manual intake dispatch with current approved labels
+is the rare break-glass recovery when model routing is unavailable. Metadata changes by automation
 are idempotent and do not recursively trigger delivery. GitHub labels are
 authoritative work state; the runner records execution state and typed failure
 evidence separately, so a failed Action or Codex session does not advance the

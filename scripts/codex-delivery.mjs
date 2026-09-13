@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { CodexClient } from './lib/codex-client.mjs';
 import { continuation, formatPlanComment, formatProgressComment, formatRefinementComment, runTurn, validateOutcome, validateRefinementOutcome } from './lib/codex-loop.mjs';
-import { classifyIssue, isResumeRequestBody, stateLabel } from './lib/issue-routing.mjs';
+import { classifyIssue, stateLabel } from './lib/issue-routing.mjs';
 import { loadLifecycleConfig } from './issue-intake.mjs';
 import { startIssueBranch } from './start-issue-branch.mjs';
 import { validateCommitRange } from './validate-commit-range.mjs';
@@ -47,8 +47,6 @@ function trustedOwnerComment(event, repository) {
   return {
     id: commentId(comment.id),
     body: typeof comment.body === 'string' ? comment.body : '',
-    isResumeCommand: comment.body?.trim() === '/codex resume',
-    isResumeRequest: isResumeRequestBody(comment.body),
   };
 }
 
@@ -236,7 +234,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   }
   const lifecycleConfig = await loadLifecycleConfig(controllerRoot);
   const deliveryMetadataSafe = (metadata) => {
-    const blockedGovernance = metadata.governance
+    const blockedGovernance = metadata.workType === 'architecture' ? [] : metadata.governance
       .filter((label) => lifecycleConfig.readiness.blocking_governance.includes(label));
     return Boolean(metadata.workType)
       && !metadata.conflict?.length
@@ -309,8 +307,7 @@ export async function deliver(env = process.env, dependencies = {}) {
       comments.push(...batch.filter((item) => {
         const login = String(item.user?.login ?? '');
         const bot = item.user?.type === 'Bot' || login.endsWith('[bot]') || login === 'github-actions';
-        return !ownComments.has(String(item.id)) && String(item.id) !== String(excludedCommentId ?? '')
-          && !isResumeRequestBody(item.body) && !bot;
+        return !ownComments.has(String(item.id)) && String(item.id) !== String(excludedCommentId ?? '') && !bot;
       })
         .map((item) => ({ id:item.id, author:item.user.login, body:item.body })));
       if (batch.length < 100) break;
@@ -336,7 +333,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   try { lock = await import('node:fs/promises').then(({ open }) => open(lockFile, 'wx', 0o600)); }
   catch (error) {
     if (error.code !== 'EEXIST') throw error;
-    await api(`/issues/${issue}/comments`, 'POST', { body: 'Codex execution is already locked on this runner. After the active run finishes, reply with a natural-language request such as “Please continue from the saved work.” If a run was killed, an operator must inspect the saved lock and confirm no Codex process is active before removing it.' });
+    await api(`/issues/${issue}/comments`, 'POST', { body: 'Delivery is already running. No action is needed. If the linked run is no longer active, an operator must clear the stale runner lock and rerun the workflow. Do not change labels or post another continuation comment.' });
     return;
   }
   runTools = await mkdtemp(path.join(issueRoot, 'run-tools-'));
@@ -391,9 +388,8 @@ export async function deliver(env = process.env, dependencies = {}) {
       || (comment && state.consumedCommentIds.includes(comment.id))) return {status:'ignored', reason:'This delivery event is already complete or in progress.'};
     if (comment && !coordinationContinuation) {
       if (state.status === 'new') return {status:'ignored', reason:'An issue comment cannot start a new delivery task.'};
-      if (state.status === 'paused' && !comment.isResumeRequest) return {status:'ignored', reason:'A technical pause requires a clear natural-language request to continue.'};
       if (state.status === 'awaiting-human') {
-        if (comment.isResumeRequest || !comment.body.trim()) return {status:'ignored', reason:'A waiting state requires an answer, not only a request to continue.'};
+        if (!comment.body.trim()) return {status:'ignored', reason:'A waiting state requires an answer.'};
         if (compareCommentIds(comment.id, state.waitingCommentId ?? '0') <= 0) return {status:'ignored', reason:'The comment is at or before the waiting boundary.'};
       }
       if (!['paused','awaiting-human'].includes(state.status)) return {status:'ignored', reason:'The saved state is not eligible for issue-comment continuation.'};
@@ -565,7 +561,7 @@ export async function deliver(env = process.env, dependencies = {}) {
       const brief = await readBrief(comment?.id);
       if (['refine', 'plan'].includes(state.phase)) { state.sourceDigest = digest(brief); await save(); }
       else await requireCurrentBrief(brief);
-      if (comment && !comment.isResumeCommand) {
+      if (comment) {
         state.sourceDigest = digest(await readBrief());
         await save();
       }
@@ -604,7 +600,7 @@ legacy owner-only rule in the base instruction file.`;
         return thread;
       };
       const continuationPhase = state.phase;
-      const humanContinuation = comment && !comment.isResumeCommand ? comment.body : '';
+      const humanContinuation = comment?.body ?? '';
       let continuationConsumed = false;
       const continuationContext = (phase) => humanContinuation && continuationPhase === phase && !continuationConsumed ? [
         `Continue the interrupted ${phase} turn from the exact saved delivery run and return the required structured outcome.`,
@@ -625,8 +621,8 @@ legacy owner-only rule in the base instruction file.`;
       };
       const implementationOutcomeContract = [
         'Return `continue` with the exact remaining implementation tasks when another model turn is needed.',
-        'Return `complete` only when repository changes are ready for controller-owned verification; then tasks and questions must both be empty.',
-        'Installation, repository tests, dependency audit, commit, push, and pull-request publication are controller-owned work and must not remain in the implementation task list.',
+        'Return `complete` only when repository changes are ready for the workflow to verify; then tasks and questions must both be empty.',
+        'The workflow runs installation, repository tests, dependency audit, commit, push, and pull-request publication. Do not keep those operations in the implementation task list.',
       ].join(' ');
       const progress = async (text) => {
         state.lastProgress = redact(text, env).slice(-20_000);

@@ -33,10 +33,10 @@ test('trusted owner comments carry their payload identity, including plain conti
   const result=intakeEvent(event,context);
   assert.equal(result.issue,'15');
   assert.equal(result.actor,'owner');
-  assert.deepEqual(result.comment,{id:'42',body:'Please use the second option.',isResumeCommand:false,isResumeRequest:false});
+  assert.deepEqual(result.comment,{id:'42',body:'Please use the second option.'});
 });
 
-test('natural-language requests and the legacy command express technical recovery intent', () => {
+test('the controller carries comment text without assigning routing intent', () => {
   const context={...env,GITHUB_EVENT_NAME:'issue_comment'};
   const event=(id,body)=>({
     action:'created',
@@ -44,18 +44,13 @@ test('natural-language requests and the legacy command express technical recover
     issue:{number:15},
     comment:{id,body,user:{login:'owner',type:'User'},author_association:'OWNER'},
   });
-  const natural=intakeEvent(event(43,'Please continue from the saved work.'),context).comment;
-  assert.equal(natural.isResumeRequest,true);
-  assert.equal(natural.isResumeCommand,false);
-  const dutch=intakeEvent(event(44,'Ga verder met het opgeslagen werk.'),context).comment;
-  assert.equal(dutch.isResumeRequest,true);
-  assert.equal(intakeEvent(event(45,'Yes, could you please resume from where you left off?'),context).comment.isResumeRequest,true);
-  assert.equal(intakeEvent(event(46,'Ja, ga maar verder alsjeblieft.'),context).comment.isResumeRequest,true);
-  const legacy=intakeEvent(event(47,'/codex resume'),context).comment;
-  assert.equal(legacy.isResumeRequest,true);
-  assert.equal(legacy.isResumeCommand,true);
-  assert.equal(intakeEvent(event(48,'Do not continue yet.'),context).comment.isResumeRequest,false);
-  assert.equal(intakeEvent(event(49,'Continue, but remove the changelog first.'),context).comment.isResumeRequest,false);
+  for (const [id, body] of [
+    [43, 'Please continue from the saved work.'],
+    [44, 'Ga verder met het opgeslagen werk.'],
+    [45, 'Do not continue yet.'],
+    [46, 'Continue, but remove the changelog first.'],
+    [47, '/codex resume'],
+  ]) assert.deepEqual(intakeEvent(event(id,body),context).comment,{id:String(id),body});
 });
 
 test('bot identities and pull-request comments cannot enter intake while repository users may answer', () => {
@@ -72,7 +67,7 @@ test('issue comments do not require the resume command before intake eligibility
   const workflow = readFile(path.join(repositoryRoot, '.github/workflows/issue-intake.yml'), 'utf8');
   return workflow.then((source) => {
     assert.match(source, /github\.event\.comment\.user\.type != 'Bot'/);
-    assert.match(source, /needs\.classify\.outputs\.route == 'refine'/);
+    assert.match(source, /needs\.classify\.outputs\.route == 'resume'/);
     assert.doesNotMatch(source, /startsWith\(github\.event\.comment\.body, '\/codex resume'\)/);
   });
 });

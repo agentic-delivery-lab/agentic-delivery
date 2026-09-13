@@ -29,10 +29,10 @@ Keep the plan and tasks concrete enough for another model to implement.
 ## Implementation and verification
 
 Use GPT-5.6 Luna at max reasoning effort. Follow the completed plan and preserve
-existing changes when resuming. A trusted owner comment is continuation input
-only when the persisted continuation state is `awaiting-human`; use the exact
-saved Codex session and read the supplied issue brief, progress, plan, tasks,
-and validation context. If that input changes the plan, return `needs_input` and
+existing changes when resuming. A repository-writer comment is continuation
+input only after the semantic router proposes that route and deterministic code
+validates it; use the exact saved Codex session and read the supplied issue
+brief, progress, plan, tasks, and validation context. If that input changes the plan, return `needs_input` and
 explain the required planning change before implementing it. Keep progress
 messages useful to a future reviewer: describe changes, reasons, verification,
 and remaining work. Do not include private chain-of-thought, credentials, or raw
@@ -43,10 +43,10 @@ domain register, documentation, and provisional ADR when the change requires
 them. Run relevant tests and report actual results. Use the final structured
 outcome to record remaining tasks and questions. Return `continue` with the
 exact remaining implementation tasks when another model turn is needed. Return
-`complete` only when the changes are ready for controller-owned verification
-and both tasks and questions are empty. Dependency installation, repository
-verification, audit, commit, push, and pull-request publication are controller
-work; do not report them as remaining implementation tasks. Do not claim
+`complete` only when the changes are ready for the workflow to verify and both
+tasks and questions are empty. The workflow performs dependency installation,
+repository verification, audit, commit, push, and pull-request publication; do
+not report them as remaining implementation tasks. Do not claim
 completion when requirements remain unresolved.
 
 Issue communication must minimize cognitive load. Keep progress summaries
@@ -57,8 +57,8 @@ Markdown, coalesces rapid progress updates, and gives human-input requests a
 prominent action-required heading. Raw protocol JSON is not a human-facing
 audit format.
 
-The controller owns Git metadata, commits, pushes, issue communication, and
-pull-request publication. Issue communication uses the job token; publication
+The workflow handles Git metadata, commits, pushes, issue communication, and
+pull-request publication after model work. Issue communication uses the job token; publication
 uses a separate workflow-capable credential that model tools never receive.
 Model tools have restricted filesystem access and no external network access.
 They cannot install packages or use external integrations;
@@ -79,10 +79,9 @@ The longer controller and Actions timeouts are recovery failsafes, not usage
 budgets. A human-input request is
 saved as the successful `awaiting-human` continuation state; technical quota,
 session, repository, and validation failures remain `paused` failures. Keep
-progress current so a trusted owner can answer a waiting run or an operator can
-recover a technical pause. A clear natural-language owner request continues a
-technical pause and is passed to the exact saved Codex session when model work
-resumes. The legacy `/codex resume` command remains a compatibility shortcut,
-not the required human interface. A five-hour wall-clock timeout is not a
+progress current so a repository writer can answer a waiting run or an operator
+can recover a technical pause. The semantic router interprets every eligible
+comment in the full issue context and proposes whether to resume, refine, or
+hold. No keyword, fixed phrase, or legacy command bypasses that decision. A five-hour wall-clock timeout is not a
 subscription budget. Never switch models, billing methods, or accounts to get
 around a limit.

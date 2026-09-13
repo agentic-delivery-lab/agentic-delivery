@@ -163,7 +163,8 @@
         "issue-classifier",
         "lifecycle-transition-rules",
         "lifecycle-transition-validator",
-        "repository-governance-instructions"
+        "repository-governance-instructions",
+        "semantic-issue-router"
       ]
     },
     {
@@ -251,6 +252,7 @@
         "main-history-validator",
         "repository-governance-instructions",
         "semantic-architecture-review",
+        "semantic-issue-router",
         "toolchain-policy-validator"
       ]
     }
@@ -501,6 +503,19 @@
       "enforcement": "semantic",
       "adrs": [
         "ADR-0011"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "semantic-issue-router",
+      "path": "scripts/lib/issue-routing-agent.mjs",
+      "location": "scripts/lib/issue-routing-agent.mjs",
+      "kind": "state-machine",
+      "enforcement": "semantic",
+      "adrs": [
+        "ADR-0012"
       ],
       "domains": [
         "agentic-delivery-governance"
