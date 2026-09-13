@@ -1,7 +1,7 @@
 // agentic-primitive: {"id":"issue-metadata-migration","kind":"script","enforcement":"deterministic","adrs":["ADR-0012","ADR-0013"],"domains":["agentic-delivery-governance"]}
 
 import { issueMetadata, issueTypes, lifecycleStages, readinessOptions } from './issue-metadata.mjs';
-import { bindIssueMetadataConfig, setIssueFields, setIssueType } from './issue-field-api.mjs';
+import { bindIssueMetadataConfig, setIssueFields, setIssueType, validateOrganizationIssueFields } from './issue-field-api.mjs';
 
 function labels(issue) {
   return (issue?.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean);
@@ -22,6 +22,19 @@ function legacyTypeLabels(config) {
 function issueTypeId(organizationIssueTypes, nativeName) {
   const match = (organizationIssueTypes ?? []).find((type) => type.name === nativeName && type.isEnabled !== false);
   return match?.id ?? null;
+}
+
+function observedField(organizationIssueFields, definition) {
+  const ids = [definition?.runtime_id, definition?.github_id, definition?.id].filter(Boolean);
+  return (organizationIssueFields ?? []).find((field) => ids.includes(field?.id) || field?.name === definition?.name);
+}
+
+function fieldIsComplete(observed, definition) {
+  if (!observed || observed.dataType !== 'SINGLE_SELECT' || !Array.isArray(observed.options)) return false;
+  if (!definition?.runtime_id && !definition?.github_id) return false;
+  if ((definition?.options ?? []).some((expected) => !expected.runtime_id && !expected.github_id)) return false;
+  return (definition?.options ?? []).every((expected) => observed.options.some((option) => option?.name === expected.name
+    && option?.id === (expected.runtime_id ?? expected.github_id)));
 }
 
 function option(config, field, id) {
@@ -59,10 +72,11 @@ export function organizationMetadataManifest(config) {
  * Build a deterministic, repeatable migration plan. Planning has no side
  * effects; applying it requires an explicit operator action.
  */
-export function planIssueMetadataMigration({ issue = {}, config, organizationIssueTypes = [] } = {}) {
-  const metadata = issueMetadata(issue, config);
+export function planIssueMetadataMigration({ issue = {}, config, organizationIssueTypes = [], organizationIssueFields = null, bindings = {} } = {}) {
+  const boundConfig = bindIssueMetadataConfig(config, bindings);
+  const metadata = issueMetadata(issue, boundConfig);
   const currentLabels = labels(issue);
-  const type = metadata.issueType.id ? issueTypes(config).find((candidate) => candidate.id === metadata.issueType.id) : null;
+  const type = metadata.issueType.id ? issueTypes(boundConfig).find((candidate) => candidate.id === metadata.issueType.id) : null;
   const desiredStage = metadata.lifecycleStage ?? type?.initial_stage ?? 'intake';
   const desiredReadiness = metadata.readiness ?? type?.initial_readiness ?? 'not-ready';
   const actions = [];
@@ -78,18 +92,30 @@ export function planIssueMetadataMigration({ issue = {}, config, organizationIss
       ? { kind: 'set-issue-type', issueTypeId: nativeId, issueType: type.native_name }
       : { kind: 'manual-issue-type', issueType: type.native_name, reason: 'The organization issue type ID was not observed.' });
   }
-  if (!metadata.fieldPresence?.lifecycleStage || !metadata.lifecycleStage) {
-    actions.push({ kind: 'set-field', field: 'lifecycle_stage', value: desiredStage, option: option(config, 'lifecycle_stage', desiredStage) });
+  const missingFields = Array.isArray(organizationIssueFields)
+    ? ['lifecycle_stage', 'readiness'].filter((field) => {
+      const observed = observedField(organizationIssueFields, boundConfig.fields[field]);
+      return !fieldIsComplete(observed, boundConfig.fields[field]);
+    })
+    : [];
+  for (const field of missingFields) actions.push({
+    kind: 'manual-issue-field',
+    field,
+    reason: `The organization single-select field ${boundConfig.fields[field].name} was not observed with the required options, data type, and runtime bindings. Provision it and rerun migration.`,
+  });
+  if (!missingFields.includes('lifecycle_stage') && (!metadata.fieldPresence?.lifecycleStage || !metadata.lifecycleStage)) {
+    actions.push({ kind: 'set-field', field: 'lifecycle_stage', value: desiredStage, option: option(boundConfig, 'lifecycle_stage', desiredStage) });
   }
-  if (!metadata.fieldPresence?.readiness || !metadata.readiness) {
-    actions.push({ kind: 'set-field', field: 'readiness', value: desiredReadiness, option: option(config, 'readiness', desiredReadiness) });
+  if (!missingFields.includes('readiness') && (!metadata.fieldPresence?.readiness || !metadata.readiness)) {
+    actions.push({ kind: 'set-field', field: 'readiness', value: desiredReadiness, option: option(boundConfig, 'readiness', desiredReadiness) });
   }
   const canRemoveTypeFallback = Boolean(nativeType || actions.some((action) => action.kind === 'set-issue-type'));
-  const removeLabels = currentLabels.filter((label) => legacyStateLabels(config).has(label)
+  const canRemoveLegacyMetadata = !missingFields.length && !actions.some((action) => action.kind === 'manual-issue-type');
+  const removeLabels = canRemoveLegacyMetadata && currentLabels.filter((label) => legacyStateLabels(config).has(label)
     || (canRemoveTypeFallback && legacyTypeLabels(config).has(label)));
   if (removeLabels.length) actions.push({ kind: 'remove-legacy-labels', labels: removeLabels });
   return {
-    version: config.version,
+    version: boundConfig.version,
     issue: issue.number ?? null,
     idempotent: true,
     authoritative: { issueType: 'organization-native', lifecycleStage: 'organization-issue-field', readiness: 'organization-issue-field' },
@@ -101,7 +127,7 @@ export function planIssueMetadataMigration({ issue = {}, config, organizationIss
     },
     target: { issueType: type?.id ?? null, lifecycleStage: desiredStage, readiness: desiredReadiness },
     actions,
-    blocked: actions.filter((action) => action.kind === 'manual-issue-type').map((action) => action.reason),
+    blocked: actions.filter((action) => action.kind.startsWith('manual-')).map((action) => action.reason),
     governanceLabels: currentLabels.filter((label) => governanceLabels(config).has(label)),
   };
 }
@@ -116,19 +142,28 @@ export function migrationLabels({ issue = {}, config, plan } = {}) {
  * Apply only the operations present in a previously generated plan. The
  * caller owns the REST label endpoint and must verify the result afterward.
  */
-export async function applyIssueMetadataMigration({ plan, issue, config, graphql, updateLabels, verify, bindings = {}, actor = 'controller' } = {}) {
+export async function applyIssueMetadataMigration({ plan, issue, config, graphql, updateLabels, verify, bindings = {}, organizationIssueFields = null, actor = 'controller' } = {}) {
   if (actor !== 'controller') throw new Error('Only the deterministic controller may apply metadata migration.');
   if (!plan || plan.idempotent !== true) throw new Error('A validated idempotent migration plan is required.');
+  const manualActions = (plan.actions ?? []).filter((action) => action.kind.startsWith('manual-'));
+  if (manualActions.length) throw new Error(`Cannot migrate metadata automatically: ${manualActions.map((action) => action.reason).join(' ')}`);
+  const fieldActions = (plan.actions ?? []).filter((action) => action.kind === 'set-field');
+  const requiresFieldCatalog = fieldActions.length > 0 || (plan.actions ?? []).some((action) => action.kind === 'remove-legacy-labels');
+  let boundConfig = config;
+  if (requiresFieldCatalog) {
+    if (!Array.isArray(organizationIssueFields)) throw new Error('A live organization issue-field catalog is required before metadata migration.');
+    boundConfig = bindIssueMetadataConfig(config, { fields: bindings.fields ?? {} });
+    const fieldContract = validateOrganizationIssueFields({ config: boundConfig, organizationIssueFields, requireRuntimeBindings: true });
+    if (!fieldContract.valid) throw new Error(`Cannot migrate metadata automatically: ${fieldContract.errors.join(' ')}`);
+  }
   for (const action of plan.actions ?? []) {
-    if (action.kind === 'manual-issue-type') throw new Error(`Cannot migrate issue type automatically: ${action.reason}`);
     if (action.kind === 'set-issue-type') {
       if (!issue?.id) throw new Error('Issue node ID is required for native type migration.');
       await setIssueType({ graphql, issueId: issue.id, issueTypeId: bindings.issueTypeIds?.[action.issueType] ?? action.issueTypeId, actor });
     }
   }
-  const values = Object.fromEntries((plan.actions ?? []).filter((action) => action.kind === 'set-field').map((action) => [action.field, action.value]));
+  const values = Object.fromEntries(fieldActions.map((action) => [action.field, action.value]));
   if (Object.keys(values).length) {
-    const boundConfig = bindIssueMetadataConfig(config, { fields: bindings.fields ?? {} });
     if (!issue?.id) throw new Error('Issue node ID is required for issue-field migration.');
     await setIssueFields({ graphql, issueId: issue.id, config: boundConfig, values, actor });
   }

@@ -53,8 +53,15 @@ repository variable named `ISSUE_FIELD_BINDINGS_JSON`:
       "id": "<github-lifecycle-stage-field-id>",
       "options": {
         "intake": "<github-intake-option-id>",
+        "discovery": "<github-discovery-option-id>",
+        "definition": "<github-definition-option-id>",
+        "decision": "<github-decision-option-id>",
         "planning": "<github-planning-option-id>",
-        "execution": "<github-execution-option-id>"
+        "execution": "<github-execution-option-id>",
+        "validation": "<github-validation-option-id>",
+        "acceptance": "<github-acceptance-option-id>",
+        "done": "<github-done-option-id>",
+        "parked": "<github-parked-option-id>"
       }
     },
     "readiness": {
@@ -73,20 +80,23 @@ repository variable named `ISSUE_FIELD_BINDINGS_JSON`:
 }
 ```
 
-The binding is configuration, not model input. The controller rejects unknown
-logical fields and options and never accepts field IDs from a routing result.
-Run intake only after the GraphQL read shows the fields and organization Issue
-Types. If the read or a field mutation fails, intake holds the issue and leaves
-its lifecycle unchanged.
+The binding is configuration, not model input. Include every field and option
+binding shown in the manifest; partial bindings are rejected against the live
+catalog. The controller rejects unknown logical fields and options and never
+accepts field IDs from a routing result. Run intake only after the GraphQL read
+shows the fields, their complete option sets, and the organization Issue Types.
+If the read or a field mutation fails, intake holds the issue and leaves its
+lifecycle unchanged.
 
 ## Organization issue forms
 
 Copy the prepared reusable forms from this repository's
 `.github/ISSUE_TEMPLATE/` directory into
 `agentic-delivery-lab/.github/ISSUE_TEMPLATE/` after reviewing them against the
-organization catalog. The forms collect intent and evidence; the organization
-Issue Type is the durable classification and the controller sets missing
-metadata through the validated GraphQL boundary. Forms do not use `type:*` or
+organization catalog. Each form declares the corresponding organization Issue
+Type with its top-level `type` key; the controller still validates the observed
+native type and sets any missing metadata through the validated GraphQL
+boundary. The forms collect intent and evidence and do not use `type:*` or
 `state:*` labels to select work or lifecycle.
 
 GitHub gives repository-local templates precedence over organization defaults;
@@ -107,7 +117,9 @@ pnpm metadata:migrate --issue <number> --apply
 ```
 
 The dry run reads the native type, fields, legacy labels, and organization
-catalog. Apply performs these operations in order:
+catalog. It reports a manual operator block when the required native type or
+either organization field, complete option set, or runtime binding is not
+observed. Apply performs these operations in order:
 
 1. Assign the matching native Issue Type when the organization exposes it.
 2. Copy the legacy `type:*` and `state:*` meaning into the native type and the

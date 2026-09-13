@@ -4,11 +4,29 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { issueMetadata } from '../../scripts/lib/issue-metadata.mjs';
-import { organizationMetadataManifest, planIssueMetadataMigration } from '../../scripts/lib/issue-metadata-migration.mjs';
+import { applyIssueMetadataMigration, organizationMetadataManifest, planIssueMetadataMigration } from '../../scripts/lib/issue-metadata-migration.mjs';
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const config = parseRepositoryYaml(await readFile(path.join(root, '.github/issue-metadata.yml'), 'utf8'), 'issue metadata');
+
+function liveCatalog() {
+  return ['lifecycle_stage', 'readiness'].map((key) => ({
+    id: `live-${config.fields[key].id}`,
+    name: config.fields[key].name,
+    dataType: 'SINGLE_SELECT',
+    options: config.fields[key].options.map(({ id, name }) => ({ id: `live-${id}`, name })),
+  }));
+}
+
+function liveBindings() {
+  return {
+    fields: Object.fromEntries(['lifecycle_stage', 'readiness'].map((key) => [key, {
+      id: `live-${config.fields[key].id}`,
+      options: Object.fromEntries(config.fields[key].options.map(({ id }) => [id, `live-${id}`])),
+    }])),
+  };
+}
 
 test('migration manifests preserve the four separate metadata concepts', () => {
   const manifest = organizationMetadataManifest(config);
@@ -47,4 +65,98 @@ test('migration fills a missing field even when a legacy label has the same valu
     ['lifecycle_stage', 'planning'],
     ['readiness', 'ready'],
   ]);
+});
+
+test('live catalog absence blocks migration before legacy labels can be removed', () => {
+  const plan = planIssueMetadataMigration({
+    issue: { number: 9, state: 'open', labels: [{ name: 'type:task' }, { name: 'state:ready-for-plan' }] },
+    config,
+    organizationIssueTypes: [{ id: 'IT_task', name: 'Task', isEnabled: true }],
+    organizationIssueFields: [],
+  });
+
+  assert.equal(plan.blocked.length, 2);
+  assert.ok(plan.actions.every((action) => action.kind !== 'remove-legacy-labels'));
+});
+
+test('migration application preflights blocked organization metadata without partial writes', async () => {
+  const calls = [];
+  const plan = planIssueMetadataMigration({
+    issue: { number: 10, state: 'open', labels: [{ name: 'type:task' }, { name: 'state:ready-for-plan' }] },
+    config,
+    organizationIssueTypes: [{ id: 'IT_task', name: 'Task', isEnabled: true }],
+    organizationIssueFields: [],
+  });
+
+  await assert.rejects(() => applyIssueMetadataMigration({
+    plan,
+    issue: { id: 'I_10' },
+    config,
+    graphql: async () => { calls.push('graphql'); },
+    updateLabels: async () => { calls.push('labels'); },
+  }), /Cannot migrate metadata automatically/);
+  assert.deepEqual(calls, []);
+});
+
+test('migration application preflights runtime bindings before native type or field writes', async () => {
+  const calls = [];
+  const plan = planIssueMetadataMigration({
+    issue: { number: 11, state: 'open', labels: [{ name: 'type:task' }, { name: 'state:ready-for-plan' }] },
+    config,
+    organizationIssueTypes: [{ id: 'IT_task', name: 'Task', isEnabled: true }],
+    organizationIssueFields: liveCatalog(),
+    bindings: liveBindings(),
+  });
+
+  await assert.rejects(() => applyIssueMetadataMigration({
+    plan,
+    issue: { id: 'I_11' },
+    config,
+    organizationIssueFields: liveCatalog(),
+    graphql: async () => { calls.push('graphql'); },
+    updateLabels: async () => { calls.push('labels'); },
+  }), /runtime binding/);
+  assert.deepEqual(calls, []);
+});
+
+test('migration planning reports incomplete runtime bindings before field writes', () => {
+  const plan = planIssueMetadataMigration({
+    issue: { number: 13, state: 'open', labels: [{ name: 'type:task' }, { name: 'state:ready-for-plan' }] },
+    config,
+    organizationIssueTypes: [{ id: 'IT_task', name: 'Task', isEnabled: true }],
+    organizationIssueFields: liveCatalog(),
+  });
+
+  assert.equal(plan.blocked.length, 2);
+  assert.ok(plan.actions.every((action) => action.kind !== 'remove-legacy-labels'));
+});
+
+test('migration applies provisioned fields with explicit runtime bindings', async () => {
+  const calls = [];
+  const plan = planIssueMetadataMigration({
+    issue: { number: 12, state: 'open', labels: [{ name: 'type:task' }, { name: 'state:ready-for-plan' }] },
+    config,
+    organizationIssueTypes: [{ id: 'IT_task', name: 'Task', isEnabled: true }],
+    organizationIssueFields: liveCatalog(),
+    bindings: liveBindings(),
+  });
+
+  const result = await applyIssueMetadataMigration({
+    plan,
+    issue: { id: 'I_12', labels: [{ name: 'type:task' }, { name: 'state:ready-for-plan' }] },
+    config,
+    organizationIssueFields: liveCatalog(),
+    bindings: liveBindings(),
+    graphql: async (query, variables) => { calls.push({ query, variables }); },
+    updateLabels: async (labels) => { calls.push({ labels }); },
+  });
+  assert.equal(result.applied, true);
+  assert.deepEqual(calls.filter((call) => call.variables).map((call) => call.variables.input), [
+    { issueId: 'I_12', issueTypeId: 'IT_task' },
+    { issueId: 'I_12', issueFields: [
+      { fieldId: 'live-lifecycle-stage', singleSelectOptionId: 'live-planning' },
+      { fieldId: 'live-delivery-readiness', singleSelectOptionId: 'live-ready' },
+    ] },
+  ]);
+  assert.deepEqual(calls.at(-1).labels, []);
 });

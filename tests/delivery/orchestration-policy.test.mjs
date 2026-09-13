@@ -80,6 +80,15 @@ test('unavailable web research is an explicit degraded route', () => {
   assert.match(result.reason, /web-research|MCP/i);
 });
 
+test('non-optional capabilities declared by selected profiles are required', () => {
+  const result = selectOrchestration({
+    policy,
+    context: context({ capabilities: [] }),
+  });
+  assert.equal(result.status, 'degraded');
+  assert.deepEqual(result.missingCapabilities, ['deterministic-validation', 'repository-read', 'repository-write']);
+});
+
 test('capability inventory normalizes only explicitly available capabilities', () => {
   assert.deepEqual(availableCapabilities({ capabilities: ['repository-read'], mcp: [{ name: 'firecrawl', available: false }] }), {
     capabilities: ['repository-read'], mcp: [], degraded: ['firecrawl'], skills: [],

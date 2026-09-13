@@ -19,7 +19,10 @@ query IssueControlPlane($owner: String!, $name: String!, $number: Int!, $organiz
             name
             value
             optionId
-            field { id name }
+            field {
+              ... on Node { id }
+              ... on IssueFieldCommon { name dataType }
+            }
           }
         }
       }
@@ -30,7 +33,11 @@ query IssueControlPlane($owner: String!, $name: String!, $number: Int!, $organiz
   organization(login: $organization) {
     issueTypes(first: 100) { nodes { id name isEnabled } }
     issueFields(first: 100) {
-      nodes { ... on IssueFieldCommon { id name dataType } }
+      nodes {
+        ... on Node { id }
+        ... on IssueFieldCommon { name dataType }
+        ... on IssueFieldSingleSelect { options { id name description } }
+      }
     }
   }
 }`;
@@ -42,7 +49,16 @@ mutation SetIssueFields($input: SetIssueFieldValueInput!) {
       id
       issueFieldValues(first: 100) {
         nodes {
-          ... on IssueFieldSingleSelectValue { id name value optionId field { id name } }
+          ... on IssueFieldSingleSelectValue {
+            id
+            name
+            value
+            optionId
+            field {
+              ... on Node { id }
+              ... on IssueFieldCommon { name dataType }
+            }
+          }
         }
       }
     }
@@ -108,6 +124,9 @@ export async function readIssueControlPlane({ graphql, repository, issueNumber: 
   if (!issue) throw new Error(`Issue #${number} was not found in ${repository}.`);
   return {
     ...issue,
+    // GraphQL exposes the IssueState enum in upper case; the REST-compatible
+    // controller contract uses the lower-case value used by existing guards.
+    state: typeof issue.state === 'string' ? issue.state.toLocaleLowerCase('en-US') : issue.state,
     issueType: issue.issueType ?? null,
     issueFieldValues: issue.issueFieldValues?.nodes ?? [],
     parent: issue.parent ?? null,
@@ -123,6 +142,64 @@ function runtimeId(definition) {
 
 function runtimeOptionId(option) {
   return option?.runtime_id ?? option?.github_id ?? option?.id ?? null;
+}
+
+function observedOrganizationField(fields, definition) {
+  const ids = [definition?.runtime_id, definition?.github_id, definition?.id]
+    .filter((value) => typeof value === 'string' && value.trim());
+  return (fields ?? []).find((field) => ids.includes(field?.id) || field?.name === definition?.name) ?? null;
+}
+
+/**
+ * Verify the live organization field catalog before any controller mutation.
+ * The repository contract uses logical IDs; the runtime binding must match
+ * the GitHub IDs and option names observed by the trusted GraphQL read.
+ */
+export function validateOrganizationIssueFields({ config, organizationIssueFields, requireOptions = true, requireRuntimeBindings = false } = {}) {
+  const errors = [];
+  const observed = {};
+  if (!Array.isArray(organizationIssueFields)) {
+    return { valid: false, errors: ['The organization issue-field catalog was not returned.'], observed };
+  }
+  for (const fieldKey of ['lifecycle_stage', 'readiness']) {
+    const definition = config?.fields?.[fieldKey];
+    if (!definition) {
+      errors.push(`The repository field definition ${fieldKey} is missing.`);
+      continue;
+    }
+    const field = observedOrganizationField(organizationIssueFields, definition);
+    if (!field) {
+      errors.push(`The organization issue field ${definition.name} was not observed.`);
+      continue;
+    }
+    observed[fieldKey] = field;
+    if (field.dataType !== 'SINGLE_SELECT') errors.push(`The organization issue field ${definition.name} is not SINGLE_SELECT.`);
+    const configuredFieldId = runtimeId(definition);
+    if (requireRuntimeBindings && !definition.runtime_id && !definition.github_id) {
+      errors.push(`The runtime binding for ${fieldKey} is missing.`);
+    }
+    if (configuredFieldId && field.id && configuredFieldId !== field.id) {
+      errors.push(`The runtime binding for ${fieldKey} does not match the observed organization field ID.`);
+    }
+    if (!requireOptions) continue;
+    if (!Array.isArray(field.options)) {
+      errors.push(`The organization issue field ${definition.name} did not return its options.`);
+      continue;
+    }
+    for (const expected of definition.options ?? []) {
+      if (requireRuntimeBindings && !expected.runtime_id && !expected.github_id) {
+        errors.push(`The runtime binding for ${fieldKey}.${expected.id} is missing.`);
+      }
+      const actual = field.options.find((candidate) => candidate?.name === expected.name
+        || candidate?.id === runtimeOptionId(expected));
+      if (!actual) {
+        errors.push(`The organization issue field ${definition.name} is missing option ${expected.name}.`);
+      } else if (runtimeOptionId(expected) && actual.id && runtimeOptionId(expected) !== actual.id) {
+        errors.push(`The runtime binding for ${fieldKey}.${expected.id} does not match the observed option ID.`);
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors, observed };
 }
 
 /**

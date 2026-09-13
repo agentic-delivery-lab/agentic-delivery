@@ -41,12 +41,19 @@ export async function runMigration({ env = process.env, argv = process.argv, roo
   const repository = env.GITHUB_REPOSITORY;
   if (!/^[^/\s]+\/[^/\s]+$/.test(repository ?? '') || !env.GH_TOKEN) throw new Error('GITHUB_REPOSITORY and GH_TOKEN are required.');
   const issueNumber = requireIssue(options.issue);
+  const runtimeBindings = bindings(env);
   const api = githubApi({ repository, token: env.GH_TOKEN, fetchImpl });
   const restIssue = await api(`/issues/${issueNumber}`);
   const graphql = graphqlImpl ?? githubGraphqlApi({ token: env.GH_TOKEN, fetchImpl });
   const controlPlane = await readIssueControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
   const issue = { ...restIssue, ...controlPlane, labels: restIssue.labels ?? [] };
-  const plan = planIssueMetadataMigration({ issue, config, organizationIssueTypes: controlPlane.organizationIssueTypes });
+  const plan = planIssueMetadataMigration({
+    issue,
+    config,
+    organizationIssueTypes: controlPlane.organizationIssueTypes,
+    organizationIssueFields: controlPlane.organizationIssueFields,
+    bindings: runtimeBindings,
+  });
   if (!options.apply) return { mode: 'dry-run', plan };
   if (plan.blocked.length) throw new Error(`Migration requires operator configuration: ${plan.blocked.join('; ')}`);
   const result = await applyIssueMetadataMigration({
@@ -54,7 +61,8 @@ export async function runMigration({ env = process.env, argv = process.argv, roo
     issue,
     config,
     graphql,
-    bindings: bindings(env),
+    bindings: runtimeBindings,
+    organizationIssueFields: controlPlane.organizationIssueFields,
     actor: 'controller',
     verify: async () => {
       const observed = await readIssueControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });

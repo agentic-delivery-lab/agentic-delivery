@@ -1,5 +1,6 @@
 name: Feature / Request
 description: Describe a user problem and the outcome a change should achieve.
+type: Feature
 title: "Feature: "
 body:
   - type: markdown

@@ -1,5 +1,6 @@
 name: Implementation
 description: Execute an already authorized implementation plan.
+type: Implementation
 title: "Implementation: "
 body:
   - type: markdown

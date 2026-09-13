@@ -28,6 +28,22 @@ function evidence(issue, event, config) {
       nativeType: typeof issueType === 'string' ? issueType : issueType?.name ?? null,
       issueFieldValues: fieldValues,
       comments: issue.comments ?? [],
+      savedExecution: {
+        plan: issue.plan ? {
+          exists: issue.plan.exists === true,
+          valid: issue.plan.valid === true,
+          scopeChanged: issue.plan.scopeChanged === true,
+        } : null,
+        session: issue.session ? {
+          exists: issue.session.exists === true,
+          resumable: issue.session.resumable === true,
+        } : null,
+        execution: issue.execution ? {
+          status: issue.execution.status ?? null,
+          operation: issue.execution.operation ?? null,
+        } : null,
+        scopeChanged: issue.scopeChanged === true,
+      },
     },
     event: {
       kind: event.kind ?? null,

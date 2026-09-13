@@ -38,9 +38,21 @@ test('issue intake configuration keeps issue type, lifecycle stage, readiness, a
 
 test('structured issue forms and generic fallback are present', async () => {
   const templateRoot = path.join(repositoryRoot, '.github', 'ISSUE_TEMPLATE');
-  for (const template of ['bug.yml', 'feature.yml', 'idea.yml', 'task.yml', 'research.yml', 'requirements.yml', 'architecture-decision.yml', 'implementation.yml', 'validation.yml']) {
+  const expectedTypes = {
+    'bug.yml': 'Bug',
+    'feature.yml': 'Feature',
+    'idea.yml': 'Idea',
+    'task.yml': 'Task',
+    'research.yml': 'Research',
+    'requirements.yml': 'Requirements',
+    'architecture-decision.yml': 'Architecture Decision',
+    'implementation.yml': 'Implementation',
+    'validation.yml': 'Validation',
+  };
+  for (const template of Object.keys(expectedTypes)) {
     await access(path.join(templateRoot, template));
     const form = parseRepositoryYaml(await text(`.github/ISSUE_TEMPLATE/${template}`), template);
+    assert.equal(form.type, expectedTypes[template]);
     assert.ok(Array.isArray(form.body) && form.body.length > 1);
   }
   const issueConfig = parseRepositoryYaml(await text('.github/ISSUE_TEMPLATE/config.yml'), 'issue template config');

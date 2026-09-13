@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
@@ -163,6 +165,22 @@ test('routes a blank untyped source issue to refinement without manual labels', 
   assert.ok(!fixture.calls.some((call) => call.route === '/issues/17/labels' && call.method === 'PUT'));
 });
 
+test('holds live intake before model routing when organization lifecycle fields are unavailable', async () => {
+  const fixture = apiFixture({ state: 'open', title: 'A new goal', body: '', labels: [] });
+  const result = await classifyAndRoute({
+    env: { GITHUB_REPOSITORY: 'owner/repo', SOURCE_ISSUE: '17', GH_TOKEN: 'token', GITHUB_ACTOR: 'maintainer', GITHUB_EVENT_NAME: 'issues', ISSUE_FIELD_BINDINGS_JSON: '' },
+    event: { action: 'opened', issue: {} },
+    fetchImpl: fixture.fetchImpl,
+    graphqlImpl: async () => ({}),
+    controlPlaneReader: async () => ({ organizationIssueTypes: [], organizationIssueFields: [] }),
+    config,
+    reasonRoute: async () => { throw new Error('Unavailable metadata must hold before model routing.'); },
+  });
+  assert.equal(result.route, 'hold');
+  assert.match(result.metadata.reasons.join(' '), /organization issue fields are not ready/);
+  assert.ok(!fixture.calls.some((call) => call.route.includes('/permission')));
+});
+
 test('does not refine an already-ready decomposed implementation child', async () => {
   const fixture = apiFixture({
     state: 'open', title: 'Implement: child work', body: '<!-- codex-lineage:v1 parent=17 key=implementation -->\nDeliver the child.',
@@ -259,6 +277,41 @@ test('uses model reasoning for comment routing instead of matching comment words
     }),
   });
   assert.equal(held.route, 'hold');
+});
+
+test('uses the runner-local saved plan and session to authorize exact continuation routing', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'issue-intake-state-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(path.join(root, '100', '17'), { recursive: true });
+  await writeFile(path.join(root, '100', '17', 'state.json'), JSON.stringify({
+    repository: 'owner/repo', issue: '17', version: 3, phase: 'implement', status: 'paused',
+    events: [], tasks: [], plan: { status: 'ready' }, planDigest: 'a'.repeat(64),
+    sessionId: '019fb023-24b8-7881-9119-509f078b610e',
+    execution: { status: 'paused', operation: 'implement', run: null, lastFailure: null },
+  }));
+  const fixture = apiFixture({
+    state: 'open', title: 'Task: continue routing', body: 'Continue the saved implementation.',
+    labels: [{ name: 'type:task' }, { name: 'state:in-progress' }],
+  }, 'write');
+  const result = await classifyAndRoute({
+    env: {
+      GITHUB_REPOSITORY: 'owner/repo', SOURCE_ISSUE: '17', GH_TOKEN: 'token',
+      GITHUB_EVENT_NAME: 'issue_comment', CODEX_DELIVERY_STATE_DIR: root,
+    },
+    event: {
+      action: 'created', repository: { id: 100 }, issue: {},
+      comment: { id: 10, body: 'Continue from the saved work.', user: { login: 'owner', type: 'User' } },
+    },
+    fetchImpl: fixture.fetchImpl,
+    config,
+    reasonRoute: async () => ({
+      route: 'resume', workType: 'task', lifecycleStage: 'execution', readiness: 'working',
+      governance: [], orchestrationPattern: 'implementation-continuation',
+      summary: 'Resume the unchanged saved implementation.', message: '',
+    }),
+  });
+  assert.equal(result.route, 'resume', JSON.stringify(result));
+  assert.equal(result.metadata.orchestrationPattern, 'implementation-continuation');
 });
 
 test('does not route an older comment after a newer human reply', async () => {

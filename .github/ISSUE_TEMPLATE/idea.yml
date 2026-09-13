@@ -1,5 +1,6 @@
 name: Idea
 description: Capture an opportunity that needs discovery before implementation.
+type: Idea
 title: "Idea: "
 body:
   - type: markdown

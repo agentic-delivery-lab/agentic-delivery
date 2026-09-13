@@ -62,6 +62,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_GRAPHQL: 'true'
           ISSUE_FIELD_BINDINGS_JSON: ${{ vars.ISSUE_FIELD_BINDINGS_JSON }}
+          CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
           CODEX_MCP_SERVERS: ${{ vars.CODEX_MCP_SERVERS }}
           SOURCE_ISSUE: ${{ inputs.issue || github.event.inputs.issue || github.event.issue.number }}
           FORCE_ROUTE: ${{ inputs.force || false }}

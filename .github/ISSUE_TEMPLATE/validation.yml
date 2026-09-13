@@ -1,5 +1,6 @@
 name: Validation
 description: Independently validate deterministic evidence and acceptance criteria.
+type: Validation
 title: "Validation: "
 body:
   - type: markdown

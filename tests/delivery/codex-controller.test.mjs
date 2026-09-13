@@ -34,6 +34,7 @@ async function fixture(t) {
     sourceLabels:['type:task', 'state:ready-for-plan'], sourceNativeType:'Task',
     sourceFields:{lifecycle_stage:'planning', readiness:'ready'},
     startSessionId:SESSION_ID, resumeSessionId:SESSION_ID, refinement:null,
+    organizationIssueFieldsMissing:false,
   };
   const issueTypes = [
     ['idea', 'Idea'], ['research', 'Research'], ['feature', 'Feature'], ['bug', 'Bug'],
@@ -58,7 +59,10 @@ async function fixture(t) {
     ],
     parent:null, subIssues:[],
     organizationIssueTypes:issueTypes.map(([id, name]) => ({id:`IT_${id}`, name, isEnabled:true})),
-    organizationIssueFields:[{id:'lifecycle-stage',name:'Lifecycle Stage',dataType:'SINGLE_SELECT'},{id:'delivery-readiness',name:'Delivery Readiness',dataType:'SINGLE_SELECT'}],
+    organizationIssueFields:faults.organizationIssueFieldsMissing ? [] : [
+      {id:'lifecycle-stage',name:'Lifecycle Stage',dataType:'SINGLE_SELECT',options:Object.entries(stageNames).map(([id,name]) => ({id,name}))},
+      {id:'delivery-readiness',name:'Delivery Readiness',dataType:'SINGLE_SELECT',options:Object.entries(readinessNames).map(([id,name]) => ({id,name}))},
+    ],
   });
   const dependencies = {
     fetch:async (url, options) => {
@@ -221,6 +225,14 @@ test('does not start a model turn when the source issue is not ready for plannin
   assert.deepEqual(f.calls.turns, []);
   assert.equal(f.calls.prs.length, 0);
   assert.match((await f.state()).reason, /not ready for planning/);
+});
+
+test('does not start delivery when the live organization field catalog is incomplete', async (t) => {
+  const f = await fixture(t);
+  f.faults.organizationIssueFieldsMissing = true;
+  await assert.rejects(f.run(), /organization issue fields are not ready/);
+  assert.equal(f.calls.clients, 0);
+  assert.deepEqual(f.calls.turns, []);
 });
 
 test('refined atomic work receives a deterministic type and readiness transition before planning', async (t) => {

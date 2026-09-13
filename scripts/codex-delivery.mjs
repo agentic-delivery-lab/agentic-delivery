@@ -15,7 +15,7 @@ import { validateBranchName } from './validate-branch-name.mjs';
 import { deterministicReview, validateEvidenceRecord } from './lib/architecture-review.mjs';
 import { validateTransition } from './lib/lifecycle-transitions.mjs';
 import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
-import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType } from './lib/issue-field-api.mjs';
+import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType, validateOrganizationIssueFields } from './lib/issue-field-api.mjs';
 import { issueMetadata, issueFieldMutation, validateFieldMutation } from './lib/issue-metadata.mjs';
 import { patternById, selectOrchestration } from './lib/orchestration-policy.mjs';
 
@@ -288,7 +288,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   if (!['admin', 'maintain', 'write'].includes(permission.permission)) {
     throw new Error('Source issue execution requires repository write permission.');
   }
-  const lifecycleConfig = bindIssueMetadataConfig(await loadLifecycleConfig(controllerRoot), env.ISSUE_FIELD_BINDINGS_JSON ?? {});
+  const lifecycleConfig = bindIssueMetadataConfig(await loadLifecycleConfig(controllerRoot), env.ISSUE_FIELD_BINDINGS_JSON || {});
   const orchestrationAvailability = {
     capabilities: ['repository-read', 'repository-write', 'deterministic-validation'],
     mcp: String(env.CODEX_MCP_SERVERS ?? '').split(',').map((name) => name.trim()).filter(Boolean)
@@ -299,10 +299,16 @@ export async function deliver(env = process.env, dependencies = {}) {
   let graphql = dependencies.graphql;
   const useGraphql = Boolean(graphql || env.GITHUB_GRAPHQL === 'true' || env.GITHUB_ACTIONS === 'true');
   if (useGraphql && !graphql) graphql = githubGraphqlApi({ token: env.GH_TOKEN, fetchImpl: fetchApi });
+  const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
+  const readTrustedControlPlane = async ({ issueNumber = issue } = {}) => {
+    const value = await readControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
+    const fieldContract = validateOrganizationIssueFields({ config: lifecycleConfig, organizationIssueFields: value.organizationIssueFields });
+    if (!fieldContract.valid) throw new Error(`Required organization issue fields are not ready: ${fieldContract.errors.join(' ')}`);
+    return value;
+  };
   let source = sourceRest;
   if (graphql) {
-    const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
-    source = { ...sourceRest, ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })), labels: sourceRest.labels ?? [] };
+    source = { ...sourceRest, ...(await readTrustedControlPlane()), labels: sourceRest.labels ?? [] };
   }
   if (source.pull_request) throw new Error('A pull request cannot be a source issue.');
   if (source.state !== 'open') {
@@ -486,8 +492,7 @@ export async function deliver(env = process.env, dependencies = {}) {
     transitionState = async (target, allowedCurrentStates, childDependencies = []) => {
       let current = await api(`/issues/${issue}`);
       if (graphql) {
-        const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
-        current = { ...current, ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })), labels: current.labels ?? [] };
+        current = { ...current, ...(await readTrustedControlPlane()), labels: current.labels ?? [] };
       }
       if (current.state !== 'open' || current.pull_request) throw new Error('The source issue must still be open.');
       const currentMetadata = classifyIssue({ issue: current, config: lifecycleConfig, available: orchestrationAvailability });
@@ -525,8 +530,7 @@ export async function deliver(env = process.env, dependencies = {}) {
         await setIssueFields({ graphql, issueId: current.id, config: lifecycleConfig, values, actor: 'controller' });
       }
       if (graphql) {
-        const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
-        const observed = { ...await api(`/issues/${issue}`), ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })) };
+        const observed = { ...await api(`/issues/${issue}`), ...(await readTrustedControlPlane()) };
         const observedMetadata = classifyIssue({ issue: observed, config: lifecycleConfig, available: orchestrationAvailability });
         if (observedMetadata.lifecycleStage !== targetStage || (targetValue.readiness && observedMetadata.readiness !== targetValue.readiness)) {
           throw new Error(`Lifecycle field transition to ${target} was not observed after the GitHub field update.`);
@@ -538,8 +542,7 @@ export async function deliver(env = process.env, dependencies = {}) {
     const requireDeliveryMetadata = async (allowedStates) => {
       let current = await api(`/issues/${issue}`);
       if (graphql) {
-        const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
-        current = { ...current, ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })) };
+        current = { ...current, ...(await readTrustedControlPlane()) };
       }
       if (current.state !== 'open' || current.pull_request) throw new Error('The source issue must still be open.');
       const currentMetadata = classifyIssue({ issue: current, config: lifecycleConfig, available: orchestrationAvailability });
@@ -554,8 +557,7 @@ export async function deliver(env = process.env, dependencies = {}) {
     };
     let metadataSource = await api(`/issues/${issue}`);
     if (graphql) {
-      const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
-      metadataSource = { ...metadataSource, ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })) };
+      metadataSource = { ...metadataSource, ...(await readTrustedControlPlane()) };
     }
     if (metadataSource.state !== 'open' || metadataSource.pull_request) throw new Error('The source issue must still be open.');
     let metadata = classifyIssue({ issue: metadataSource, config: lifecycleConfig, mode: deliveryRoute === 'resume' ? 'resume' : 'event', available: orchestrationAvailability });
@@ -598,11 +600,13 @@ export async function deliver(env = process.env, dependencies = {}) {
     if (state.phase === 'plan') {
       let planningIssue = await api(`/issues/${issue}`);
       if (graphql) {
-        const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
-        planningIssue = { ...planningIssue, ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })) };
+        planningIssue = { ...planningIssue, ...(await readTrustedControlPlane()) };
       }
       if (planningIssue.state !== 'open' || planningIssue.pull_request) throw new Error('The source issue must still be open.');
       metadata = classifyIssue({ issue: planningIssue, config: lifecycleConfig, mode: deliveryRoute === 'resume' ? 'resume' : 'event', available: orchestrationAvailability });
+      if (metadata.workTypeSource !== 'native') {
+        throw new Error('The source issue is not ready for planning: a supported native organization issue type must be assigned before a new Plan run.');
+      }
       if (!['planning', 'intake'].includes(metadata.lifecycleStage) || (metadata.lifecycleStage === 'intake' && metadata.readiness !== 'needs-info')) {
         throw new Error(`The source issue is not ready for planning: it is at lifecycle stage ${metadata.lifecycleStage ?? 'unknown'}; planning requires Planning or an explicit Needs information recovery.`);
       }
@@ -661,7 +665,8 @@ export async function deliver(env = process.env, dependencies = {}) {
         return { status: 'ready' };
       }
       const children = await Promise.all((state.childIssues ?? []).map(async (child) => {
-        const issueValue = await api(`/issues/${child.number}`);
+        let issueValue = await api(`/issues/${child.number}`);
+        if (graphql) issueValue = { ...issueValue, ...(await readTrustedControlPlane({ issueNumber: child.number })), labels: issueValue.labels ?? [] };
         return { ...child, state: classifyIssue({ issue: issueValue, config: lifecycleConfig, available: orchestrationAvailability }).state };
       }));
       const incomplete = children.filter((child) => child.state !== 'done');
@@ -817,8 +822,7 @@ legacy owner-only rule in the base instruction file.`;
         if (refinement.status === 'refined') {
           let currentIssue = await api(`/issues/${issue}`);
           if (graphql) {
-            const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
-            currentIssue = { ...currentIssue, ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })) };
+            currentIssue = { ...currentIssue, ...(await readTrustedControlPlane()) };
           }
           const currentMetadata = classifyIssue({ issue: currentIssue, config: lifecycleConfig, available: orchestrationAvailability });
           if (currentMetadata.conflict?.length) throw new Error(`The source issue has conflicting work-type metadata: ${currentMetadata.conflict.join(', ')}.`);
@@ -849,9 +853,16 @@ legacy owner-only rule in the base instruction file.`;
             ['research', 'research'], ['specification', 'requirements'], ['requirements', 'requirements'], ['architecture', 'architecture'],
             ['task', 'task'], ['bug', 'bug'], ['implementation', 'implementation'], ['validation', 'validation'],
           ]);
-          const childIssues = [];
-          for (const item of refinement.workItems) {
+          const childPlans = refinement.workItems.map((item) => {
             const childType = lifecycleConfig.types.find((candidate) => candidate.id === typeForKind.get(item.kind)) ?? lifecycleConfig.types.find((candidate) => candidate.id === 'task');
+            const nativeType = graphql
+              ? (metadataSource.organizationIssueTypes ?? []).find((candidate) => candidate.name === childType.native_name && candidate.isEnabled !== false)
+              : null;
+            if (graphql && !nativeType?.id) throw new Error(`The organization native issue type ${childType.native_name} is not available; provision it before decomposing the source issue.`);
+            return { item, childType, nativeType };
+          });
+          const childIssues = [];
+          for (const { item, childType, nativeType } of childPlans) {
             const marker = `<!-- codex-lineage:v1 parent=${issue} key=${item.key} -->`;
             const body = [marker, '', `Parent issue: #${issue}`, `Work item: ${item.key}`, `Kind: ${item.kind}`, '', `## Goal\n\n${item.goal}`, '', '## Acceptance criteria', ...item.acceptanceCriteria.map((criterion) => `- ${criterion}`), ...(item.dependencies.length ? ['', '## Dependencies', ...item.dependencies.map((dependency) => `- ${dependency}`)] : [])].join('\n');
             const existing = [];
@@ -867,10 +878,12 @@ legacy owner-only rule in the base instruction file.`;
               body,
               labels: [],
             });
-            if (!match && graphql && child.id) {
-              const nativeType = (await readIssueControlPlane({ graphql, repository, issueNumber: child.number, organization: repository.split('/')[0] })).organizationIssueTypes
-                .find((candidate) => candidate.name === childType.native_name && candidate.isEnabled !== false);
-              if (nativeType?.id) await setIssueType({ graphql, issueId: child.node_id ?? child.id, issueTypeId: nativeType.id });
+            if (graphql && child.id) {
+              const childControl = await readTrustedControlPlane({ issueNumber: child.number });
+              if (childControl.issueType && childControl.issueType.name !== childType.native_name) {
+                throw new Error(`Existing child issue #${child.number} has native issue type ${childControl.issueType.name}; expected ${childType.native_name}.`);
+              }
+              if (!childControl.issueType) await setIssueType({ graphql, issueId: childControl.id ?? child.node_id ?? child.id, issueTypeId: nativeType.id });
             }
             if (!match) {
               try { await publishApi(`/issues/${issue}/sub_issues`, 'POST', { sub_issue_id: child.id }); } catch (error) {

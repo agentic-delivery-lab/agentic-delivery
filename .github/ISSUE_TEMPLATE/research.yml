@@ -1,5 +1,6 @@
 name: Research
 description: Investigate a question and record evidence before deciding or implementing.
+type: Research
 title: "Research: "
 body:
   - type: markdown

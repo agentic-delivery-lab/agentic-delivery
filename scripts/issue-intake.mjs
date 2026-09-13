@@ -1,9 +1,9 @@
-import { appendFile, readFile } from 'node:fs/promises';
+import { access, appendFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
-import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType } from './lib/issue-field-api.mjs';
+import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType, validateOrganizationIssueFields } from './lib/issue-field-api.mjs';
 import {
   classifyIssue,
   validateRoutingProposal,
@@ -129,6 +129,49 @@ function runnerAvailability(env, config) {
   };
 }
 
+const DELIVERY_PHASES = new Set(['refine', 'research', 'requirements', 'architecture', 'plan', 'implement', 'validate', 'coordinate', 'branch', 'verify', 'commit', 'publish']);
+const DELIVERY_STATUSES = new Set(['new', 'running', 'paused', 'awaiting-human', 'ready']);
+const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Read the runner-local continuation projection without granting it control
+ * over GitHub. Intake needs this context to validate a resume proposal; the
+ * saved file remains execution evidence and never becomes lifecycle authority.
+ */
+export async function readSavedDeliveryContext({ env = process.env, event = {}, repository, issueNumber } = {}) {
+  const configuredRoot = env.CODEX_DELIVERY_STATE_DIR
+    || (env.RUNNER_WORKSPACE ? path.join(env.RUNNER_WORKSPACE, '..', '.codex-delivery') : null);
+  if (!configuredRoot) return null;
+  const repositoryKey = event.repository?.id !== undefined && /^\d+$/.test(String(event.repository.id))
+    ? String(event.repository.id)
+    : repository.replace('/', '_');
+  const stateFile = path.join(path.resolve(configuredRoot), repositoryKey, String(issueNumber), 'state.json');
+  try { await access(stateFile); } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw new Error('Saved delivery state is unreadable; preserve it for operator inspection.');
+  }
+  let value;
+  try { value = JSON.parse(await readFile(stateFile, 'utf8')); } catch { throw new Error('Saved delivery state is unreadable; preserve the issue directory for operator inspection.'); }
+  const status = value?.status === 'needs_input' ? 'awaiting-human' : value?.status;
+  if (value?.repository !== repository || String(value?.issue) !== String(issueNumber)
+    || !DELIVERY_PHASES.has(value?.phase) || !DELIVERY_STATUSES.has(status)) {
+    throw new Error('Saved delivery state does not match the current source issue; preserve it for operator inspection.');
+  }
+  if (value.sessionId !== undefined && (typeof value.sessionId !== 'string' || !SESSION_ID_PATTERN.test(value.sessionId))) {
+    throw new Error('Saved delivery state contains an invalid Codex session ID; preserve it for operator inspection.');
+  }
+  const planDigest = typeof value.planDigest === 'string' && /^[a-f0-9]{64}$/i.test(value.planDigest) ? value.planDigest : null;
+  const planExists = value.plan !== undefined;
+  const planValid = value.plan?.status === 'ready' && planDigest !== null && value.planInvalidatedReason == null;
+  const sessionExists = typeof value.sessionId === 'string';
+  return {
+    plan: { exists: planExists, valid: planValid, digest: planDigest, scopeChanged: value.planInvalidatedReason != null },
+    session: { exists: sessionExists, resumable: sessionExists && status !== 'new', id: value.sessionId ?? null },
+    execution: value.execution ?? { status: status === 'ready' ? 'completed' : status, operation: value.phase },
+    scopeChanged: value.planInvalidatedReason != null,
+  };
+}
+
 export async function reconcileFields({ graphql, issue, config, classification, actor = 'controller' }) {
   if (actor !== 'controller') throw new Error('Only the deterministic controller may reconcile lifecycle fields.');
   const current = issueMetadata(issue, config);
@@ -193,16 +236,22 @@ export async function classifyAndRoute({
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !/^[1-9][0-9]*$/.test(issueNumber)) throw new Error('Invalid source repository or issue number.');
   if (event?.issue?.pull_request) throw new Error('A pull request cannot enter issue intake.');
   const api = githubApi({ repository, token: env.GH_TOKEN, fetchImpl });
-  const effectiveConfig = bindIssueMetadataConfig(config, env.ISSUE_FIELD_BINDINGS_JSON ?? {});
+  const effectiveConfig = bindIssueMetadataConfig(config, env.ISSUE_FIELD_BINDINGS_JSON || {});
   const available = runnerAvailability(env, effectiveConfig);
   let issue = await api(`/issues/${issueNumber}`);
   if (issue.pull_request) throw new Error('A pull request cannot enter issue intake.');
   let graphql = graphqlImpl;
   const useGraphql = Boolean(graphqlImpl || env.GITHUB_GRAPHQL === 'true' || env.GITHUB_ACTIONS === 'true');
   if (useGraphql && !graphql) graphql = githubGraphqlApi({ token: env.GH_TOKEN, fetchImpl });
+  const readTrustedControlPlane = async (controlIssueNumber) => {
+    const enriched = await controlPlaneReader({ graphql, repository, issueNumber: controlIssueNumber, organization: repository.split('/')[0] });
+    const fieldContract = validateOrganizationIssueFields({ config: effectiveConfig, organizationIssueFields: enriched.organizationIssueFields });
+    if (!fieldContract.valid) throw new Error(`Required organization issue fields are not ready: ${fieldContract.errors.join(' ')}`);
+    return enriched;
+  };
   if (graphql) {
     try {
-      const enriched = await controlPlaneReader({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
+      const enriched = await readTrustedControlPlane(issueNumber);
       issue = { ...issue, ...enriched, labels: issue.labels ?? enriched.labels ?? [] };
     } catch (error) {
       const reason = `Issue field metadata could not be read; no lifecycle mutation is authorized. ${String(error.message ?? error).slice(0, 400)}`;
@@ -213,6 +262,17 @@ export async function classifyAndRoute({
       await writeOutputs(result, env);
       return result;
     }
+  }
+  try {
+    const saved = await readSavedDeliveryContext({ env, event, repository, issueNumber });
+    if (saved) issue = { ...issue, ...saved };
+  } catch (error) {
+    const metadata = classifyIssue({ issue, config: effectiveConfig, eventAction: event?.action, eventKind: env.GITHUB_EVENT_NAME, available });
+    metadata.route = 'hold';
+    metadata.reasons = [...metadata.reasons, `Saved execution state could not be trusted; no orchestration route is authorized. ${String(error.message ?? error).slice(0, 400)}`];
+    const result = { issue: issueNumber, route: 'hold', state: metadata.state, metadata, labels: issue.labels ?? [] };
+    await writeOutputs(result, env);
+    return result;
   }
   const issueComment = env.GITHUB_EVENT_NAME === 'issue_comment';
   const trustedComment = !issueComment || (
@@ -239,7 +299,10 @@ export async function classifyAndRoute({
   const parentNumber = !issueComment && ['edited', 'closed', 'reopened', 'typed', 'untyped'].includes(event?.action)
     ? issue.parent?.number ?? lineageParent(issue) : null;
   if (parentNumber) {
-    const parent = await api(`/issues/${parentNumber}`);
+    let parent = await api(`/issues/${parentNumber}`);
+    if (graphql) {
+      parent = { ...parent, ...(await readTrustedControlPlane(parentNumber)), labels: parent.labels ?? [] };
+    }
     const parentMetadata = classifyIssue({ issue: parent, config: effectiveConfig, eventKind: 'child-event', available });
     const actor = env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR;
     let actorAllowed = false;

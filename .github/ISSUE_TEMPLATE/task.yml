@@ -1,5 +1,6 @@
 name: Task / Work Request
 description: Request a bounded piece of work with a clear definition of done.
+type: Task
 title: "Task: "
 body:
   - type: markdown

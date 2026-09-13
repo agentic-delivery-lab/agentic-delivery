@@ -1,5 +1,6 @@
 name: Requirements
 description: Turn a goal or evidence into requirements and acceptance criteria.
+type: Requirements
 title: "Requirements: "
 body:
   - type: markdown

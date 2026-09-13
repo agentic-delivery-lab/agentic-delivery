@@ -55,6 +55,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   const intake = await text('.github/workflows/issue-intake.yml');
   assert.ok(intake.includes('node scripts/issue-intake.mjs'));
   assert.ok(intake.includes('ISSUE_FIELD_BINDINGS_JSON'));
+  assert.ok(intake.includes('CODEX_DELIVERY_STATE_DIR'));
   assert.ok(intake.includes('lifecycle_stage'));
   assert.ok(intake.includes('readiness'));
   const delivery = await text('.github/workflows/codex-delivery.yml');

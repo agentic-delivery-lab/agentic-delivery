@@ -93,6 +93,7 @@ export function validateOrchestrationPolicy(policy, { issueTypes = [], lifecycle
     if (list(pattern?.triggers).some((trigger) => !TRIGGERS.has(trigger))) errors.push(`${pattern.id}: trigger is not approved`);
     for (const profile of profileIds(pattern)) if (!profiles?.[profile]) errors.push(`${pattern.id}: unknown profile ${profile}`);
     for (const profile of pattern?.forbidden_profiles ?? []) if (!profiles?.[profile]) errors.push(`${pattern.id}: unknown forbidden profile ${profile}`);
+    for (const profile of pattern?.forbidden_profiles ?? []) if (profileIds(pattern).includes(profile)) errors.push(`${pattern.id}: forbidden profile ${profile} is selected`);
     for (const capability of pattern?.required_capabilities ?? []) if (!capabilities.has(capability)) errors.push(`${pattern.id}: unknown required capability ${capability}`);
     for (const capability of pattern?.required_capabilities ?? []) if (!profileCapabilitySet(policy, pattern).has(capability)) errors.push(`${pattern.id}: no selected profile provides ${capability}`);
     for (const skill of pattern?.required_skills ?? []) if (!skills.has(skill)) errors.push(`${pattern.id}: unknown required skill ${skill}`);
@@ -185,8 +186,11 @@ function choosePattern(policy, context) {
     ?? null;
 }
 
-function requiredCapabilities(pattern, context) {
+function requiredCapabilities(policy, pattern, context) {
   const required = new Set(pattern?.required_capabilities ?? []);
+  for (const capability of profileCapabilitySet(policy, pattern)) {
+    if (policy?.capabilities?.[capability]?.optional !== true) required.add(capability);
+  }
   for (const [control, capabilities] of Object.entries(pattern?.conditional_capabilities ?? {})) if ((context.governance ?? []).includes(control)) for (const capability of capabilities) required.add(capability);
   return [...required].sort();
 }
@@ -212,7 +216,7 @@ export function selectOrchestration({ policy, context = {}, available = context 
   const pattern = choosePattern(policy, normalizedContext);
   if (!pattern) return { status: 'hold', pattern: null, steps: [], profiles: [], requiredCapabilities: [], missingCapabilities: [], reason: 'No approved orchestration pattern matches the issue type, lifecycle stage, trigger, and execution state.' };
   const inventory = availableCapabilities(available, policy);
-  const required = requiredCapabilities(pattern, normalizedContext);
+  const required = requiredCapabilities(policy, pattern, normalizedContext);
   const missing = required.filter((capability) => !inventory.capabilities.includes(capability));
   const requiredSkills = [...profileSkillSet(policy, pattern)].sort();
   const missingSkills = requiredSkills.filter((skill) => !inventory.skills.includes(skill));
