@@ -9,6 +9,10 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- [Issue #42](https://github.com/agentic-delivery-lab/agentic-delivery/issues/42) makes the published organization issue forms canonical for this repository. The repository has no local issue-form override, blank issues remain available, and CI validates the live organization source.
+
 ### Added
 
 - [Issue #35](https://github.com/agentic-delivery-lab/agentic-delivery/issues/35) evolves intake to native organization Issue Types, pinned Lifecycle Stage and Delivery Readiness fields, capability-aware orchestration profiles, independent research/requirements/architecture/validation routes, and an idempotent migration path from legacy metadata labels.
@@ -48,6 +52,10 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 - Headless runner Codex authentication uses the service account's explicit file-backed credential store. Startup and protocol errors publish safe diagnostic hints without raw authentication data.
 - Paused delivery runs return to planning when the source issue changes, preserve invalid saved state for inspection, and refuse to publish changes that no longer match the verified tree.
+
+### Removed
+
+- [Issue #42](https://github.com/agentic-delivery-lab/agentic-delivery/issues/42) removes the repository-local issue-form files after the equivalent organization defaults were published and verified.
 
 ### Security
 

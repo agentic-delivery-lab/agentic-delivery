@@ -90,22 +90,24 @@ lifecycle unchanged.
 
 ## Organization issue forms
 
-Copy the prepared reusable forms from this repository's
-`.github/ISSUE_TEMPLATE/` directory into
-`agentic-delivery-lab/.github/ISSUE_TEMPLATE/` after reviewing them against the
-organization catalog. Each form declares the corresponding organization Issue
-Type with its top-level `type` key; the controller still validates the observed
-native type and sets any missing metadata through the validated GraphQL
+The canonical forms are published in the
+[`agentic-delivery-lab/.github` repository](https://github.com/agentic-delivery-lab/.github/tree/main/.github/ISSUE_TEMPLATE/).
+This repository has no local issue-form override, so GitHub can use the
+organization defaults. Each form declares its corresponding organization
+Issue Type with the top-level `type` key; the controller still validates the
+observed native type and sets missing metadata through the validated GraphQL
 boundary. The forms collect intent and evidence and do not use `type:*` or
 `state:*` labels to select work or lifecycle.
 
-GitHub gives repository-local templates precedence over organization defaults;
-it does not merge the two directories. Keep the local forms while the
-organization defaults are being provisioned. After the organization repository
-is observed to contain equivalent forms, remove the local copies in a separate
-reviewed change, or keep an intentionally repository-specific override and
-document why it differs. Blank issues remain enabled so incomplete or untyped
-work can enter semantic refinement.
+Blank issues remain enabled so incomplete or untyped work can enter semantic
+refinement. CI fetches all nine forms and `config.yml` from the live raw source
+at
+`https://raw.githubusercontent.com/agentic-delivery-lab/.github/main/.github/ISSUE_TEMPLATE/`.
+It validates the expected native Issue Type, YAML and body for every form and
+checks that blank issues remain enabled. Availability of the organization
+repository is a live CI dependency; an unreachable, malformed, incomplete, or
+invalid source fails the contract tests. Changes to the separate
+`agentic-delivery-lab/.github` repository are outside this change.
 
 ## Existing issue migration
 

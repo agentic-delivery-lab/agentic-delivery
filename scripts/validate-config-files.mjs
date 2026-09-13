@@ -32,10 +32,12 @@ async function gitFiles(repositoryRoot) {
     for (const file of ['.github/issue-metadata.yml', '.github/orchestration-policy.yml']) {
       if (!tracked.includes(file)) tracked.push(file);
     }
-    // This repository-local file was replaced by organization issue fields.
-    // A deleted-but-not-yet-staged path can still appear in `git ls-files`.
-    const obsolete = '.github/issue-lifecycle.yml';
-    return tracked.filter((file) => file !== obsolete);
+    // These repository-local files were replaced by organization metadata and
+    // organization issue forms. Deleted-but-not-yet-staged paths can still
+    // appear in `git ls-files`.
+    const obsolete = (file) => file === '.github/issue-lifecycle.yml'
+      || file.startsWith('.github/ISSUE_TEMPLATE/');
+    return tracked.filter((file) => !obsolete(file));
   } catch {
     throw new ConfigValidationError('Configuration check: repository root is not a Git repository.', 2);
   }

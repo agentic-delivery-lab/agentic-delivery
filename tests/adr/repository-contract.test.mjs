@@ -3,7 +3,7 @@ import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
+import { loadOrganizationIssueForms } from '../helpers/organization-issue-forms.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const decisionsDirectory = path.join(repositoryRoot, 'docs/decisions');
@@ -20,7 +20,6 @@ test('repository decision and runner contracts are present', async () => {
   for (const file of [
     'docs/decisions/README.md',
     'docs/decisions/adr-template.md',
-    '.github/ISSUE_TEMPLATE/architecture-decision.yml',
     'AGENTS.md',
     '.github/workflows/self-hosted-runner-smoke.yml',
   ]) await assertFile(file);
@@ -45,7 +44,8 @@ test('repository decision and runner contracts are present', async () => {
   for (const phrase of ['Closes #', 'never create a pull request from `main`', 'is only the protected base']) {
     assert.ok(agents.includes(phrase), `missing agent contract: ${phrase}`);
   }
-  const issueTemplate = parseRepositoryYaml(await text('.github/ISSUE_TEMPLATE/architecture-decision.yml'), 'issue template');
+  const { forms } = await loadOrganizationIssueForms();
+  const issueTemplate = forms['architecture-decision.yml'];
   const operation = issueTemplate.body.find((item) => item.id === 'operation');
   assert.ok(operation);
   assert.equal(operation.attributes.options.includes('Create or update an ADR'), true);

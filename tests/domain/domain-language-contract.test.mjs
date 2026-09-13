@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
+import { loadOrganizationIssueForms } from '../helpers/organization-issue-forms.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -27,7 +27,8 @@ test('domain-language guidance and workflow contracts use the ESM validator', as
   const config = await text('.agents/skills/ubiquitous-language/agents/openai.yaml');
   for (const phrase of ['Use $ubiquitous-language', 'allow_implicit_invocation: true']) assert.ok(config.includes(phrase));
 
-  const issueTemplate = parseRepositoryYaml(await text('.github/ISSUE_TEMPLATE/architecture-decision.yml'), 'issue template');
+  const { forms } = await loadOrganizationIssueForms();
+  const issueTemplate = forms['architecture-decision.yml'];
   const field = issueTemplate.body.find((item) => item.id === 'domain_language');
   assert.ok(field);
   assert.equal(field.validations.required, true);
