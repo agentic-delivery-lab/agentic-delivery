@@ -77,10 +77,10 @@ test('controller evidence is required only when a delivery marker is present', a
     return stdout.trim();
   })());
   await writeFile(path.join(fixture, 'event.json'), JSON.stringify({
-    repository: { full_name: 'sjefsharp/agentic-delivery' },
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery' },
     pull_request: {
       number: 25,
-      html_url: 'https://github.com/sjefsharp/agentic-delivery/pull/25',
+      html_url: 'https://github.com/agentic-delivery-lab/agentic-delivery/pull/25',
       body: '<!-- codex-delivery-evidence:v1\n{"schemaVersion":1}\n-->',
       head: { ref: 'feat/issue-25-review', sha: revision },
     },
@@ -154,9 +154,9 @@ test('the evidence contract validates the complete projection and rejects mismat
   const evidence = {
     schemaVersion: 1,
     producer: 'codex-delivery',
-    repository: 'sjefsharp/agentic-delivery',
-    sourceIssue: { number: 25, url: 'https://github.com/sjefsharp/agentic-delivery/issues/25' },
-    deliveryRun: { id: '123', attempt: '1', url: 'https://github.com/sjefsharp/agentic-delivery/actions/runs/123' },
+    repository: 'agentic-delivery-lab/agentic-delivery',
+    sourceIssue: { number: 25, url: 'https://github.com/agentic-delivery-lab/agentic-delivery/issues/25' },
+    deliveryRun: { id: '123', attempt: '1', url: 'https://github.com/agentic-delivery-lab/agentic-delivery/actions/runs/123' },
     revision: { branch: 'feat/issue-25-review', commit: revision, tree: revision },
     codexSession: { id: '019fb023-24b8-7881-9119-509f078b610e' },
     modelTurns: [{ phase: 'plan', model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' }],

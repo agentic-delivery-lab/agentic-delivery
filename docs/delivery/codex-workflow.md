@@ -11,25 +11,27 @@ recorded in [ADR-0012](../decisions/0012-use-github-as-the-lifecycle-control-pla
 [ADR-0014](../decisions/0014-use-a-repository-scoped-github-app.md), and
 [ADR-0015](../decisions/0015-isolate-resumable-runner-execution.md).
 
-GitHub is the control plane: issue labels, child-issue lineage, pull requests,
-and Actions own work state. Codex and the self-hosted runner are the execution
-plane. Model output is an untrusted transition proposal; deterministic
-validation approves it before GitHub state changes. A run's execution state
-(operation, Actions run identity, failure reason, and recoverability) is stored
-separately, so retries do not silently advance or corrupt the work item.
+GitHub is the control plane: native issue types, pinned issue fields,
+governance metadata, child-issue lineage, pull requests, and Actions own work
+intent and lifecycle. Codex and the self-hosted runner are the execution plane.
+Model output is an untrusted transition and orchestration proposal;
+deterministic validation approves it before GitHub state changes. A run's
+execution state (operation, Actions run identity, exact session, failure
+reason, and recoverability) is stored separately, so retries do not silently
+advance or corrupt the work item.
 
 ## Start and resume
 
 After the workflow is merged and prerequisites are verified, open an issue
 through an intake form or the blank-issue fallback. The intake workflow
 uses a read-only Sol High routing turn to interpret the issue and conversation.
-It proposes the work type, lifecycle state, governance labels, and next route.
-Deterministic code validates that proposal against the approved catalog and
-transition table before changing labels or starting delivery. Title words,
-form headings, keywords, and regular expressions do not decide the route.
-Incomplete, ambiguous, Idea, and Research work remains in
-maturation (`Research` uses `state:investigating`; deferred Idea work uses
-`state:parked`).
+It proposes the native issue type, Lifecycle Stage, Delivery Readiness,
+governance labels, and an allowed orchestration pattern. Deterministic code
+validates that proposal against the two versioned catalogs and transition table
+before changing issue fields or starting delivery. Title words, form headings,
+keywords, and regular expressions do not decide the route. Incomplete,
+ambiguous, Idea, and Research work remains in maturation; its stage and
+readiness are represented by issue fields, not lifecycle labels.
 
 A blank issue can enter iterative refinement: Codex asks one to three focused
 questions, and a later repository-writer comment continues the same
@@ -41,12 +43,13 @@ the parent without a fixed child checklist. After discovery children provide
 new evidence, a repository-writer comment can request another refinement wave
 on the coordinating parent.
 
-People do not apply `state:ready-for-plan` during normal work. The routing model
-proposes it when the issue is ready, and the deterministic readiness gate must
-pass before GPT-5.6 Sol High starts Plan mode. After a successful plan,
-the controller records `state:ready-for-agent`, enters `state:in-progress`,
-and automatically invokes GPT-5.6 Luna Max for Implement. The workflow records
-progress and validation on the source issue.
+People do not set lifecycle fields during normal work. The routing model
+proposes a stage and readiness value, and the deterministic readiness gate must
+pass before GPT-5.6 Sol High starts Plan mode. After a successful plan, the
+controller advances the issue fields through Planning and Execution and
+automatically invokes GPT-5.6 Luna Max for Implement. Research, requirements,
+architecture, validation, and coordination routes can stop or complete without
+invoking an implementer.
 
 The `issue_comment` trigger is restricted twice: the workflow accepts only a
 new non-bot issue comment, and the intake controller verifies repository
@@ -56,12 +59,13 @@ actors, and unauthorized writers cannot enter continuation. Every eligible
 human comment is interpreted with the full issue conversation. The model may
 propose `resume`, `refine`, or `hold` regardless of the words used. The
 deterministic controller receives only the validated route and does not parse
-the comment for intent. Manual intake dispatch with current approved labels is
-the break-glass path when semantic routing is unavailable.
+the comment for intent. Manual intake dispatch with current approved field
+values is the break-glass path when semantic routing is unavailable.
 
 The controller reuses saved changes and a single branch. It never creates a
-new task for a comment on a missing, completed, running, stale, or inactive
-state. It never merges the review pull request or closes the source issue.
+new task for a comment on missing, completed, running, stale, or inactive
+execution state. It never merges the review pull request or closes the source
+issue.
 
 At publication, the controller derives a version-1 delivery evidence contract
 from saved state, the verified tree, and the audit checkpoint. It stores the
@@ -80,7 +84,7 @@ Issue comments use three short Markdown formats:
 - **Action required** lists only the questions that need a human
   decision and tells a repository writer to reply with those answers.
 - **Delivery paused** names the stopped step, exact cause, and next action. It
-  never asks for a label change or a continuation comment. When
+  never asks for a field change or a continuation comment. When
   repository validation exhausts its repair attempts, this comment also shows
   the latest redacted validation error. Reading runner-local state is not
   required to identify that failure.
@@ -103,8 +107,8 @@ later runs with `thread/resume` for that exact UUID. It does not use
 `codex resume --last`, a global newest-session lookup, or a new-thread fallback
 when a versioned state is missing or has an unresumable UUID.
 
-The `awaiting-human` state is an intentional boundary, not a failed Actions
-job. The handoff and its `CONTINUE.md` copy expose the same persisted identity:
+The `awaiting-human` execution status is an intentional boundary, not a failed
+Actions job. The handoff and its `CONTINUE.md` copy expose the same persisted identity:
 
 ```text
 Codex session ID: <UUID>
@@ -180,7 +184,8 @@ issue edits.
   The controller mints short-lived installation tokens only for child issue
   creation and publication. It keeps the private key and token in memory,
   redacts them, and never exposes them to Codex. `GITHUB_TOKEN` remains the
-  default for reads, permission checks, labels, and comments.
+  default for reads, permission checks, governance labels, issue fields, and
+  comments.
 
 Run `self-hosted-runner-smoke` with input `codex=true` for a check without a
 model turn. The setup step supplies the executable without copying
@@ -191,7 +196,7 @@ Specify the repository explicitly when dispatching outside its checkout:
 
 ```bash
 gh workflow run self-hosted-runner-smoke.yml \
-  --repo sjefsharp/agentic-delivery --ref main -f codex=true
+  --repo agentic-delivery-lab/agentic-delivery --ref main -f codex=true
 ```
 
 Before merge, replace `main` with the review pull request's head branch.

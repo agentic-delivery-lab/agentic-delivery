@@ -9,15 +9,15 @@ import { validateRefinementOutcome } from '../../scripts/lib/codex-loop.mjs';
 const config = await loadLifecycleConfig(path.resolve(import.meta.dirname, '../..'));
 
 test('transition validator accepts configured refinement and coordination paths', () => {
-  assert.equal(validateTransition({ config, from: 'requirements', to: 'decomposing', workType: 'feature' }).allowed, true);
-  assert.equal(validateTransition({ config, from: 'coordinating', to: 'acceptance', workType: 'feature', dependencies: [{ state: 'done' }] }).allowed, true);
+  assert.equal(validateTransition({ config, from: 'intake', to: 'definition', workType: 'feature' }).allowed, true);
+  assert.equal(validateTransition({ config, from: 'acceptance', to: 'done', workType: 'feature', dependencies: [{ state: 'done' }] }).allowed, true);
 });
 
 test('transition validator rejects model proposals that bypass state or dependencies', () => {
-  const invalid = validateTransition({ config, from: 'requirements', to: 'review', workType: 'feature' });
+  const invalid = validateTransition({ config, from: 'definition', to: 'validation', workType: 'feature' });
   assert.equal(invalid.allowed, false);
   assert.match(invalid.reasons.join(' '), /not allowed/);
-  const blocked = validateTransition({ config, from: 'coordinating', to: 'acceptance', workType: 'feature', dependencies: [{ state: 'in-progress' }] });
+  const blocked = validateTransition({ config, from: 'acceptance', to: 'execution', workType: 'feature', dependencies: [{ state: 'in-progress' }] });
   assert.equal(blocked.allowed, false);
   assert.match(blocked.reasons.join(' '), /dependencies/);
 });

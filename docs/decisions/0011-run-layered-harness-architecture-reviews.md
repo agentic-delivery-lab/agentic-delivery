@@ -1,6 +1,6 @@
 ---
 date: 2026-09-10
-source-issue: https://github.com/sjefsharp/agentic-delivery/issues/25
+source-issue: https://github.com/agentic-delivery-lab/agentic-delivery/issues/25
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
@@ -148,6 +148,6 @@ evidence rather than treating tests or documentation as runtime proof.
 - Baseline: [`docs/architecture/harness-conformance-review.md`](../architecture/harness-conformance-review.md)
 - Domain register: [`ubiquitous-language.yml`](../domain/ubiquitous-language.yml)
 - Related decisions: [ADR-0001](0001-use-madr-for-architecture-decisions.md), [ADR-0003](0003-use-context-scoped-ubiquitous-language.md), [ADR-0009](0009-run-codex-from-source-issues-with-a-budget-boundary.md), [ADR-0012](0012-use-github-as-the-lifecycle-control-plane.md), and [ADR-0013](0013-derive-adr-traceability-from-agentic-primitives.md)
-- Amendment source: [issue #32](https://github.com/sjefsharp/agentic-delivery/issues/32)
+- Amendment source: [issue #32](https://github.com/agentic-delivery-lab/agentic-delivery/issues/32)
 - This decision is provisional on its feature branch and becomes official only
   after its review pull request is merged into `main`.

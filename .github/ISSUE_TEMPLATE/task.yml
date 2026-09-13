@@ -1,9 +1,6 @@
 name: Task / Work Request
 description: Request a bounded piece of work with a clear definition of done.
 title: "Task: "
-labels:
-  - "type:task"
-  - "state:needs-triage"
 body:
   - type: markdown
     attributes:

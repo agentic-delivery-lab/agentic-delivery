@@ -12,10 +12,10 @@ bounded-contexts:
 runtime-surfaces:
   - id: intake-and-routing
     paths: [.github/workflows/issue-intake.yml, scripts/issue-intake.mjs, scripts/lib/issue-routing.mjs]
-    evidence: [source-issue, lifecycle-state, governance-metadata, tests]
+    evidence: [source-issue, issue-type, lifecycle-stage, delivery-readiness, governance-metadata, tests]
   - id: codex-delivery
     paths: [.github/workflows/codex-delivery.yml, scripts/codex-delivery.mjs, scripts/lib/codex-client.mjs, scripts/lib/codex-loop.mjs]
-    evidence: [source-issue, actions-run, codex-session, validation, review-pull-request]
+    evidence: [source-issue, issue-type, lifecycle-stage, actions-run, codex-session, validation, review-pull-request]
   - id: architecture-review
     paths: [.github/workflows/harness-architecture-review.yml, scripts/harness-architecture-review.mjs, scripts/lib/architecture-review.mjs]
     evidence: [base-revision, head-revision, affected-adrs, affected-contexts, deterministic-result, semantic-result]

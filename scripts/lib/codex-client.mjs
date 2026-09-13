@@ -8,13 +8,36 @@ import { tmpdir } from 'node:os';
 export const MODELS = Object.freeze({
   route: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
   refine: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
+  discovery: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
+  research: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
+  requirements: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
+  architecture: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
   plan: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
   implement: { model: 'gpt-5.6-luna', effort: 'max', mode: 'default' },
+  validate: { model: 'gpt-5.6-sol', effort: 'high', mode: 'default' },
   review: { model: 'gpt-5.6-sol', effort: 'high', mode: 'default' },
 });
 
 export const AUTH_STORAGE_CONFIG = 'cli_auth_credentials_store="file"';
 export const DEFAULT_PERMISSION_CONFIG = 'default_permissions="delivery-plan"';
+
+export function modelForProfile(profile = 'planner') {
+  const phase = {
+    router: 'route', discovery: 'discovery', research: 'research', requirements: 'requirements',
+    'architecture-decision': 'architecture', planner: 'plan', implementer: 'implement',
+    validator: 'validate', coordinator: 'requirements', 'harness-reviewer': 'review',
+  }[profile] ?? profile;
+  return MODELS[phase] ?? MODELS.plan;
+}
+
+export function permissionForProfile(profile = 'planner') {
+  return {
+    router: 'delivery-plan', discovery: 'delivery-research', research: 'delivery-research',
+    requirements: 'delivery-plan', 'architecture-decision': 'delivery-plan', planner: 'delivery-plan',
+    implementer: 'delivery-edit', validator: 'delivery-review', coordinator: 'delivery-plan',
+    'harness-reviewer': 'delivery-review',
+  }[profile] ?? 'delivery-plan';
+}
 
 function safeCodexDiagnostic(value) {
   // Codex owns authentication. Its errors may contain arbitrary credentials,
@@ -114,13 +137,13 @@ function runtimeFiles(env) {
 }
 
 export function deliveryPermissions(readableFiles = [], runtime) {
-  return Object.fromEntries(['plan', 'edit', 'verify', 'deps', 'review'].map((phase) => [`delivery-${phase}`, {
+  return Object.fromEntries(['plan', 'research', 'edit', 'verify', 'deps', 'review'].map((phase) => [`delivery-${phase}`, {
     extends: ':read-only',
     filesystem: {
       ':root': 'deny', ':minimal': 'read',
       ...Object.fromEntries(readableFiles.map((file) => [file, 'read'])),
       ...(runtime ? {[runtime]: 'write'} : {}),
-      ':workspace_roots': { '.': ['plan', 'verify', 'review'].includes(phase) ? 'read' : 'write', '.git': 'read', '.codex': 'read' },
+      ':workspace_roots': { '.': ['plan', 'research', 'verify', 'review'].includes(phase) ? 'read' : 'write', '.git': 'read', '.codex': 'read' },
     },
     // A deny-all managed proxy preserves process-local IPC in the isolated
     // network namespace. The plain network=false seccomp mode blocks Node's
@@ -138,11 +161,13 @@ function tomlValue(value) {
 }
 
 export class CodexClient extends EventEmitter {
-  constructor({ command = 'codex', args = [], cwd, env = serverEnvironment(), runtime, readableFiles = [], timeoutMs = 30_000 } = {}) {
+  constructor({ command = 'codex', args = [], cwd, env = serverEnvironment(), runtime, readableFiles = [], timeoutMs = 30_000, approvedMcpServers = [] } = {}) {
     super();
     this.pending = new Map();
     this.nextId = 0;
     this.timeoutMs = timeoutMs;
+    this.availableMcpServers = new Set(String(env.CODEX_MCP_SERVERS ?? '').split(',').map((name) => name.trim()).filter(Boolean));
+    this.approvedMcpServers = new Set((Array.isArray(approvedMcpServers) ? approvedMcpServers : []).filter((name) => typeof name === 'string' && name.trim()));
     this.runtime = runtime ?? mkdtempSync(path.join(tmpdir(), 'codex-delivery-tools-'));
     for (const dir of ['home', 'tmp', 'cache', 'data']) mkdirSync(path.join(this.runtime, dir), {recursive:true, mode:0o700});
     this.processEnv = serverEnvironment(env);
@@ -232,13 +257,19 @@ export class CodexClient extends EventEmitter {
     return quotaBoundary(await this.request('account/rateLimits/read'));
   }
 
-  async threadConfig(cwd, developerInstructions = '') {
+  async threadConfig(cwd, developerInstructions = '', profile = 'planner') {
     const { config } = await this.request('config/read', { includeLayers: false, cwd });
     checkConfiguration(config);
-    const mcpServers = Object.fromEntries(Object.keys(config?.mcp_servers ?? {}).map((name) => [name, { enabled: false }]));
+    const mcpServers = Object.fromEntries(Object.keys(config?.mcp_servers ?? {}).map((name) => [name, {
+      // The controller supplies only MCP servers declared by the selected
+      // policy profiles. The runner inventory is a separate explicit gate;
+      // desirable or model-supplied server names never become enabled.
+      enabled: this.approvedMcpServers?.has(name) === true && this.availableMcpServers?.has(name) === true,
+    }]));
+    const selected = modelForProfile(profile);
     return {
-      cwd, model: MODELS.plan.model, modelProvider: 'openai', allowProviderModelFallback: false,
-      permissions: 'delivery-plan', approvalPolicy: 'never',
+      cwd, model: selected.model, modelProvider: 'openai', allowProviderModelFallback: false,
+      permissions: permissionForProfile(profile), approvalPolicy: 'never',
       developerInstructions,
       config: {
         permissions: this.permissions, mcp_servers: mcpServers, web_search: 'disabled',
@@ -249,13 +280,13 @@ export class CodexClient extends EventEmitter {
     };
   }
 
-  async startThread(cwd, developerInstructions = '') {
-    const params = await this.threadConfig(cwd, developerInstructions);
+  async startThread(cwd, developerInstructions = '', profile = 'planner') {
+    const params = await this.threadConfig(cwd, developerInstructions, profile);
     return this.request('thread/start', {...params, ephemeral: false});
   }
 
-  async resumeThread(cwd, sessionId, developerInstructions = '') {
-    const params = await this.threadConfig(cwd, developerInstructions);
+  async resumeThread(cwd, sessionId, developerInstructions = '', profile = 'planner') {
+    const params = await this.threadConfig(cwd, developerInstructions, profile);
     const { ephemeral: _ephemeral, ...resumeParams } = params;
     return this.request('thread/resume', {threadId: sessionId, ...resumeParams});
   }

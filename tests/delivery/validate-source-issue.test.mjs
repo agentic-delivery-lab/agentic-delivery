@@ -7,7 +7,7 @@ import { runNodeScript } from '../helpers/process.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const validator = path.join(repositoryRoot, 'scripts/validate-source-issue.mjs');
-const repository = 'sjefsharp/agentic-delivery';
+const repository = 'agentic-delivery-lab/agentic-delivery';
 
 function localGh(stdout, { fail = false } = {}) {
   return async (_command, args) => {

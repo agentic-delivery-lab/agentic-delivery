@@ -189,9 +189,9 @@ test('completed plans keep details available without overwhelming the issue time
   assert.doesNotMatch(text, /"status"|"questions"/);
 });
 
-test('technical pauses are short and do not ask for a continuation comment or label change', () => {
+test('technical pauses are short and do not ask for a continuation comment or field change', () => {
   const text=continuation({issue:15,status:'paused',phase:'implement',reason:'Quota reserve',branch:'feat/issue-15-change',plan:{plan:'The plan',tasks:['First task']},tasks:['Remaining task'],lastProgress:'Edited controller'});
-  for(const value of ['## Delivery paused','**Stopped at:** Implement','Quota reserve','Rerun the failed workflow','Do not change labels or post a continuation comment']) assert.ok(text.includes(value),value);
+  for(const value of ['## Delivery paused','**Stopped at:** Implement','Quota reserve','Rerun the failed workflow','Do not change lifecycle fields or post a continuation comment']) assert.ok(text.includes(value),value);
   for(const hidden of ['#15','feat/issue-15-change','Remaining task','Edited controller','Codex session ID']) assert.doesNotMatch(text,new RegExp(hidden));
 });
 
@@ -226,7 +226,7 @@ test('awaiting-human handoffs contain only the question and direct next action',
     '**Answer:**',
     '1. Which lifecycle should apply?',
     '2. Should delivery start automatically?',
-    'Reply with the answers. Do not add or remove labels.',
+    'Reply with the answers. Do not change lifecycle fields or governance metadata.',
   ]) assert.ok(text.includes(value),value);
   assert.doesNotMatch(text,/Codex session ID|Saved delivery details|continuation state/i);
 });

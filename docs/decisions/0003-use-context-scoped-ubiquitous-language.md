@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-source-issue: https://github.com/sjefsharp/agentic-delivery/issues/5
+source-issue: https://github.com/agentic-delivery-lab/agentic-delivery/issues/5
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
@@ -15,7 +15,7 @@ required-enforcement:
 
 ## Context and Problem Statement
 
-Issue [#5](https://github.com/sjefsharp/agentic-delivery/issues/5) asks how this repository can apply domain-driven design and use unambiguous language in code and documentation. The repository already defines architecture-decision and plain-language practices, but it does not define their domain concepts in one shared model. Agents and people can therefore use different names for the same concept or give one name different meanings.
+Issue [#5](https://github.com/agentic-delivery-lab/agentic-delivery/issues/5) asks how this repository can apply domain-driven design and use unambiguous language in code and documentation. The repository already defines architecture-decision and plain-language practices, but it does not define their domain concepts in one shared model. Agents and people can therefore use different names for the same concept or give one name different meanings.
 
 Eric Evans' *Domain-Driven Design Reference* defines a bounded context as the boundary within which a model applies. It describes ubiquitous language as a shared language built around that model and used in team communication and software. It also treats a change in that language as a change to the model. This means a repository-wide word blacklist would be too broad: the meaning of a term depends on its bounded context, and external names or quotations may need to remain exact.
 
@@ -90,8 +90,8 @@ A validator checks the register's structure and references. Contract tests check
 
 ## More Information
 
-- Assignment brief: [GitHub issue #5](https://github.com/sjefsharp/agentic-delivery/issues/5)
-- Implementation and review: [pull request #6](https://github.com/sjefsharp/agentic-delivery/pull/6)
+- Assignment brief: [GitHub issue #5](https://github.com/agentic-delivery-lab/agentic-delivery/issues/5)
+- Implementation and review: [pull request #6](https://github.com/agentic-delivery-lab/agentic-delivery/pull/6)
 - Domain model and change process: [`docs/domain/README.md`](../domain/README.md)
 - Canonical register: [`docs/domain/ubiquitous-language.yml`](../domain/ubiquitous-language.yml)
 - Source: [Eric Evans, *Domain-Driven Design Reference* (2015)](https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf), especially Bounded Context, Ubiquitous Language and Continuous Integration

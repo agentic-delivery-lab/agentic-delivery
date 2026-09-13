@@ -3,8 +3,6 @@ description: Start a traceable investigation for an ADR or ADR removal.
 title: "ADR: "
 labels:
   - "adr:needed"
-  - "type:architecture"
-  - "state:decision-needed"
 body:
   - type: markdown
     attributes:

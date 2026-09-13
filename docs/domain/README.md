@@ -6,10 +6,17 @@ This repository defines a reliable way for people and coding agents to deliver c
 
 The canonical model vocabulary is stored in [`ubiquitous-language.yml`](ubiquitous-language.yml). Use the registered term and definition when discussing a modeled concept in documentation, agent instructions, issue or pull-request communication, and domain-bearing code.
 
-The control plane is GitHub: Issues, pull requests, lifecycle metadata, and
+The control plane is GitHub: Issues, native issue types, pinned Lifecycle Stage
+and Delivery Readiness fields, governance metadata, pull requests, and
 deterministic Actions own work state. The execution plane is Codex and the
 self-hosted runner: it performs bounded operations and records execution state
 but cannot decide or apply lifecycle transitions.
+
+Issue type answers what the issue represents. Lifecycle Stage answers where it
+is in its lifecycle. Delivery Readiness records an orthogonal temporary gate,
+while governance metadata records cross-cutting controls. The runner's
+execution state records resumable operations and is not a replacement for any
+of those GitHub values.
 
 ## Repository boundary
 

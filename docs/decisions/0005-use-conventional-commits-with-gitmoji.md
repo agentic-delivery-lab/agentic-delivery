@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-source-issue: https://github.com/sjefsharp/agentic-delivery/issues/7
+source-issue: https://github.com/agentic-delivery-lab/agentic-delivery/issues/7
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
@@ -14,7 +14,7 @@ required-enforcement:
 
 ## Context and Problem Statement
 
-Issue [#7](https://github.com/sjefsharp/agentic-delivery/issues/7) asks the repository to introduce Conventional Commits, `@commitlint`, and Gitmoji. Commit messages are part of the delivery history used by people, agents and future automation, but the repository currently has no enforced format for new work.
+Issue [#7](https://github.com/agentic-delivery-lab/agentic-delivery/issues/7) asks the repository to introduce Conventional Commits, `@commitlint`, and Gitmoji. Commit messages are part of the delivery history used by people, agents and future automation, but the repository currently has no enforced format for new work.
 
 Conventional Commits defines a parseable type, optional scope, optional breaking-change marker and description. Gitmoji adds a compact visual intention. Their published examples place the Gitmoji at different positions: Conventional Commits starts with the type, while Gitmoji's own grammar starts with the intention. The repository needs one unambiguous local grammar.
 
@@ -90,7 +90,7 @@ The decision follows [Conventional Commits 1.0.0](https://www.conventionalcommit
 
 ## More Information
 
-- Assignment brief: [GitHub issue #7](https://github.com/sjefsharp/agentic-delivery/issues/7)
+- Assignment brief: [GitHub issue #7](https://github.com/agentic-delivery-lab/agentic-delivery/issues/7)
 - [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
 - [`@commitlint/config-conventional`](https://github.com/conventional-changelog/commitlint/tree/master/%40commitlint/config-conventional)
 - [Gitmoji](https://gitmoji.dev/)

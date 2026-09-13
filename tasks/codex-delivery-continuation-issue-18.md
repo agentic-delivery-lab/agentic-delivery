@@ -6,9 +6,9 @@ led to it. It is written for a fresh implementation context on branch
 
 ## Current checkpoint
 
-- Repository: `sjefsharp/agentic-delivery`
-- Source issue: [#18](https://github.com/sjefsharp/agentic-delivery/issues/18)
-- Related waiting source issue: [#17](https://github.com/sjefsharp/agentic-delivery/issues/17)
+- Repository: `agentic-delivery-lab/agentic-delivery`
+- Source issue: [#18](https://github.com/agentic-delivery-lab/agentic-delivery/issues/18)
+- Related waiting source issue: [#17](https://github.com/agentic-delivery-lab/agentic-delivery/issues/17)
 - Branch: `fix/issue-18-restore-codex-continuation`
 - Base: `main` at `43bcbb64ec43bc56dc659599fece611327528723`
 - Working tree was clean when this branch was created.
@@ -23,14 +23,14 @@ one-time, explicitly recorded context reconstruction for those legacy states.
 
 ## Evidence
 
-- [Run 34313589420](https://github.com/sjefsharp/agentic-delivery/actions/runs/34313589420)
+- [Run 34313589420](https://github.com/agentic-delivery-lab/agentic-delivery/actions/runs/34313589420)
   started issue #17, reached clarification, posted a continuation, and ended
   with exit code 1.
 - The owner’s answer on #17 created
-  [run 34314255009](https://github.com/sjefsharp/agentic-delivery/actions/runs/34314255009),
+  [run 34314255009](https://github.com/agentic-delivery-lab/agentic-delivery/actions/runs/34314255009),
   but its `deliver` job was skipped because the workflow only accepted comment
   bodies beginning with `/codex resume`.
-- [Run 34315950838](https://github.com/sjefsharp/agentic-delivery/actions/runs/34315950838)
+- [Run 34315950838](https://github.com/agentic-delivery-lab/agentic-delivery/actions/runs/34315950838)
   started issue #18 and stopped because quota telemetry became unavailable.
   That is a separate fail-closed budget-boundary event.
 - The runner service is active as `github-runner`. Its state and Codex home are

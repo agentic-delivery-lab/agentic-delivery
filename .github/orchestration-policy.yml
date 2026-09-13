@@ -1,0 +1,227 @@
+# agentic-primitive: {"id":"orchestration-policy-catalog","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012","ADR-0015"],"domains":["agentic-delivery-governance"]}
+version: 1
+
+authority:
+  proposal: semantic-model
+  authorization: deterministic-controller
+  unknown: hold
+
+models:
+  gpt-5.6-sol: [high]
+  gpt-5.6-luna: [max]
+
+permissions:
+  - delivery-plan
+  - delivery-research
+  - delivery-edit
+  - delivery-review
+
+capabilities:
+  repository-read:
+    owner: runner
+    optional: false
+  repository-write:
+    owner: runner
+    optional: false
+  deterministic-validation:
+    owner: controller
+    optional: false
+  web-research:
+    owner: approved-mcp
+    optional: true
+  browser-automation:
+    owner: approved-mcp
+    optional: true
+  documentation-research:
+    owner: approved-mcp
+    optional: true
+
+skills:
+  architecture-decision:
+    owner: repository
+  delivery-workflow:
+    owner: repository
+  plain-language-communication:
+    owner: repository
+  ubiquitous-language:
+    owner: repository
+
+mcp_servers:
+  firecrawl:
+    provides: [web-research]
+    optional: true
+  chrome-devtools:
+    provides: [browser-automation]
+    optional: true
+  context7:
+    provides: [documentation-research]
+    optional: true
+
+profiles:
+  router:
+    purpose: Interpret the issue and propose an allowed route.
+    model: gpt-5.6-sol
+    reasoning: high
+    mode: plan
+    permissions: delivery-plan
+    skills: [delivery-workflow]
+    capabilities: [repository-read]
+    mcp: []
+    mutates_repository: false
+  discovery:
+    purpose: Gather repository evidence and identify unknowns.
+    model: gpt-5.6-sol
+    reasoning: high
+    mode: plan
+    permissions: delivery-research
+    skills: [ubiquitous-language, plain-language-communication]
+    capabilities: [repository-read]
+    mcp: []
+    mutates_repository: false
+  research:
+    purpose: Gather approved external and repository evidence.
+    model: gpt-5.6-sol
+    reasoning: high
+    mode: plan
+    permissions: delivery-research
+    skills: [ubiquitous-language, plain-language-communication]
+    capabilities: [repository-read, web-research]
+    mcp: [firecrawl]
+    mutates_repository: false
+  requirements:
+    purpose: Turn evidence and intent into requirements and acceptance criteria.
+    model: gpt-5.6-sol
+    reasoning: high
+    mode: plan
+    permissions: delivery-plan
+    skills: [ubiquitous-language, plain-language-communication]
+    capabilities: [repository-read]
+    mcp: []
+    mutates_repository: false
+  architecture-decision:
+    purpose: Compare significant choices and prepare a provisional ADR.
+    model: gpt-5.6-sol
+    reasoning: high
+    mode: plan
+    permissions: delivery-plan
+    skills: [architecture-decision, ubiquitous-language, plain-language-communication, delivery-workflow]
+    capabilities: [repository-read, deterministic-validation]
+    mcp: []
+    mutates_repository: false
+  planner:
+    purpose: Produce a decision-complete implementation plan when needed.
+    model: gpt-5.6-sol
+    reasoning: high
+    mode: plan
+    permissions: delivery-plan
+    skills: [delivery-workflow, ubiquitous-language]
+    capabilities: [repository-read]
+    mcp: []
+    mutates_repository: false
+  implementer:
+    purpose: Execute an authorized plan and preserve existing implementation work.
+    model: gpt-5.6-luna
+    reasoning: max
+    mode: default
+    permissions: delivery-edit
+    skills: [delivery-workflow, ubiquitous-language]
+    capabilities: [repository-read, repository-write, deterministic-validation]
+    mcp: []
+    mutates_repository: true
+  validator:
+    purpose: Independently validate deterministic evidence and acceptance criteria.
+    model: gpt-5.6-sol
+    reasoning: high
+    mode: default
+    permissions: delivery-review
+    skills: [delivery-workflow, ubiquitous-language, plain-language-communication]
+    capabilities: [repository-read, deterministic-validation]
+    mcp: []
+    mutates_repository: false
+  coordinator:
+    purpose: Inspect lineage children and prepare a parent for acceptance.
+    model: gpt-5.6-sol
+    reasoning: high
+    mode: plan
+    permissions: delivery-plan
+    skills: [delivery-workflow, plain-language-communication]
+    capabilities: [repository-read]
+    mcp: []
+    mutates_repository: false
+  harness-reviewer:
+    purpose: Review architecture conformance independently of implementation.
+    model: gpt-5.6-sol
+    reasoning: high
+    mode: default
+    permissions: delivery-review
+    skills: [architecture-decision, ubiquitous-language, delivery-workflow]
+    capabilities: [repository-read, deterministic-validation]
+    mcp: []
+    mutates_repository: false
+
+patterns:
+  - id: idea-discovery
+    issue_types: [idea]
+    stages: [intake, discovery, definition]
+    triggers: [issue, comment, manual]
+    steps: [router, discovery]
+    optional_steps: [research, requirements]
+    forbidden_profiles: [implementer]
+  - id: research-only
+    issue_types: [research]
+    stages: [discovery, definition]
+    triggers: [issue, comment, manual]
+    steps: [router, research, validator]
+    required_capabilities: [repository-read]
+    conditional_capabilities:
+      external-evidence-required: [web-research]
+    forbidden_profiles: [planner, implementer]
+  - id: requirements
+    issue_types: [feature, bug, task, requirements]
+    stages: [intake, definition, discovery]
+    triggers: [issue, comment, manual]
+    steps: [requirements, validator]
+    forbidden_profiles: [implementer]
+  - id: architecture-decision
+    issue_types: [architecture]
+    stages: [decision, definition]
+    triggers: [issue, comment, manual]
+    steps: [architecture-decision, validator, harness-reviewer]
+    required_capabilities: [repository-read, deterministic-validation]
+    forbidden_profiles: [planner, implementer]
+    governance: [adr:needed, adr:proposed, adr:removal]
+  - id: implementation-fresh
+    issue_types: [bug, feature, task, implementation]
+    stages: [planning]
+    triggers: [issue, comment, manual]
+    steps: [router, planner, implementer, validator, harness-reviewer]
+    required_capabilities: [repository-read, repository-write, deterministic-validation]
+  - id: implementation-existing-plan
+    issue_types: [bug, feature, task, implementation]
+    stages: [execution]
+    triggers: [issue, manual]
+    requires: [valid-plan, unchanged-scope]
+    steps: [implementer, validator, harness-reviewer]
+    required_capabilities: [repository-read, repository-write, deterministic-validation]
+  - id: implementation-continuation
+    issue_types: [bug, feature, task, implementation]
+    stages: [execution]
+    triggers: [comment, manual]
+    requires: [valid-plan, resumable-session, unchanged-scope]
+    steps: [implementer, validator, harness-reviewer]
+    required_capabilities: [repository-read, repository-write, deterministic-validation]
+  - id: validation-only
+    issue_types: [validation]
+    stages: [validation, acceptance]
+    triggers: [issue, comment, manual]
+    steps: [validator, harness-reviewer]
+    required_capabilities: [repository-read, deterministic-validation]
+    forbidden_profiles: [planner, implementer]
+  - id: parent-coordination
+    issue_types: [idea, feature, bug, task, requirements, architecture, implementation, validation]
+    stages: [acceptance]
+    triggers: [issue, comment, child-event, manual]
+    requires: [lineage-root]
+    steps: [coordinator]
+    optional_steps: [requirements, architecture-decision, planner]
+    forbidden_profiles: [implementer]

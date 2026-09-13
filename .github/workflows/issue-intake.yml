@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       force:
-        description: Break glass by using current approved labels when semantic routing is unavailable
+        description: Break glass by using current approved metadata when semantic routing is unavailable
         required: false
         default: false
         type: boolean
@@ -33,6 +33,9 @@ jobs:
       issue: ${{ steps.intake.outputs.issue }}
       route: ${{ steps.intake.outputs.route }}
       state: ${{ steps.intake.outputs.state }}
+      lifecycle_stage: ${{ steps.intake.outputs.lifecycle_stage }}
+      readiness: ${{ steps.intake.outputs.readiness }}
+      orchestration_pattern: ${{ steps.intake.outputs.orchestration_pattern }}
     steps:
       - name: Check out trusted intake
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -57,13 +60,26 @@ jobs:
         id: intake
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_GRAPHQL: 'true'
+          ISSUE_FIELD_BINDINGS_JSON: ${{ vars.ISSUE_FIELD_BINDINGS_JSON }}
+          CODEX_MCP_SERVERS: ${{ vars.CODEX_MCP_SERVERS }}
           SOURCE_ISSUE: ${{ inputs.issue || github.event.inputs.issue || github.event.issue.number }}
           FORCE_ROUTE: ${{ inputs.force || false }}
         run: node scripts/issue-intake.mjs
 
   deliver:
     needs: classify
-    if: needs.classify.result == 'success' && (needs.classify.outputs.route == 'plan' || needs.classify.outputs.route == 'resume' || needs.classify.outputs.route == 'refine' || needs.classify.outputs.route == 'coordinate')
+    if: >-
+      needs.classify.result == 'success' &&
+      (needs.classify.outputs.route == 'plan' ||
+       needs.classify.outputs.route == 'implement' ||
+       needs.classify.outputs.route == 'resume' ||
+       needs.classify.outputs.route == 'refine' ||
+       needs.classify.outputs.route == 'research' ||
+       needs.classify.outputs.route == 'requirements' ||
+       needs.classify.outputs.route == 'architecture' ||
+       needs.classify.outputs.route == 'validate' ||
+       needs.classify.outputs.route == 'coordinate')
     permissions:
       contents: read
       issues: write

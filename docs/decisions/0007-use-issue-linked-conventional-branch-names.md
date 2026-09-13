@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-source-issue: https://github.com/sjefsharp/agentic-delivery/issues/11
+source-issue: https://github.com/agentic-delivery-lab/agentic-delivery/issues/11
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
@@ -14,7 +14,7 @@ required-enforcement:
 
 ## Context and Problem Statement
 
-Issue [#11](https://github.com/sjefsharp/agentic-delivery/issues/11) asks the repository to improve branch naming based on trunk-based delivery and Conventional Commits. A branch name should show the kind of change and make its source issue immediately traceable. The repository also needs an early, repeatable way to reject work that starts from a closed issue.
+Issue [#11](https://github.com/agentic-delivery-lab/agentic-delivery/issues/11) asks the repository to improve branch naming based on trunk-based delivery and Conventional Commits. A branch name should show the kind of change and make its source issue immediately traceable. The repository also needs an early, repeatable way to reject work that starts from a closed issue.
 
 The affected bounded context is `agentic-delivery-governance`. The relevant terms are `short-lived feature branch`, `source issue`, `issue-linked branch name`, `trunk` and `conventional commit`.
 
@@ -94,8 +94,8 @@ The repository cannot intercept a contributor who invokes raw `git switch -c` di
 
 ## More Information
 
-- Assignment brief: [GitHub issue #11](https://github.com/sjefsharp/agentic-delivery/issues/11)
-- Review and implementation: [pull request #13](https://github.com/sjefsharp/agentic-delivery/pull/13)
+- Assignment brief: [GitHub issue #11](https://github.com/agentic-delivery-lab/agentic-delivery/issues/11)
+- Review and implementation: [pull request #13](https://github.com/agentic-delivery-lab/agentic-delivery/pull/13)
 - Related decision: [ADR-0004](0004-use-trunk-based-delivery.md)
 - Related decision: [ADR-0005](0005-use-conventional-commits-with-gitmoji.md)
 - Domain register: [`ubiquitous-language.yml`](../domain/ubiquitous-language.yml)

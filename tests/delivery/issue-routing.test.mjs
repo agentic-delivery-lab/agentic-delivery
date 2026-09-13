@@ -63,7 +63,7 @@ test('allows an untyped blank issue to enter model-selected refinement', () => {
   assert.equal(proposal.workType, null);
 });
 
-test('routes a partially completed structured form to needs-info', () => {
+test('routes a partially completed structured form to requirements with needs-info readiness', () => {
   const result = classifyIssue({
     issue: issue({
       title: 'Bug: incomplete report',
@@ -73,9 +73,10 @@ test('routes a partially completed structured form to needs-info', () => {
     config,
   });
   assert.equal(result.formDetected, true);
-  assert.equal(result.state, 'needs-info');
+  assert.equal(result.readiness, 'needs-info');
+  assert.equal(result.state, 'needs-triage');
   assert.ok(result.missingFields.includes('Reproduction steps'));
-  assert.equal(result.route, 'hold');
+  assert.equal(result.route, 'requirements');
 });
 
 test('keeps registered label metadata authoritative over prose signals', () => {
@@ -97,17 +98,18 @@ test('keeps registered label metadata authoritative over prose signals', () => {
   assert.equal(result.workType, 'bug');
   assert.equal(result.conflict, null);
   assert.equal(result.state, 'needs-triage');
-  assert.equal(result.route, 'hold');
+  assert.equal(result.route, 'requirements');
 });
 
 test('preserves the semantic distinction between Research, Idea, and final disposition', () => {
   const research = classifyIssue({ issue: issue({ labels: ['type:research', 'state:investigating'] }), config });
   assert.equal(research.workType, 'research');
   assert.equal(research.state, 'investigating');
-  assert.equal(research.route, 'hold');
+  assert.equal(research.route, 'research');
 
   const researchFromTriage = classifyIssue({ issue: issue({ labels: ['type:research', 'state:needs-triage'] }), config });
-  assert.equal(researchFromTriage.state, 'investigating');
+  assert.equal(researchFromTriage.state, 'needs-triage');
+  assert.equal(researchFromTriage.route, 'hold');
 
   const parked = classifyIssue({ issue: issue({ labels: ['type:idea', 'state:parked'] }), config });
   assert.equal(parked.workType, 'idea');
@@ -132,38 +134,38 @@ test('readiness is deterministic and blocks unresolved governance and discovery 
     issue: issue({ labels: ['type:task', 'state:ready-for-plan'] }),
     config,
   });
-  assert.equal(ready.readiness.ok, true);
+  assert.equal(ready.readinessGate.ok, true);
   assert.equal(ready.route, 'plan');
 
   const adrBlocked = classifyIssue({
     issue: issue({ labels: ['type:feature', 'state:ready-for-plan', 'adr:needed'] }),
     config,
   });
-  assert.equal(adrBlocked.readiness.ok, false);
-  assert.equal(adrBlocked.state, 'requirements');
+  assert.equal(adrBlocked.readinessGate.ok, false);
+  assert.equal(adrBlocked.state, 'ready-for-plan');
   assert.match(adrBlocked.reasons.join(' '), /governance/);
 
   const architectureReady = classifyIssue({
-    issue: issue({ labels: ['type:architecture', 'state:ready-for-plan', 'adr:needed'] }),
+    issue: issue({ labels: ['type:architecture', 'state:decision-needed', 'adr:needed'] }),
     config,
   });
-  assert.equal(architectureReady.readiness.ok, true, 'architecture work resolves its own ADR governance label');
-  assert.equal(architectureReady.route, 'plan');
+  assert.equal(architectureReady.readinessGate.ok, false, 'architecture work needs its own decision outcome before delivery');
+  assert.equal(architectureReady.route, 'architecture');
 
   const architectureFromDecision = validateRoutingProposal({
-    proposal: { route: 'plan', workType: 'architecture', state: 'ready-for-plan', governance: ['adr:needed'], summary: 'Plan the ADR change.', message: '' },
+    proposal: { route: 'architecture', workType: 'architecture', lifecycleStage: 'decision', readiness: 'needs-info', governance: ['adr:needed'], orchestrationPattern: 'architecture-decision', summary: 'Analyze the ADR change.', message: '' },
     issue: issue({ labels: ['type:architecture', 'state:decision-needed', 'adr:needed'] }),
     event: { kind: 'issues', action: 'edited' }, config,
   });
-  assert.equal(architectureFromDecision.route, 'plan');
+  assert.equal(architectureFromDecision.route, 'architecture');
 
   const ideaReady = classifyIssue({
     issue: issue({ labels: ['type:idea', 'state:ready-for-plan'] }),
     config,
   });
   assert.equal(ideaReady.route, 'hold');
-  assert.equal(ideaReady.state, 'needs-triage');
-  assert.match(ideaReady.reasons.join(' '), /mature/);
+  assert.equal(ideaReady.state, 'ready-for-plan');
+  assert.match(ideaReady.reasons.join(' '), /does not authorize/);
 });
 
 test('conflicting work-type metadata remains visible and routes to triage', () => {
@@ -185,33 +187,39 @@ test('conflicting lifecycle state metadata routes to triage instead of guessing'
   assert.equal(result.state, 'needs-triage');
   assert.equal(result.stateConflict, true);
   assert.equal(result.route, 'hold');
-  assert.match(result.reasons.join(' '), /Multiple lifecycle states/);
+  assert.match(result.reasons.join(' '), /multiple legacy lifecycle labels/i);
 });
 
 test('invalid requested transitions are rejected without changing the current state', () => {
   const result = classifyIssue({
-    issue: issue({ labels: ['type:feature', 'state:requirements'] }),
+    issue: issue({ labels: ['type:feature', 'state:needs-triage'] }),
     config,
-    requestedState: 'ready-for-agent',
+    requestedStage: 'validation',
   });
-  assert.equal(result.state, 'requirements');
+  assert.equal(result.state, 'needs-triage');
+  assert.equal(result.lifecycleStage, 'intake');
   assert.equal(result.route, 'hold');
   assert.match(result.reasons.join(' '), /not allowed/);
 });
 
-test('validates a model routing proposal against configured labels and transitions', () => {
-  const current = issue({ labels: ['type:task', 'state:in-progress'] });
+test('validates a model routing proposal against configured fields and transitions', () => {
+  const current = issue({
+    labels: ['type:task', 'state:in-progress'],
+    plan: { exists: true, valid: true, digest: 'a'.repeat(64) },
+    session: { exists: true, resumable: true, id: '019fb023-24b8-7881-9119-509f078b610e' },
+  });
   const result = validateRoutingProposal({
     proposal: {
-      route: 'resume', workType: 'task', state: 'in-progress', governance: [],
+      route: 'resume', workType: 'task', lifecycleStage: 'execution', readiness: 'working', governance: [], orchestrationPattern: 'implementation-continuation',
       summary: 'Continue the saved implementation.', message: '',
     },
     issue: current,
-    event: { action: 'created', comment: { body: 'Any paraphrase can carry this intent.' } },
+    event: { kind: 'issue_comment', action: 'created', comment: { body: 'Any paraphrase can carry this intent.' } },
     config,
   });
   assert.equal(result.route, 'resume');
-  assert.deepEqual(result.targetLabels, ['type:task', 'state:in-progress']);
+  assert.deepEqual(result.targetFields.lifecycle_stage, 'execution');
+  assert.deepEqual(result.targetLabels, []);
 
   assert.throws(() => validateRoutingProposal({
     proposal: { route: 'hold', workType: 'task', state: 'in-progress', governance: ['state:model-invented'], summary: 'No.', message: '' },
@@ -219,12 +227,12 @@ test('validates a model routing proposal against configured labels and transitio
   }), /approved governance label/);
 
   assert.throws(() => validateRoutingProposal({
-    proposal: { route: 'plan', workType: 'feature', state: 'review', governance: [], summary: 'Skip ahead.', message: '' },
+    proposal: { route: 'plan', workType: 'feature', lifecycleStage: 'validation', readiness: 'ready', governance: [], orchestrationPattern: 'implementation-fresh', summary: 'Skip ahead.', message: '' },
     issue: issue({ labels: ['type:feature', 'state:requirements'] }), event: {}, config,
-  }), /transition|requires state:ready-for-plan/);
+  }), /transition|Planning|readiness/);
 
   assert.throws(() => validateRoutingProposal({
-    proposal: { route: 'hold', workType: 'task', state: 'ready-for-plan', governance: [], summary: 'Ready, but idle.', message: '' },
+    proposal: { route: 'plan', workType: 'task', lifecycleStage: 'parked', readiness: 'ready', governance: [], orchestrationPattern: 'implementation-fresh', summary: 'Bypass the lifecycle.', message: '' },
     issue: issue({ labels: ['type:task', 'state:needs-triage'] }), event: {}, config,
-  }), /must start or resume planning/);
+  }), /Only Idea|transition|cannot plan/);
 });

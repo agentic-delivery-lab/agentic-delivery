@@ -31,8 +31,35 @@ async function fixture(t) {
   const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], publishHeaders:[], pushHeaders:[], clients:0, closes:0};
   const faults = {
     permission:'write', sourceState:'open', sourceTitle:'Add a file', sourceBody:'Create result.txt', sourceComments:[],
-    sourceLabels:['type:task', 'state:ready-for-plan'], startSessionId:SESSION_ID, resumeSessionId:SESSION_ID, refinement:null,
+    sourceLabels:['type:task', 'state:ready-for-plan'], sourceNativeType:'Task',
+    sourceFields:{lifecycle_stage:'planning', readiness:'ready'},
+    startSessionId:SESSION_ID, resumeSessionId:SESSION_ID, refinement:null,
   };
+  const issueTypes = [
+    ['idea', 'Idea'], ['research', 'Research'], ['feature', 'Feature'], ['bug', 'Bug'],
+    ['task', 'Task'], ['requirements', 'Requirements'], ['architecture', 'Architecture Decision'],
+    ['implementation', 'Implementation'], ['validation', 'Validation'],
+  ];
+  const stageNames = {
+    intake:'Intake', discovery:'Discovery', definition:'Definition', decision:'Decision',
+    planning:'Planning', execution:'Execution', validation:'Validation', acceptance:'Acceptance',
+    done:'Done', parked:'Parked',
+  };
+  const readinessNames = {
+    'not-ready':'Not ready', 'needs-info':'Needs information', ready:'Ready', working:'Working',
+    waiting:'Waiting', 'awaiting-human':'Awaiting human', blocked:'Blocked',
+  };
+  const controlPlane = (number = 7) => ({
+    id:`I_${number}`, number, state:faults.sourceState, title:faults.sourceTitle, body:faults.sourceBody,
+    issueType:faults.sourceNativeType ? {id:`IT_${issueTypes.find(([id, name]) => name === faults.sourceNativeType)?.[0] ?? 'task'}`, name:faults.sourceNativeType} : null,
+    issueFieldValues:[
+      {id:`FV_STAGE_${number}`, field:{id:'lifecycle-stage', name:'Lifecycle Stage'}, value:stageNames[faults.sourceFields.lifecycle_stage], name:stageNames[faults.sourceFields.lifecycle_stage], optionId:faults.sourceFields.lifecycle_stage},
+      {id:`FV_READY_${number}`, field:{id:'delivery-readiness', name:'Delivery Readiness'}, value:readinessNames[faults.sourceFields.readiness], name:readinessNames[faults.sourceFields.readiness], optionId:faults.sourceFields.readiness},
+    ],
+    parent:null, subIssues:[],
+    organizationIssueTypes:issueTypes.map(([id, name]) => ({id:`IT_${id}`, name, isEnabled:true})),
+    organizationIssueFields:[{id:'lifecycle-stage',name:'Lifecycle Stage',dataType:'SINGLE_SELECT'},{id:'delivery-readiness',name:'Delivery Readiness',dataType:'SINGLE_SELECT'}],
+  });
   const dependencies = {
     fetch:async (url, options) => {
       const route = url.replace('https://api.github.com/repos/fixture/repo', '');
@@ -60,6 +87,22 @@ async function fixture(t) {
         if (!calls.prs.length) calls.prs.push(data);
       } else throw new Error(`Unexpected API request: ${route}`);
       return new Response(JSON.stringify(data), {status:200});
+    },
+    readControlPlane:async ({issueNumber}) => controlPlane(Number(issueNumber)),
+    graphql:async (query, variables) => {
+      if (query.includes('setIssueFieldValue')) {
+        for (const field of variables.input.issueFields ?? []) {
+          if (field.fieldId === 'lifecycle-stage') faults.sourceFields.lifecycle_stage = field.singleSelectOptionId;
+          if (field.fieldId === 'delivery-readiness') faults.sourceFields.readiness = field.singleSelectOptionId;
+        }
+        return {setIssueFieldValue:{issue:{id:'I_7'}}};
+      }
+      if (query.includes('updateIssueIssueType')) {
+        const entry = issueTypes.find(([id]) => `IT_${id}` === variables.input.issueTypeId);
+        faults.sourceNativeType = entry?.[1] ?? faults.sourceNativeType;
+        return {updateIssueIssueType:{issue:{id:'I_7',issueType:{id:variables.input.issueTypeId,name:faults.sourceNativeType}}}};
+      }
+      throw new Error(`Unexpected GraphQL request: ${query.slice(0, 80)}`);
     },
     execute:async (command, args, options) => {
       if (command === 'git' && args[0] === 'clone') args = ['clone', '--branch', 'main', origin, workspace];
@@ -159,7 +202,8 @@ test('publishes one recorded branch and PR with a complete issue audit trail', a
   assert.equal(f.calls.prs[0].base,'main'); assert.equal(f.calls.prs[0].head,state.branch);
   assert.ok(f.calls.comments.some((text) => text.includes('Plan complete')));
   assert.ok(f.calls.comments.some((text) => text.includes('Review pull request ready')));
-  assert.ok(f.faults.sourceLabels.includes('state:review'));
+  assert.equal(f.faults.sourceFields.lifecycle_stage, 'validation');
+  assert.equal(f.faults.sourceFields.readiness, 'awaiting-human');
   assert.ok(f.calls.commands.some(({command,profile}) => command[1] === 'install' && profile === 'delivery-deps'));
   const validators = f.calls.commands.filter(({command}) => command[1]?.includes('validate-adrs'));
   assert.ok(validators.length); assert.ok(validators.every(({command}) => !command[1].startsWith(f.workspace)));
@@ -169,10 +213,11 @@ test('publishes one recorded branch and PR with a complete issue audit trail', a
 
 test('does not start a model turn when the source issue is not ready for planning', async (t) => {
   const f = await fixture(t);
-  f.faults.sourceLabels = ['type:idea', 'state:needs-triage'];
+  f.faults.sourceNativeType = 'Idea';
+  f.faults.sourceFields = {lifecycle_stage:'intake', readiness:'not-ready'};
   const result = await f.run();
   assert.equal(result.status, 'paused');
-  assert.equal(f.calls.clients, 0);
+  assert.equal(f.calls.clients, 0, JSON.stringify(await f.state()));
   assert.deepEqual(f.calls.turns, []);
   assert.equal(f.calls.prs.length, 0);
   assert.match((await f.state()).reason, /not ready for planning/);
@@ -181,7 +226,9 @@ test('does not start a model turn when the source issue is not ready for plannin
 test('refined atomic work receives a deterministic type and readiness transition before planning', async (t) => {
   const f = await fixture(t);
   f.env.INTAKE_ROUTE = 'refine';
-  f.faults.sourceLabels = ['state:needs-triage'];
+  f.faults.sourceNativeType = null;
+  f.faults.sourceLabels = [];
+  f.faults.sourceFields = {lifecycle_stage:'intake', readiness:'not-ready'};
   f.faults.refinement = {
     status: 'refined', summary: 'The request is clear.', workType: 'task', questions: [],
     refinedGoal: 'Deliver the requested file.', audience: 'Maintainers', requirements: [], constraints: [],
@@ -191,8 +238,9 @@ test('refined atomic work receives a deterministic type and readiness transition
   await f.run();
   assert.deepEqual(f.calls.turns, ['refine', 'plan', 'implement']);
   assert.equal((await f.state()).status, 'ready');
-  assert.ok(f.faults.sourceLabels.includes('type:task'));
-  assert.ok(f.faults.sourceLabels.includes('state:review'));
+  assert.equal(f.faults.sourceNativeType, 'Task');
+  assert.equal(f.faults.sourceFields.lifecycle_stage, 'validation');
+  assert.equal(f.faults.sourceFields.readiness, 'awaiting-human');
 });
 
 test('continues incomplete implementation turns automatically before verification', async (t) => {
@@ -313,6 +361,7 @@ test('saved planning cannot bypass a newly added governance gate', async (t) => 
   const clients = f.calls.clients;
   const turns = [...f.calls.turns];
   f.faults.questions = false;
+  f.faults.sourceFields = {lifecycle_stage:'planning', readiness:'needs-info'};
   f.faults.sourceLabels = ['type:task', 'state:needs-info', 'adr:needed'];
   const result = await f.resume();
   assert.equal(result.status, 'awaiting-human');
@@ -387,7 +436,7 @@ test('saved verification cannot continue after a lifecycle state change', async 
   await f.run(); assert.equal((await f.state()).phase,'verify');
   const clients = f.calls.clients;
   const turns = [...f.calls.turns];
-  f.faults.sourceLabels = ['type:task', 'state:needs-info'];
+  f.faults.sourceFields = {lifecycle_stage:'intake', readiness:'needs-info'};
   const result = await f.resume();
   assert.equal(result.status, 'paused');
   assert.match(result.reason, /not authorized for verification/);
@@ -399,7 +448,7 @@ test('implementation questions preserve the implementation phase and existing br
   const f = await fixture(t); f.faults.implementationQuestion = true;
   await f.run(); const first = await f.state();
   assert.equal(first.phase,'implement'); assert.equal(first.status,'awaiting-human');
-  assert.ok(f.faults.sourceLabels.includes('state:needs-info'));
+  assert.equal(f.faults.sourceFields.readiness, 'needs-info');
   f.faults.implementationQuestion = false; await f.comment({id:209,body:'Use the existing wording.'}); await f.run();
   assert.equal((await f.state()).status,'ready'); assert.equal((await f.state()).branch,first.branch);
   assert.deepEqual(f.calls.turns,['plan','implement','implement']);
@@ -452,7 +501,7 @@ test('trusted owner comments continue the exact waiting session and finish succe
   await f.comment({id:200,body:'Use the existing result file.'});
   const result = await f.run();
 
-  assert.equal(result?.status,undefined);
+  assert.equal(result?.status, undefined);
   assert.equal((await f.state()).status,'ready');
   assert.deepEqual(f.calls.threads,[{method:'start'},{method:'resume',sessionId:SESSION_ID}]);
   assert.ok(f.calls.prompts.some(({prompt}) => prompt.includes('Use the existing result file.')));
@@ -494,7 +543,7 @@ test('manual dispatch remains available for a waiting continuation', async (t) =
   f.faults.questions = false;
   f.env.GITHUB_EVENT_NAME = 'workflow_dispatch';
   f.env.GITHUB_RUN_ID = '2';
-  assert.equal((await f.run())?.status,undefined);
+  assert.equal((await f.run())?.status, undefined);
   assert.equal((await f.state()).status,'ready');
   assert.deepEqual(f.calls.threads,[{method:'start'},{method:'resume',sessionId:SESSION_ID}]);
 });

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-source-issue: https://github.com/sjefsharp/agentic-delivery/issues/12
+source-issue: https://github.com/agentic-delivery-lab/agentic-delivery/issues/12
 decision-makers: Sjef Jenniskens
 consulted: None
 informed: None
@@ -14,7 +14,7 @@ required-enforcement:
 
 ## Context and Problem Statement
 
-Issue [#12](https://github.com/sjefsharp/agentic-delivery/issues/12) asks the
+Issue [#12](https://github.com/agentic-delivery-lab/agentic-delivery/issues/12) asks the
 repository to adopt pnpm, reject dependency releases younger than 48 hours,
 and make repository-owned validation tooling portable across Windows, macOS
 and Linux. Before this proposal, the repository used npm, one npm lockfile,
@@ -193,7 +193,7 @@ The implementation will:
 
 ## More Information
 
-- Assignment brief and ADR tracking issue: [GitHub issue #12](https://github.com/sjefsharp/agentic-delivery/issues/12)
+- Assignment brief and ADR tracking issue: [GitHub issue #12](https://github.com/agentic-delivery-lab/agentic-delivery/issues/12)
 - Related decision: [ADR-0004](0004-use-trunk-based-delivery.md)
 - Related decision: [ADR-0005](0005-use-conventional-commits-with-gitmoji.md)
 - Related decision: [ADR-0006](0006-curate-a-changelog.md)

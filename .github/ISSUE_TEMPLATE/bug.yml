@@ -1,9 +1,6 @@
 name: Bug
 description: Report reproducible behavior that does not match expectations.
 title: "Bug: "
-labels:
-  - "type:bug"
-  - "state:needs-triage"
 body:
   - type: markdown
     attributes:

@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { CodexClient } from './lib/codex-client.mjs';
-import { continuation, formatPlanComment, formatProgressComment, formatRefinementComment, runTurn, validateOutcome, validateRefinementOutcome } from './lib/codex-loop.mjs';
-import { classifyIssue, stateLabel } from './lib/issue-routing.mjs';
+import { continuation, formatPlanComment, formatProgressComment, formatRefinementComment, orchestrationOutcomeSchema, runTurn, validateOrchestrationOutcome, validateOutcome, validateRefinementOutcome } from './lib/codex-loop.mjs';
+import { classifyIssue } from './lib/issue-routing.mjs';
 import { loadLifecycleConfig } from './issue-intake.mjs';
 import { startIssueBranch } from './start-issue-branch.mjs';
 import { validateCommitRange } from './validate-commit-range.mjs';
@@ -15,6 +15,9 @@ import { validateBranchName } from './validate-branch-name.mjs';
 import { deterministicReview, validateEvidenceRecord } from './lib/architecture-review.mjs';
 import { validateTransition } from './lib/lifecycle-transitions.mjs';
 import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
+import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType } from './lib/issue-field-api.mjs';
+import { issueMetadata, issueFieldMutation, validateFieldMutation } from './lib/issue-metadata.mjs';
+import { patternById, selectOrchestration } from './lib/orchestration-policy.mjs';
 
 const executeFile = promisify(execFile);
 const controllerRoot = path.resolve(import.meta.dirname, '..');
@@ -22,6 +25,65 @@ const STATE_VERSION = 3;
 const PROGRESS_COMMENT_INTERVAL_MS = 5 * 60_000;
 const OVERALL_TIMEOUT_MS = 5.5 * 60 * 60_000;
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const STAGE_TARGETS = Object.freeze({
+  'needs-triage': { stage: 'intake', readiness: 'not-ready' },
+  // Needs information is an orthogonal readiness gate. It must not move an
+  // implementation back to Intake or erase its current lifecycle position.
+  'needs-info': { stage: null, readiness: 'needs-info' },
+  requirements: { stage: 'definition', readiness: 'not-ready' },
+  decomposing: { stage: 'definition', readiness: 'waiting' },
+  'decision-needed': { stage: 'decision', readiness: 'needs-info' },
+  investigating: { stage: 'discovery', readiness: 'working' },
+  parked: { stage: 'parked', readiness: 'waiting' },
+  'ready-for-plan': { stage: 'planning', readiness: 'ready' },
+  'ready-for-agent': { stage: 'execution', readiness: 'ready' },
+  'in-progress': { stage: 'execution', readiness: 'working' },
+  review: { stage: 'validation', readiness: 'awaiting-human' },
+  coordinating: { stage: 'acceptance', readiness: 'waiting' },
+  acceptance: { stage: 'acceptance', readiness: 'awaiting-human' },
+  done: { stage: 'done', readiness: 'awaiting-human' },
+});
+
+function stageTarget(target) {
+  return STAGE_TARGETS[target] ?? { stage: target, readiness: undefined };
+}
+
+function deliveryPhases() {
+  return ['refine', 'research', 'requirements', 'architecture', 'plan', 'implement', 'validate', 'coordinate', 'branch', 'verify', 'commit', 'publish'];
+}
+
+function profileForPhase(phase) {
+  return {
+    refine: 'discovery', research: 'research', requirements: 'requirements', architecture: 'architecture-decision',
+    plan: 'planner', implement: 'implementer', validate: 'validator', coordinate: 'coordinator',
+  }[phase] ?? 'planner';
+}
+
+function orchestrationPatternForRoute(route, phase, workType) {
+  if (route === 'refine' && phase === 'coordinate') return 'parent-coordination';
+  if (route === 'refine' && !workType) return null;
+  if (route === 'resume' || route === 'manual') {
+    return {
+      refine: workType ? 'idea-discovery' : null,
+      research: 'research-only', requirements: 'requirements', architecture: 'architecture-decision',
+      plan: 'implementation-fresh', implement: 'implementation-continuation', validate: 'validation-only',
+      coordinate: 'parent-coordination',
+    }[phase] ?? null;
+  }
+  return {
+    refine: 'idea-discovery', research: 'research-only', requirements: 'requirements', architecture: 'architecture-decision',
+    plan: 'implementation-fresh', implement: 'implementation-existing-plan', validate: 'validation-only', coordinate: 'parent-coordination',
+  }[route] ?? null;
+}
+
+function stageToControllerTarget(stage, phase) {
+  const fallback = { research: 'requirements', requirements: 'requirements', architecture: 'decision-needed', validate: 'acceptance' }[phase];
+  return {
+    intake: 'needs-triage', discovery: 'investigating', definition: 'requirements', decision: 'decision-needed',
+    planning: 'ready-for-plan', execution: 'ready-for-agent', validation: 'review', acceptance: 'acceptance',
+    parked: 'parked', done: 'done',
+  }[stage] ?? fallback;
+}
 
 function commentId(value) {
   const id = String(value ?? '');
@@ -135,7 +197,7 @@ async function readSavedState(file, issue, repository) {
     const status = value?.status === 'needs_input' ? 'awaiting-human' : value?.status;
     if (value?.repository !== repository || String(value?.issue) !== issue
       || (!legacy && ![2, STATE_VERSION].includes(value.version))
-      || !['refine','plan','coordinate','branch','implement','verify','commit','publish'].includes(value.phase)
+      || !deliveryPhases().includes(value.phase)
       || !['new','running','paused','awaiting-human','ready'].includes(status)
       || !strings(value.events) || !strings(value.tasks)
       || (value.questions !== undefined && !strings(value.questions))
@@ -148,7 +210,7 @@ async function readSavedState(file, issue, repository) {
       || (value.sessionStarted === false && value.sessionId !== undefined)
       || (value.legacySessionReconstruction !== undefined && typeof value.legacySessionReconstruction !== 'boolean')
       || (value.progressCommentAt !== undefined && (!Number.isFinite(value.progressCommentAt) || value.progressCommentAt < 0))
-      || (value.progressCommentPhase !== undefined && !['refine','plan','implement'].includes(value.progressCommentPhase))
+      || (value.progressCommentPhase !== undefined && !['refine','research','requirements','architecture','plan','implement','validate'].includes(value.progressCommentPhase))
       || (value.sessionId !== undefined && (typeof value.sessionId !== 'string' || !SESSION_ID_PATTERN.test(value.sessionId)))
       || (value.waitingCommentId !== undefined && !/^(?:0|[1-9][0-9]*)$/.test(String(value.waitingCommentId)))
       || (value.execution !== undefined && (!value.execution || typeof value.execution !== 'object'
@@ -167,7 +229,7 @@ async function readSavedState(file, issue, repository) {
     }
     if (value.refined !== undefined) validateRefinementOutcome(JSON.stringify(value.refined));
     if (value.plan !== undefined) validateOutcome('plan', JSON.stringify(value.plan));
-    if (!['refine', 'plan', 'coordinate'].includes(value.phase) && (!value.branch || !hash(value.base) || value.plan?.status !== 'ready')) throw new Error();
+    if (!['refine', 'research', 'requirements', 'architecture', 'plan', 'validate', 'coordinate'].includes(value.phase) && (!value.branch || !hash(value.base) || value.plan?.status !== 'ready')) throw new Error();
     if (['commit','publish'].includes(value.phase) && !hash(value.validatedTree)) throw new Error();
     const migrated = {
       ...value,
@@ -218,7 +280,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   const publishApi = async (route, method = 'GET', body) => api(route, method, body, await publicationToken());
   const deliveryRoute = env.INTAKE_ROUTE
     || (comment || env.GITHUB_EVENT_NAME === 'workflow_dispatch' ? 'resume' : 'manual');
-  if (!['refine', 'plan', 'resume', 'manual', 'coordinate'].includes(deliveryRoute)) throw new Error('Invalid intake route.');
+  if (!['refine', 'research', 'requirements', 'architecture', 'plan', 'implement', 'resume', 'validate', 'manual', 'coordinate'].includes(deliveryRoute)) throw new Error('Invalid intake route.');
   const internalCoordination = deliveryRoute === 'coordinate' && actor === 'github-actions[bot]';
   const permission = internalCoordination
     ? { permission: 'write' }
@@ -226,21 +288,42 @@ export async function deliver(env = process.env, dependencies = {}) {
   if (!['admin', 'maintain', 'write'].includes(permission.permission)) {
     throw new Error('Source issue execution requires repository write permission.');
   }
-  const source = await api(`/issues/${issue}`);
+  const lifecycleConfig = bindIssueMetadataConfig(await loadLifecycleConfig(controllerRoot), env.ISSUE_FIELD_BINDINGS_JSON ?? {});
+  const orchestrationAvailability = {
+    capabilities: ['repository-read', 'repository-write', 'deterministic-validation'],
+    mcp: String(env.CODEX_MCP_SERVERS ?? '').split(',').map((name) => name.trim()).filter(Boolean)
+      .map((name) => ({ name, available: true })),
+    skills: Object.keys(lifecycleConfig.orchestration.skills ?? {}),
+  };
+  const sourceRest = await api(`/issues/${issue}`);
+  let graphql = dependencies.graphql;
+  const useGraphql = Boolean(graphql || env.GITHUB_GRAPHQL === 'true' || env.GITHUB_ACTIONS === 'true');
+  if (useGraphql && !graphql) graphql = githubGraphqlApi({ token: env.GH_TOKEN, fetchImpl: fetchApi });
+  let source = sourceRest;
+  if (graphql) {
+    const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
+    source = { ...sourceRest, ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })), labels: sourceRest.labels ?? [] };
+  }
   if (source.pull_request) throw new Error('A pull request cannot be a source issue.');
   if (source.state !== 'open') {
     if (comment) return {status:'ignored', reason:'The source issue is inactive.'};
     throw new Error('The source issue must still be open.');
   }
-  const lifecycleConfig = await loadLifecycleConfig(controllerRoot);
   const deliveryMetadataSafe = (metadata) => {
     const blockedGovernance = metadata.workType === 'architecture' ? [] : metadata.governance
       .filter((label) => lifecycleConfig.readiness.blocking_governance.includes(label));
     return Boolean(metadata.workType)
+      && metadata.workTypeSource === 'native'
+      && metadata.fieldAuthority === 'organization-issue-field'
+      && metadata.fieldPresence?.lifecycleStage === true
+      && metadata.fieldPresence?.readiness === true
+      && !(metadata.invalidFields?.length > 0)
       && !metadata.conflict?.length
       && !metadata.stateConflict
       && lifecycleConfig.readiness.delivery_types.includes(metadata.workType)
       && !(metadata.missingFields?.length > 0)
+      && ['planning', 'execution', 'validation'].includes(metadata.lifecycleStage)
+      && ['ready', 'working', 'awaiting-human'].includes(metadata.readiness)
       && blockedGovernance.length === 0;
   };
   const stateRoot = path.resolve(env.CODEX_DELIVERY_STATE_DIR || path.join(env.RUNNER_WORKSPACE, '..', '.codex-delivery'));
@@ -322,6 +405,8 @@ export async function deliver(env = process.env, dependencies = {}) {
   const requireCurrentBrief = async (brief) => {
     if (state.sourceDigest !== digest(brief)) {
       state.phase = 'plan';
+      state.planDigest = null;
+      state.planInvalidatedReason = 'The source issue or conversation changed.';
       state.tasks = ['Review the changed source issue and discussion, then update the saved plan.', ...(state.tasks ?? [])];
       await save();
       await transitionState('ready-for-plan');
@@ -333,7 +418,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   try { lock = await import('node:fs/promises').then(({ open }) => open(lockFile, 'wx', 0o600)); }
   catch (error) {
     if (error.code !== 'EEXIST') throw error;
-    await api(`/issues/${issue}/comments`, 'POST', { body: 'Delivery is already running. No action is needed. If the linked run is no longer active, an operator must clear the stale runner lock and rerun the workflow. Do not change labels or post another continuation comment.' });
+    await api(`/issues/${issue}/comments`, 'POST', { body: 'Delivery is already running. No action is needed. If the linked run is no longer active, an operator must clear the stale runner lock and rerun the workflow. Do not change lifecycle fields or post another continuation comment.' });
     return;
   }
   runTools = await mkdtemp(path.join(issueRoot, 'run-tools-'));
@@ -367,8 +452,12 @@ export async function deliver(env = process.env, dependencies = {}) {
   };
   try {
     await lock.writeFile(JSON.stringify({ runUrl, issue, pid: process.pid }));
+    const initialPhase = {
+      refine: 'refine', research: 'research', requirements: 'requirements', architecture: 'architecture',
+      plan: 'plan', implement: 'implement', validate: 'validate', coordinate: 'coordinate',
+    }[deliveryRoute] ?? 'plan';
     state = stateWasSaved ? await readSavedState(stateFile, issue, repository) : {
-      version: STATE_VERSION, issue, repository, phase: deliveryRoute === 'refine' ? 'refine' : 'plan', status: 'new', execution: { status: 'idle', operation: null, run: null, lastFailure: null }, tasks: [], events: [], consumedCommentIds: [], sessionStarted: false,
+      version: STATE_VERSION, issue, repository, phase: initialPhase, status: 'new', execution: { status: 'idle', operation: null, run: null, lastFailure: null }, tasks: [], events: [], consumedCommentIds: [], sessionStarted: false, planDigest: null,
     };
     const priorStatus = state.status;
     const canStartInitialSession = !stateWasSaved
@@ -394,63 +483,112 @@ export async function deliver(env = process.env, dependencies = {}) {
       }
       if (!['paused','awaiting-human'].includes(state.status)) return {status:'ignored', reason:'The saved state is not eligible for issue-comment continuation.'};
     }
-    transitionState = async (target, allowedCurrentStates, dependencies = []) => {
-      const current = await api(`/issues/${issue}`);
+    transitionState = async (target, allowedCurrentStates, childDependencies = []) => {
+      let current = await api(`/issues/${issue}`);
+      if (graphql) {
+        const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
+        current = { ...current, ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })), labels: current.labels ?? [] };
+      }
       if (current.state !== 'open' || current.pull_request) throw new Error('The source issue must still be open.');
-      const currentMetadata = classifyIssue({ issue: current, config: lifecycleConfig });
-      if (allowedCurrentStates && !allowedCurrentStates.includes(currentMetadata.state)) {
-        throw new Error(`The source issue is in state ${currentMetadata.state ?? 'unknown'}; it cannot transition to ${target}.`);
+      const currentMetadata = classifyIssue({ issue: current, config: lifecycleConfig, available: orchestrationAvailability });
+      const targetValue = stageTarget(target);
+      const targetStage = targetValue.stage ?? currentMetadata.lifecycleStage;
+      const allowedStages = allowedCurrentStates?.map((value) => stageTarget(value).stage);
+      if (allowedStages && !allowedStages.includes(currentMetadata.lifecycleStage)) {
+        throw new Error(`The source issue is at lifecycle stage ${currentMetadata.lifecycleStage ?? 'unknown'}; it cannot transition to ${target}.`);
       }
       const transition = validateTransition({
         config: lifecycleConfig,
-        from: currentMetadata.state,
-        to: target,
+        from: currentMetadata.lifecycleStage,
+        to: targetStage,
         workType: currentMetadata.workType,
         governance: currentMetadata.governance,
         issueState: current.state,
-        dependencies,
+        dependencies: childDependencies,
       });
       if (!transition.allowed) throw new Error(`Lifecycle transition rejected: ${transition.reasons.join(' ')}`);
-      if (target === 'ready-for-plan') {
-        const targetMetadata = classifyIssue({ issue: current, config: lifecycleConfig, requestedState: target });
-        if (targetMetadata.state !== target || !targetMetadata.readiness.ok) {
-          throw new Error(`Lifecycle transition rejected: ${targetMetadata.readiness.reasons.join(' ')}`);
-        }
+      const targetMetadata = classifyIssue({ issue: current, config: lifecycleConfig, requestedStage: targetStage, requestedReadiness: targetValue.readiness, available: orchestrationAvailability });
+      if (target === 'ready-for-plan' && (!targetMetadata.readinessGate.ok || targetMetadata.lifecycleStage !== targetStage)) {
+        throw new Error(`Lifecycle transition rejected: ${targetMetadata.readinessGate.reasons.join(' ')}`);
       }
-      if (['ready-for-agent', 'in-progress', 'review'].includes(target) && !deliveryMetadataSafe(currentMetadata)) {
+      if (['ready-for-agent', 'in-progress', 'review'].includes(target) && !deliveryMetadataSafe({ ...currentMetadata, readiness: targetValue.readiness })) {
         throw new Error('The source issue no longer satisfies the implementation readiness contract.');
       }
-      const stateLabels = new Set(lifecycleConfig.states.map((candidate) => candidate.label));
-      const labels = (current.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean);
-      const targetLabel = stateLabel(lifecycleConfig, target);
-      if (!targetLabel) throw new Error(`Unknown lifecycle state: ${target}.`);
-      const next = [...new Set([...labels.filter((label) => !stateLabels.has(label)), targetLabel])];
-      if (labels.length !== next.length || labels.some((label, index) => label !== next[index])) {
-        await api(`/issues/${issue}/labels`, 'PUT', { labels: next });
+      const values = {};
+      if (targetValue.stage && currentMetadata.lifecycleStage !== targetValue.stage) values.lifecycle_stage = targetValue.stage;
+      if (targetValue.readiness && currentMetadata.readiness !== targetValue.readiness) values.readiness = targetValue.readiness;
+      for (const [field, value] of Object.entries(values)) {
+        const mutation = validateFieldMutation({ config: lifecycleConfig, issueState: current.state, field, from: field === 'lifecycle_stage' ? currentMetadata.lifecycleStage : currentMetadata.readiness, to: value, workType: currentMetadata.workType, governance: currentMetadata.governance, actor: 'controller', dependencies: childDependencies });
+        if (!mutation.allowed) throw new Error(`Issue field transition rejected: ${mutation.reasons.join(' ')}`);
       }
-      const observed = await api(`/issues/${issue}`);
-      const observedMetadata = classifyIssue({ issue: observed, config: lifecycleConfig });
-      if (observedMetadata.state !== target) {
-        throw new Error(`Lifecycle transition to ${target} was not observed after the GitHub label update.`);
+      if (graphql && current.id && Object.keys(values).length) {
+        await setIssueFields({ graphql, issueId: current.id, config: lifecycleConfig, values, actor: 'controller' });
       }
-      state.workState = { value: target, observedAt: new Date().toISOString(), source: 'github-label' };
+      if (graphql) {
+        const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
+        const observed = { ...await api(`/issues/${issue}`), ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })) };
+        const observedMetadata = classifyIssue({ issue: observed, config: lifecycleConfig, available: orchestrationAvailability });
+        if (observedMetadata.lifecycleStage !== targetStage || (targetValue.readiness && observedMetadata.readiness !== targetValue.readiness)) {
+          throw new Error(`Lifecycle field transition to ${target} was not observed after the GitHub field update.`);
+        }
+      }
+      state.workState = { lifecycleStage: targetStage, readiness: targetValue.readiness ?? currentMetadata.readiness, observedAt: new Date().toISOString(), source: graphql ? 'github-issue-field' : 'runner-observation' };
       await save();
     };
     const requireDeliveryMetadata = async (allowedStates) => {
-      const current = await api(`/issues/${issue}`);
+      let current = await api(`/issues/${issue}`);
+      if (graphql) {
+        const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
+        current = { ...current, ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })) };
+      }
       if (current.state !== 'open' || current.pull_request) throw new Error('The source issue must still be open.');
-      const currentMetadata = classifyIssue({ issue: current, config: lifecycleConfig });
-      if (allowedStates && !allowedStates.includes(currentMetadata.state)) {
-        throw new Error(`The source issue is in state ${currentMetadata.state ?? 'unknown'}; it cannot continue ${state.phase}.`);
+      const currentMetadata = classifyIssue({ issue: current, config: lifecycleConfig, available: orchestrationAvailability });
+      const allowedStages = allowedStates?.map((value) => stageTarget(value).stage);
+      if (allowedStages && !allowedStages.includes(currentMetadata.lifecycleStage)) {
+        throw new Error(`The source issue is at lifecycle stage ${currentMetadata.lifecycleStage ?? 'unknown'}; it cannot continue ${state.phase}.`);
       }
       if (!deliveryMetadataSafe(currentMetadata)) {
         throw new Error('The source issue no longer satisfies the delivery readiness contract.');
       }
       return currentMetadata;
     };
-    const metadataSource = await api(`/issues/${issue}`);
+    let metadataSource = await api(`/issues/${issue}`);
+    if (graphql) {
+      const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
+      metadataSource = { ...metadataSource, ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })) };
+    }
     if (metadataSource.state !== 'open' || metadataSource.pull_request) throw new Error('The source issue must still be open.');
-    let metadata = classifyIssue({ issue: metadataSource, config: lifecycleConfig, mode: deliveryRoute === 'resume' ? 'resume' : 'event' });
+    let metadata = classifyIssue({ issue: metadataSource, config: lifecycleConfig, mode: deliveryRoute === 'resume' ? 'resume' : 'event', available: orchestrationAvailability });
+    const policyContext = {
+      issueType: metadata.workType,
+      lifecycleStage: metadata.lifecycleStage,
+      readiness: metadata.readiness,
+      governance: metadata.governance,
+      trigger: comment ? 'comment' : deliveryRoute === 'manual' || env.GITHUB_EVENT_NAME === 'workflow_dispatch' ? 'manual' : 'issue',
+      lineage: { isRoot: !metadataSource.parent, parent: metadataSource.parent ?? null, children: state.childIssues ?? metadataSource.subIssues ?? [] },
+      plan: { exists: state.plan?.status === 'ready', valid: state.plan?.status === 'ready' && Boolean(state.planDigest ?? state.sourceDigest), digest: state.planDigest ?? state.sourceDigest ?? null, scopeChanged: state.planInvalidatedReason != null },
+      session: { exists: Boolean(state.sessionId), resumable: Boolean(state.sessionId) && state.status !== 'new', id: state.sessionId ?? null },
+      execution: state.execution ?? { status: 'idle', operation: state.phase },
+      capabilities: ['repository-read', 'repository-write', 'deterministic-validation'],
+      mcp: env.CODEX_MCP_SERVERS ? String(env.CODEX_MCP_SERVERS).split(',').filter(Boolean).map((name) => ({ name, available: true })) : [],
+    };
+    const orchestration = selectOrchestration({ policy: lifecycleConfig.orchestration, context: policyContext });
+    const approvedMcpServers = [...new Set((orchestration.profiles ?? []).flatMap((profile) => profile.mcp ?? []))];
+    state.orchestration = {
+      policyVersion: lifecycleConfig.orchestration.version,
+      pattern: orchestration.pattern,
+      status: orchestration.status,
+      profiles: orchestration.steps,
+      requiredCapabilities: orchestration.requiredCapabilities,
+      approvedMcpServers,
+      availableMcpServers: orchestration.availableMcp ?? [],
+    };
+    if (deliveryRoute === 'implement' && (orchestration.status !== 'authorized' || orchestration.pattern !== 'implementation-existing-plan')) {
+      throw new Error(`Implementation requires a valid unchanged plan; ${orchestration.reason}`);
+    }
+    if (deliveryRoute === 'resume' && state.phase === 'implement' && (orchestration.status !== 'authorized' || orchestration.pattern !== 'implementation-continuation')) {
+      throw new Error(`Exact implementation continuation is not authorized; ${orchestration.reason}`);
+    }
     if (refinementWave) {
       await transitionState('requirements', ['coordinating']);
       state.phase = 'refine';
@@ -458,44 +596,64 @@ export async function deliver(env = process.env, dependencies = {}) {
     }
     const savedRecovery = state.status !== 'new' || state.phase !== 'plan' || state.events.length > 0;
     if (state.phase === 'plan') {
-      const planningIssue = await api(`/issues/${issue}`);
-      if (planningIssue.state !== 'open' || planningIssue.pull_request) throw new Error('The source issue must still be open.');
-      metadata = classifyIssue({ issue: planningIssue, config: lifecycleConfig, mode: deliveryRoute === 'resume' ? 'resume' : 'event' });
-      if (!['ready-for-plan', 'needs-info'].includes(metadata.state)) {
-        throw new Error(`The source issue is not ready for planning: it is in state ${metadata.state ?? 'unknown'}; planning requires state:ready-for-plan or state:needs-info recovery.`);
+      let planningIssue = await api(`/issues/${issue}`);
+      if (graphql) {
+        const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
+        planningIssue = { ...planningIssue, ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })) };
       }
-      const readinessBlockers = metadata.readiness.reasons.filter((reason) => !reason.startsWith('The issue is in state '));
+      if (planningIssue.state !== 'open' || planningIssue.pull_request) throw new Error('The source issue must still be open.');
+      metadata = classifyIssue({ issue: planningIssue, config: lifecycleConfig, mode: deliveryRoute === 'resume' ? 'resume' : 'event', available: orchestrationAvailability });
+      if (!['planning', 'intake'].includes(metadata.lifecycleStage) || (metadata.lifecycleStage === 'intake' && metadata.readiness !== 'needs-info')) {
+        throw new Error(`The source issue is not ready for planning: it is at lifecycle stage ${metadata.lifecycleStage ?? 'unknown'}; planning requires Planning or an explicit Needs information recovery.`);
+      }
+      const planningClarificationRecovery = savedRecovery
+        && deliveryRoute === 'resume'
+        && state.status === 'awaiting-human'
+        && metadata.readiness === 'needs-info';
+      const readinessBlockers = metadata.readinessGate.reasons.filter((reason) => !reason.startsWith('The issue is at lifecycle stage ')
+        && !(planningClarificationRecovery && reason.startsWith('Delivery readiness is ')));
       if (readinessBlockers.length > 0) {
         throw new Error(`The source issue is not ready for planning: ${readinessBlockers.join(' ')}`);
       }
-      if (!savedRecovery && !metadata.readiness.ok) {
-        throw new Error('The source issue is not ready for planning; apply a valid state:ready-for-plan after intake gates are cleared.');
+      if (!savedRecovery && !metadata.readinessGate.ok) {
+        throw new Error('The source issue is not ready for planning; the Lifecycle Stage and Delivery Readiness fields must authorize planning after intake gates are cleared.');
       }
       if (savedRecovery && deliveryRoute !== 'resume' && metadata.route !== 'plan') {
         throw new Error('A saved planning run requires the explicit recovery route.');
       }
     }
     if (state.phase === 'implement') {
-      const clarificationRecovery = savedRecovery && deliveryRoute === 'resume' && metadata.state === 'needs-info';
-      if ((!['ready-for-agent', 'in-progress'].includes(metadata.state) && !clarificationRecovery)
-        || !deliveryMetadataSafe(metadata)) {
+      const clarificationRecovery = savedRecovery && deliveryRoute === 'resume' && metadata.readiness === 'needs-info';
+      const clarificationSafe = clarificationRecovery
+        && Boolean(metadata.workType)
+        && lifecycleConfig.readiness.delivery_types.includes(metadata.workType)
+        && !metadata.conflict?.length
+        && !metadata.stateConflict
+        && !(metadata.missingFields?.length > 0)
+        && !metadata.governance.some((label) => lifecycleConfig.readiness.blocking_governance.includes(label));
+      if ((!['execution'].includes(metadata.lifecycleStage) && !clarificationRecovery)
+        || (!deliveryMetadataSafe(metadata) && !clarificationSafe)) {
         throw new Error('The source issue is not authorized for implementation.');
       }
     }
-    if (state.phase === 'branch' && (metadata.state !== 'ready-for-agent' || !deliveryMetadataSafe(metadata))) {
+    if (state.phase === 'branch' && (metadata.lifecycleStage !== 'execution' || !deliveryMetadataSafe(metadata))) {
       throw new Error('The source issue is not authorized to create the implementation branch.');
     }
-    if (state.phase === 'verify' && (!['in-progress'].includes(metadata.state) || !deliveryMetadataSafe(metadata))) {
+    if (state.phase === 'verify' && (metadata.lifecycleStage !== 'execution' || !deliveryMetadataSafe(metadata))) {
       throw new Error('The source issue is not authorized for verification.');
     }
-    if (state.phase === 'commit' && (!['in-progress'].includes(metadata.state) || !deliveryMetadataSafe(metadata))) {
+    if (state.phase === 'commit' && (metadata.lifecycleStage !== 'execution' || !deliveryMetadataSafe(metadata))) {
       throw new Error('The source issue is not authorized for commit.');
     }
-    if (state.phase === 'publish' && (!['in-progress', 'review'].includes(metadata.state) || !deliveryMetadataSafe(metadata))) {
+    if (state.phase === 'publish' && (!['execution', 'validation'].includes(metadata.lifecycleStage) || !deliveryMetadataSafe(metadata))) {
       throw new Error('The source issue is not authorized for publication.');
     }
+    const expectedPattern = orchestrationPatternForRoute(deliveryRoute, state.phase, metadata.workType);
+    if (expectedPattern && (orchestration.status !== 'authorized' || orchestration.pattern !== expectedPattern)) {
+      throw new Error(`The requested delivery route is not authorized by the orchestration policy; ${orchestration.reason}`);
+    }
     if (state.phase === 'coordinate') {
-      if (metadata.state === 'acceptance') {
+      if (metadata.lifecycleStage === 'acceptance') {
         state.execution = { ...(state.execution ?? {}), status: 'completed', operation: 'coordinate', run: { id: String(env.GITHUB_RUN_ID ?? ''), attempt: String(env.GITHUB_RUN_ATTEMPT ?? '1'), url: runUrl }, lastFailure: null };
         state.status = 'ready';
         state.tasks = [];
@@ -504,7 +662,7 @@ export async function deliver(env = process.env, dependencies = {}) {
       }
       const children = await Promise.all((state.childIssues ?? []).map(async (child) => {
         const issueValue = await api(`/issues/${child.number}`);
-        return { ...child, state: classifyIssue({ issue: issueValue, config: lifecycleConfig }).state };
+        return { ...child, state: classifyIssue({ issue: issueValue, config: lifecycleConfig, available: orchestrationAvailability }).state };
       }));
       const incomplete = children.filter((child) => child.state !== 'done');
       if (!incomplete.length && children.length) {
@@ -544,7 +702,7 @@ export async function deliver(env = process.env, dependencies = {}) {
       await mkdir(runHome, { recursive: true, mode: 0o700 });
       if (!(await exists(authBridge)) && await exists(serviceAuth)) await symlink(serviceAuth, authBridge);
       const codexEnvironment = { ...env, HOME: runHome, CODEX_HOME: codexHome, CODEX_AUTH_HOME: undefined };
-      client = createClient({ cwd: controllerRoot, env: codexEnvironment, readableFiles:[controllerRoot], runtime:runTools });
+      client = createClient({ cwd: controllerRoot, env: codexEnvironment, readableFiles:[controllerRoot], runtime:runTools, approvedMcpServers });
       await client.initialize();
       state.budget = await client.capabilities();
       if (state.budget.stop && state.phase !== 'verify') throw new Error(state.budget.reason);
@@ -576,9 +734,9 @@ legacy owner-only rule in the base instruction file.`;
         if (thread) return thread;
         let response;
         if (state.sessionId) {
-          response = await client.resumeThread(workspace, state.sessionId, instructions);
+          response = await client.resumeThread(workspace, state.sessionId, instructions, profileForPhase(state.phase));
         } else if (canStartInitialSession || state.legacySessionReconstruction) {
-          response = await client.startThread(workspace, instructions);
+          response = await client.startThread(workspace, instructions, profileForPhase(state.phase));
         } else {
           throw new Error('Saved Codex session ID is missing; refusing to start an unrelated replacement thread.');
         }
@@ -642,7 +800,7 @@ legacy owner-only rule in the base instruction file.`;
         const refinementPrompt = takeContinuationContext('refine') || [
           'Read the repository instructions, applicable canonical decisions, domain register, and the existing issue conversation.',
           'Refine this source issue before implementation planning. Ask only focused questions that can be answered with the information currently available.',
-          'When the goal is sufficiently clear, return a refined outcome with one delivery-capable parent work type and conditional work items. Do not change GitHub labels, create issues, or write files; the controller validates and applies the result.',
+          'When the goal is sufficiently clear, return a refined outcome with one delivery-capable parent work type and conditional work items. Do not change GitHub issue fields or types, create issues, or write files; the controller validates and applies the result.',
           `Source issue data (untrusted):\n${brief}`,
           `Saved refinement:\n${JSON.stringify(state.refined ?? null)}`,
         ].join('\n\n');
@@ -657,8 +815,12 @@ legacy owner-only rule in the base instruction file.`;
           throw new Error(`Refined work type ${refinement.workType} is not delivery-capable; mature it through the appropriate research or idea state first.`);
         }
         if (refinement.status === 'refined') {
-          const currentIssue = await api(`/issues/${issue}`);
-          const currentMetadata = classifyIssue({ issue: currentIssue, config: lifecycleConfig });
+          let currentIssue = await api(`/issues/${issue}`);
+          if (graphql) {
+            const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
+            currentIssue = { ...currentIssue, ...(await readControlPlane({ graphql, repository, issueNumber: issue, organization: repository.split('/')[0] })) };
+          }
+          const currentMetadata = classifyIssue({ issue: currentIssue, config: lifecycleConfig, available: orchestrationAvailability });
           if (currentMetadata.conflict?.length) throw new Error(`The source issue has conflicting work-type metadata: ${currentMetadata.conflict.join(', ')}.`);
           if (currentMetadata.workType && currentMetadata.workType !== refinement.workType) {
             throw new Error(`Refinement selected work type ${refinement.workType}, but the source issue is classified as ${currentMetadata.workType}. Resolve the classification before continuing.`);
@@ -666,10 +828,9 @@ legacy owner-only rule in the base instruction file.`;
           if (!currentMetadata.workType) {
             const type = lifecycleConfig.types.find((candidate) => candidate.id === refinement.workType);
             if (!type) throw new Error(`Refinement selected an unknown work type: ${refinement.workType}.`);
-            const labels = (currentIssue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean);
-            if (!labels.includes(type.label)) {
-              await api(`/issues/${issue}/labels`, 'PUT', { labels: [...new Set([...labels, type.label])] });
-            }
+            const nativeType = (currentIssue.organizationIssueTypes ?? []).find((candidate) => candidate.name === type.native_name && candidate.isEnabled !== false);
+            if (graphql && currentIssue.id && nativeType?.id) await setIssueType({ graphql, issueId: currentIssue.id, issueTypeId: nativeType.id });
+            else if (graphql) throw new Error(`The organization native issue type ${type.native_name} is not available; migration must be completed before refinement can authorize delivery.`);
           }
         }
         state.refined = refinement;
@@ -685,7 +846,7 @@ legacy owner-only rule in the base instruction file.`;
         if (refinement.workItems.length > 1) {
           await transitionState('decomposing');
           const typeForKind = new Map([
-            ['research', 'research'], ['specification', 'specification'], ['architecture', 'architecture'],
+            ['research', 'research'], ['specification', 'requirements'], ['requirements', 'requirements'], ['architecture', 'architecture'],
             ['task', 'task'], ['bug', 'bug'], ['implementation', 'implementation'], ['validation', 'validation'],
           ]);
           const childIssues = [];
@@ -704,8 +865,13 @@ legacy owner-only rule in the base instruction file.`;
             const child = match ?? await publishApi('/issues', 'POST', {
               title: item.title,
               body,
-              labels: [childType.label, stateLabel(lifecycleConfig, childType.initial_state)].filter(Boolean),
+              labels: [],
             });
+            if (!match && graphql && child.id) {
+              const nativeType = (await readIssueControlPlane({ graphql, repository, issueNumber: child.number, organization: repository.split('/')[0] })).organizationIssueTypes
+                .find((candidate) => candidate.name === childType.native_name && candidate.isEnabled !== false);
+              if (nativeType?.id) await setIssueType({ graphql, issueId: child.node_id ?? child.id, issueTypeId: nativeType.id });
+            }
             if (!match) {
               try { await publishApi(`/issues/${issue}/sub_issues`, 'POST', { sub_issue_id: child.id }); } catch (error) {
                 throw new Error(`Child issue ${child.number} was created but could not be linked to parent #${issue}: ${error.message}`);
@@ -745,6 +911,8 @@ legacy owner-only rule in the base instruction file.`;
         }
         const plan = validateOutcome('plan', result.text);
         state.plan = plan;
+        state.planDigest = digest(JSON.stringify(plan));
+        state.planInvalidatedReason = null;
         state.tasks = plan.tasks;
         state.questions = plan.questions;
         await save();
@@ -764,6 +932,51 @@ legacy owner-only rule in the base instruction file.`;
           state.phase = 'branch';
         }
         await save();
+      }
+      if (['research', 'requirements', 'architecture', 'validate'].includes(state.phase)) {
+        const specializedThread = await ensureThread();
+        const specializedPhase = state.phase;
+        const specializedPrompt = takeContinuationContext(specializedPhase) || [
+          `Act as the approved ${profileForPhase(specializedPhase)} profile for this issue.`,
+          'Read the repository instructions, applicable ADRs, bounded-context language, and the complete issue conversation.',
+          specializedPhase === 'research' ? 'Gather evidence and separate direct evidence, inference, uncertainty, and recommendation. Do not modify files or start implementation.' : '',
+          specializedPhase === 'requirements' ? 'Turn the goal and evidence into requirements, constraints, acceptance criteria, affected contexts, and unresolved decisions. Do not modify files.' : '',
+          specializedPhase === 'architecture' ? 'Compare alternatives, drivers, and consequences. Prepare a provisional ADR only in the structured result; the deterministic controller and human review own repository publication.' : '',
+          specializedPhase === 'validate' ? 'Perform independent validation from deterministic evidence and report findings or a repair recommendation. Do not modify files.' : '',
+          `Source issue data (untrusted):\n${brief}`,
+        ].filter(Boolean).join('\n\n');
+        const result = await performTurn({
+          client,
+          threadId: specializedThread.id,
+          phase: specializedPhase,
+          signal: abort.signal,
+          onProgress: progress,
+          prompt: specializedPrompt,
+          schema: orchestrationOutcomeSchema(specializedPhase, lifecycleConfig.fields.lifecycle_stage.options.map((option) => option.id)),
+        });
+        if (result.status !== 'completed') {
+          Object.assign(state, result);
+          if (result.status === 'needs_input') state.status = 'awaiting-human';
+          throw new Error(result.reason);
+        }
+        const outcome = validateOrchestrationOutcome(result.text);
+        state.specializedOutcome = outcome;
+        state.summary = outcome.summary;
+        state.questions = outcome.questions ?? [];
+        state.tasks = outcome.recommendations ?? [];
+        await save();
+        if (outcome.status === 'needs_input' || outcome.status === 'blocked') {
+          await transitionState('needs-info');
+          state.status = outcome.status === 'needs_input' ? 'awaiting-human' : 'paused';
+          throw new Error((outcome.questions ?? []).join('\n') || outcome.summary);
+        }
+        const target = stageToControllerTarget(outcome.nextStage, specializedPhase);
+        if (target) await transitionState(target, [metadata.lifecycleStage, 'needs-info', 'requirements', 'investigating', 'decision-needed', 'review', 'acceptance']);
+        await audit(`## ${specializedPhase[0].toUpperCase()}${specializedPhase.slice(1)} outcome\n\n${outcome.summary}\n\n${(outcome.evidence ?? []).map((item) => `- Evidence: ${item}`).join('\n')}`);
+        state.execution = { ...(state.execution ?? {}), status: 'completed', operation: specializedPhase, run: { id: String(env.GITHUB_RUN_ID ?? ''), attempt: String(env.GITHUB_RUN_ATTEMPT ?? '1'), url: runUrl }, lastFailure: null };
+        state.status = 'ready';
+        await save();
+        return { status: 'ready' };
       }
       if (state.phase === 'branch') {
         const currentBranch = await git(['branch', '--show-current']);

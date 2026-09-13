@@ -20,9 +20,12 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     'scripts/lib/toolchain.mjs', 'scripts/lib/yaml.mjs', '.agents/skills/delivery-workflow/SKILL.md',
     '.agents/skills/delivery-workflow/agents/openai.yaml', '.github/pull_request_template.md',
     '.github/workflows/delivery-quality.yml', '.github/workflows/issue-intake.yml',
-    '.github/workflows/codex-delivery.yml', '.github/issue-lifecycle.yml', 'scripts/issue-intake.mjs',
-    'scripts/lib/issue-routing.mjs', '.github/ISSUE_TEMPLATE/bug.yml', '.github/ISSUE_TEMPLATE/feature.yml',
-    '.github/ISSUE_TEMPLATE/idea.yml', '.github/ISSUE_TEMPLATE/task.yml',
+    '.github/workflows/codex-delivery.yml', '.github/issue-metadata.yml', '.github/orchestration-policy.yml',
+    'scripts/issue-intake.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
+    'scripts/lib/orchestration-policy.mjs', '.github/ISSUE_TEMPLATE/bug.yml', '.github/ISSUE_TEMPLATE/feature.yml',
+    '.github/ISSUE_TEMPLATE/idea.yml', '.github/ISSUE_TEMPLATE/task.yml', '.github/ISSUE_TEMPLATE/research.yml',
+    '.github/ISSUE_TEMPLATE/requirements.yml', '.github/ISSUE_TEMPLATE/implementation.yml',
+    '.github/ISSUE_TEMPLATE/validation.yml', '.github/ISSUE_TEMPLATE/architecture-decision.yml',
   ]) await access(path.join(repositoryRoot, relativePath));
 
   const packageJson = JSON.parse(await text('package.json'));
@@ -51,7 +54,9 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   }
   const intake = await text('.github/workflows/issue-intake.yml');
   assert.ok(intake.includes('node scripts/issue-intake.mjs'));
-  assert.ok(intake.includes('state:'));
+  assert.ok(intake.includes('ISSUE_FIELD_BINDINGS_JSON'));
+  assert.ok(intake.includes('lifecycle_stage'));
+  assert.ok(intake.includes('readiness'));
   const delivery = await text('.github/workflows/codex-delivery.yml');
   assert.ok(delivery.includes('workflow_call:'));
   assert.ok(!delivery.includes('types: [opened]'));

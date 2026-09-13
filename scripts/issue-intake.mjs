@@ -3,22 +3,65 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
+import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType } from './lib/issue-field-api.mjs';
 import {
   classifyIssue,
-  labelDefinitions,
-  managedLabels,
-  stateByLabel,
   validateRoutingProposal,
 } from './lib/issue-routing.mjs';
-import { validateTransition } from './lib/lifecycle-transitions.mjs';
 import { reasonIssueRouting } from './lib/issue-routing-agent.mjs';
+import { validateIssueMetadataConfig, issueMetadata, issueFieldMutation, validateFieldMutation } from './lib/issue-metadata.mjs';
+import { validateOrchestrationPolicy } from './lib/orchestration-policy.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '..');
 
 export async function loadLifecycleConfig(root = repositoryRoot) {
-  const source = await readFile(path.join(root, '.github', 'issue-lifecycle.yml'), 'utf8');
-  return parseRepositoryYaml(source, 'issue lifecycle configuration');
+  const source = await readFile(path.join(root, '.github', 'issue-metadata.yml'), 'utf8');
+  const config = parseRepositoryYaml(source, 'issue metadata configuration');
+  const metadataValidation = validateIssueMetadataConfig(config);
+  if (!metadataValidation.valid) throw new Error(`Issue metadata configuration is invalid: ${metadataValidation.errors.join('; ')}`);
+  const policySource = await readFile(path.join(root, '.github', 'orchestration-policy.yml'), 'utf8');
+  config.orchestration = parseRepositoryYaml(policySource, 'orchestration policy');
+  const policy = validateOrchestrationPolicy(config.orchestration, {
+    issueTypes: config.issue_types.map((type) => type.id),
+    lifecycleStages: config.fields.lifecycle_stage.options.map((option) => option.id),
+  });
+  if (!policy.valid) throw new Error(`Orchestration policy is invalid: ${policy.errors.join('; ')}`);
+  // Transitional read-only projections keep older integrations and persisted
+  // delivery fixtures loadable while active mutation paths use fields. They
+  // are never used as lifecycle authority.
+  const legacyTypes = config.issue_types.map((type) => ({
+    id: type.id,
+    name: type.name,
+    native_name: type.native_name,
+    label: type.legacy_label,
+    initial_state: type.initial_stage,
+    initial_stage: type.initial_stage,
+    initial_readiness: type.initial_readiness,
+    delivery: type.delivery,
+  }));
+  const legacyStates = Object.entries(config.legacy?.state_labels ?? {}).map(([label, value]) => ({
+    id: label.replace(/^state:/, ''),
+    label,
+    color: '6E7781',
+    description: `Legacy migration alias for the ${value.stage} lifecycle stage.`,
+  }));
+  const stageForLegacyId = new Map(Object.entries(config.legacy?.state_labels ?? {}).map(([label, value]) => [label.replace(/^state:/, ''), value.stage]));
+  const legacyTransitions = Object.fromEntries(legacyStates.map((from) => [from.id, legacyStates.filter((to) => {
+    if (from.id === to.id) return false;
+    const sourceStage = stageForLegacyId.get(from.id);
+    const targetStage = stageForLegacyId.get(to.id);
+    return sourceStage === targetStage || config.lifecycle.transitions[sourceStage]?.includes(targetStage);
+  }).map((to) => to.id)]));
+  config.types = legacyTypes;
+  config.states = legacyStates;
+  config.transitions = legacyTransitions;
+  config.governance = config.governance.labels.map((item) => ({ ...item, label: item.label ?? item.name }));
+  config.governance.labels = config.governance;
+  config.readiness.delivery_types = config.readiness.planning_types;
+  return config;
 }
+
+export const loadIssueMetadataConfig = loadLifecycleConfig;
 
 function apiError(method, route, status) {
   const error = new Error(`GitHub ${method} ${route} failed (${status}).`);
@@ -77,52 +120,50 @@ function newerHumanComment(comments, commentId) {
     && comment.authorType !== 'Bot' && !String(comment.author ?? '').endsWith('[bot]'));
 }
 
-async function upsertLabels(api, config) {
-  for (const definition of labelDefinitions(config)) {
-    try {
-      await api(`/labels/${encodeURIComponent(definition.name)}`);
-      await api(`/labels/${encodeURIComponent(definition.name)}`, 'PATCH', definition);
-    } catch (error) {
-      if (error.status !== 404) throw error;
-      await api('/labels', 'POST', definition);
-    }
-  }
+function runnerAvailability(env, config) {
+  return {
+    capabilities: ['repository-read', 'repository-write', 'deterministic-validation'],
+    mcp: String(env.CODEX_MCP_SERVERS ?? '').split(',').map((name) => name.trim()).filter(Boolean)
+      .map((name) => ({ name, available: true })),
+    skills: Object.keys(config.orchestration?.skills ?? {}),
+  };
 }
 
-export async function reconcileLabels({ api, issueNumber, issue, config, classification }) {
-  await upsertLabels(api, config);
-  const existing = (issue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean);
-  const managed = managedLabels(config);
-  const preserved = existing.filter((label) => !managed.has(label));
-  const currentManaged = existing.filter((label) => managed.has(label));
-  const currentStates = existing.map((label) => stateByLabel(config, label)?.id).filter(Boolean);
-  const targetState = stateByLabel(config, classification.stateLabel)?.id;
-  if (currentStates.length === 1 && targetState && currentStates[0] !== targetState) {
-    const transition = validateTransition({
-      config,
-      from: currentStates[0],
-      to: targetState,
-      workType: classification.workType,
-      governance: classification.governance,
-      issueState: issue.state,
-    });
-    if (!transition.allowed) throw new Error(`Lifecycle transition rejected: ${transition.reasons.join(' ')}`);
-  }
-  const desiredManaged = [...classification.governance];
-  if (classification.workType && classification.workTypeSource !== 'native' && !classification.conflict?.length) {
-    const type = config.types.find((candidate) => candidate.id === classification.workType);
-    if (type) desiredManaged.push(type.label);
-  } else if (classification.conflict?.length) {
-    // Keep conflicting type labels visible until a maintainer resolves them.
-    desiredManaged.push(...existing.filter((label) => config.types.some((type) => type.label === label)));
-  }
-  if (classification.stateLabel) desiredManaged.push(classification.stateLabel);
-  const next = [...new Set([...preserved, ...desiredManaged])];
-  const changed = currentManaged.length !== desiredManaged.length
-    || currentManaged.some((label) => !desiredManaged.includes(label))
-    || preserved.length + currentManaged.length !== existing.length;
-  if (changed) await api(`/issues/${issueNumber}/labels`, 'PUT', { labels: next });
-  return { changed, labels: next };
+export async function reconcileFields({ graphql, issue, config, classification, actor = 'controller' }) {
+  if (actor !== 'controller') throw new Error('Only the deterministic controller may reconcile lifecycle fields.');
+  const current = issueMetadata(issue, config);
+  const target = classification.targetFields ?? {
+    lifecycle_stage: classification.lifecycleStage,
+    readiness: classification.readiness,
+  };
+  const values = {};
+  if (target.lifecycle_stage && (!current.fieldPresence?.lifecycleStage || current.lifecycleStage !== target.lifecycle_stage)) values.lifecycle_stage = target.lifecycle_stage;
+  if (target.readiness && (!current.fieldPresence?.readiness || current.readiness !== target.readiness)) values.readiness = target.readiness;
+  if (!Object.keys(values).length) return { changed: false, fields: target };
+  const stageMutation = values.lifecycle_stage
+    ? validateFieldMutation({ config, issueState: issue.state, field: 'lifecycle_stage', from: current.lifecycleStage, to: values.lifecycle_stage, workType: classification.workType, governance: classification.governance, actor })
+    : { allowed: true };
+  if (!stageMutation.allowed) throw new Error(`Lifecycle field transition rejected: ${stageMutation.reasons.join(' ')}`);
+  const readinessMutation = values.readiness
+    ? validateFieldMutation({ config, issueState: issue.state, field: 'readiness', from: current.readiness, to: values.readiness, workType: classification.workType, governance: classification.governance, actor })
+    : { allowed: true };
+  if (!readinessMutation.allowed) throw new Error(`Delivery readiness mutation rejected: ${readinessMutation.reasons.join(' ')}`);
+  const mutation = { ...target, values: Object.fromEntries(Object.entries(values).map(([field, value]) => [field, issueFieldMutation({ config, field, to: value })])) };
+  await setIssueFields({ graphql, issueId: issue.id, config, values, actor });
+  return { changed: true, fields: mutation };
+}
+
+// Kept as a migration-only compatibility shim for callers that still import
+// the old name. It deliberately performs no label mutation and reports the
+// authoritative field target instead.
+export async function reconcileLabels({ issue, config, classification }) {
+  return {
+    changed: false,
+    labels: (issue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean),
+    fields: classification.targetFields ?? { lifecycle_stage: classification.lifecycleStage, readiness: classification.readiness },
+    migrationOnly: true,
+    config,
+  };
 }
 
 async function writeOutputs(result, env) {
@@ -131,57 +172,92 @@ async function writeOutputs(result, env) {
     `issue=${result.issue}`,
     `route=${result.route}`,
     `state=${result.state}`,
+    `lifecycle_stage=${result.metadata?.lifecycleStage ?? result.state}`,
+    `readiness=${result.metadata?.readiness ?? ''}`,
+    `orchestration_pattern=${result.metadata?.orchestrationPattern ?? ''}`,
     `metadata=${JSON.stringify(result.metadata)}`,
   ].join('\n') + '\n');
 }
 
-export async function classifyAndRoute({ env = process.env, event, fetchImpl = fetch, config, reasonRoute = reasonIssueRouting } = {}) {
+export async function classifyAndRoute({
+  env = process.env,
+  event,
+  fetchImpl = fetch,
+  config,
+  reasonRoute = reasonIssueRouting,
+  graphqlImpl,
+  controlPlaneReader = readIssueControlPlane,
+} = {}) {
   const repository = env.GITHUB_REPOSITORY;
   const issueNumber = String(env.SOURCE_ISSUE ?? event?.issue?.number ?? '');
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !/^[1-9][0-9]*$/.test(issueNumber)) {
-    throw new Error('Invalid source repository or issue number.');
-  }
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !/^[1-9][0-9]*$/.test(issueNumber)) throw new Error('Invalid source repository or issue number.');
   if (event?.issue?.pull_request) throw new Error('A pull request cannot enter issue intake.');
   const api = githubApi({ repository, token: env.GH_TOKEN, fetchImpl });
-  const issue = await api(`/issues/${issueNumber}`);
+  const effectiveConfig = bindIssueMetadataConfig(config, env.ISSUE_FIELD_BINDINGS_JSON ?? {});
+  const available = runnerAvailability(env, effectiveConfig);
+  let issue = await api(`/issues/${issueNumber}`);
   if (issue.pull_request) throw new Error('A pull request cannot enter issue intake.');
+  let graphql = graphqlImpl;
+  const useGraphql = Boolean(graphqlImpl || env.GITHUB_GRAPHQL === 'true' || env.GITHUB_ACTIONS === 'true');
+  if (useGraphql && !graphql) graphql = githubGraphqlApi({ token: env.GH_TOKEN, fetchImpl });
+  if (graphql) {
+    try {
+      const enriched = await controlPlaneReader({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
+      issue = { ...issue, ...enriched, labels: issue.labels ?? enriched.labels ?? [] };
+    } catch (error) {
+      const reason = `Issue field metadata could not be read; no lifecycle mutation is authorized. ${String(error.message ?? error).slice(0, 400)}`;
+      const metadata = classifyIssue({ issue, config: effectiveConfig, eventAction: event?.action, eventKind: env.GITHUB_EVENT_NAME, available });
+      metadata.route = 'hold';
+      metadata.reasons = [...metadata.reasons, reason];
+      const result = { issue: issueNumber, route: 'hold', state: metadata.state, metadata, labels: issue.labels ?? [] };
+      await writeOutputs(result, env);
+      return result;
+    }
+  }
   const issueComment = env.GITHUB_EVENT_NAME === 'issue_comment';
   const trustedComment = !issueComment || (
     event?.action === 'created'
     && event?.comment?.user?.type !== 'Bot'
     && !String(event?.comment?.user?.login ?? '').endsWith('[bot]')
   );
-  let metadata = classifyIssue({ issue, config, eventAction: event?.action });
+  const resultFor = (targetIssue, metadata, fields = null) => ({
+    issue: String(targetIssue.number ?? issueNumber),
+    route: metadata.route,
+    state: metadata.state,
+    metadata,
+    fields,
+    labels: (targetIssue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean),
+  });
+  let metadata = classifyIssue({ issue, config: effectiveConfig, eventAction: event?.action, eventKind: env.GITHUB_EVENT_NAME, available });
   if (!trustedComment) {
     metadata.route = 'hold';
     metadata.reasons = [...metadata.reasons, 'Only a newly created non-bot comment may enter semantic routing.'];
-    const result = { issue: issueNumber, route: metadata.route, state: metadata.state, metadata, labels: (issue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean) };
+    const result = resultFor(issue, metadata);
     await writeOutputs(result, env);
     return result;
   }
-  const parentNumber = !issueComment && ['edited', 'closed', 'reopened', 'labeled', 'unlabeled', 'typed', 'untyped'].includes(event?.action)
-    ? lineageParent(issue) : null;
+  const parentNumber = !issueComment && ['edited', 'closed', 'reopened', 'typed', 'untyped'].includes(event?.action)
+    ? issue.parent?.number ?? lineageParent(issue) : null;
   if (parentNumber) {
     const parent = await api(`/issues/${parentNumber}`);
-    const parentMetadata = classifyIssue({ issue: parent, config });
+    const parentMetadata = classifyIssue({ issue: parent, config: effectiveConfig, eventKind: 'child-event', available });
     const actor = env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR;
     let actorAllowed = false;
     if (typeof actor === 'string' && (actor === 'github-actions[bot]' || actor.endsWith('[bot]'))) actorAllowed = true;
     else if (actor) {
-      try { actorAllowed = ['admin', 'maintain', 'write'].includes((await api(`/collaborators/${encodeURIComponent(actor)}/permission`)).permission); } catch (error) {
-        if (error.status !== 404) throw error;
-      }
+      try { actorAllowed = ['admin', 'maintain', 'write'].includes((await api(`/collaborators/${encodeURIComponent(actor)}/permission`)).permission); }
+      catch (error) { if (error.status !== 404) throw error; }
     }
-    if (actorAllowed && parent.state === 'open' && parentMetadata.state === 'coordinating') {
+    if (actorAllowed && parent.state === 'open' && parentMetadata.lifecycleStage === 'acceptance') {
       metadata = { ...parentMetadata, route: 'coordinate', reasons: [...parentMetadata.reasons, `Child issue #${issueNumber} changed; coordinate parent #${parentNumber}.`] };
-      const result = { issue: parentNumber, route: metadata.route, state: metadata.state, metadata, labels: (parent.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean) };
+      const result = resultFor({ ...parent, number: parentNumber }, metadata);
       await writeOutputs(result, env);
       return result;
     }
   }
   if (issue.state !== 'open') {
     metadata.route = 'hold';
-    const result = { issue: issueNumber, route: metadata.route, state: metadata.state, metadata, labels: (issue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean) };
+    const result = resultFor(issue, metadata);
     await writeOutputs(result, env);
     return result;
   }
@@ -195,14 +271,14 @@ export async function classifyAndRoute({ env = process.env, event, fetchImpl = f
   if (!['admin', 'maintain', 'write'].includes(permission)) {
     metadata.route = 'hold';
     metadata.reasons = [...metadata.reasons, 'A repository writer must authorize semantic routing.'];
-    const result = { issue: issueNumber, route: metadata.route, state: metadata.state, metadata, labels: (issue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean) };
+    const result = resultFor(issue, metadata);
     await writeOutputs(result, env);
     return result;
   }
 
   const manualRecovery = env.GITHUB_EVENT_NAME === 'workflow_dispatch' && env.FORCE_ROUTE === 'true';
   if (manualRecovery) {
-    metadata = classifyIssue({ issue, config, mode: 'resume' });
+    metadata = classifyIssue({ issue, config: effectiveConfig, mode: 'resume', eventKind: 'manual', available });
     metadata.reasons = [...metadata.reasons, 'A repository writer used manual recovery after semantic routing was unavailable.'];
   } else {
     try {
@@ -210,33 +286,63 @@ export async function classifyAndRoute({ env = process.env, event, fetchImpl = f
       if (issueComment && newerHumanComment(comments, event.comment.id)) {
         metadata.route = 'hold';
         metadata.reasons = [...metadata.reasons, 'A newer human comment superseded this event.'];
-        const result = { issue: issueNumber, route: 'hold', state: metadata.state, metadata, labels: (issue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean) };
+        const result = resultFor(issue, metadata);
         await writeOutputs(result, env);
         return result;
       }
-      const proposal = await reasonRoute({
-        repositoryRoot,
-        issue: { ...issue, comments },
-        event: { ...event, kind: env.GITHUB_EVENT_NAME },
-        config,
-        env,
-      });
-      metadata = validateRoutingProposal({ proposal, issue, event: { ...event, kind: env.GITHUB_EVENT_NAME }, config });
+      const proposal = await reasonRoute({ repositoryRoot, issue: { ...issue, comments }, event: { ...event, kind: env.GITHUB_EVENT_NAME }, config: effectiveConfig, env });
+      metadata = validateRoutingProposal({ proposal, issue, event: { ...event, kind: env.GITHUB_EVENT_NAME }, config: effectiveConfig, available });
     } catch (error) {
       const detail = String(error?.message ?? '').replace(/\s+/g, ' ').trim().slice(0, 500);
-      const message = `Routing could not be decided. No labels changed. Next: rerun issue intake after Codex is available.${detail ? `\n\nReason: ${detail}` : ''}`;
+      const message = `Routing could not be decided. No issue fields changed. Next: rerun issue intake after Codex is available.${detail ? `\n\nReason: ${detail}` : ''}`;
       await api(`/issues/${issueNumber}/comments`, 'POST', { body: message });
       metadata.route = 'hold';
       metadata.reasons = [...metadata.reasons, message];
-      const result = { issue: issueNumber, route: 'hold', state: metadata.state, metadata, labels: (issue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean) };
+      const result = resultFor(issue, metadata);
       await writeOutputs(result, env);
       return result;
     }
   }
 
-  const labels = await reconcileLabels({ api, issueNumber, issue, config, classification: metadata });
+  // Establish durable native classification before writing lifecycle fields.
+  // If the organization type is not observed, fail closed and leave both
+  // control-plane concepts unchanged for explicit migration.
+  if (graphql && issue.id && !issue.issueType && metadata.workType) {
+    const nativeType = (issue.organizationIssueTypes ?? []).find((candidate) => candidate.name === metadata.workTypeName && candidate.isEnabled !== false);
+    if (!nativeType?.id) {
+      metadata.route = 'hold';
+      metadata.reasons = [...metadata.reasons, `The organization native issue type ${metadata.workTypeName} is not available; migration must be completed before routing can authorize delivery.`];
+      const result = resultFor(issue, metadata);
+      await writeOutputs(result, env);
+      return result;
+    }
+    try {
+      await setIssueType({ graphql, issueId: issue.id, issueTypeId: nativeType.id });
+    } catch (error) {
+      metadata.route = 'hold';
+      metadata.reasons = [...metadata.reasons, `Native issue type assignment was rejected; no lifecycle field mutation is authorized. ${String(error.message ?? error).slice(0, 400)}`];
+      const result = resultFor(issue, metadata);
+      await writeOutputs(result, env);
+      return result;
+    }
+  }
+
+  let fieldResult = null;
+  if (graphql && issue.id && metadata.targetFields) {
+    try {
+      fieldResult = await reconcileFields({ graphql, issue, config: effectiveConfig, classification: metadata });
+    } catch (error) {
+      metadata.route = 'hold';
+      metadata.reasons = [...metadata.reasons, `Issue-field mutation was rejected; no delivery route is authorized. ${String(error.message ?? error).slice(0, 400)}`];
+      const result = resultFor(issue, metadata);
+      await writeOutputs(result, env);
+      return result;
+    }
+  } else {
+    fieldResult = { changed: false, fields: metadata.targetFields, migrationRequired: true };
+  }
   if (metadata.message) await api(`/issues/${issueNumber}/comments`, 'POST', { body: metadata.message });
-  const result = { issue: issueNumber, route: metadata.route, state: metadata.state, metadata, labels: labels.labels };
+  const result = resultFor(issue, metadata, fieldResult);
   await writeOutputs(result, env);
   return result;
 }

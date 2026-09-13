@@ -2,7 +2,7 @@
 
 Evidence cutoff: 2026-09-10, implementation base `b0c34fc3b7c104fb37c51b541bf16c4020d26539`.
 
-Source issue: [#25](https://github.com/sjefsharp/agentic-delivery/issues/25).
+Source issue: [#25](https://github.com/agentic-delivery-lab/agentic-delivery/issues/25).
 
 This baseline is an evidence review, not a claim that documentation or tests
 alone prove runtime behavior. It separates declared architecture, encoded
@@ -199,11 +199,25 @@ domain compatibility, required enforcement, removal outcomes, dangling
 references, supersession, and minimal runtime context before its advisory
 semantic pass.
 
-The branch also keeps GitHub labels as work state and stores execution failures
-separately, accepts iterative refinement and validated conditional child
-issues, uses a repository-scoped App for event-producing operations, and gives
-each source issue an isolated resumable state directory with per-run temporary
-homes, tools, and authentication bridges. These controls are ready for
-controller-owned dependency, installation, and self-hosted end-to-end
-verification; they do not claim that GitHub, App installation, or runner
-retention has been observed in this sandbox.
+The branch keeps GitHub issue type, pinned Lifecycle Stage and Delivery
+Readiness fields as work metadata, with governance labels remaining orthogonal,
+and stores execution failures separately. It accepts iterative refinement and
+validated conditional child issues, uses a repository-scoped App for
+event-producing operations, and gives each source issue an isolated resumable
+state directory with per-run temporary homes, tools, and authentication
+bridges. The new organization metadata and orchestration contracts are ready
+for controller-owned dependency, installation, and self-hosted end-to-end
+verification; they do not claim that GitHub field provisioning, App
+installation, or runner retention has been observed in this sandbox.
+
+## K. Organization metadata and orchestration evolution
+
+The active branch replaces the baseline repository-local lifecycle file with
+`.github/issue-metadata.yml` and `.github/orchestration-policy.yml`. Native
+Issue Types provide durable classification; `Lifecycle Stage` and `Delivery
+Readiness` are organization-level pinned fields; governance labels are
+cross-cutting; and the runner retains only execution state. The policy selects
+composable profiles for research, requirements, architecture, planning,
+implementation, validation, and coordination from structured issue and
+execution context. `docs/delivery/organization-metadata.md` records the
+organization provisioning and migration boundary.

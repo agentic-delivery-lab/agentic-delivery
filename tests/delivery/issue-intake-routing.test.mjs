@@ -7,11 +7,25 @@ import { classifyAndRoute, loadLifecycleConfig, reconcileLabels } from '../../sc
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const config = await loadLifecycleConfig(repositoryRoot);
 
-const modelRoute = (route, workType, state, governance = []) => async () => ({
-  route, workType, state, governance, summary: `Model selected ${route}.`, message: '',
-});
+const modelRoute = (route, workType, state, governance = []) => async () => {
+  const legacy = config.legacy.state_labels[`state:${state}`];
+  const patterns = {
+    refine: 'idea-discovery', research: 'research-only', requirements: 'requirements',
+    architecture: 'architecture-decision', plan: 'implementation-fresh',
+    implement: 'implementation-existing-plan', resume: 'implementation-continuation',
+    validate: 'validation-only', coordinate: 'parent-coordination',
+  };
+  return {
+    route, workType, state,
+    lifecycleStage: legacy?.stage ?? state,
+    readiness: legacy?.readiness ?? 'not-ready',
+    governance,
+    orchestrationPattern: route === 'hold' ? null : patterns[route] ?? null,
+    summary: `Model selected ${route}.`, message: '',
+  };
+};
 
-test('reconciles managed labels idempotently while preserving unrelated labels and governance metadata', async () => {
+test('legacy label reconciliation is read-only during the migration window', async () => {
   const calls = [];
   const api = async (route, method = 'GET', body) => {
     calls.push({ route, method, body });
@@ -40,19 +54,14 @@ test('reconciles managed labels idempotently while preserving unrelated labels a
   assert.equal(result.changed, false);
 });
 
-test('creates missing governance labels with GitHub API-compatible names', async () => {
+test('governance labels are not created by lifecycle reconciliation', async () => {
   const calls = [];
   const api = async (route, method = 'GET', body) => {
     calls.push({ route, method, body });
-    if (route === '/labels/human-review' && method === 'GET') {
-      const error = new Error('Label not found.');
-      error.status = 404;
-      throw error;
-    }
     return null;
   };
 
-  await reconcileLabels({
+  const result = await reconcileLabels({
     api,
     issueNumber: '17',
     issue: { labels: [] },
@@ -66,17 +75,11 @@ test('creates missing governance labels with GitHub API-compatible names', async
     },
   });
 
-  assert.deepEqual(
-    calls.find((call) => call.route === '/labels' && call.method === 'POST')?.body,
-    {
-      name: 'human-review',
-      color: '5319E7',
-      description: 'A human review control applies to this work.',
-    },
-  );
+  assert.equal(result.migrationOnly, true);
+  assert.equal(calls.length, 0);
 });
 
-test('removes stale managed state and fallback type labels when native type is authoritative', async () => {
+test('stale lifecycle and fallback type labels remain untouched until explicit migration', async () => {
   const calls = [];
   const api = async (route, method = 'GET', body) => {
     calls.push({ route, method, body });
@@ -96,9 +99,9 @@ test('removes stale managed state and fallback type labels when native type is a
       stateLabel: 'state:needs-triage',
     },
   });
-  const update = calls.find((call) => call.method === 'PUT' && call.route === '/issues/17/labels');
-  assert.deepEqual(update.body.labels.sort(), ['security-review', 'state:needs-triage', 'team:delivery'].sort());
-  assert.equal(result.changed, true);
+  assert.equal(calls.length, 0);
+  assert.equal(result.changed, false);
+  assert.equal(result.migrationOnly, true);
 });
 
 function apiFixture(issue, permission = 'write', comments = []) {
@@ -108,6 +111,7 @@ function apiFixture(issue, permission = 'write', comments = []) {
     const body = options.body ? JSON.parse(options.body) : undefined;
     calls.push({ route, method: options.method, body });
     if (route === '/issues/17') return new Response(JSON.stringify(issue), { status: 200 });
+    if (route === '/issues/17/comments' && options.method === 'POST') return new Response(JSON.stringify({ id: 100 }), { status: 201 });
     if (route.startsWith('/issues/17/comments?')) return new Response(JSON.stringify(comments), { status: 200 });
     if (route.startsWith('/labels/')) return new Response(JSON.stringify({ name: decodeURIComponent(route.slice('/labels/'.length)) }), { status: 200 });
     if (route === '/issues/17/labels' && options.method === 'PUT') return new Response(JSON.stringify(body.labels.map((name) => ({ name }))), { status: 200 });
@@ -131,7 +135,13 @@ test('classifies and hands off a ready issue only after metadata reconciliation 
   });
   assert.equal(result.route, 'plan');
   assert.equal(result.state, 'ready-for-plan');
-  assert.ok(fixture.calls.some((call) => call.route === '/issues/17/labels' && call.method === 'PUT'));
+  assert.deepEqual(result.metadata.targetFields, {
+    lifecycle_stage: 'planning',
+    readiness: 'ready',
+    lifecycleStageField: 'lifecycle-stage',
+    readinessField: 'delivery-readiness',
+  });
+  assert.ok(!fixture.calls.some((call) => call.route === '/issues/17/labels' && call.method === 'PUT'));
   assert.ok(fixture.calls.some((call) => call.route === '/collaborators/maintainer/permission'));
 });
 
@@ -144,7 +154,13 @@ test('routes a blank untyped source issue to refinement without manual labels', 
   });
   assert.equal(result.route, 'refine');
   assert.equal(result.state, 'needs-triage');
-  assert.deepEqual(fixture.calls.find((call) => call.route === '/issues/17/labels' && call.method === 'PUT')?.body.labels, ['state:needs-triage']);
+  assert.deepEqual(result.metadata.targetFields, {
+    lifecycle_stage: 'intake',
+    readiness: 'not-ready',
+    lifecycleStageField: 'lifecycle-stage',
+    readinessField: 'delivery-readiness',
+  });
+  assert.ok(!fixture.calls.some((call) => call.route === '/issues/17/labels' && call.method === 'PUT'));
 });
 
 test('does not refine an already-ready decomposed implementation child', async () => {
@@ -206,6 +222,8 @@ test('uses model reasoning for comment routing instead of matching comment words
   const issue = {
     state: 'open', title: 'Task: implement routing', body: 'Deliver the routing harness.',
     labels: [{ name: 'type:task' }, { name: 'state:in-progress' }],
+    plan: { exists: true, valid: true, digest: 'a'.repeat(64) },
+    session: { exists: true, resumable: true, id: '019fb023-24b8-7881-9119-509f078b610e' },
   };
   const event = (body) => ({
     action: 'created', issue: {},
@@ -221,12 +239,12 @@ test('uses model reasoning for comment routing instead of matching comment words
     reasonRoute: async ({ issue: issueWithConversation }) => {
       routedIssue = issueWithConversation;
       return {
-        route: 'resume', workType: 'task', state: 'in-progress', governance: [],
+        route: 'resume', workType: 'task', state: 'in-progress', lifecycleStage: 'execution', readiness: 'working', governance: [], orchestrationPattern: 'implementation-continuation',
         summary: 'The owner authorized the saved work to continue.', message: '',
       };
     },
   });
-  assert.equal(resumed.route, 'resume');
+  assert.equal(resumed.route, 'resume', JSON.stringify(resumed));
   assert.equal(routedIssue.comments[0].body, 'Publishing failed after implementation.');
 
   const holdFixture = apiFixture(issue);
@@ -236,7 +254,7 @@ test('uses model reasoning for comment routing instead of matching comment words
     fetchImpl: holdFixture.fetchImpl,
     config,
     reasonRoute: async () => ({
-      route: 'hold', workType: 'task', state: 'in-progress', governance: [],
+      route: 'hold', workType: 'task', state: 'in-progress', lifecycleStage: 'execution', readiness: 'working', governance: [], orchestrationPattern: null,
       summary: 'The surrounding context says not to act yet.', message: '',
     }),
   });
@@ -246,7 +264,7 @@ test('uses model reasoning for comment routing instead of matching comment words
 test('does not route an older comment after a newer human reply', async () => {
   const fixture = apiFixture({
     state: 'open', title: 'Task: resume saved work', body: 'Continue after answering.',
-    labels: [{ name: 'type:task' }, { name: 'state:needs-info' }],
+    labels: [{ name: 'type:task' }, { name: 'state:in-progress' }],
   }, 'write', [
     { id: 4, body: 'First answer', user: { login: 'owner', type: 'User' } },
     { id: 5, body: 'Correction: wait', user: { login: 'owner', type: 'User' } },
@@ -265,7 +283,9 @@ test('does not route an older comment after a newer human reply', async () => {
 test('preserves natural-language recovery through the intake boundary', async () => {
   const fixture = apiFixture({
     state: 'open', title: 'Task: implement routing', body: 'Deliver the routing harness.',
-    labels: [{ name: 'type:task' }, { name: 'state:needs-info' }],
+    labels: [{ name: 'type:task' }, { name: 'state:in-progress' }],
+    plan: { exists: true, valid: true, digest: 'a'.repeat(64) },
+    session: { exists: true, resumable: true, id: '019fb023-24b8-7881-9119-509f078b610e' },
   });
   const result = await classifyAndRoute({
     env: { GITHUB_REPOSITORY: 'owner/repo', SOURCE_ISSUE: '17', GH_TOKEN: 'token', GITHUB_ACTOR: 'maintainer', GITHUB_EVENT_NAME: 'issue_comment' },
@@ -276,9 +296,13 @@ test('preserves natural-language recovery through the intake boundary', async ()
     },
     fetchImpl: fixture.fetchImpl,
     config,
-    reasonRoute: modelRoute('resume', 'task', 'needs-info'),
+    reasonRoute: async () => ({
+      route: 'resume', workType: 'task', lifecycleStage: 'execution', readiness: 'needs-info',
+      governance: [], orchestrationPattern: 'implementation-continuation',
+      summary: 'The owner authorized the saved work to continue.', message: '',
+    }),
   });
-  assert.equal(result.route, 'resume');
+  assert.equal(result.route, 'resume', JSON.stringify(result));
   assert.ok(fixture.calls.some((call) => call.route === '/collaborators/owner/permission'));
 });
 
@@ -296,9 +320,9 @@ test('routes a repository-writer clarification answer into refinement', async ()
     },
     fetchImpl: fixture.fetchImpl,
     config,
-    reasonRoute: modelRoute('refine', 'task', 'needs-info'),
+    reasonRoute: modelRoute('requirements', 'task', 'needs-info'),
   });
-  assert.equal(result.route, 'refine');
+  assert.equal(result.route, 'requirements');
 });
 
 test('allows a writer to request a later refinement wave from a coordinating parent', async () => {
@@ -312,9 +336,9 @@ test('allows a writer to request a later refinement wave from a coordinating par
       action: 'created', issue: {},
       comment: { body: 'The research is complete; refine the parent with those findings.', user: { login: 'owner', type: 'User' }, author_association: 'OWNER' },
     }, fetchImpl: fixture.fetchImpl, config,
-    reasonRoute: modelRoute('refine', 'feature', 'coordinating'),
+    reasonRoute: modelRoute('coordinate', 'feature', 'coordinating'),
   });
-  assert.equal(result.route, 'refine');
+  assert.equal(result.route, 'coordinate');
   assert.equal(result.state, 'coordinating');
 });
 

@@ -14,64 +14,47 @@ This guide describes how people and coding agents move a change through the repo
 
 ## Issue intake and routing
 
-Issues enter through the repository's intake forms or the enabled blank-issue
-fallback. A read-only routing model interprets each eligible issue or human
-comment in context and proposes its route, work type, lifecycle state, and
-governance metadata (including any governance labels). Deterministic code validates the proposal against the
-versioned label catalog and transition table before applying it. It does not
-assign intent from title words, form headings, keywords, or regular
-expressions. Native
-GitHub Issue Types are used when available; the repository-local `type:*`
-labels are the fallback for Bug, Feature, Task, Idea, Research, Architecture,
-Specification, Implementation, and Validation work.
+Issues enter through organization defaults, repository-local forms during the
+migration window, or the enabled blank-issue fallback. A read-only routing
+model interprets each eligible issue or human comment in context and proposes
+an issue type, lifecycle stage, readiness value, governance metadata, and
+orchestration pattern. Deterministic code validates the proposal against
+`.github/issue-metadata.yml`, `.github/orchestration-policy.yml`, and the
+transition rules before applying it. It does not assign intent from title
+words, form headings, keywords, or regular expressions.
 
-The managed state labels are:
+The organization-wide taxonomy is: Idea, Research, Feature, Bug, Task,
+Requirements, Architecture Decision, Implementation, and Validation. Native
+GitHub Issue Types are the durable classification. Existing `type:*` labels
+are read-only migration evidence and are removed only after a native type is
+observed or explicitly assigned.
 
-```text
-state:needs-triage → state:needs-info | state:requirements | state:decision-needed
-                  → state:investigating | state:decomposing | state:parked | state:ready-for-plan
-state:decomposing → state:coordinating → state:acceptance
-state:ready-for-plan → Plan → state:ready-for-agent → Implement
-state:in-progress → state:review → state:done
-```
+`Lifecycle Stage` is a small pinned single-select field with Intake, Discovery,
+Definition, Decision, Planning, Execution, Validation, Acceptance, Done, and
+Parked. `Delivery Readiness` is a separate pinned field for temporary gates
+such as Needs information, Ready, Working, Waiting, Awaiting human, or
+Blocked. Governance labels such as `adr:needed`, `security-review`, and
+`human-review` remain orthogonal controls. The runner's resumable execution
+state is stored separately in its protected per-issue state directory.
 
-Research uses `state:investigating`; it is not represented by a state named
-`state:research`. Idea work can use `state:parked` while it is deferred. An
-Idea or Research issue must mature into a delivery-capable work type before it
-can become ready for planning. Rejected or intentionally abandoned work uses
-`state:done` together with GitHub's `not planned` close reason.
+The lifecycle is not a mandatory waterfall. An Idea may use discovery and
+optional research; Research can finish with evidence; Requirements can mature
+without code; Architecture Decision work follows the ADR process; Validation
+can run independently; and a lineage root can coordinate child outcomes.
+Fresh implementation work uses Plan → Implement only when no valid plan
+exists. A valid existing plan invokes the implementer directly, and an
+unchanged execution continuation resumes the exact saved GPT-5.6 Luna Max
+session without planning again. A scope-changing comment invalidates the plan
+and returns to the appropriate requirements, research, architecture, or
+planning route.
 
-`state:ready-for-plan` is the deterministic readiness gate and automatically
-authorizes the downstream Plan workflow after the model proposes it and the
-validator accepts it. People do not manage lifecycle labels during normal work.
-A blank issue first enters iterative
-refinement: Codex can ask one to three focused questions, and a later comment
-continues the same issue conversation. A refined outcome selects a
-delivery-capable parent work type. Multiple actionable work items are
-conditionally decomposed into idempotent child issues; the parent remains the
-lineage root and reaches `state:acceptance` only after its required children
-are complete. An atomic goal continues from the parent without a fixed child
-checklist. The gate requires one supported work type, complete
-structured intake when a form was used, cleared requirements and decision
-gates, and no unresolved `adr:needed`, `adr:proposed`, or `adr:removal`
-governance label, except that Architecture work may resolve its own ADR labels.
-The intake workflow only hands a validated proposal to `codex-delivery`;
-ambiguous or incomplete issues remain in a maturation state. A repository-writer comment on a coordinating
-lineage root can request a later refinement wave after research, specification,
-or decision children provide new evidence.
-
-The existing Plan → Implement controller is a reusable downstream primitive.
-It records `state:ready-for-agent` after a successful plan, enters
-`state:in-progress` before implementation, records `state:needs-info` when a
-clarification is required, and records `state:review` after publishing a
-review pull request. Every eligible human comment is interpreted by the routing
-model, and the delivery controller receives the validated result without
-parsing the comment text. Manual intake dispatch with current approved labels
-is the rare break-glass recovery when model routing is unavailable. Metadata changes by automation
-are idempotent and do not recursively trigger delivery. GitHub labels are
-authoritative work state; the runner records execution state and typed failure
-evidence separately, so a failed Action or Codex session does not advance the
-work item.
+The intake workflow only hands a deterministic, field-authorized pattern to
+`codex-delivery`. Missing optional capabilities produce an explicit degraded or
+held route. Metadata changes are idempotent and do not recursively trigger
+delivery. A failed Action or Codex session does not advance the Lifecycle Stage.
+The deterministic readiness gate checks the selected issue type, fields,
+governance controls, dependencies, and orchestration policy before an operation
+can proceed.
 
 ## Package manager and local preflight
 

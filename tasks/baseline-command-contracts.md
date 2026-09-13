@@ -8,7 +8,7 @@ for new work.
 
 ## Baseline context
 
-- Source issue: [Issue #12](https://github.com/sjefsharp/agentic-delivery/issues/12)
+- Source issue: [Issue #12](https://github.com/agentic-delivery-lab/agentic-delivery/issues/12)
 - Baseline commit: `ce5c86c` (`main` and `origin/main`)
 - Baseline date: 2026-09-06
 - Node.js: `v26.7.0`
@@ -17,7 +17,7 @@ for new work.
 - Repository runner observed through the GitHub API: `omarchy-runner`, Linux,
   online and idle
 
-The source issue was open in `sjefsharp/agentic-delivery` when the
+The source issue was open in `agentic-delivery-lab/agentic-delivery` when the
 implementation branch was created. The GitHub-hosted runner matrix is part of
 the implementation and still requires a workflow run before cross-platform
 support can be claimed.
