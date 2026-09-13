@@ -46,6 +46,27 @@ test('the current architecture map covers the official ADR set and emits a conci
   assert.match(formatReviewMarkdown(review), /adr-map-coverage/);
 });
 
+test('review reads provisional architecture evidence from the requested head revision', async (t) => {
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-revision-review-'));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+  const clone = path.join(fixture, 'repository');
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const run = promisify(execFile);
+  await run('git', ['clone', '--quiet', '--no-hardlinks', repositoryRoot, clone]);
+  const { stdout } = await run('git', ['-C', clone, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+  const revision = stdout.trim();
+  await Promise.all([
+    writeFile(path.join(clone, 'docs/architecture/harness-review.yml'), 'invalid working tree data\n'),
+    writeFile(path.join(clone, 'docs/architecture/adr-primitive-index.json'), '{}\n'),
+    writeFile(path.join(clone, 'docs/decisions/README.md'), 'invalid working tree data\n'),
+    writeFile(path.join(clone, 'docs/domain/ubiquitous-language.yml'), 'invalid working tree data\n'),
+  ]);
+  const review = await deterministicReview({ repositoryRoot: clone, base: revision, head: revision });
+  assert.equal(review.status, 'pass');
+  assert.equal(review.officialAdrs.length, 14);
+});
+
 test('controller evidence is required only when a delivery marker is present', async (t) => {
   const fixture = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-review-event-'));
   t.after(() => rm(fixture, { recursive: true, force: true }));

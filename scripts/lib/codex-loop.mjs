@@ -211,7 +211,7 @@ export function formatRefinementComment(outcome) {
   return lines.join('\n');
 }
 
-export async function runTurn({ client, threadId, phase, prompt, onProgress, signal, stallTimeoutMs = 20 * 60_000, pollMs = 15_000 }) {
+export async function runTurn({ client, threadId, phase, prompt, onProgress, signal, schema = outcomeSchema(phase), stallTimeoutMs = 20 * 60_000, pollMs = 15_000 }) {
   let budget;
   try { budget = quotaBoundary(await client.request('account/rateLimits/read')); }
   catch { return { status: 'paused', reason: 'Quota telemetry is unavailable.' }; }
@@ -295,14 +295,15 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
   client.on('message', onMessage);
   client.on('failure', onFailure);
   signal?.addEventListener('abort', onAbort, { once: true });
-    const selected = MODELS[phase];
+  const selected = MODELS[phase];
+  if (!selected) throw new Error(`Unsupported model phase: ${phase}.`);
   try {
     const response = await client.request('turn/start', {
       threadId, input: [{ type: 'text', text: prompt }],
       collaborationMode: { mode: selected.mode, settings: { model: selected.model, reasoning_effort: selected.effort, developer_instructions: null } },
-      permissions: ['refine', 'plan'].includes(phase) ? 'delivery-plan' : phase === 'implement' ? 'delivery-edit' : 'delivery-review',
+      permissions: ['route', 'refine', 'plan'].includes(phase) ? 'delivery-plan' : phase === 'implement' ? 'delivery-edit' : 'delivery-review',
       approvalPolicy: 'never', serviceTierForTurn: 'default',
-      outputSchema: outcomeSchema(phase),
+      outputSchema: schema,
     });
     turnId = response.turn.id;
     recordActivity();
@@ -317,74 +318,24 @@ export function continuation(state) {
   const questions = (state.questions?.length ? state.questions : state.plan?.questions ?? [])
     .filter((question) => typeof question === 'string' && question.trim());
   if (awaitingHuman && !questions.length && state.reason) questions.push(state.reason);
-  const { summary: savedProgress } = progressData(state.lastProgress ?? 'Intake has not completed.');
-  const tasks = Array.isArray(state.tasks)
-    ? state.tasks
-    : state.plan?.tasks ?? ['Complete intake and planning.', 'Implement, validate, and open the review pull request.'];
-  const taskLines = tasks.length
-    ? tasks.map((task) => `- [ ] ${task}`)
-    : ['No saved tasks remain.'];
-  const validationError = state.phase === 'verify' && state.validation
-    ? ['### Latest validation error', '', quoteMarkdown(state.validation), '']
-    : [];
-  const sessionDetails = state.sessionId ? [
-    `Codex session ID: \`${state.sessionId}\``,
-    `Continuation state: \`${state.status}\``,
-    `Issue: \`#${state.issue}\``,
-    `Runner operator recovery: \`codex resume ${state.sessionId}\``,
-  ] : [];
-  const savedDetails = [
-    '<details>',
-    '<summary>Saved delivery details</summary>',
-    '',
-    `- Phase: **${phaseName(state.phase)}**`,
-    `- Branch: \`${state.branch ?? 'not created yet'}\``,
-    ...sessionDetails.map((line) => line ? `- ${line}` : ''),
-    '',
-    '### Latest progress',
-    '',
-    savedProgress,
-    '',
-    '### Remaining work',
-    '',
-    ...taskLines,
-    '',
-    '### Agent continuation prompt',
-    '',
-    `Continue source issue #${state.issue} from the saved ${state.phase} phase and existing working tree. Read its plan, questions, comments, and latest validation results. Preserve existing changes. Resolve unanswered questions before implementation. Use Sol High in Plan mode for incomplete planning and Luna Max for implementation. Check subscription quota before model execution. Do not merge or close the source issue.`,
-    '',
-    '</details>',
-  ];
   if (awaitingHuman) return [
-    '## Action required: answer Codex',
-    `Codex is waiting for your input before it can continue **${phaseName(state.phase)}**.`,
-    '',
-    '### Questions',
-    '',
+    '## Action required',
+    `**Stopped at:** ${phaseName(state.phase)}`,
+    `**Why:** ${phaseName(state.phase)} needs your answer to continue.`,
+    '**Answer:**',
     questions.map((question, index) => `${index + 1}. ${question}`).join('\n'),
-    '',
-    '**What to do:** Reply with your answers in a new comment. A plain repository-writer comment continues this waiting delivery run.',
-    '',
-    ...savedDetails,
+    '**Next:** Reply with the answers. Do not add or remove labels.',
   ].join('\n');
+  const validation = state.phase === 'verify' && state.validation
+    ? `\n\n**Latest check failure:**\n${quoteMarkdown(state.validation, 1_200)}`
+    : '';
+  const next = quotaPause
+    ? `Rerun the failed workflow after ${state.budget?.resetsAt ? new Date(state.budget.resetsAt * 1000).toISOString() : 'the quota resets'}.`
+    : 'Fix the reported cause, then rerun the failed workflow.';
   return [
-    '## Delivery paused: recovery required',
-    'No decision is requested from you.',
-    '',
-    `**Why it stopped:** ${state.reason ?? 'Work remains.'}`,
-    ...(state.execution?.lastFailure ? [
-      '',
-      '**Execution evidence**',
-      `- Operation: **${state.execution.lastFailure.operation}**`,
-      `- Run: **${state.execution.lastFailure.runId || 'unavailable'}**`,
-      `- Recoverability: **${state.execution.lastFailure.recoverability}**`,
-    ] : []),
-    ...(state.shutdownError ? [`Shutdown warning: ${state.shutdownError}. The account lock requires operator inspection.`] : []),
-    '',
-    ...validationError,
-    `**What to do:** ${quotaPause ? 'After the reported quota reset, ' : 'After the cause is resolved, '}reply with a natural-language request such as “Please continue from the saved work.” Manual workflow dispatch remains available for recovery.`,
-    ...(quotaPause && state.budget?.resetsAt ? ['', `Reported quota reset: ${new Date(state.budget.resetsAt * 1000).toISOString()}.`] : []),
-    '',
-    ...savedDetails,
-  ].join('\n');
+    '## Delivery paused',
+    `**Stopped at:** ${phaseName(state.phase)}`,
+    `**Why:** ${concise(state.reason ?? 'The workflow could not continue.', 700)}${validation}`,
+    `**Next:** ${next} Do not change labels or post a continuation comment.`,
+  ].join('\n\n');
 }

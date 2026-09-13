@@ -52,7 +52,8 @@ test('quality workflows use the pinned pnpm action and preserve the infrastructu
   assert.doesNotMatch(codexWorkflow, /CODEX_DELIVERY_PUBLISH_TOKEN|PUBLISH_TOKEN:/);
   assert.match(codexWorkflow, /CODEX_AUTH_HOME: \/var\/lib\/github-runner\/\.codex/);
   const intakeWorkflow = await text('.github/workflows/issue-intake.yml');
-  assert.ok(intakeWorkflow.includes('types: [opened, edited, reopened, labeled, unlabeled, typed, untyped, closed]'));
+  assert.ok(intakeWorkflow.includes('types: [opened, edited, reopened, typed, untyped, closed]'));
+  assert.ok(!intakeWorkflow.includes('labeled, unlabeled'));
   assert.ok(intakeWorkflow.includes('uses: ./.github/workflows/codex-delivery.yml'));
   assert.ok(codexWorkflow.includes('workflow_call:'));
   assert.ok(!codexWorkflow.includes('types: [opened]'));

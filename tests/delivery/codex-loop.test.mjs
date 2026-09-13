@@ -189,11 +189,10 @@ test('completed plans keep details available without overwhelming the issue time
   assert.doesNotMatch(text, /"status"|"questions"/);
 });
 
-test('continuation includes source, phase, saved work, and outstanding tasks', () => {
+test('technical pauses are short and do not ask for a continuation comment or label change', () => {
   const text=continuation({issue:15,status:'paused',phase:'implement',reason:'Quota reserve',branch:'feat/issue-15-change',plan:{plan:'The plan',tasks:['First task']},tasks:['Remaining task'],lastProgress:'Edited controller'});
-  for(const value of ['Delivery paused: recovery required','#15','Implement','Quota reserve','feat/issue-15-change','Remaining task','Edited controller','Please continue from the saved work.']) assert.ok(text.includes(value),value);
-  assert.match(text,/No decision is requested/);
-  assert.doesNotMatch(text,/comment `\/codex resume`/);
+  for(const value of ['## Delivery paused','**Stopped at:** Implement','Quota reserve','Rerun the failed workflow','Do not change labels or post a continuation comment']) assert.ok(text.includes(value),value);
+  for(const hidden of ['#15','feat/issue-15-change','Remaining task','Edited controller','Codex session ID']) assert.doesNotMatch(text,new RegExp(hidden));
 });
 
 test('validation recovery surfaces the latest error without restoring completed plan tasks', () => {
@@ -209,30 +208,25 @@ test('validation recovery surfaces the latest error without restoring completed 
     lastProgress:'Implementation is complete.',
   });
 
-  assert.match(text, /### Latest validation error/);
+  assert.match(text, /\*\*Latest check failure:\*\*/);
   assert.match(text, /Fix the latest error shown below before resuming\./);
   assert.match(text, /ADR check: 0011-example\.md breaks the record sequence\./);
-  assert.match(text, /No saved tasks remain\./);
-  assert.doesNotMatch(text, /- \[ \] Implement the approved plan\./);
+  assert.doesNotMatch(text, /saved tasks|Implement the approved plan/);
 });
 
-test('awaiting-human handoffs lead with questions and separate recovery details', () => {
+test('awaiting-human handoffs contain only the question and direct next action', () => {
   const text = continuation({
     issue:18, phase:'plan', status:'awaiting-human', sessionId:'019fb023-24b8-7881-9119-509f078b610e',
     reason:'The model requested a decision.', tasks:['Answer the question.'],
     questions:['Which lifecycle should apply?', 'Should delivery start automatically?'],
   });
   for (const value of [
-    '## Action required: answer Codex',
-    '### Questions',
+    '## Action required',
+    '**Stopped at:** Plan',
+    '**Answer:**',
     '1. Which lifecycle should apply?',
     '2. Should delivery start automatically?',
-    'Reply with your answers in a new comment.',
-    'Codex session ID: `019fb023-24b8-7881-9119-509f078b610e`',
-    'Continuation state: `awaiting-human`',
-    'Issue: `#18`',
-    '<summary>Saved delivery details</summary>',
+    'Reply with the answers. Do not add or remove labels.',
   ]) assert.ok(text.includes(value),value);
-  assert.doesNotMatch(text,/Saved progress: \{/);
-  assert.doesNotMatch(text,/comment `\/codex resume`/);
+  assert.doesNotMatch(text,/Codex session ID|Saved delivery details|continuation state/i);
 });

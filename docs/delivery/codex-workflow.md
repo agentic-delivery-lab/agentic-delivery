@@ -22,8 +22,12 @@ separately, so retries do not silently advance or corrupt the work item.
 
 After the workflow is merged and prerequisites are verified, open an issue
 through an intake form or the blank-issue fallback. The intake workflow
-classifies the work type, lifecycle state, and governance metadata before any
-Codex turn. Incomplete, ambiguous, Idea, and Research work remains in
+uses a read-only Sol High routing turn to interpret the issue and conversation.
+It proposes the work type, lifecycle state, governance labels, and next route.
+Deterministic code validates that proposal against the approved catalog and
+transition table before changing labels or starting delivery. Title words,
+form headings, keywords, and regular expressions do not decide the route.
+Incomplete, ambiguous, Idea, and Research work remains in
 maturation (`Research` uses `state:investigating`; deferred Idea work uses
 `state:parked`).
 
@@ -37,26 +41,23 @@ the parent without a fixed child checklist. After discovery children provide
 new evidence, a repository-writer comment can request another refinement wave
 on the coordinating parent.
 
-Applying a valid `state:ready-for-plan` is the normal authorization for the
-downstream delivery workflow. The classifier's deterministic readiness gate
-must pass before GPT-5.6 Sol High starts Plan mode. After a successful plan,
+People do not apply `state:ready-for-plan` during normal work. The routing model
+proposes it when the issue is ready, and the deterministic readiness gate must
+pass before GPT-5.6 Sol High starts Plan mode. After a successful plan,
 the controller records `state:ready-for-agent`, enters `state:in-progress`,
-and automatically invokes GPT-5.6 Luna Max for Implement. A clear
-natural-language recovery request, the legacy `/codex resume` command, or
-manual dispatch is reserved for a paused continuation or a separately
-configured human gate. The workflow records progress and validation on the
-source issue.
+and automatically invokes GPT-5.6 Luna Max for Implement. The workflow records
+progress and validation on the source issue.
 
 The `issue_comment` trigger is restricted twice: the workflow accepts only a
 new non-bot issue comment, and the intake controller verifies repository
 write/maintain/admin permission before handing it to delivery. The controller
 also verifies the same payload identity. Pull-request comments, bots, rerun
-actors, and unauthorized writers cannot enter continuation. A plain
-writer answer continues an existing `awaiting-human` continuation state. A
-clear natural-language request such as “Please continue from the saved work”
-continues a technical `paused` state. The legacy `/codex resume` form remains a
-compatibility shortcut, while manual dispatch of `codex-delivery` remains
-available for recovery and initial issue execution.
+actors, and unauthorized writers cannot enter continuation. Every eligible
+human comment is interpreted with the full issue conversation. The model may
+propose `resume`, `refine`, or `hold` regardless of the words used. The
+deterministic controller receives only the validated route and does not parse
+the comment for intent. Manual intake dispatch with current approved labels is
+the break-glass path when semantic routing is unavailable.
 
 The controller reuses saved changes and a single branch. It never creates a
 new task for a comment on a missing, completed, running, stale, or inactive
@@ -72,23 +73,22 @@ reasoning or raw tool output and is replaced idempotently on publication retry.
 
 ## Issue communication
 
-Issue comments use three visibly different Markdown formats:
+Issue comments use three short Markdown formats:
 
 - **Progress update** reports concise, non-blocking work. Rapid updates in the
   same phase are saved but coalesced to avoid flooding the issue timeline.
-- **Action required: answer Codex** lists only the questions that need a human
+- **Action required** lists only the questions that need a human
   decision and tells a repository writer to reply with those answers.
-- **Delivery paused: recovery required** reports a technical or quota pause,
-  states that no decision is requested, and gives the recovery action. When
+- **Delivery paused** names the stopped step, exact cause, and next action. It
+  never asks for a label change or a continuation comment. When
   repository validation exhausts its repair attempts, this comment also shows
   the latest redacted validation error. Reading runner-local state is not
   required to identify that failure.
 
 Structured model output remains machine-readable in saved delivery state. The
-controller extracts its summary and next tasks for issue comments instead of
-publishing raw protocol JSON. Full implementation plans, remaining work,
-session correlation, and operator recovery details remain available in
-collapsed Markdown sections when they are needed for review or recovery.
+workflow publishes only the information a person needs to review the result or
+take the stated next action. Session IDs, internal ownership terms, raw
+protocol JSON, and hidden runner details are not issue instructions.
 
 ## Continuation state and session correlation
 
@@ -230,8 +230,9 @@ Implementation can span multiple model turns in one run. A `continue` outcome
 records exact remaining implementation tasks and starts the next turn without
 human intervention. A `complete` outcome must have no remaining tasks or
 questions. Installation, repository verification, audit, commit, push, and
-pull-request publication are controller-owned work and therefore do not belong
-in the model's remaining task list. A validation pause keeps an empty completed
+pull-request publication are performed by the workflow after model
+implementation and therefore do not belong in the model's remaining task list.
+A validation pause keeps an empty completed
 task list empty instead of restoring the original plan as unfinished work. If
 a structured completion is rejected, the controller preserves its reported
 tasks in the handoff instead of showing an older plan.
@@ -250,11 +251,10 @@ the outbox. A working tree, Codex session home, and `CONTINUE.md` exist only
 while a run is active or deliberately recoverable after a pause or human-input
 boundary. Successful publication or explicit abandonment removes the checkout,
 session home, temporary tools, and authentication bridge after the outbox is
-flushed. The continuation prompt and remaining tasks are also posted on the
-source issue without another model call. A technical pause waits for a clear
-natural-language writer request to continue; an `awaiting-human` state waits
-for the requested answer. The legacy `/codex resume` command remains accepted
-for compatibility.
+flushed. Internal continuation details remain on the runner. A technical pause
+states the exact rerun action; an `awaiting-human` state waits for the requested
+answer. Comments use the semantic routing boundary, including comments that
+contain the legacy `/codex resume` text.
 Saved phases distinguish planning, branch creation, implementation,
 verification, commit, and publication. Commit/publication retries do not start
 a model or require available generation quota. Implementation questions preserve

@@ -5,26 +5,19 @@ import { fileURLToPath } from 'node:url';
 import { parseRepositoryYaml } from './lib/yaml.mjs';
 import {
   classifyIssue,
-  isResumeRequestBody,
   labelDefinitions,
   managedLabels,
-  parseEventRequestedState,
   stateByLabel,
+  validateRoutingProposal,
 } from './lib/issue-routing.mjs';
 import { validateTransition } from './lib/lifecycle-transitions.mjs';
+import { reasonIssueRouting } from './lib/issue-routing-agent.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '..');
 
 export async function loadLifecycleConfig(root = repositoryRoot) {
   const source = await readFile(path.join(root, '.github', 'issue-lifecycle.yml'), 'utf8');
   return parseRepositoryYaml(source, 'issue lifecycle configuration');
-}
-
-export function intakeMode(event, env = process.env) {
-  if (env.INTAKE_MODE) return env.INTAKE_MODE;
-  if (env.GITHUB_EVENT_NAME === 'issue_comment') return 'resume';
-  if (env.GITHUB_EVENT_NAME === 'workflow_dispatch') return 'resume';
-  return 'event';
 }
 
 function apiError(method, route, status) {
@@ -55,6 +48,33 @@ export function githubApi({ repository, token, fetchImpl = fetch }) {
 function lineageParent(issue) {
   const match = /^<!--\s*codex-lineage:v1\s+parent=([1-9][0-9]*)\s+key=[a-z0-9]+(?:-[a-z0-9]+)*\s*-->/.exec(String(issue?.body ?? '').trim());
   return match ? match[1] : null;
+}
+
+async function issueConversation(api, issueNumber) {
+  const comments = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const batch = await api(`/issues/${issueNumber}/comments?per_page=100&page=${page}`);
+    if (!Array.isArray(batch)) throw new Error('Issue conversation is unavailable.');
+    comments.push(...batch.map((comment) => ({
+      id: comment.id,
+      author: comment.user?.login ?? null,
+      authorType: comment.user?.type ?? null,
+      body: comment.body ?? '',
+      createdAt: comment.created_at ?? null,
+      updatedAt: comment.updated_at ?? null,
+    })));
+    if (batch.length < 100) break;
+    if (page === 10) throw new Error('Issue conversation exceeds the routing limit.');
+  }
+  if (JSON.stringify(comments).length > 150_000) throw new Error('Issue conversation exceeds the routing size limit.');
+  return comments;
+}
+
+function newerHumanComment(comments, commentId) {
+  if (commentId == null) return false;
+  const current = BigInt(commentId);
+  return comments.some((comment) => comment.id != null && BigInt(comment.id) > current
+    && comment.authorType !== 'Bot' && !String(comment.author ?? '').endsWith('[bot]'));
 }
 
 async function upsertLabels(api, config) {
@@ -115,7 +135,7 @@ async function writeOutputs(result, env) {
   ].join('\n') + '\n');
 }
 
-export async function classifyAndRoute({ env = process.env, event, fetchImpl = fetch, config } = {}) {
+export async function classifyAndRoute({ env = process.env, event, fetchImpl = fetch, config, reasonRoute = reasonIssueRouting } = {}) {
   const repository = env.GITHUB_REPOSITORY;
   const issueNumber = String(env.SOURCE_ISSUE ?? event?.issue?.number ?? '');
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !/^[1-9][0-9]*$/.test(issueNumber)) {
@@ -131,27 +151,13 @@ export async function classifyAndRoute({ env = process.env, event, fetchImpl = f
     && event?.comment?.user?.type !== 'Bot'
     && !String(event?.comment?.user?.login ?? '').endsWith('[bot]')
   );
-  const mode = trustedComment ? intakeMode(event, env) : 'event';
-  const requestedState = parseEventRequestedState(event, config);
-  let metadata = classifyIssue({ issue, config, requestedState, mode, eventAction: event?.action });
+  let metadata = classifyIssue({ issue, config, eventAction: event?.action });
   if (!trustedComment) {
     metadata.route = 'hold';
-    metadata.reasons = [...metadata.reasons, 'Only a newly created non-bot comment may continue refinement or delivery.'];
-  }
-  const existingStates = [...new Set((issue.labels ?? [])
-    .map((label) => typeof label === 'string' ? label : label?.name)
-    .map((label) => stateByLabel(config, label)?.id)
-    .filter(Boolean))];
-  if (existingStates.length === 1 && existingStates[0] !== metadata.state) {
-    const transition = validateTransition({
-      config,
-      from: existingStates[0],
-      to: metadata.state,
-      workType: metadata.workType,
-      governance: metadata.governance,
-      issueState: issue.state,
-    });
-    if (!transition.allowed) throw new Error(`Lifecycle transition rejected: ${transition.reasons.join(' ')}`);
+    metadata.reasons = [...metadata.reasons, 'Only a newly created non-bot comment may enter semantic routing.'];
+    const result = { issue: issueNumber, route: metadata.route, state: metadata.state, metadata, labels: (issue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean) };
+    await writeOutputs(result, env);
+    return result;
   }
   const parentNumber = !issueComment && ['edited', 'closed', 'reopened', 'labeled', 'unlabeled', 'typed', 'untyped'].includes(event?.action)
     ? lineageParent(issue) : null;
@@ -173,42 +179,63 @@ export async function classifyAndRoute({ env = process.env, event, fetchImpl = f
       return result;
     }
   }
-  const labels = await reconcileLabels({ api, issueNumber, issue, config, classification: metadata });
-
-  const refinementEvent = issue.state === 'open' && (
-    (!issueComment && event?.action === 'opened' && ['needs-triage', 'needs-info', 'requirements', 'decision-needed', 'investigating'].includes(metadata.state))
-    || (trustedComment && issueComment
-      && !isResumeRequestBody(event.comment?.body)
-      && ['needs-triage', 'needs-info', 'requirements', 'decision-needed', 'investigating', 'coordinating'].includes(metadata.state))
-  );
-  if (refinementEvent && trustedComment) metadata.route = 'refine';
-
-  if (metadata.route === 'resume' && issue.state !== 'open') {
+  if (issue.state !== 'open') {
     metadata.route = 'hold';
-    metadata.reasons = [...metadata.reasons, 'A closed issue cannot resume delivery.'];
+    const result = { issue: issueNumber, route: metadata.route, state: metadata.state, metadata, labels: (issue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean) };
+    await writeOutputs(result, env);
+    return result;
   }
 
-  // A ready route is an authorization boundary. Check the triggering actor
-  // before handing it to the delivery workflow; ordinary intake remains open
-  // to issue authors and can still reconcile metadata without this check.
-  if (metadata.route === 'plan' || metadata.route === 'resume' || metadata.route === 'refine') {
-    const actor = issueComment ? event.comment.user.login : env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR;
-    if (!actor) {
-      metadata.route = 'hold';
-      metadata.reasons = [...metadata.reasons, 'A maintainer must authorize downstream delivery.'];
-    } else {
-      let permission = 'none';
-      try {
-        permission = (await api(`/collaborators/${encodeURIComponent(actor)}/permission`)).permission;
-      } catch (error) {
-        if (error.status !== 404) throw error;
-      }
-      if (!['admin', 'maintain', 'write'].includes(permission)) {
+  const actor = issueComment ? event.comment.user.login : env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR;
+  let permission = 'none';
+  if (actor) {
+    try { permission = (await api(`/collaborators/${encodeURIComponent(actor)}/permission`)).permission; }
+    catch (error) { if (error.status !== 404) throw error; }
+  }
+  if (!['admin', 'maintain', 'write'].includes(permission)) {
+    metadata.route = 'hold';
+    metadata.reasons = [...metadata.reasons, 'A repository writer must authorize semantic routing.'];
+    const result = { issue: issueNumber, route: metadata.route, state: metadata.state, metadata, labels: (issue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean) };
+    await writeOutputs(result, env);
+    return result;
+  }
+
+  const manualRecovery = env.GITHUB_EVENT_NAME === 'workflow_dispatch' && env.FORCE_ROUTE === 'true';
+  if (manualRecovery) {
+    metadata = classifyIssue({ issue, config, mode: 'resume' });
+    metadata.reasons = [...metadata.reasons, 'A repository writer used manual recovery after semantic routing was unavailable.'];
+  } else {
+    try {
+      const comments = await issueConversation(api, issueNumber);
+      if (issueComment && newerHumanComment(comments, event.comment.id)) {
         metadata.route = 'hold';
-        metadata.reasons = [...metadata.reasons, 'A maintainer must authorize downstream delivery.'];
+        metadata.reasons = [...metadata.reasons, 'A newer human comment superseded this event.'];
+        const result = { issue: issueNumber, route: 'hold', state: metadata.state, metadata, labels: (issue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean) };
+        await writeOutputs(result, env);
+        return result;
       }
+      const proposal = await reasonRoute({
+        repositoryRoot,
+        issue: { ...issue, comments },
+        event: { ...event, kind: env.GITHUB_EVENT_NAME },
+        config,
+        env,
+      });
+      metadata = validateRoutingProposal({ proposal, issue, event: { ...event, kind: env.GITHUB_EVENT_NAME }, config });
+    } catch (error) {
+      const detail = String(error?.message ?? '').replace(/\s+/g, ' ').trim().slice(0, 500);
+      const message = `Routing could not be decided. No labels changed. Next: rerun issue intake after Codex is available.${detail ? `\n\nReason: ${detail}` : ''}`;
+      await api(`/issues/${issueNumber}/comments`, 'POST', { body: message });
+      metadata.route = 'hold';
+      metadata.reasons = [...metadata.reasons, message];
+      const result = { issue: issueNumber, route: 'hold', state: metadata.state, metadata, labels: (issue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean) };
+      await writeOutputs(result, env);
+      return result;
     }
   }
+
+  const labels = await reconcileLabels({ api, issueNumber, issue, config, classification: metadata });
+  if (metadata.message) await api(`/issues/${issueNumber}/comments`, 'POST', { body: metadata.message });
   const result = { issue: issueNumber, route: metadata.route, state: metadata.state, metadata, labels: labels.labels };
   await writeOutputs(result, env);
   return result;

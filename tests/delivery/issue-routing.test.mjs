@@ -3,7 +3,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { loadLifecycleConfig } from '../../scripts/issue-intake.mjs';
-import { classifyIssue, isResumeRequestBody } from '../../scripts/lib/issue-routing.mjs';
+import { classifyIssue, validateRoutingProposal } from '../../scripts/lib/issue-routing.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const config = await loadLifecycleConfig(repositoryRoot);
@@ -16,7 +16,7 @@ function formBody(fields) {
   return Object.entries(fields).map(([heading, value]) => `### ${heading}\n\n${value}`).join('\n\n');
 }
 
-test('classifies structured forms into separate work types and maturation states', () => {
+test('does not infer work type or route from title and body wording', () => {
   const bug = classifyIssue({
     issue: issue({
       title: 'Bug: broken intake',
@@ -31,7 +31,7 @@ test('classifies structured forms into separate work types and maturation states
     }),
     config,
   });
-  assert.equal(bug.workType, 'bug');
+  assert.equal(bug.workType, null);
   assert.equal(bug.state, 'needs-triage');
   assert.equal(bug.route, 'hold');
 
@@ -50,9 +50,17 @@ test('classifies structured forms into separate work types and maturation states
     }),
     config,
   });
-  assert.equal(feature.workType, 'feature');
-  assert.equal(feature.state, 'requirements');
-  assert.equal(feature.formDetected, true);
+  assert.equal(feature.workType, null);
+  assert.equal(feature.state, 'needs-triage');
+});
+
+test('allows an untyped blank issue to enter model-selected refinement', () => {
+  const proposal = validateRoutingProposal({
+    proposal: { route: 'refine', workType: null, state: 'needs-triage', governance: [], summary: 'Clarify the goal.', message: '' },
+    issue: issue({ title: '', body: '' }), event: { kind: 'issues', action: 'opened' }, config,
+  });
+  assert.equal(proposal.route, 'refine');
+  assert.equal(proposal.workType, null);
 });
 
 test('routes a partially completed structured form to needs-info', () => {
@@ -70,10 +78,11 @@ test('routes a partially completed structured form to needs-info', () => {
   assert.equal(result.route, 'hold');
 });
 
-test('keeps conflicting form and title signals in triage', () => {
+test('keeps registered label metadata authoritative over prose signals', () => {
   const result = classifyIssue({
     issue: issue({
       title: 'Feature: conflicting report',
+      labels: ['type:bug', 'state:needs-triage'],
       body: formBody({
         'Observed behavior': 'The issue is routed incorrectly.',
         'Expected behavior': 'The issue remains in triage.',
@@ -86,7 +95,7 @@ test('keeps conflicting form and title signals in triage', () => {
     config,
   });
   assert.equal(result.workType, 'bug');
-  assert.deepEqual(result.conflict, ['feature']);
+  assert.equal(result.conflict, null);
   assert.equal(result.state, 'needs-triage');
   assert.equal(result.route, 'hold');
 });
@@ -134,6 +143,20 @@ test('readiness is deterministic and blocks unresolved governance and discovery 
   assert.equal(adrBlocked.state, 'requirements');
   assert.match(adrBlocked.reasons.join(' '), /governance/);
 
+  const architectureReady = classifyIssue({
+    issue: issue({ labels: ['type:architecture', 'state:ready-for-plan', 'adr:needed'] }),
+    config,
+  });
+  assert.equal(architectureReady.readiness.ok, true, 'architecture work resolves its own ADR governance label');
+  assert.equal(architectureReady.route, 'plan');
+
+  const architectureFromDecision = validateRoutingProposal({
+    proposal: { route: 'plan', workType: 'architecture', state: 'ready-for-plan', governance: ['adr:needed'], summary: 'Plan the ADR change.', message: '' },
+    issue: issue({ labels: ['type:architecture', 'state:decision-needed', 'adr:needed'] }),
+    event: { kind: 'issues', action: 'edited' }, config,
+  });
+  assert.equal(architectureFromDecision.route, 'plan');
+
   const ideaReady = classifyIssue({
     issue: issue({ labels: ['type:idea', 'state:ready-for-plan'] }),
     config,
@@ -176,16 +199,32 @@ test('invalid requested transitions are rejected without changing the current st
   assert.match(result.reasons.join(' '), /not allowed/);
 });
 
-test('recognizes bounded natural-language recovery requests', () => {
-  for (const request of [
-    '/codex resume',
-    'Please continue from the saved work.',
-    'Ga verder met het opgeslagen werk.',
-  ]) assert.equal(isResumeRequestBody(request), true);
+test('validates a model routing proposal against configured labels and transitions', () => {
+  const current = issue({ labels: ['type:task', 'state:in-progress'] });
+  const result = validateRoutingProposal({
+    proposal: {
+      route: 'resume', workType: 'task', state: 'in-progress', governance: [],
+      summary: 'Continue the saved implementation.', message: '',
+    },
+    issue: current,
+    event: { action: 'created', comment: { body: 'Any paraphrase can carry this intent.' } },
+    config,
+  });
+  assert.equal(result.route, 'resume');
+  assert.deepEqual(result.targetLabels, ['type:task', 'state:in-progress']);
 
-  for (const request of [
-    'Do not continue yet.',
-    'Continue, but remove the changelog first.',
-    '/codex resume-malicious',
-  ]) assert.equal(isResumeRequestBody(request), false);
+  assert.throws(() => validateRoutingProposal({
+    proposal: { route: 'hold', workType: 'task', state: 'in-progress', governance: ['state:model-invented'], summary: 'No.', message: '' },
+    issue: current, event: {}, config,
+  }), /approved governance label/);
+
+  assert.throws(() => validateRoutingProposal({
+    proposal: { route: 'plan', workType: 'feature', state: 'review', governance: [], summary: 'Skip ahead.', message: '' },
+    issue: issue({ labels: ['type:feature', 'state:requirements'] }), event: {}, config,
+  }), /transition|requires state:ready-for-plan/);
+
+  assert.throws(() => validateRoutingProposal({
+    proposal: { route: 'hold', workType: 'task', state: 'ready-for-plan', governance: [], summary: 'Ready, but idle.', message: '' },
+    issue: issue({ labels: ['type:task', 'state:needs-triage'] }), event: {}, config,
+  }), /must start or resume planning/);
 });

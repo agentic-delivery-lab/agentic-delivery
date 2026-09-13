@@ -81,14 +81,11 @@ async function walk(root, relative = '') {
   return files;
 }
 
-export async function collectPrimitives(repositoryRoot) {
-  const root = path.resolve(repositoryRoot);
+export function collectPrimitivesFromSources(sources) {
   const result = [];
   const errors = [];
-  for (const relativePath of await walk(root)) {
-    const absolutePath = path.join(root, relativePath);
-    let source;
-    try { source = await readFile(absolutePath, 'utf8'); } catch { continue; }
+  for (const { path: sourcePath, source } of sources) {
+    const relativePath = normalizeRepositoryPath(sourcePath);
     const lines = source.split(/\r?\n/);
     const anchors = new Map();
     lines.forEach((line, lineIndex) => {
@@ -117,27 +114,45 @@ export async function collectPrimitives(repositoryRoot) {
   return { primitives: result.sort((left, right) => left.id.localeCompare(right.id)), errors };
 }
 
-export async function collectAdrs(repositoryRoot) {
+export async function collectPrimitives(repositoryRoot) {
   const root = path.resolve(repositoryRoot);
+  const sources = [];
+  for (const relativePath of await walk(root)) {
+    try { sources.push({ path: relativePath, source: await readFile(path.join(root, relativePath), 'utf8') }); } catch { /* unreadable files are outside traceability */ }
+  }
+  return collectPrimitivesFromSources(sources);
+}
+
+export function collectAdrsFromSources(sources) {
   const records = [];
   const errors = [];
-  const decisions = path.join(root, 'docs', 'decisions');
-  for (const entry of (await readdir(decisions, { withFileTypes: true })).filter((item) => item.isFile())) {
-    const match = `docs/decisions/${entry.name}`.match(ADR_FILENAME);
+  for (const { path: sourcePath, source } of sources) {
+    const relativePath = normalizeRepositoryPath(sourcePath);
+    const match = relativePath.match(ADR_FILENAME);
     if (!match) continue;
-    const source = await readFile(path.join(decisions, entry.name), 'utf8');
+    const entryName = path.posix.basename(relativePath);
     const parsed = frontmatter(source);
     const id = `ADR-${match[1]}`;
     const values = parsed?.values ?? {};
     const domains = listify(values.domains);
     const requiredEnforcement = listify(values['required-enforcement']);
-    if (!domains.length) errors.push(`${entry.name}: domains must be a non-empty array`);
-    if (!requiredEnforcement.length || requiredEnforcement.some((item) => !ENFORCEMENTS.has(item))) errors.push(`${entry.name}: required-enforcement is invalid`);
+    if (!domains.length) errors.push(`${entryName}: domains must be a non-empty array`);
+    if (!requiredEnforcement.length || requiredEnforcement.some((item) => !ENFORCEMENTS.has(item))) errors.push(`${entryName}: required-enforcement is invalid`);
     const supersedes = listify(values.supersedes);
-    if (supersedes.some((item) => !ADR_ID.test(item))) errors.push(`${entry.name}: supersedes contains an invalid ADR`);
-    records.push({ id, file: `docs/decisions/${entry.name}`, domains, requiredEnforcement, supersedes });
+    if (supersedes.some((item) => !ADR_ID.test(item))) errors.push(`${entryName}: supersedes contains an invalid ADR`);
+    records.push({ id, file: relativePath, domains, requiredEnforcement, supersedes });
   }
   return { adrs: records.sort((left, right) => left.id.localeCompare(right.id)), errors };
+}
+
+export async function collectAdrs(repositoryRoot) {
+  const root = path.resolve(repositoryRoot);
+  const decisions = path.join(root, 'docs', 'decisions');
+  const sources = [];
+  for (const entry of (await readdir(decisions, { withFileTypes: true })).filter((item) => item.isFile())) {
+    sources.push({ path: `docs/decisions/${entry.name}`, source: await readFile(path.join(decisions, entry.name), 'utf8') });
+  }
+  return collectAdrsFromSources(sources);
 }
 
 export function buildTraceability({ adrs, primitives, domains = [] }) {

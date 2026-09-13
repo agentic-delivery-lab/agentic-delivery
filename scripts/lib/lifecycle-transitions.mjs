@@ -25,6 +25,7 @@ export function validateTransition({ config, from, to, workType, governance = []
   if (to === 'parked' && workType !== 'idea') reasons.push('Only Idea work may enter state:parked.');
   if (['ready-for-plan', 'ready-for-agent', 'in-progress'].includes(to)
     && Array.isArray(config.readiness?.blocking_governance)
+    && workType !== 'architecture'
     && governance.some((label) => config.readiness.blocking_governance.includes(label))) {
     reasons.push('Blocking governance metadata is unresolved.');
   }

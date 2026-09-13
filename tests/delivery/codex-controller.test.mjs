@@ -203,7 +203,7 @@ test('continues incomplete implementation turns automatically before verificatio
   assert.equal((await f.state()).status,'ready');
   assert.deepEqual(f.calls.turns,['plan','implement','implement','implement','implement','implement']);
   assert.equal(f.calls.prs.length,1);
-  assert.ok(f.calls.prompts.slice(1).every(({prompt}) => prompt.includes('controller-owned verification')));
+  assert.ok(f.calls.prompts.slice(1).every(({prompt}) => prompt.includes('workflow to verify')));
 });
 
 test('an owner continue comment resumes implementation and is consumed once across automatic turns', async (t) => {
@@ -231,8 +231,8 @@ test('persists exact tasks from a rejected completion outcome', async (t) => {
 
   const state = await f.state();
   assert.deepEqual(state.tasks,['Run controller verification.']);
-  assert.match(await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8'),/Run controller verification/);
-  assert.doesNotMatch(await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8'),/Add result\.txt/);
+  assert.match(await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8'),/Remaining tasks prevent publication/);
+  assert.doesNotMatch(await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8'),/Run controller verification|Add result\.txt/);
 });
 
 test('coalesces rapid progress updates within one delivery phase', async (t) => {
@@ -295,9 +295,9 @@ test('recovers branch creation without repeating a completed plan', async (t) =>
 
 test('questions and quota exhaustion leave a readable continuation without implementation', async (t) => {
   for (const [fault, heading] of [
-    ['questions', 'Action required: answer Codex'],
-    ['quota', 'Delivery paused: recovery required'],
-    ['turnPause', 'Delivery paused: recovery required'],
+    ['questions', 'Action required'],
+    ['quota', 'Delivery paused'],
+    ['turnPause', 'Delivery paused'],
   ]) {
     const f = await fixture(t); f.faults[fault] = true; await f.run();
     assert.notEqual((await f.state()).status,'ready');
@@ -371,7 +371,7 @@ test('keeps the account lock when process termination cannot be confirmed', asyn
   const f = await fixture(t); f.faults.turnPause = true; f.faults.shutdown = true;
   await assert.rejects(f.run(),/process group/);
   await access(path.join(f.stateRoot,'account.lock'));
-  assert.match(await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8'),/Continuation/);
+  assert.match(await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8'),/Delivery paused/);
 });
 
 test('verification retry does not repeat implementation after a manual repair', async (t) => {
@@ -445,16 +445,8 @@ test('trusted owner comments continue the exact waiting session and finish succe
   assert.equal(waiting.sessionId,SESSION_ID);
   assert.ok(waiting.waitingCommentId);
   const handoff = await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8');
-  for (const value of [
-    `Codex session ID: \`${SESSION_ID}\``,
-    'Continuation state: `awaiting-human`',
-    'Issue: `#7`',
-    `codex resume ${SESSION_ID}`,
-  ]) assert.ok(handoff.includes(value),value);
-
-  await f.comment({id:199,body:'Please continue from the saved work.'});
-  assert.equal((await f.run())?.status,'ignored');
-  assert.equal((await f.state()).status,'awaiting-human');
+  assert.match(handoff, /Reply with the answers/);
+  assert.doesNotMatch(handoff, /Codex session ID|Continuation state|codex resume/);
 
   f.faults.questions = false;
   await f.comment({id:200,body:'Use the existing result file.'});
@@ -483,15 +475,16 @@ test('natural-language owner requests recover a technical pause in the exact ses
   assert.ok(f.calls.prompts.some(({prompt}) => prompt.includes('Please continue from the saved work.')));
 });
 
-test('ordinary owner feedback does not accidentally recover a technical pause', async (t) => {
+test('the controller trusts an already validated semantic resume route without parsing words', async (t) => {
   const f = await fixture(t);
   f.faults.turnPause = true;
   assert.equal((await f.run()).status,'paused');
-  const pausedTurns = f.calls.turns.length;
 
-  await f.comment({id:202,body:'Do not continue yet; I am reviewing the plan.'});
-  assert.equal((await f.run())?.status,'ignored');
-  assert.equal(f.calls.turns.length,pausedTurns);
+  f.faults.turnPause = false;
+  await f.comment({id:202,body:'This validated instruction contains no routing keyword.'});
+  await f.run();
+  assert.equal((await f.state()).status,'ready');
+  assert.ok(f.calls.prompts.some(({prompt}) => prompt.includes('This validated instruction contains no routing keyword.')));
 });
 
 test('manual dispatch remains available for a waiting continuation', async (t) => {

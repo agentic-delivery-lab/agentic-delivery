@@ -64,6 +64,14 @@ machine-readable result and one concise check summary. It does not post issue
 comments, modify the pull request, merge, close issues or silently repair
 findings.
 
+The requested Git revisions are the evidence boundary. The review reads the
+architecture map, ADR index and records, primitive metadata, domain register,
+generated traceability, and decision index directly from the pull-request head;
+it does not substitute the runner working tree. Added, changed, and removed ADRs
+on that head are therefore the provisional truth for that branch. After merge,
+the same files become official on `main`, and every branch created from the new
+`main` inherits them. The base revision remains the official comparison point.
+
 The deterministic layer validates the evidence schema, generated
 ADR/primitive relationships, domain applicability, required deterministic
 enforcement, source-issue and branch correlation, required durable-artifact
@@ -140,5 +148,6 @@ evidence rather than treating tests or documentation as runtime proof.
 - Baseline: [`docs/architecture/harness-conformance-review.md`](../architecture/harness-conformance-review.md)
 - Domain register: [`ubiquitous-language.yml`](../domain/ubiquitous-language.yml)
 - Related decisions: [ADR-0001](0001-use-madr-for-architecture-decisions.md), [ADR-0003](0003-use-context-scoped-ubiquitous-language.md), [ADR-0009](0009-run-codex-from-source-issues-with-a-budget-boundary.md), [ADR-0012](0012-use-github-as-the-lifecycle-control-plane.md), and [ADR-0013](0013-derive-adr-traceability-from-agentic-primitives.md)
+- Amendment source: [issue #32](https://github.com/sjefsharp/agentic-delivery/issues/32)
 - This decision is provisional on its feature branch and becomes official only
   after its review pull request is merged into `main`.

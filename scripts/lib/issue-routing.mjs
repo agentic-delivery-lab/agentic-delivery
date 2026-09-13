@@ -1,33 +1,7 @@
 // agentic-primitive: {"id":"issue-classifier","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012"],"domains":["agentic-delivery-governance"]}
 import { validateTransition } from './lifecycle-transitions.mjs';
 
-const TITLE_TYPE_PREFIXES = new Map([
-  ['bug', 'bug'], ['feature', 'feature'], ['request', 'feature'], ['task', 'task'],
-  ['idea', 'idea'], ['research', 'research'], ['architecture', 'architecture'], ['adr', 'architecture'],
-]);
-
-const ENGLISH_RECOVERY_REQUEST = new RegExp([
-  String.raw`^(?:(?:yes|okay|ok|sure)[,.!]?\s+)?`,
-  String.raw`(?:(?:please|kindly)\s+|(?:could|would|can|will)\s+you\s+(?:please\s+)?)?`,
-  String.raw`(?:continue|resume|proceed|retry|try\s+again|go\s+ahead)`,
-  String.raw`(?:\s+(?:(?:with\s+)?(?:the\s+)?(?:saved\s+)?(?:work|delivery|run|task)`,
-  String.raw`|from\s+(?:(?:the\s+)?saved\s+work|where\s+you\s+(?:stopped|left\s+off))))?`,
-  String.raw`(?:\s+please)?[.!?]*$`,
-].join(''), 'i');
-const DUTCH_RECOVERY_REQUEST = new RegExp([
-  String.raw`^(?:(?:ja|ok[eé]?|prima)[,.!]?\s+)?`,
-  String.raw`(?:(?:graag|alsjeblieft)\s+|(?:kun|wil|kan)\s+je\s+(?:alsjeblieft\s+)?)?`,
-  String.raw`(?:ga(?:\s+maar)?\s+verder|ga\s+door|hervat|probeer\s+opnieuw)`,
-  String.raw`(?:\s+(?:met\s+(?:het\s+)?(?:opgeslagen\s+)?(?:werk|proces|taak)`,
-  String.raw`|vanaf\s+waar\s+je\s+gebleven\s+was))?`,
-  String.raw`(?:\s+(?:graag|alsjeblieft))?[.!?]*$`,
-].join(''), 'i');
-
-export function isResumeRequestBody(body) {
-  const text = String(body ?? '').trim().replace(/\s+/g, ' ');
-  if (text === '/codex resume') return true;
-  return ENGLISH_RECOVERY_REQUEST.test(text) || DUTCH_RECOVERY_REQUEST.test(text);
-}
+const ROUTES = new Set(['hold', 'refine', 'plan', 'resume', 'coordinate']);
 
 export function normalize(value) {
   return String(value ?? '').trim().toLocaleLowerCase('en-US');
@@ -102,11 +76,6 @@ function detectFormType(body, config) {
   return { bodyHeadings, matches };
 }
 
-function titleType(title) {
-  const match = /^\s*([^:–—-]+?)\s*[:–—-]/u.exec(String(title ?? ''));
-  return TITLE_TYPE_PREFIXES.get(normalize(match?.[1]));
-}
-
 function resolveNativeType(issue, config) {
   const name = normalize(nativeTypeName(issue));
   return config.types.find((type) => normalize(type.name) === name || normalize(type.id) === name);
@@ -117,13 +86,7 @@ export function resolveWorkType({ issue = {}, body = issue.body, config }) {
   const native = resolveNativeType(issue, config);
   const fallback = [...new Set(labels.map((label) => typeByLabel(config, label)).filter(Boolean).map((type) => type.id))]
     .map((id) => typeById(config, id));
-  const forms = detectFormType(body, config);
-  const title = titleType(issue.title);
-  const candidates = new Set([
-    ...fallback.map((type) => type.id),
-    ...forms.matches,
-    ...(title ? [title] : []),
-  ]);
+  const candidates = new Set(fallback.map((type) => type.id));
 
   if (native) {
     const conflicts = [...candidates].filter((candidate) => candidate !== native.id);
@@ -134,17 +97,6 @@ export function resolveWorkType({ issue = {}, body = issue.body, config }) {
     return { type: fallback[0], source: 'label', conflict: conflicts.length > 0 ? conflicts : null, candidates: [fallback[0].id, ...conflicts] };
   }
   if (fallback.length > 1) return { type: null, source: 'conflict', conflict: fallback.map((type) => type.id), candidates: [...candidates] };
-  if (forms.matches.length === 1) {
-    const conflicts = [...candidates].filter((candidate) => candidate !== forms.matches[0]);
-    return {
-      type: typeById(config, forms.matches[0]),
-      source: 'form',
-      conflict: conflicts.length > 0 ? conflicts : null,
-      candidates: [...candidates],
-    };
-  }
-  if (forms.matches.length > 1) return { type: null, source: 'conflict', conflict: forms.matches, candidates: [...candidates] };
-  if (title) return { type: typeById(config, title), source: 'title', conflict: null, candidates: [...candidates] };
   return { type: null, source: 'unknown', conflict: null, candidates: [...candidates] };
 }
 
@@ -204,7 +156,9 @@ function readiness(config, { issue, type, state, governance, form, conflict }) {
   if (type && !config.readiness.delivery_types.includes(type.id)) reasons.push(`${type.name} work must mature before planning.`);
   if (state !== 'ready-for-plan') reasons.push(`The issue is in state ${state ?? 'unknown'}, not state:ready-for-plan.`);
   if (form.incomplete) reasons.push(`Required intake fields are missing: ${form.missing.join(', ')}.`);
-  const blocked = governance.filter((label) => config.readiness.blocking_governance.includes(label));
+  const blocked = type?.id === 'architecture'
+    ? []
+    : governance.filter((label) => config.readiness.blocking_governance.includes(label));
   if (blocked.length) reasons.push(`Unresolved governance gates: ${blocked.join(', ')}.`);
   return { ok: reasons.length === 0, reasons };
 }
@@ -280,7 +234,91 @@ export function classifyIssue({ issue = {}, config, requestedState, mode = 'even
   };
 }
 
-export function parseEventRequestedState(event, config) {
-  if (event?.action !== 'labeled' || !event.label?.name) return undefined;
-  return stateByLabel(config, event.label.name)?.id;
+export function routingOutcomeSchema(config) {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['route', 'workType', 'state', 'governance', 'summary', 'message'],
+    properties: {
+      route: { type: 'string', enum: [...ROUTES] },
+      workType: { type: ['string', 'null'], enum: [...config.types.map((type) => type.id), null] },
+      state: { type: 'string', enum: config.states.map((state) => state.id) },
+      governance: { type: 'array', items: { type: 'string', enum: config.governance.map((item) => item.label) } },
+      summary: { type: 'string' },
+      message: { type: 'string' },
+    },
+  };
+}
+
+export function validateRoutingProposal({ proposal, issue = {}, event = {}, config }) {
+  const required = ['route', 'workType', 'state', 'governance', 'summary', 'message'];
+  if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)
+    || Object.keys(proposal).some((key) => !required.includes(key))
+    || required.some((key) => !(key in proposal))) throw new Error('Routing proposal does not match the required schema.');
+  if (!ROUTES.has(proposal.route)) throw new Error('Routing proposal uses an unsupported route.');
+  const type = proposal.workType === null ? null : typeById(config, proposal.workType);
+  if (proposal.workType !== null && !type) throw new Error('Routing proposal uses an unapproved work type.');
+  const native = resolveNativeType(issue, config);
+  if (native && proposal.workType !== native.id) throw new Error(`Routing proposal conflicts with the native work type ${native.id}.`);
+  if (!config.states.some((state) => state.id === proposal.state)) throw new Error('Routing proposal uses an unapproved lifecycle state.');
+  if (!Array.isArray(proposal.governance) || proposal.governance.some((label) => typeof label !== 'string'
+    || !config.governance.some((item) => item.label === label))) throw new Error('Routing proposal uses an unapproved governance label.');
+  if (new Set(proposal.governance).size !== proposal.governance.length) throw new Error('Routing proposal repeats a governance label.');
+  if (typeof proposal.summary !== 'string' || !proposal.summary.trim() || proposal.summary.length > 1_000) throw new Error('Routing proposal requires a concise summary.');
+  if (typeof proposal.message !== 'string' || proposal.message.length > 1_000) throw new Error('Routing proposal message must be concise.');
+  if (!['hold', 'refine'].includes(proposal.route) && !type) throw new Error('Planning or resuming requires an approved work type.');
+
+  const labels = issueLabels(issue);
+  const currentStates = stateIds(config, labels);
+  if (currentStates.length > 1 && proposal.state !== 'needs-triage') throw new Error('Conflicting lifecycle states may only transition to needs-triage.');
+  if (currentStates.length === 1 && currentStates[0] !== proposal.state) {
+    const transition = validateTransition({
+      config,
+      from: currentStates[0],
+      to: proposal.state,
+      workType: proposal.workType,
+      governance: proposal.governance,
+      issueState: issue.state,
+    });
+    if (!transition.allowed) throw new Error(`Routing proposal transition rejected: ${transition.reasons.join(' ')}`);
+  }
+  if (normalize(issue.state) !== 'open' && (proposal.route !== 'hold' || proposal.state !== 'done')) {
+    throw new Error('A closed issue can only remain on hold in state:done.');
+  }
+  if (proposal.state === 'parked' && proposal.workType !== 'idea') throw new Error('Only Idea work may use state:parked.');
+  if (proposal.route === 'plan' && proposal.state !== 'ready-for-plan') throw new Error('The plan route requires state:ready-for-plan.');
+  if (proposal.route === 'resume' && !event.comment && event.kind !== 'workflow_dispatch') throw new Error('The resume route requires a comment or manual recovery event.');
+  if (proposal.route === 'coordinate' && proposal.state !== 'coordinating') throw new Error('The coordinate route requires state:coordinating.');
+  if (proposal.route === 'refine' && !['needs-triage', 'needs-info', 'requirements', 'decision-needed', 'investigating', 'coordinating'].includes(proposal.state)) {
+    throw new Error(`The refine route is not valid from ${proposal.state}.`);
+  }
+
+  const form = requiredFormFields(config, type, issue.body, 'model');
+  const gate = readiness(config, { issue, type, state: proposal.state, governance: proposal.governance, form, conflict: null });
+  if (proposal.route === 'plan' && !gate.ok) throw new Error(`Routing proposal cannot plan: ${gate.reasons.join(' ')}`);
+  if (proposal.state === 'ready-for-plan' && !currentStates.includes('ready-for-plan')
+    && !['plan', 'resume'].includes(proposal.route)) {
+    throw new Error('A new ready-for-plan state must start or resume planning.');
+  }
+  const typeLabel = type?.label;
+  return {
+    workType: type?.id ?? null,
+    workTypeName: type?.name ?? null,
+    workTypeSource: 'model',
+    candidates: type ? [type.id] : [],
+    conflict: null,
+    stateConflict: false,
+    state: proposal.state,
+    stateLabel: stateLabel(config, proposal.state),
+    governance: [...proposal.governance],
+    formDetected: form.detected,
+    missingFields: form.missing,
+    readiness: gate,
+    route: proposal.route,
+    reasons: [proposal.summary],
+    message: proposal.message,
+    targetLabels: [typeLabel, stateLabel(config, proposal.state), ...proposal.governance].filter(Boolean),
+    managedLabels: [...managedLabels(config)],
+    resolution: normalize(issue.state) === 'closed' ? issue.state_reason ?? null : null,
+  };
 }
