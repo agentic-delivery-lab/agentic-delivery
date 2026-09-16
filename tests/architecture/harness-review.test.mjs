@@ -64,7 +64,7 @@ test('review reads provisional architecture evidence from the requested head rev
   ]);
   const review = await deterministicReview({ repositoryRoot: clone, base: revision, head: revision });
   assert.equal(review.status, 'pass');
-  assert.equal(review.officialAdrs.length, 14);
+  assert.equal(review.officialAdrs.length, 15);
 });
 
 test('controller evidence is required only when a delivery marker is present', async (t) => {
