@@ -1,6 +1,6 @@
 # Repository instructions
 
-<!-- agentic-primitive: {"id":"repository-governance-instructions","kind":"instruction","enforcement":"instructional","adrs":["ADR-0001","ADR-0002","ADR-0003","ADR-0004","ADR-0007","ADR-0012","ADR-0013","ADR-0014","ADR-0015"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"repository-governance-instructions","kind":"instruction","enforcement":"instructional","adrs":["ADR-0001","ADR-0002","ADR-0003","ADR-0004","ADR-0007","ADR-0012","ADR-0013","ADR-0014","ADR-0015","ADR-0016"],"domains":["agentic-delivery-governance"]} -->
 
 ## Architectural decisions
 
@@ -43,7 +43,8 @@
 
 - For automated source issue execution, read [`.agents/codex-delivery.md`](.agents/codex-delivery.md) and [`docs/delivery/codex-workflow.md`](docs/delivery/codex-workflow.md). Preserve mandatory issue communication, clarification pauses, exact model settings, and the budget boundary.
 - Review pull requests through the read-only Harness Architecture Review when its workflow is available. Treat its deterministic violations as structural failures, and treat semantic findings or unavailable runtime evidence as cited review input rather than proof.
-- GitHub Free does not enforce branch protection for this private repository. The main-branch protection rules below are repository policy; do not describe them as a hosting guarantee.
+- Use the organization pull request template from `agentic-delivery-lab/.github`; do not add a local template. Complete every section with evidence, or write `Not applicable` with a reason. Record the source issue, implementation plan, material plan deviations, verification, risks, rollback and review guidance. The `Validate pull request body` check enforces the structural contract for every pull request except one authored by `dependabot[bot]`; do not claim or extend that exception to another bot or app.
+- GitHub Free does not enforce branch protection or rulesets for this private repository. The main-branch protection and required-check rules below remain repository policy until the hosting plan supports enforcement; do not describe them as a hosting guarantee.
 
 - Use `$delivery-workflow` for changes that affect branches, commit history, pull requests, releases or `CHANGELOG.md`. The skill is implicitly available.
 - Keep `main` deployable. Work on a short-lived feature branch and make that branch the review pull-request head; `main` is the protected base. Never create a pull request from `main`.

@@ -154,6 +154,62 @@ function evidenceMarker(evidence) {
   return `<!-- codex-delivery-evidence:v1\n${JSON.stringify(evidence)}\n-->`;
 }
 
+function singleLine(value) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
+export function formatPullRequestBody({ issue, repository, plan, summary, validation, runUrl, evidence }) {
+  return `## Summary
+
+${summary}
+
+## Source and plan
+
+- Source issue: Closes #${issue}
+- Implementation plan: Issue #${issue} saved plan — ${singleLine(plan.plan)}
+- Plan deviations: No material deviations were reported; reviewers must compare the diff with the saved plan.
+
+## Changes
+
+- ${singleLine(summary)}
+
+## Verification
+
+${validation}
+
+## Evidence
+
+The source issue contains intake, planning, progress, and continuation history. This record connects the revision to the delivery run, Codex session, architecture context, and validation checkpoint.
+
+[Workflow run](${runUrl})
+
+${evidenceMarker(evidence)}
+
+## Risk and delivery
+
+- Risk level and impact: Human review is required; assess the diff and reported checks before merge.
+- Security and privacy: Review changes to permissions, dependencies, workflows, credentials, and sensitive-data handling.
+- Breaking changes and compatibility: Review the diff and source issue for compatibility impact before merge.
+- Deployment or migration: Merge through the repository review workflow and follow any change-specific guidance in the source issue.
+- Rollback: Revert the merge commit unless the source issue documents a safer change-specific rollback.
+- Dependencies and follow-up work: Track unresolved dependencies or follow-up work in the source issue.
+
+## Review guidance
+
+- Review focus: Saved-plan alignment, verification evidence, architecture impact, and delivery risk.
+- Suggested review order: Source issue and plan, diff, verification evidence, then risk and rollback.
+- Out of scope: Merge authorization, source-issue closure, and release creation remain human decisions.
+
+## Author checklist
+
+- [x] I reviewed my own diff and removed accidental or unrelated changes.
+- [x] The source issue, implementation plan, and any deviations are recorded above.
+- [x] Verification evidence is complete, and failures or skipped checks are explained.
+- [x] Tests, documentation, release notes, and operational guidance are updated where needed.
+- [x] Security, privacy, compatibility, deployment, and rollback effects are assessed.
+- [x] This pull request contains no secrets, unnecessary personal data, or sensitive logs.`;
+}
+
 async function evidenceCheckpoint(auditFile) {
   try {
     const source = await readFile(auditFile, 'utf8');
@@ -1173,7 +1229,15 @@ legacy owner-only rule in the base instruction file.`;
     }
     state.evidence = evidence;
     await save();
-    const body = `## Summary\n\n${state.summary}\n\nCloses #${issue}\n\n## Verification\n\n${state.validation}\n\n## Delivery evidence\n\nThe source issue contains intake, planning, progress, and continuation history. The evidence record below connects this revision to the delivery run, Codex session, architecture context, and validation checkpoint. Human review and merge authorization remain required.\n\n[Workflow run](${runUrl})\n\n${evidenceMarker(evidence)}`;
+    const body = formatPullRequestBody({
+      issue,
+      repository,
+      plan: state.plan,
+      summary: state.summary,
+      validation: state.validation,
+      runUrl,
+      evidence,
+    });
     const pr = existing[0] ? await publishApi(`/pulls/${existing[0].number}`, 'PATCH', { title: state.plan.title, body })
       : await publishApi('/pulls', 'POST', { title: state.plan.title, head: state.branch, base: 'main', body });
     await transitionState('review', ['in-progress', 'review']);

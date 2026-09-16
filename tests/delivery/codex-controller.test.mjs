@@ -6,6 +6,7 @@ import { mkdtemp, readFile, writeFile, mkdir, rm, access } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { deliver } from '../../scripts/codex-delivery.mjs';
+import { validatePullRequestBody } from '../../scripts/validate-pull-request-body.mjs';
 
 const exec = promisify(execFile);
 const plan = {status:'ready', kind:'requirements', summary:'Add the requested file.', plan:'Add result.txt and verify it.', tasks:['Add result.txt.'], questions:[], changeType:'feat', title:'feat: ✨ add requested file'};
@@ -201,6 +202,8 @@ test('publishes one recorded branch and PR with a complete issue audit trail', a
   assert.deepEqual(f.calls.threads,[{method:'start'}]);
   assert.match(f.calls.prs[0].body,/Closes #7/);
   assert.match(f.calls.prs[0].body,/codex-delivery-evidence:v1/);
+  const pullRequestBody = validatePullRequestBody({body:f.calls.prs[0].body,author:'github-actions[bot]'});
+  assert.equal(pullRequestBody.valid,true,pullRequestBody.errors.join('\n'));
   const auditLines = (await readFile(path.join(f.issueRoot, 'audit.jsonl'), 'utf8')).trim().split(/\r?\n/).map((line) => JSON.parse(line));
   assert.ok(auditLines.every((entry) => entry.schemaVersion === 1 && entry.type === 'delivery-audit' && entry.sourceIssue === 7));
   assert.equal(f.calls.prs[0].base,'main'); assert.equal(f.calls.prs[0].head,state.branch);

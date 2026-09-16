@@ -5,6 +5,8 @@ import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
+import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
+
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const execFileAsync = promisify(execFile);
 
@@ -67,4 +69,25 @@ test('the hosted portability matrix is internal-only and tests the frozen instal
   const portability = workflow.slice(workflow.indexOf('  portability:'));
   assert.equal((portability.match(/pnpm install --frozen-lockfile --ignore-scripts/g) ?? []).length, 1);
   assert.equal((portability.match(/pnpm test/g) ?? []).length, 1);
+});
+
+test('pull request body workflow always reports a trusted read-only check', async () => {
+  const source = await text('.github/workflows/pull-request-body.yml');
+  const workflow = parseRepositoryYaml(source, 'pull request body workflow');
+  assert.deepEqual(workflow.on.pull_request_target.types, [
+    'opened', 'edited', 'reopened', 'synchronize', 'ready_for_review',
+  ]);
+  assert.deepEqual(workflow.permissions, { contents: 'read' });
+  const job = workflow.jobs.validate;
+  assert.equal(job.name, 'Validate pull request body');
+  assert.equal(job['runs-on'], 'ubuntu-latest');
+  assert.ok(!job.if);
+  const checkout = job.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
+  assert.equal(checkout.with.ref, '${{ github.event.pull_request.base.sha }}');
+  assert.equal(checkout.with['persist-credentials'], false);
+  const validate = job.steps.find((step) => step.run === 'node scripts/validate-pull-request-body.mjs');
+  assert.equal(validate.env.PR_AUTHOR, '${{ github.event.pull_request.user.login }}');
+  assert.equal(validate.env.PR_BODY, '${{ github.event.pull_request.body }}');
+  assert.ok(!source.includes('secrets.'));
+  assert.ok(!source.includes('github.event.pull_request.head'));
 });

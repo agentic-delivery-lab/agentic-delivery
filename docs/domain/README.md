@@ -61,3 +61,4 @@ presence does not load complete ADRs into a model context.
 - [ADR-0013: Derive ADR traceability from agentic primitives](../decisions/0013-derive-adr-traceability-from-agentic-primitives.md).
 - [ADR-0014: Use a repository-scoped GitHub App](../decisions/0014-use-a-repository-scoped-github-app.md).
 - [ADR-0015: Isolate resumable runner execution](../decisions/0015-isolate-resumable-runner-execution.md).
+- [ADR-0016: Require structured pull request descriptions](../decisions/0016-require-structured-pull-request-descriptions.md).

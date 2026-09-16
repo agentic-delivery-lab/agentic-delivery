@@ -34,6 +34,31 @@ malformed, incomplete, or invalid source fails the contract tests. Blank
 issues remain enabled for incomplete or untyped work that needs semantic
 refinement.
 
+The canonical pull request template is published in the
+[`agentic-delivery-lab/.github` repository](https://github.com/agentic-delivery-lab/.github/blob/main/.github/pull_request_template.md).
+This repository has no local pull request template override. A local template
+in `.github`, the repository root, or `docs` would take precedence and must not
+be added. Publish and verify an organization-template change before removing or
+replacing the active default, so contributors are never left without a
+template.
+
+The `Validate pull request body` Actions job checks that people and coding
+agents complete the required sections, fields and author checklist. It runs
+trusted code from the pull request's base commit with read-only permissions and
+does not execute pull-request code. Only a pull request authored by
+`dependabot[bot]` receives a successful explicit exemption. Other bots and Apps
+must satisfy the same contract as people.
+
+The desired default-branch ruleset is versioned at
+[`require-pull-request-body.json`](../../.github/rulesets/require-pull-request-body.json).
+It has no bypass actors and requires the exact job name
+`Validate pull request body`. GitHub Free cannot enforce rulesets for this
+private repository: the live API currently returns HTTP 403. After the
+organization moves to GitHub Team or Enterprise Cloud, or this repository
+becomes public, an administrator must first observe the check, import or create
+the ruleset, and verify the live rule. Until then, the required check is
+repository policy but not a hosting guarantee.
+
 The organization-wide taxonomy is: Idea, Research, Feature, Bug, Task,
 Requirements, Architecture Decision, Implementation, and Validation. Native
 GitHub Issue Types are the durable classification. Existing `type:*` labels

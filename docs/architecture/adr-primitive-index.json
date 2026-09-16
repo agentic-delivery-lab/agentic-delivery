@@ -228,6 +228,23 @@
         "organization-metadata-runbook",
         "repository-governance-instructions"
       ]
+    },
+    {
+      "id": "ADR-0016",
+      "file": "docs/decisions/0016-require-structured-pull-request-descriptions.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "instructional"
+      ],
+      "primitives": [
+        "organization-metadata-runbook",
+        "pull-request-body-check",
+        "pull-request-body-validator",
+        "repository-governance-instructions"
+      ]
     }
   ],
   "domains": [
@@ -247,7 +264,8 @@
         "ADR-0012",
         "ADR-0013",
         "ADR-0014",
-        "ADR-0015"
+        "ADR-0015",
+        "ADR-0016"
       ],
       "primitives": [
         "adr-structure-validator",
@@ -273,6 +291,8 @@
         "orchestration-policy-catalog",
         "orchestration-policy-validator",
         "organization-metadata-runbook",
+        "pull-request-body-check",
+        "pull-request-body-validator",
         "repository-governance-instructions",
         "semantic-architecture-review",
         "semantic-issue-router",
@@ -590,7 +610,34 @@
       "adrs": [
         "ADR-0012",
         "ADR-0013",
-        "ADR-0015"
+        "ADR-0015",
+        "ADR-0016"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "pull-request-body-check",
+      "path": ".github/workflows/pull-request-body.yml",
+      "location": ".github/workflows/pull-request-body.yml",
+      "kind": "workflow",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0016"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "pull-request-body-validator",
+      "path": "scripts/validate-pull-request-body.mjs",
+      "location": "scripts/validate-pull-request-body.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0016"
       ],
       "domains": [
         "agentic-delivery-governance"
@@ -612,7 +659,8 @@
         "ADR-0012",
         "ADR-0013",
         "ADR-0014",
-        "ADR-0015"
+        "ADR-0015",
+        "ADR-0016"
       ],
       "domains": [
         "agentic-delivery-governance"

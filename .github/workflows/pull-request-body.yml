@@ -1,0 +1,27 @@
+# agentic-primitive: {"id":"pull-request-body-check","kind":"workflow","enforcement":"deterministic","adrs":["ADR-0016"],"domains":["agentic-delivery-governance"]}
+name: pull-request-body
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate pull request body
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check out the trusted base revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Validate the pull request body
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/validate-pull-request-body.mjs

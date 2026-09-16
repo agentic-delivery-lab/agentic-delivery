@@ -26,6 +26,14 @@ Keep the title to one line and do not add issue-closing directives to titles
 or implementation summaries; the controller supplies the linked issue reference.
 Keep the plan and tasks concrete enough for another model to implement.
 
+The controller publishes the review pull request with the organization
+template contract. Make the implementation summary evidence-based and report
+material plan deviations immediately in progress or clarification output. Do
+not hide a deviation in a generic completion statement. The published body
+must give reviewers enough context to compare the saved implementation plan,
+diff, verification evidence, risks, deployment and rollback. Only Dependabot
+pull requests are exempt from the deterministic body check.
+
 ## Implementation and verification
 
 Use GPT-5.6 Luna at max reasoning effort. Follow the completed plan and preserve

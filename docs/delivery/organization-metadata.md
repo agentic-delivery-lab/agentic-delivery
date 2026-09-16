@@ -1,4 +1,4 @@
-<!-- agentic-primitive: {"id":"organization-metadata-runbook","kind":"instruction","enforcement":"instructional","adrs":["ADR-0012","ADR-0013","ADR-0015"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"organization-metadata-runbook","kind":"instruction","enforcement":"instructional","adrs":["ADR-0012","ADR-0013","ADR-0015","ADR-0016"],"domains":["agentic-delivery-governance"]} -->
 
 # Organization GitHub metadata runbook
 
@@ -108,6 +108,42 @@ checks that blank issues remain enabled. Availability of the organization
 repository is a live CI dependency; an unreachable, malformed, incomplete, or
 invalid source fails the contract tests. Changes to the separate
 `agentic-delivery-lab/.github` repository are outside this change.
+
+## Organization pull request template and required check
+
+The canonical pull request template is published in the
+[`agentic-delivery-lab/.github` repository](https://github.com/agentic-delivery-lab/.github/blob/main/.github/pull_request_template.md).
+This repository has no local pull request template override, so GitHub falls
+back to the organization default. Do not add `pull_request_template.md` or a
+`PULL_REQUEST_TEMPLATE` directory under `.github`, the repository root, or
+`docs`; a local template would take precedence.
+
+The organization template asks authors to link the source issue and
+implementation plan, explain material plan deviations, provide verification
+evidence, assess delivery risk, and guide reviewers. The
+`pull-request-body.yml` workflow validates that contract with trusted
+base-branch code and read-only permissions. It reports the stable job name
+`Validate pull request body` for every relevant pull-request event. The exact
+author `dependabot[bot]` receives a successful exemption; no other bot, App,
+user, team, or administrator is exempt.
+
+The importable repository ruleset is
+[`require-pull-request-body.json`](../../.github/rulesets/require-pull-request-body.json).
+It targets the default branch, has no bypass actors, and requires the stable
+job name. The organization currently uses GitHub Free and this repository is
+private, so the Rulesets API returns HTTP 403. Do not claim live enforcement.
+When the plan or visibility supports rulesets, first let the workflow report
+the check and then apply the reviewed definition:
+
+```text
+gh api --method POST repos/agentic-delivery-lab/agentic-delivery/rulesets \
+  --input .github/rulesets/require-pull-request-body.json
+```
+
+Read the created ruleset back through the API and confirm that it is active,
+targets `~DEFAULT_BRANCH`, requires `Validate pull request body`, and has no
+bypass actors. Merge the organization template before merging the removal of
+any local override.
 
 ## Existing issue migration
 
