@@ -13,6 +13,56 @@ on:
         description: Authorized orchestration route selected by the intake policy
         required: true
         type: string
+      invocation_event_name:
+        description: Validated source comment event name, when the run came from an agent mention
+        required: false
+        default: ''
+        type: string
+      invocation_source_kind:
+        description: Validated issue or pull request conversation surface
+        required: false
+        default: ''
+        type: string
+      invocation_comment_id:
+        description: Source issue or inline comment ID
+        required: false
+        default: ''
+        type: string
+      invocation_review_id:
+        description: Source formal review ID
+        required: false
+        default: ''
+        type: string
+      invocation_pull_request_number:
+        description: Source pull request number
+        required: false
+        default: ''
+        type: string
+      invocation_delivery_id:
+        description: GitHub delivery ID used for idempotency
+        required: false
+        default: ''
+        type: string
+      invocation_actor:
+        description: Signed source actor login
+        required: false
+        default: ''
+        type: string
+      invocation_actor_kind:
+        description: Deterministically classified source actor kind
+        required: false
+        default: ''
+        type: string
+      invocation_authorized:
+        description: Whether preflight authorized the source actor
+        required: false
+        default: 'false'
+        type: string
+      invocation_body_digest:
+        description: Digest of the validated source comment body
+        required: false
+        default: ''
+        type: string
     secrets:
       CODEX_DELIVERY_APP_PRIVATE_KEY:
         required: true
@@ -67,6 +117,17 @@ jobs:
           CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ secrets.CODEX_DELIVERY_APP_INSTALLATION_ID }}
           SOURCE_ISSUE: ${{ inputs.issue || github.event.inputs.issue }}
           INTAKE_ROUTE: ${{ inputs.route || 'resume' }}
+          INVOCATION_EVENT: ${{ inputs.invocation_event_name != '' && 'true' || 'false' }}
+          INVOCATION_EVENT_NAME: ${{ inputs.invocation_event_name }}
+          INVOCATION_SOURCE_KIND: ${{ inputs.invocation_source_kind }}
+          INVOCATION_COMMENT_ID: ${{ inputs.invocation_comment_id }}
+          INVOCATION_REVIEW_ID: ${{ inputs.invocation_review_id }}
+          INVOCATION_PULL_REQUEST_NUMBER: ${{ inputs.invocation_pull_request_number }}
+          INVOCATION_DELIVERY_ID: ${{ inputs.invocation_delivery_id }}
+          INVOCATION_ACTOR: ${{ inputs.invocation_actor }}
+          INVOCATION_ACTOR_KIND: ${{ inputs.invocation_actor_kind }}
+          INVOCATION_AUTHORIZED: ${{ inputs.invocation_authorized }}
+          INVOCATION_BODY_DIGEST: ${{ inputs.invocation_body_digest }}
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
           ISSUE_FIELD_BINDINGS_JSON: ${{ vars.ISSUE_FIELD_BINDINGS_JSON }}
           CODEX_MCP_SERVERS: ${{ vars.CODEX_MCP_SERVERS }}

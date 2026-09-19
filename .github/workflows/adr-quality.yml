@@ -6,7 +6,6 @@ on:
     paths:
       - AGENTS.md
       - .agents/skills/**
-      - .github/pull_request_template.md
       - .github/workflows/adr-quality.yml
       - .markdownlint-cli2.jsonc
       - CHANGELOG.md
@@ -29,7 +28,6 @@ on:
     paths:
       - AGENTS.md
       - .agents/skills/**
-      - .github/pull_request_template.md
       - .github/workflows/adr-quality.yml
       - .markdownlint-cli2.jsonc
       - CHANGELOG.md

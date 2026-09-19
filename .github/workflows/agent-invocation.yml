@@ -1,0 +1,22 @@
+name: agent-invocation
+
+# agentic-primitive: {"id":"agent-invocation-workflow","kind":"workflow","enforcement":"deterministic","adrs":["ADR-0017"],"domains":["agentic-delivery-governance"]}
+
+on:
+  repository_dispatch:
+    types: [agent_invocation]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  intake:
+    uses: ./.github/workflows/issue-intake.yml
+    with:
+      agent_invocation: true
+    secrets:
+      CODEX_DELIVERY_APP_ID: ${{ secrets.CODEX_DELIVERY_APP_ID }}
+      CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
+      CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ secrets.CODEX_DELIVERY_APP_INSTALLATION_ID }}

@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  GITHUB_API_VERSION,
   ISSUE_CONTROL_PLANE_QUERY,
   SET_ISSUE_FIELDS_MUTATION,
+  githubGraphqlApi,
   issueFieldInput,
   readIssueControlPlane,
   setIssueFields,
@@ -33,6 +35,28 @@ test('the control-plane query reads native issue types, pinned field values, and
   assert.match(ISSUE_CONTROL_PLANE_QUERY, /\.\.\. on IssueFieldSingleSelect \{ options \{ id name description \} \}/);
   assert.match(ISSUE_CONTROL_PLANE_QUERY, /parent/);
   assert.match(ISSUE_CONTROL_PLANE_QUERY, /subIssues/);
+});
+
+test('GraphQL control-plane requests pin the issue-field API schema version', async () => {
+  let request;
+  const graphql = githubGraphqlApi({
+    token: 'test-token',
+    fetchImpl: async (url, options) => {
+      request = { url, options };
+      return { ok: true, status: 200, json: async () => ({ data: {} }) };
+    },
+  });
+
+  await graphql('query Test { viewer { login } }', { example: true });
+
+  assert.equal(request.url, 'https://api.github.com/graphql');
+  assert.equal(request.options.headers['X-GitHub-Api-Version'], '2026-03-10');
+  assert.equal(request.options.headers['X-GitHub-Api-Version'], GITHUB_API_VERSION);
+  assert.equal(request.options.headers.Authorization, 'Bearer test-token');
+  assert.deepEqual(JSON.parse(request.options.body), {
+    query: 'query Test { viewer { login } }',
+    variables: { example: true },
+  });
 });
 
 test('field inputs use approved field and option IDs', () => {

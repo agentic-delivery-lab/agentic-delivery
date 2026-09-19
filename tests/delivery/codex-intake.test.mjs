@@ -63,12 +63,14 @@ test('bot identities and pull-request comments cannot enter intake while reposit
   assert.throws(() => intakeEvent({action:'created',...base,comment:{id:47,body:'Continue'}},context),/non-bot repository user/);
 });
 
-test('issue comments do not require the resume command before intake eligibility is checked', () => {
+test('comment-driven intake is dispatched only through the explicit agent-invocation workflow', () => {
   const workflow = readFile(path.join(repositoryRoot, '.github/workflows/issue-intake.yml'), 'utf8');
   return workflow.then((source) => {
-    assert.match(source, /github\.event\.comment\.user\.type != 'Bot'/);
+    assert.doesNotMatch(source, /issue_comment:\s*\n\s*types:/);
+    assert.match(source, /inputs\.agent_invocation/);
+    assert.match(source, /prepare-agent-invocation\.mjs/);
     assert.match(source, /needs\.classify\.outputs\.route == 'resume'/);
-    assert.doesNotMatch(source, /startsWith\(github\.event\.comment\.body, '\/codex resume'\)/);
+    assert.doesNotMatch(source, /startsWith\(github\.event\.comment\.body/);
   });
 });
 

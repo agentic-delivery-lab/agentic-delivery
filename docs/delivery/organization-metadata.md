@@ -1,4 +1,4 @@
-<!-- agentic-primitive: {"id":"organization-metadata-runbook","kind":"instruction","enforcement":"instructional","adrs":["ADR-0012","ADR-0013","ADR-0015"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"organization-metadata-runbook","kind":"instruction","enforcement":"instructional","adrs":["ADR-0012","ADR-0013","ADR-0015","ADR-0016","ADR-0017"],"domains":["agentic-delivery-governance"]} -->
 
 # Organization GitHub metadata runbook
 
@@ -45,6 +45,11 @@ after the operator binds the provisioned GitHub IDs.
 GitHub assigns organization-specific node IDs to Issue Types, fields, and
 single-select options. Store the observed, non-secret bindings as a protected
 repository variable named `ISSUE_FIELD_BINDINGS_JSON`:
+
+The metadata controller reads this catalog through the GitHub GraphQL API with
+version `2026-03-10`. Keep that version pinned when operating or extending the
+controller: older API versions can omit the native issue-field schema even
+when the organization fields exist.
 
 ```json
 {
@@ -108,6 +113,54 @@ checks that blank issues remain enabled. Availability of the organization
 repository is a live CI dependency; an unreachable, malformed, incomplete, or
 invalid source fails the contract tests. Changes to the separate
 `agentic-delivery-lab/.github` repository are outside this change.
+
+## Organization pull request template and required check
+
+The canonical pull request template is published in the
+[`agentic-delivery-lab/.github` repository](https://github.com/agentic-delivery-lab/.github/blob/main/.github/pull_request_template.md).
+This repository has no local pull request template override, so GitHub falls
+back to the organization default. Do not add `pull_request_template.md` or a
+`PULL_REQUEST_TEMPLATE` directory under `.github`, the repository root, or
+`docs`; a local template would take precedence.
+
+The organization template has separate `Source` and `Plan` sections. `Source`
+contains the source issue; `Plan` contains the implementation plan and
+material deviations. It also asks authors to provide verification evidence,
+assess delivery risk, and guide reviewers. The
+`pull-request-body.yml` workflow validates that contract with trusted
+base-branch code and read-only permissions. It reports the stable job name
+`Validate pull request body` for every relevant pull-request event. The exact
+author `dependabot[bot]` receives a successful exemption; no other bot, App,
+user, team, or administrator is exempt.
+
+The organization `.github` repository is the right home for default templates,
+issue forms, and reusable workflow definitions. A workflow that must react to
+pull requests in this repository still needs a small caller under this
+repository's `.github/workflows`; moving the event-triggered YAML entirely to
+the organization repository would not make GitHub run it here. The required
+body check therefore remains local and checks trusted base-branch code. Rulesets
+are GitHub repository or organization resources rather than files discovered
+from `.github`; the JSON below is versioned as an auditable deployment input
+and must be applied through the Rulesets API by an authorized maintainer.
+
+The importable repository ruleset is
+[`require-pull-request-body.json`](../../.github/rulesets/require-pull-request-body.json).
+It targets the default branch, has no bypass actors, and requires the stable
+job name. The repository is public now, so the repository Rulesets API is
+available. Do not apply the active rule until this pull request (and the
+workflow it introduces) is merged; otherwise the required check does not yet
+exist on `main`. After merge, first let the workflow report the check and then
+apply the reviewed definition:
+
+```text
+gh api --method POST repos/agentic-delivery-lab/agentic-delivery/rulesets \
+  --input .github/rulesets/require-pull-request-body.json
+```
+
+Read the created ruleset back through the API and confirm that it is active,
+targets `~DEFAULT_BRANCH`, requires `Validate pull request body`, and has no
+bypass actors. Merge the organization template before merging the removal of
+any local override.
 
 ## Existing issue migration
 

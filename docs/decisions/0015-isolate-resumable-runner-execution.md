@@ -86,5 +86,7 @@ must verify the boundary without a model turn.
 ## More Information
 
 - Refines [Run Codex from source issues with a budget boundary](0009-run-codex-from-source-issues-with-a-budget-boundary.md).
+- Delivery-ID and conversation correlation for tagged continuations are
+  specified by [ADR-0017](0017-use-an-explicit-agent-invocation-boundary.md).
 - This record is provisional until its review pull request is merged into
   `main`.

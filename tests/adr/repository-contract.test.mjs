@@ -36,7 +36,7 @@ test('repository decision and runner contracts are present', async () => {
   for (const phrase of ['Native organization issue types', 'Lifecycle Stage', 'Delivery Readiness', 'state:*', 'adr:needed', 'not planned', 'execution state']) {
     assert.ok(lifecycleDecision.includes(phrase), `missing lifecycle decision contract: ${phrase}`);
   }
-  for (const record of ['0013-derive-adr-traceability-from-agentic-primitives.md', '0014-use-a-repository-scoped-github-app.md', '0015-isolate-resumable-runner-execution.md']) {
+  for (const record of ['0013-derive-adr-traceability-from-agentic-primitives.md', '0014-use-a-repository-scoped-github-app.md', '0015-isolate-resumable-runner-execution.md', '0016-require-structured-pull-request-descriptions.md', '0017-use-an-explicit-agent-invocation-boundary.md']) {
     await assertFile(`docs/decisions/${record}`);
     assert.ok(decisions.includes(`(${record})`));
   }

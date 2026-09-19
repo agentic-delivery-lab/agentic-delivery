@@ -89,5 +89,7 @@ verify the real installation without exposing credentials.
 ## More Information
 
 - Refines [Run Codex from source issues with a budget boundary](0009-run-codex-from-source-issues-with-a-budget-boundary.md).
+- The conversation activation and actor-handoff contract is defined by
+  [ADR-0017](0017-use-an-explicit-agent-invocation-boundary.md).
 - This record is provisional until its review pull request is merged into
   `main`.

@@ -34,6 +34,20 @@ function bindings(env) {
   catch { throw new Error('ISSUE_FIELD_BINDINGS_JSON is not valid JSON.'); }
 }
 
+async function verifyEventually(verify, attempts = 4) {
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await verify();
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
 export async function runMigration({ env = process.env, argv = process.argv, root = repositoryRoot, fetchImpl = fetch, graphqlImpl } = {}) {
   const options = args(argv);
   const config = await loadLifecycleConfig(root);
@@ -64,7 +78,7 @@ export async function runMigration({ env = process.env, argv = process.argv, roo
     bindings: runtimeBindings,
     organizationIssueFields: controlPlane.organizationIssueFields,
     actor: 'controller',
-    verify: async () => {
+    verify: () => verifyEventually(async () => {
       const observed = await readIssueControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
       const metadata = issueMetadata(observed, config);
       const targetType = issueTypes(config).find((type) => type.id === plan.target.issueType);
@@ -74,7 +88,7 @@ export async function runMigration({ env = process.env, argv = process.argv, roo
       if (metadata.lifecycleStage !== plan.target.lifecycleStage || metadata.readiness !== plan.target.readiness) {
         throw new Error('Issue fields were not observed after migration.');
       }
-    },
+    }),
     updateLabels: (labels) => api(`/issues/${issueNumber}/labels`, 'PUT', { labels }),
   });
   return { mode: 'apply', result };

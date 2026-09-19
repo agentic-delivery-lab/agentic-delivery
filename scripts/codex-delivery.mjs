@@ -15,6 +15,7 @@ import { validateBranchName } from './validate-branch-name.mjs';
 import { deterministicReview, validateEvidenceRecord } from './lib/architecture-review.mjs';
 import { validateTransition } from './lib/lifecycle-transitions.mjs';
 import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
+import { bodyDigest } from './lib/agent-invocation.mjs';
 import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType, validateOrganizationIssueFields } from './lib/issue-field-api.mjs';
 import { issueMetadata, issueFieldMutation, validateFieldMutation } from './lib/issue-metadata.mjs';
 import { patternById, selectOrchestration } from './lib/orchestration-policy.mjs';
@@ -154,6 +155,65 @@ function evidenceMarker(evidence) {
   return `<!-- codex-delivery-evidence:v1\n${JSON.stringify(evidence)}\n-->`;
 }
 
+function singleLine(value) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
+export function formatPullRequestBody({ issue, repository, plan, summary, validation, runUrl, evidence }) {
+  return `## Summary
+
+${summary}
+
+## Source
+
+- Source issue: Closes #${issue}
+
+## Plan
+
+- Implementation plan: Issue #${issue} saved plan — ${singleLine(plan.plan)}
+- Plan deviations: No material deviations were reported; reviewers must compare the diff with the saved plan.
+
+## Changes
+
+- ${singleLine(summary)}
+
+## Verification
+
+${validation}
+
+## Evidence
+
+The source issue contains intake, planning, progress, and continuation history. This record connects the revision to the delivery run, Codex session, architecture context, and validation checkpoint.
+
+[Workflow run](${runUrl})
+
+${evidenceMarker(evidence)}
+
+## Risk and delivery
+
+- Risk level and impact: Human review is required; assess the diff and reported checks before merge.
+- Security and privacy: Review changes to permissions, dependencies, workflows, credentials, and sensitive-data handling.
+- Breaking changes and compatibility: Review the diff and source issue for compatibility impact before merge.
+- Deployment or migration: Merge through the repository review workflow and follow any change-specific guidance in the source issue.
+- Rollback: Revert the merge commit unless the source issue documents a safer change-specific rollback.
+- Dependencies and follow-up work: Track unresolved dependencies or follow-up work in the source issue.
+
+## Review guidance
+
+- Review focus: Saved-plan alignment, verification evidence, architecture impact, and delivery risk.
+- Suggested review order: Source issue and plan, diff, verification evidence, then risk and rollback.
+- Out of scope: Merge authorization, source-issue closure, and release creation remain human decisions.
+
+## Author checklist
+
+- [x] I reviewed my own diff and removed accidental or unrelated changes.
+- [x] The source issue, implementation plan, and any deviations are recorded above.
+- [x] Verification evidence is complete, and failures or skipped checks are explained.
+- [x] Tests, documentation, release notes, and operational guidance are updated where needed.
+- [x] Security, privacy, compatibility, deployment, and rollback effects are assessed.
+- [x] This pull request contains no secrets, unnecessary personal data, or sensitive logs.`;
+}
+
 async function evidenceCheckpoint(auditFile) {
   try {
     const source = await readFile(auditFile, 'utf8');
@@ -263,11 +323,12 @@ export async function deliver(env = process.env, dependencies = {}) {
   if (!env.GH_TOKEN || !env.GITHUB_EVENT_PATH || !env.RUNNER_WORKSPACE) throw new Error('Run this controller through GitHub Actions.');
   if (!env.PUBLISH_TOKEN && !(env.CODEX_DELIVERY_APP_ID && env.CODEX_DELIVERY_APP_PRIVATE_KEY)) throw new Error('Publication credential is missing. Configure the repository-scoped GitHub App credentials.');
   const event = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'));
-  const { issue, repository, actor, comment } = intakeEvent(event, env);
+  const context = intakeEvent(event, env);
+  let { issue, repository, actor, comment } = context;
   const endpoint = `https://api.github.com/repos/${repository}`;
   const api = async (route, method = 'GET', body, token = env.GH_TOKEN) => {
     const response = await fetchApi(`${endpoint}${route}`, {
-      method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+      method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10', 'Content-Type': 'application/json' },
       ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) throw new Error(`GitHub ${method} ${route} failed (${response.status}).`);
@@ -278,11 +339,30 @@ export async function deliver(env = process.env, dependencies = {}) {
     : null;
   const publicationToken = async () => appProvider ? appProvider.token() : env.PUBLISH_TOKEN;
   const publishApi = async (route, method = 'GET', body) => api(route, method, body, await publicationToken());
+  if (env.INVOCATION_EVENT === 'true') {
+    const sourceKind = String(env.INVOCATION_SOURCE_KIND ?? '');
+    const sourceId = commentId(env.INVOCATION_COMMENT_ID || env.INVOCATION_REVIEW_ID);
+    const route = sourceKind === 'issue_comment' || sourceKind === 'pull_request_comment'
+      ? `/issues/${sourceKind === 'pull_request_comment' ? commentId(env.INVOCATION_PULL_REQUEST_NUMBER) : issue}/comments/${sourceId}`
+      : sourceKind === 'pull_request_review'
+        ? `/pulls/${commentId(env.INVOCATION_PULL_REQUEST_NUMBER)}/reviews/${sourceId}`
+        : `/pulls/comments/${sourceId}`;
+    const current = await api(route);
+    const body = String(current?.body ?? '');
+    if (env.INVOCATION_BODY_DIGEST && bodyDigest(body) !== env.INVOCATION_BODY_DIGEST) throw new Error('The invocation comment changed after preflight; start a new tagged invocation.');
+    const currentActor = String(current?.user?.login ?? '');
+    if (!currentActor || currentActor !== env.INVOCATION_ACTOR) throw new Error('The invocation actor no longer matches the source comment.');
+    comment = { id: sourceId, body };
+    actor = currentActor;
+  }
   const deliveryRoute = env.INTAKE_ROUTE
     || (comment || env.GITHUB_EVENT_NAME === 'workflow_dispatch' ? 'resume' : 'manual');
   if (!['refine', 'research', 'requirements', 'architecture', 'plan', 'implement', 'resume', 'validate', 'manual', 'coordinate'].includes(deliveryRoute)) throw new Error('Invalid intake route.');
   const internalCoordination = deliveryRoute === 'coordinate' && actor === 'github-actions[bot]';
-  const permission = internalCoordination
+  const allowlistedBotInvocation = env.INVOCATION_EVENT === 'true'
+    && env.INVOCATION_ACTOR_KIND === 'external-bot'
+    && env.INVOCATION_AUTHORIZED === 'true';
+  const permission = internalCoordination || allowlistedBotInvocation
     ? { permission: 'write' }
     : await api(`/collaborators/${encodeURIComponent(actor)}/permission`);
   if (!['admin', 'maintain', 'write'].includes(permission.permission)) {
@@ -566,7 +646,9 @@ export async function deliver(env = process.env, dependencies = {}) {
       lifecycleStage: metadata.lifecycleStage,
       readiness: metadata.readiness,
       governance: metadata.governance,
-      trigger: comment ? 'comment' : deliveryRoute === 'manual' || env.GITHUB_EVENT_NAME === 'workflow_dispatch' ? 'manual' : 'issue',
+      trigger: env.INVOCATION_EVENT === 'true'
+        ? 'agent-invocation'
+        : comment ? 'comment' : deliveryRoute === 'manual' || env.GITHUB_EVENT_NAME === 'workflow_dispatch' ? 'manual' : 'issue',
       lineage: { isRoot: !metadataSource.parent, parent: metadataSource.parent ?? null, children: state.childIssues ?? metadataSource.subIssues ?? [] },
       plan: { exists: state.plan?.status === 'ready', valid: state.plan?.status === 'ready' && Boolean(state.planDigest ?? state.sourceDigest), digest: state.planDigest ?? state.sourceDigest ?? null, scopeChanged: state.planInvalidatedReason != null },
       session: { exists: Boolean(state.sessionId), resumable: Boolean(state.sessionId) && state.status !== 'new', id: state.sessionId ?? null },
@@ -1173,7 +1255,15 @@ legacy owner-only rule in the base instruction file.`;
     }
     state.evidence = evidence;
     await save();
-    const body = `## Summary\n\n${state.summary}\n\nCloses #${issue}\n\n## Verification\n\n${state.validation}\n\n## Delivery evidence\n\nThe source issue contains intake, planning, progress, and continuation history. The evidence record below connects this revision to the delivery run, Codex session, architecture context, and validation checkpoint. Human review and merge authorization remain required.\n\n[Workflow run](${runUrl})\n\n${evidenceMarker(evidence)}`;
+    const body = formatPullRequestBody({
+      issue,
+      repository,
+      plan: state.plan,
+      summary: state.summary,
+      validation: state.validation,
+      runUrl,
+      evidence,
+    });
     const pr = existing[0] ? await publishApi(`/pulls/${existing[0].number}`, 'PATCH', { title: state.plan.title, body })
       : await publishApi('/pulls', 'POST', { title: state.plan.title, head: state.branch, base: 'main', body });
     await transitionState('review', ['in-progress', 'review']);

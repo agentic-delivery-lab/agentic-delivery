@@ -67,6 +67,14 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.ok(intakeWorkflow.jobs.deliver.uses?.includes('codex-delivery.yml'));
   assert.ok(intakeWorkflow.jobs.classify.outputs.lifecycle_stage);
   assert.ok(intakeWorkflow.jobs.classify.outputs.readiness);
+  assert.ok(intakeWorkflow.jobs.classify.outputs.invocation_accepted);
+  assert.equal(intakeWorkflow.jobs.classify.needs, 'authorize');
+  assert.ok(intakeWorkflow.jobs.authorize);
+  assert.equal(intakeWorkflow.jobs.authorize['runs-on'], 'ubuntu-latest');
+  assert.equal(intakeWorkflow.jobs.authorize.permissions.issues, 'read');
+  assert.match(await text('.github/workflows/issue-intake.yml'), /authorize-issue-event\.mjs/);
+  assert.match(await text('.github/workflows/issue-intake.yml'), /steps\.invocation\.outputs\.accepted == 'true'/);
+  assert.doesNotMatch(await text('.github/workflows/issue-intake.yml'), /\n\s*issue_comment:\s*\n/);
   assert.equal(intakeWorkflow.jobs.deliver.permissions.contents, 'read');
   assert.equal(intakeWorkflow.jobs.deliver.permissions.issues, 'write');
   assert.equal(intakeWorkflow.jobs.deliver.permissions['pull-requests'], undefined);

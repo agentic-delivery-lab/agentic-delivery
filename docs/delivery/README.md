@@ -1,9 +1,9 @@
 # Delivery workflow
 
 For automated intake, planning, implementation, and continuation, see the
-[Codex source issue workflow](codex-workflow.md). GitHub Free does not enforce
-branch protection for this private repository; human review and merge authority
-remain repository policy.
+[Codex source issue workflow](codex-workflow.md). Human review and merge
+authority remain repository policy until the corresponding GitHub branch rule
+is activated and verified.
 
 Pull requests are also checked by the layered [Harness Architecture Review](../architecture/harness-conformance-review.md).
 Its deterministic result is the only architecture-review failure gate; its
@@ -33,6 +33,33 @@ The forms' availability is therefore a live CI dependency: an unreachable,
 malformed, incomplete, or invalid source fails the contract tests. Blank
 issues remain enabled for incomplete or untyped work that needs semantic
 refinement.
+
+The canonical pull request template is published in the
+[`agentic-delivery-lab/.github` repository](https://github.com/agentic-delivery-lab/.github/blob/main/.github/pull_request_template.md).
+This repository has no local pull request template override. A local template
+in `.github`, the repository root, or `docs` would take precedence and must not
+be added. Publish and verify an organization-template change before removing or
+replacing the active default, so contributors are never left without a
+template.
+
+The template keeps `## Source` and `## Plan` separate. `Source` contains the
+source issue; `Plan` contains the implementation plan and material deviations.
+The combined `## Source and plan` heading is not valid.
+
+The `Validate pull request body` Actions job checks that people and coding
+agents complete the required sections, fields and author checklist. It runs
+trusted code from the pull request's base commit with read-only permissions and
+does not execute pull-request code. Only a pull request authored by
+`dependabot[bot]` receives a successful explicit exemption. Other bots and Apps
+must satisfy the same contract as people.
+
+The desired default-branch ruleset is versioned at
+[`require-pull-request-body.json`](../../.github/rulesets/require-pull-request-body.json).
+It has no bypass actors and requires the exact job name
+`Validate pull request body`. The repository is public, so an administrator may
+apply it after the workflow is present on `main` and has reported the check.
+Until that activation and verification occur, the required check is repository
+policy but not a hosting guarantee.
 
 The organization-wide taxonomy is: Idea, Research, Feature, Bug, Task,
 Requirements, Architecture Decision, Implementation, and Validation. Native
@@ -66,6 +93,14 @@ delivery. A failed Action or Codex session does not advance the Lifecycle Stage.
 The deterministic readiness gate checks the selected issue type, fields,
 governance controls, dependencies, and orchestration policy before an operation
 can proceed.
+
+Conversation-driven continuation uses the separate
+`@agentic-delivery-bot` invocation boundary. The GitHub App webhook covers
+issue comments, PR conversation comments, formal reviews, and inline review
+comments; only a tag on the first visible line can dispatch the deterministic
+preflight and `repository_dispatch` workflow. The actor catalog, digest,
+delivery-ID deduplication, and one-hop bot rule are versioned in this
+repository. This does not change native `@copilot` behavior.
 
 ## Package manager and local preflight
 

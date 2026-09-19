@@ -168,6 +168,7 @@ function readinessName(config, id) {
 }
 
 function issueTrigger(eventAction, eventKind) {
+  if (eventKind === 'agent-invocation') return 'agent-invocation';
   if (eventKind === 'issue_comment' || eventKind === 'comment') return 'comment';
   if (['child-event', 'child'].includes(eventKind)) return 'child-event';
   if (eventKind === 'workflow_dispatch' || eventKind === 'manual') return 'manual';

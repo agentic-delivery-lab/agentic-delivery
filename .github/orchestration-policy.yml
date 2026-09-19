@@ -1,4 +1,4 @@
-# agentic-primitive: {"id":"orchestration-policy-catalog","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012","ADR-0015"],"domains":["agentic-delivery-governance"]}
+# agentic-primitive: {"id":"orchestration-policy-catalog","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012","ADR-0015","ADR-0017"],"domains":["agentic-delivery-governance"]}
 version: 1
 
 authority:
@@ -163,14 +163,14 @@ patterns:
   - id: idea-discovery
     issue_types: [idea]
     stages: [intake, discovery, definition]
-    triggers: [issue, comment, manual]
+    triggers: [issue, comment, agent-invocation, manual]
     steps: [router, discovery]
     optional_steps: [research, requirements]
     forbidden_profiles: [implementer]
   - id: research-only
     issue_types: [research]
     stages: [discovery, definition]
-    triggers: [issue, comment, manual]
+    triggers: [issue, comment, agent-invocation, manual]
     steps: [router, research, validator]
     required_capabilities: [repository-read]
     conditional_capabilities:
@@ -179,13 +179,13 @@ patterns:
   - id: requirements
     issue_types: [feature, bug, task, requirements]
     stages: [intake, definition, discovery]
-    triggers: [issue, comment, manual]
+    triggers: [issue, comment, agent-invocation, manual]
     steps: [requirements, validator]
     forbidden_profiles: [implementer]
   - id: architecture-decision
     issue_types: [architecture]
     stages: [decision, definition]
-    triggers: [issue, comment, manual]
+    triggers: [issue, comment, agent-invocation, manual]
     steps: [architecture-decision, validator, harness-reviewer]
     required_capabilities: [repository-read, deterministic-validation]
     forbidden_profiles: [planner, implementer]
@@ -193,7 +193,7 @@ patterns:
   - id: implementation-fresh
     issue_types: [bug, feature, task, implementation]
     stages: [planning]
-    triggers: [issue, comment, manual]
+    triggers: [issue, comment, agent-invocation, manual]
     steps: [router, planner, implementer, validator, harness-reviewer]
     required_capabilities: [repository-read, repository-write, deterministic-validation]
   - id: implementation-existing-plan
@@ -206,21 +206,21 @@ patterns:
   - id: implementation-continuation
     issue_types: [bug, feature, task, implementation]
     stages: [execution]
-    triggers: [comment, manual]
+    triggers: [comment, agent-invocation, manual]
     requires: [valid-plan, resumable-session, unchanged-scope]
     steps: [implementer, validator, harness-reviewer]
     required_capabilities: [repository-read, repository-write, deterministic-validation]
   - id: validation-only
     issue_types: [validation]
     stages: [validation, acceptance]
-    triggers: [issue, comment, manual]
+    triggers: [issue, comment, agent-invocation, manual]
     steps: [validator, harness-reviewer]
     required_capabilities: [repository-read, deterministic-validation]
     forbidden_profiles: [planner, implementer]
   - id: parent-coordination
     issue_types: [idea, feature, bug, task, requirements, architecture, implementation, validation]
     stages: [acceptance]
-    triggers: [issue, comment, child-event, manual]
+    triggers: [issue, comment, agent-invocation, child-event, manual]
     requires: [lineage-root]
     steps: [coordinator]
     optional_steps: [requirements, architecture-decision, planner]

@@ -22,6 +22,23 @@ For an architectural choice, read [`docs/decisions/README.md`](../../../docs/dec
 - A coding agent may prepare, push and update a branch or review pull request, but it must not merge the pull request, bypass protection or close the source issue without explicit human authorization.
 - The repository's chosen merge method is a merge commit. Do not use squash, rebase or auto-merge for this workflow. Delete a merged feature branch after a human has completed the merge.
 
+Use the organization pull request template published by
+`agentic-delivery-lab/.github`; this repository must not carry a local
+override. Keep `## Source` and `## Plan` as separate headings: put the source
+issue under `Source`, and the implementation plan and deviations under `Plan`.
+Complete every section and replace placeholders with concise
+evidence. Link the source issue and implementation plan, explain every material
+plan deviation, report verification, assess risk and rollback, and guide the
+reviewer. Use `Not applicable` only with a reason. The deterministic
+`Validate pull request body` check applies to people and coding agents. Only a
+pull request authored by `dependabot[bot]` is explicitly exempt; do not broaden
+that exception to another bot, app, user, or team.
+
+The versioned main-branch ruleset requires this check. The repository is public,
+but the rule remains policy until an authorized maintainer applies it after the
+workflow is on `main` and verifies the live repository ruleset through GitHub.
+Do not claim live enforcement from the JSON file alone.
+
 The branch starter rejects a closed, missing or unreadable source issue and rejects a pull request number even when it is open. Use `pnpm lint:branch <branch-name>` for a candidate that already exists. CI repeats the branch syntax and open-issue checks when an internal pull request is opened or updated. A raw Git branch command can bypass the local helper, but it cannot pass the pull-request check with an invalid name or source issue.
 
 ## Write commit and pull-request titles

@@ -17,11 +17,14 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     'commitlint.config.mjs', 'scripts/start-issue-branch.mjs', 'scripts/validate-branch-name.mjs',
     'scripts/validate-commit-range.mjs', 'scripts/validate-gitmoji.mjs', 'scripts/validate-source-issue.mjs',
     'scripts/validate-changelog.mjs', 'scripts/validate-main-history.mjs', 'scripts/validate-config-files.mjs',
+    'scripts/validate-pull-request-body.mjs',
+    'scripts/authorize-issue-event.mjs',
     'scripts/lib/toolchain.mjs', 'scripts/lib/yaml.mjs', '.agents/skills/delivery-workflow/SKILL.md',
-    '.agents/skills/delivery-workflow/agents/openai.yaml', '.github/pull_request_template.md',
+    '.agents/skills/delivery-workflow/agents/openai.yaml',
     '.github/workflows/delivery-quality.yml', '.github/workflows/issue-intake.yml',
-    '.github/workflows/codex-delivery.yml', '.github/issue-metadata.yml', '.github/orchestration-policy.yml',
-    'scripts/issue-intake.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
+    '.github/workflows/pull-request-body.yml', '.github/rulesets/require-pull-request-body.json',
+    '.github/workflows/codex-delivery.yml', '.github/workflows/agent-invocation.yml', '.github/agent-actors.json', '.github/issue-metadata.yml', '.github/orchestration-policy.yml',
+    'api/github/webhook.mjs', 'scripts/issue-intake.mjs', 'scripts/lib/agent-invocation.mjs', 'scripts/prepare-agent-invocation.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
     'scripts/lib/orchestration-policy.mjs', 'tests/helpers/organization-issue-forms.mjs',
   ]) await access(path.join(repositoryRoot, relativePath));
 
@@ -58,6 +61,10 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   const delivery = await text('.github/workflows/codex-delivery.yml');
   assert.ok(delivery.includes('workflow_call:'));
   assert.ok(!delivery.includes('types: [opened]'));
+  const invocation = parseRepositoryYaml(await text('.github/workflows/agent-invocation.yml'), 'agent invocation workflow');
+  assert.deepEqual(invocation.on.repository_dispatch.types, ['agent_invocation']);
+  assert.equal(invocation.jobs.intake.uses, './.github/workflows/issue-intake.yml');
+  assert.equal(invocation.jobs.intake.with.agent_invocation, true);
 
   const docs = await text('docs/delivery/README.md');
   assert.ok(docs.includes('pnpm branch:start'));
@@ -65,6 +72,44 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.ok(docs.includes('npx get-pnpm 12.3.4'));
   assert.ok(docs.includes('curl -fsSL https://get.pnpm.io/install.sh'));
   assert.ok(docs.includes('Invoke-WebRequest https://get.pnpm.io/install.ps1'));
+});
+
+test('repository uses the organization pull request template and required-check contract', async () => {
+  for (const relativePath of [
+    '.github/pull_request_template.md',
+    'pull_request_template.md',
+    'docs/pull_request_template.md',
+    '.github/PULL_REQUEST_TEMPLATE',
+    'PULL_REQUEST_TEMPLATE',
+    'docs/PULL_REQUEST_TEMPLATE',
+  ]) {
+    await assert.rejects(
+      access(path.join(repositoryRoot, relativePath)),
+      (error) => error?.code === 'ENOENT',
+    );
+  }
+
+  for (const relativePath of ['docs/delivery/README.md', 'docs/delivery/organization-metadata.md']) {
+    const document = await text(relativePath);
+    assert.ok(document.includes('agentic-delivery-lab/.github/blob/main/.github/pull_request_template.md'));
+    assert.ok(document.includes('no local pull request template override'));
+    assert.ok(document.includes('Validate pull request body'));
+  }
+
+  const ruleset = JSON.parse(await text('.github/rulesets/require-pull-request-body.json'));
+  assert.equal(ruleset.enforcement, 'active');
+  assert.deepEqual(ruleset.bypass_actors, []);
+  assert.deepEqual(ruleset.conditions.ref_name.include, ['~DEFAULT_BRANCH']);
+  const requiredChecks = ruleset.rules.find((rule) => rule.type === 'required_status_checks');
+  assert.ok(requiredChecks);
+  assert.deepEqual(requiredChecks.parameters.required_status_checks, [
+    { context: 'Validate pull request body' },
+  ]);
+
+  const actors = JSON.parse(await text('.github/agent-actors.json'));
+  assert.equal(actors.mention, '@agentic-delivery-bot');
+  assert.deepEqual(actors.human_permissions, ['write', 'maintain', 'admin']);
+  assert.deepEqual(actors.events.issue_comment, ['created', 'edited']);
 });
 
 test('repository instructions and ADR-0007 point to pnpm commands', async () => {
