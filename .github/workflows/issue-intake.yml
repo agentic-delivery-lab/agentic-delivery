@@ -35,8 +35,39 @@ permissions:
   pull-requests: read
 
 jobs:
-  classify:
+  authorize:
     if: >-
+      !github.event.issue.pull_request &&
+      (github.event_name != 'repository_dispatch' || inputs.agent_invocation)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      authorized: ${{ steps.authorize.outputs.authorized }}
+    steps:
+      - name: Check out trusted authorization
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: main
+          path: trusted-intake
+          persist-credentials: false
+
+      - name: Authorize the issue event actor before self-hosted intake
+        id: authorize
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: node trusted-intake/scripts/authorize-issue-event.mjs
+
+  classify:
+    needs: authorize
+    if: >-
+      needs.authorize.result == 'success' &&
+      needs.authorize.outputs.authorized == 'true' &&
       !github.event.issue.pull_request &&
       (github.event_name != 'repository_dispatch' || inputs.agent_invocation)
     runs-on: [self-hosted, linux, x64, omarchy]

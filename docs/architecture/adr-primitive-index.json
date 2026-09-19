@@ -260,6 +260,7 @@
         "agent-invocation-preflight",
         "agent-invocation-workflow",
         "codex-delivery-workflow-guide",
+        "issue-event-authorization",
         "orchestration-policy-catalog",
         "orchestration-policy-validator",
         "organization-metadata-runbook",
@@ -305,6 +306,7 @@
         "harness-architecture-review",
         "issue-branch-name-validator",
         "issue-classifier",
+        "issue-event-authorization",
         "issue-field-controller-boundary",
         "issue-metadata-contract",
         "issue-metadata-migration",
@@ -536,6 +538,19 @@
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0012"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "issue-event-authorization",
+      "path": "scripts/authorize-issue-event.mjs",
+      "location": "scripts/authorize-issue-event.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0017"
       ],
       "domains": [
         "agentic-delivery-governance"

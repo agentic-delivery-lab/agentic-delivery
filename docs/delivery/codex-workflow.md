@@ -63,6 +63,13 @@ controller receives only the validated route and does not parse natural-
 approved field values is the break-glass path when semantic routing is
 unavailable.
 
+Because this repository is public, ordinary `issues` events first pass a small
+hosted-runner permission gate. It checks the event actor's repository
+permission (or an exact internal automation identity) before the self-hosted
+intake runner is allocated. Public users can therefore read and file issues
+without consuming the trusted runner or reaching Codex; the normal issue
+router still rechecks authorization before any state mutation.
+
 ## Conversation invocation operations
 
 The follow-up invocation boundary is implemented by the GitHub App named

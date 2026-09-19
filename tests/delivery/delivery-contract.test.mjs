@@ -18,6 +18,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     'scripts/validate-commit-range.mjs', 'scripts/validate-gitmoji.mjs', 'scripts/validate-source-issue.mjs',
     'scripts/validate-changelog.mjs', 'scripts/validate-main-history.mjs', 'scripts/validate-config-files.mjs',
     'scripts/validate-pull-request-body.mjs',
+    'scripts/authorize-issue-event.mjs',
     'scripts/lib/toolchain.mjs', 'scripts/lib/yaml.mjs', '.agents/skills/delivery-workflow/SKILL.md',
     '.agents/skills/delivery-workflow/agents/openai.yaml',
     '.github/workflows/delivery-quality.yml', '.github/workflows/issue-intake.yml',
