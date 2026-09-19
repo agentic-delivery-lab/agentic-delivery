@@ -55,7 +55,7 @@ must satisfy the same contract as people.
 
 The desired default-branch ruleset is versioned at
 [`require-pull-request-body.json`](../../.github/rulesets/require-pull-request-body.json).
-It has no bypass actors and requires the exact job name
+It has no bypass actors and requires the exact check context
 `Validate pull request body`. The repository is public, so an administrator may
 apply it after the workflow is present on `main` and has reported the check.
 Until that activation and verification occur, the required check is repository
