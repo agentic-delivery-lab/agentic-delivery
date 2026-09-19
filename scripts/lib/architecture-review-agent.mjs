@@ -110,7 +110,7 @@ async function sourceIssueEvidence(repository, issue) {
   if (!token) return '(unavailable: no read-only GitHub token was provided)';
   try {
     const response = await fetch(`https://api.github.com/repos/${repository}/issues/${issue}`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10' },
       signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) return `(unavailable: GitHub issue lookup returned ${response.status})`;
@@ -118,7 +118,7 @@ async function sourceIssueEvidence(repository, issue) {
     let comments = [];
     try {
       const commentResponse = await fetch(`https://api.github.com/repos/${repository}/issues/${issue}/comments?per_page=100`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10' },
         signal: AbortSignal.timeout(15_000),
       });
       if (commentResponse.ok) {

@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "mention": "@agentic-delivery-bot",
+  "bot_login": "agentic-delivery-bot[bot]",
+  "human_permissions": ["write", "maintain", "admin"],
+  "events": {
+    "issue_comment": ["created", "edited"],
+    "pull_request_review": ["submitted", "edited"],
+    "pull_request_review_comment": ["created", "edited"]
+  },
+  "max_bot_hops": 1,
+  "actors": [
+    {
+      "login": "agentic-delivery-bot[bot]",
+      "kind": "orchestrator",
+      "can_invoke": false,
+      "reason": "The orchestrator must never invoke itself from its own output."
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-<!-- agentic-primitive: {"id":"codex-delivery-workflow-guide","kind":"instruction","enforcement":"instructional","adrs":["ADR-0009","ADR-0012","ADR-0014","ADR-0015"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"codex-delivery-workflow-guide","kind":"instruction","enforcement":"instructional","adrs":["ADR-0009","ADR-0012","ADR-0014","ADR-0015","ADR-0017"],"domains":["agentic-delivery-governance"]} -->
 
 # Codex source issue workflow
 
@@ -51,16 +51,46 @@ automatically invokes GPT-5.6 Luna Max for Implement. Research, requirements,
 architecture, validation, and coordination routes can stop or complete without
 invoking an implementer.
 
-The `issue_comment` trigger is restricted twice: the workflow accepts only a
-new non-bot issue comment, and the intake controller verifies repository
-write/maintain/admin permission before handing it to delivery. The controller
-also verifies the same payload identity. Pull-request comments, bots, rerun
-actors, and unauthorized writers cannot enter continuation. Every eligible
-human comment is interpreted with the full issue conversation. The model may
-propose `resume`, `refine`, or `hold` regardless of the words used. The
-deterministic controller receives only the validated route and does not parse
-the comment for intent. Manual intake dispatch with current approved field
-values is the break-glass path when semantic routing is unavailable.
+The direct `issue_comment` workflow trigger is removed. A supported issue or
+pull-request comment/review can enter through the explicit
+`@agentic-delivery-bot` invocation boundary after the
+GitHub App webhook and deterministic preflight validate its signature, actor,
+immutable conversation, source issue, and digest. The mention activates
+processing; it does not select the route. Every accepted invocation is
+interpreted with the full issue conversation, and the model may propose
+`resume`, `refine`, or `hold` regardless of the words used. The deterministic
+controller receives only the validated route and does not parse natural-
+approved field values is the break-glass path when semantic routing is
+unavailable.
+
+## Conversation invocation operations
+
+The follow-up invocation boundary is implemented by the GitHub App named
+`Agentic Delivery Bot` and the production Vercel Function at the configured
+webhook URL. Register only these App webhook events: `issue_comment`,
+`pull_request_review`, and `pull_request_review_comment`. Install the App only
+on repositories that it is authorized to operate.
+
+The Vercel ingress requests only Metadata read and Contents write for its
+permission lookup and `repository_dispatch` handoff. The runner's publication
+token follows the existing ADR-0014 Contents, Issues, Pull requests, and
+Workflows boundary. The webhook secret and App private key are stored only in
+Vercel Production environment variables
+(`AGENTIC_DELIVERY_WEBHOOK_SECRET`, `AGENTIC_DELIVERY_APP_ID`,
+`AGENTIC_DELIVERY_APP_PRIVATE_KEY`, and
+`AGENTIC_DELIVERY_APP_INSTALLATION_ID`). The Actions controller receives the
+corresponding `CODEX_DELIVERY_APP_ID`, `CODEX_DELIVERY_APP_PRIVATE_KEY`, and
+optional `CODEX_DELIVERY_APP_INSTALLATION_ID` as repository Actions secrets.
+Rotate both the webhook secret and private key through the GitHub App and
+Vercel/Actions secret stores; never commit them.
+
+The ingress verifies the signature and delivery ID, checks the exact actor
+catalog, and calls GitHub `repository_dispatch` with only immutable source IDs
+and a body digest. The self-hosted preflight re-fetches the current comment or
+review, maps a pull request to its issue-linked source, and then invokes the
+existing issue intake. A Vercel outage is fail-closed: it cannot authorize a
+delivery run by itself. Native `@copilot` and other GitHub-managed agent
+mentions remain outside this repository-owned invocation contract.
 
 The controller reuses saved changes and a single branch. It never creates a
 new task for a comment on missing, completed, running, stale, or inactive
@@ -287,12 +317,13 @@ retention policy.
 
 ## Review boundary
 
-GitHub Free cannot enforce protected branches for this private repository.
 The controller restricts its own publication to its recorded feature branch;
 that is not protection against other credentials. The dedicated publication
 credential creates the review pull request so its required checks are started.
 A human reviews the source issue, changed files, and checks, and separately
-authorizes the merge.
+authorizes the merge. The repository is public, but branch protection and the
+required-check ruleset still need an authorized post-merge activation and live
+verification.
 
 Internal pull requests also run the read-only Harness Architecture Review. The
 deterministic layer compares the merge-base-to-head diff with the official base

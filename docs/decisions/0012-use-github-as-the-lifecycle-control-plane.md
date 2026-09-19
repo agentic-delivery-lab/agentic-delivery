@@ -188,3 +188,6 @@ operator bindings are installed.
 - The active metadata contract is `.github/issue-metadata.yml`; the active
   orchestration contract is `.github/orchestration-policy.yml`. The former
   repository-local lifecycle file is migration history and is not loaded.
+- Conversation-driven activation is refined by
+  [ADR-0017](0017-use-an-explicit-agent-invocation-boundary.md); the mention is
+  an invocation boundary, not a lifecycle or route authority.

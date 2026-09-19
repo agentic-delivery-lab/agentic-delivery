@@ -19,3 +19,6 @@ runtime-surfaces:
   - id: architecture-review
     paths: [.github/workflows/harness-architecture-review.yml, scripts/harness-architecture-review.mjs, scripts/lib/architecture-review.mjs]
     evidence: [base-revision, head-revision, affected-adrs, affected-contexts, deterministic-result, semantic-result]
+  - id: agent-invocation
+    paths: [.github/agent-actors.json, .github/orchestration-policy.yml, .github/workflows/agent-invocation.yml, api/github/**, scripts/lib/agent-invocation.mjs, scripts/prepare-agent-invocation.mjs]
+    evidence: [conversation-event, invocation-boundary, actor-catalog, actor-authorization, delivery-dispatch, idempotency, hop-limit, actions-run]

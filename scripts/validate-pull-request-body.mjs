@@ -6,7 +6,8 @@ export const DEPENDABOT_LOGIN = 'dependabot[bot]';
 
 export const REQUIRED_PULL_REQUEST_SECTIONS = Object.freeze([
   'Summary',
-  'Source and plan',
+  'Source',
+  'Plan',
   'Changes',
   'Verification',
   'Evidence',
@@ -16,7 +17,8 @@ export const REQUIRED_PULL_REQUEST_SECTIONS = Object.freeze([
 ]);
 
 const REQUIRED_FIELDS = Object.freeze({
-  'Source and plan': ['Source issue', 'Implementation plan', 'Plan deviations'],
+  Source: ['Source issue'],
+  Plan: ['Implementation plan', 'Plan deviations'],
   'Risk and delivery': [
     'Risk level and impact',
     'Security and privacy',

@@ -42,6 +42,8 @@ test('the current architecture map covers the official ADR set and emits a conci
     assert.equal(review.checks.find((item) => item.id === id).status, 'pass', id);
   }
   assert.equal(review.checks.find((item) => item.id === 'bounded-context-map').status, 'pass');
+  const reviewMap = await readFile(path.join(repositoryRoot, 'docs/architecture/harness-review.yml'), 'utf8');
+  assert.match(reviewMap, /id: agent-invocation/);
   assert.match(formatReviewMarkdown(review), /Harness Architecture Review/);
   assert.match(formatReviewMarkdown(review), /adr-map-coverage/);
 });
@@ -64,7 +66,9 @@ test('review reads provisional architecture evidence from the requested head rev
   ]);
   const review = await deterministicReview({ repositoryRoot: clone, base: revision, head: revision });
   assert.equal(review.status, 'pass');
-  assert.equal(review.officialAdrs.length, 15);
+  const { stdout: decisionFiles } = await run('git', ['-C', clone, 'ls-tree', '-r', '--name-only', revision, 'docs/decisions'], { encoding: 'utf8' });
+  const expectedAdrCount = decisionFiles.split(/\r?\n/).filter((file) => /^docs\/decisions\/\d{4}-[a-z0-9-]+\.md$/.test(file)).length;
+  assert.equal(review.officialAdrs.length, expectedAdrCount);
 });
 
 test('controller evidence is required only when a delivery marker is present', async (t) => {

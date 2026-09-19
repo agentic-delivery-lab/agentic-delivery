@@ -1,6 +1,11 @@
 // agentic-primitive: {"id":"issue-field-controller-boundary","kind":"script","enforcement":"deterministic","adrs":["ADR-0012","ADR-0015"],"domains":["agentic-delivery-governance"]}
 
 const GRAPHQL_ENDPOINT = 'https://api.github.com/graphql';
+// GitHub's newer issue-type and issue-field schema is only exposed through
+// the API version used by the organization metadata control plane. Keep the
+// version explicit so a default or older runner image cannot silently fall
+// back to a schema that omits those fields.
+export const GITHUB_API_VERSION = '2026-03-10';
 
 export const ISSUE_CONTROL_PLANE_QUERY = `
 query IssueControlPlane($owner: String!, $name: String!, $number: Int!, $organization: String!) {
@@ -97,7 +102,7 @@ export function githubGraphqlApi({ token, fetchImpl = fetch } = {}) {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
+        'X-GitHub-Api-Version': GITHUB_API_VERSION,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ query, variables }),

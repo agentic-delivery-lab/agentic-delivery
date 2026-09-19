@@ -63,6 +63,20 @@ test('fresh implementation plans, valid existing plans, and exact continuation s
   }).pattern, 'implementation-continuation');
 });
 
+test('an explicit agent invocation uses the same deterministic continuation policy', () => {
+  const result = selectOrchestration({
+    policy,
+    context: context({
+      lifecycleStage: 'execution',
+      trigger: 'agent-invocation',
+      plan: { exists: true, valid: true, digest: 'a'.repeat(64) },
+      session: { exists: true, resumable: true, id: '019fb023-24b8-7881-9119-509f078b610e' },
+    }),
+  });
+  assert.equal(result.status, 'authorized');
+  assert.equal(result.pattern, 'implementation-continuation');
+});
+
 test('research, architecture, validation, and lineage roots do not default to implementation', () => {
   assert.equal(selectOrchestration({ policy, context: context({ issueType: 'research', lifecycleStage: 'discovery' }) }).pattern, 'research-only');
   assert.equal(selectOrchestration({ policy, context: context({ issueType: 'architecture', lifecycleStage: 'decision' }) }).pattern, 'architecture-decision');

@@ -245,6 +245,26 @@
         "pull-request-body-validator",
         "repository-governance-instructions"
       ]
+    },
+    {
+      "id": "ADR-0017",
+      "file": "docs/decisions/0017-use-an-explicit-agent-invocation-boundary.md",
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ],
+      "primitives": [
+        "agent-invocation-boundary",
+        "agent-invocation-preflight",
+        "agent-invocation-workflow",
+        "codex-delivery-workflow-guide",
+        "orchestration-policy-catalog",
+        "orchestration-policy-validator",
+        "organization-metadata-runbook",
+        "repository-governance-instructions"
+      ]
     }
   ],
   "domains": [
@@ -265,11 +285,15 @@
         "ADR-0013",
         "ADR-0014",
         "ADR-0015",
-        "ADR-0016"
+        "ADR-0016",
+        "ADR-0017"
       ],
       "primitives": [
         "adr-structure-validator",
         "adr-traceability-generator",
+        "agent-invocation-boundary",
+        "agent-invocation-preflight",
+        "agent-invocation-workflow",
         "changelog-structure-validator",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
@@ -328,6 +352,45 @@
       ]
     },
     {
+      "id": "agent-invocation-boundary",
+      "path": "scripts/lib/agent-invocation.mjs",
+      "location": "scripts/lib/agent-invocation.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0017"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "agent-invocation-preflight",
+      "path": "scripts/prepare-agent-invocation.mjs",
+      "location": "scripts/prepare-agent-invocation.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0017"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "agent-invocation-workflow",
+      "path": ".github/workflows/agent-invocation.yml",
+      "location": ".github/workflows/agent-invocation.yml",
+      "kind": "workflow",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0017"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
       "id": "changelog-structure-validator",
       "path": "scripts/validate-changelog.mjs",
       "location": "scripts/validate-changelog.mjs",
@@ -365,7 +428,8 @@
         "ADR-0009",
         "ADR-0012",
         "ADR-0014",
-        "ADR-0015"
+        "ADR-0015",
+        "ADR-0017"
       ],
       "domains": [
         "agentic-delivery-governance"
@@ -581,7 +645,8 @@
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0012",
-        "ADR-0015"
+        "ADR-0015",
+        "ADR-0017"
       ],
       "domains": [
         "agentic-delivery-governance"
@@ -595,7 +660,8 @@
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0012",
-        "ADR-0015"
+        "ADR-0015",
+        "ADR-0017"
       ],
       "domains": [
         "agentic-delivery-governance"
@@ -611,7 +677,8 @@
         "ADR-0012",
         "ADR-0013",
         "ADR-0015",
-        "ADR-0016"
+        "ADR-0016",
+        "ADR-0017"
       ],
       "domains": [
         "agentic-delivery-governance"
@@ -660,7 +727,8 @@
         "ADR-0013",
         "ADR-0014",
         "ADR-0015",
-        "ADR-0016"
+        "ADR-0016",
+        "ADR-0017"
       ],
       "domains": [
         "agentic-delivery-governance"

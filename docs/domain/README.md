@@ -12,6 +12,13 @@ deterministic Actions own work state. The execution plane is Codex and the
 self-hosted runner: it performs bounded operations and records execution state
 but cannot decide or apply lifecycle transitions.
 
+Conversation events can request a delivery run only after they pass the
+versioned invocation boundary. The boundary identifies the activation mention,
+supported GitHub event, automation actor, source context, and deterministic
+authorization before Actions dispatches work. A mention activates processing;
+it does not choose a semantic route or bypass the lifecycle and readiness
+gates.
+
 Issue type answers what the issue represents. Lifecycle Stage answers where it
 is in its lifecycle. Delivery Readiness records an orthogonal temporary gate,
 while governance metadata records cross-cutting controls. The runner's
@@ -62,3 +69,4 @@ presence does not load complete ADRs into a model context.
 - [ADR-0014: Use a repository-scoped GitHub App](../decisions/0014-use-a-repository-scoped-github-app.md).
 - [ADR-0015: Isolate resumable runner execution](../decisions/0015-isolate-resumable-runner-execution.md).
 - [ADR-0016: Require structured pull request descriptions](../decisions/0016-require-structured-pull-request-descriptions.md).
+- [ADR-0017: Use an explicit agent-invocation boundary for conversation-driven delivery](../decisions/0017-use-an-explicit-agent-invocation-boundary.md).

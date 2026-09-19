@@ -77,7 +77,7 @@ export function githubApi({ repository, token, fetchImpl = fetch }) {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
+        'X-GitHub-Api-Version': '2026-03-10',
         'Content-Type': 'application/json',
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -236,6 +236,7 @@ export async function classifyAndRoute({
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !/^[1-9][0-9]*$/.test(issueNumber)) throw new Error('Invalid source repository or issue number.');
   if (event?.issue?.pull_request) throw new Error('A pull request cannot enter issue intake.');
   const api = githubApi({ repository, token: env.GH_TOKEN, fetchImpl });
+  const routingEventKind = env.INVOCATION_EVENT === 'true' ? 'agent-invocation' : env.GITHUB_EVENT_NAME;
   const effectiveConfig = bindIssueMetadataConfig(config, env.ISSUE_FIELD_BINDINGS_JSON || {});
   const available = runnerAvailability(env, effectiveConfig);
   let issue = await api(`/issues/${issueNumber}`);
@@ -255,7 +256,7 @@ export async function classifyAndRoute({
       issue = { ...issue, ...enriched, labels: issue.labels ?? enriched.labels ?? [] };
     } catch (error) {
       const reason = `Issue field metadata could not be read; no lifecycle mutation is authorized. ${String(error.message ?? error).slice(0, 400)}`;
-      const metadata = classifyIssue({ issue, config: effectiveConfig, eventAction: event?.action, eventKind: env.GITHUB_EVENT_NAME, available });
+      const metadata = classifyIssue({ issue, config: effectiveConfig, eventAction: event?.action, eventKind: routingEventKind, available });
       metadata.route = 'hold';
       metadata.reasons = [...metadata.reasons, reason];
       const result = { issue: issueNumber, route: 'hold', state: metadata.state, metadata, labels: issue.labels ?? [] };
@@ -267,7 +268,7 @@ export async function classifyAndRoute({
     const saved = await readSavedDeliveryContext({ env, event, repository, issueNumber });
     if (saved) issue = { ...issue, ...saved };
   } catch (error) {
-    const metadata = classifyIssue({ issue, config: effectiveConfig, eventAction: event?.action, eventKind: env.GITHUB_EVENT_NAME, available });
+    const metadata = classifyIssue({ issue, config: effectiveConfig, eventAction: event?.action, eventKind: routingEventKind, available });
     metadata.route = 'hold';
     metadata.reasons = [...metadata.reasons, `Saved execution state could not be trusted; no orchestration route is authorized. ${String(error.message ?? error).slice(0, 400)}`];
     const result = { issue: issueNumber, route: 'hold', state: metadata.state, metadata, labels: issue.labels ?? [] };
@@ -275,10 +276,14 @@ export async function classifyAndRoute({
     return result;
   }
   const issueComment = env.GITHUB_EVENT_NAME === 'issue_comment';
+  const allowlistedInvocationBot = env.INVOCATION_EVENT === 'true'
+    && env.INVOCATION_ACTOR_KIND === 'external-bot'
+    && env.INVOCATION_AUTHORIZED === 'true';
   const trustedComment = !issueComment || (
-    event?.action === 'created'
-    && event?.comment?.user?.type !== 'Bot'
-    && !String(event?.comment?.user?.login ?? '').endsWith('[bot]')
+    (env.INVOCATION_EVENT === 'true' && env.INVOCATION_AUTHORIZED === 'true')
+    || (event?.action === 'created'
+      && event?.comment?.user?.type !== 'Bot'
+      && !String(event?.comment?.user?.login ?? '').endsWith('[bot]'))
   );
   const resultFor = (targetIssue, metadata, fields = null) => ({
     issue: String(targetIssue.number ?? issueNumber),
@@ -288,7 +293,7 @@ export async function classifyAndRoute({
     fields,
     labels: (targetIssue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean),
   });
-  let metadata = classifyIssue({ issue, config: effectiveConfig, eventAction: event?.action, eventKind: env.GITHUB_EVENT_NAME, available });
+  let metadata = classifyIssue({ issue, config: effectiveConfig, eventAction: event?.action, eventKind: routingEventKind, available });
   if (!trustedComment) {
     metadata.route = 'hold';
     metadata.reasons = [...metadata.reasons, 'Only a newly created non-bot comment may enter semantic routing.'];
@@ -327,7 +332,8 @@ export async function classifyAndRoute({
 
   const actor = issueComment ? event.comment.user.login : env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR;
   let permission = 'none';
-  if (actor) {
+  if (allowlistedInvocationBot) permission = 'write';
+  else if (actor) {
     try { permission = (await api(`/collaborators/${encodeURIComponent(actor)}/permission`)).permission; }
     catch (error) { if (error.status !== 404) throw error; }
   }
@@ -353,8 +359,8 @@ export async function classifyAndRoute({
         await writeOutputs(result, env);
         return result;
       }
-      const proposal = await reasonRoute({ repositoryRoot, issue: { ...issue, comments }, event: { ...event, kind: env.GITHUB_EVENT_NAME }, config: effectiveConfig, env });
-      metadata = validateRoutingProposal({ proposal, issue, event: { ...event, kind: env.GITHUB_EVENT_NAME }, config: effectiveConfig, available });
+      const proposal = await reasonRoute({ repositoryRoot, issue: { ...issue, comments }, event: { ...event, kind: routingEventKind }, config: effectiveConfig, env });
+      metadata = validateRoutingProposal({ proposal, issue, event: { ...event, kind: routingEventKind }, config: effectiveConfig, available });
     } catch (error) {
       const detail = String(error?.message ?? '').replace(/\s+/g, ' ').trim().slice(0, 500);
       const message = `Routing could not be decided. No issue fields changed. Next: rerun issue intake after Codex is available.${detail ? `\n\nReason: ${detail}` : ''}`;

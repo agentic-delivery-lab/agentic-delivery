@@ -22,8 +22,8 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     '.agents/skills/delivery-workflow/agents/openai.yaml',
     '.github/workflows/delivery-quality.yml', '.github/workflows/issue-intake.yml',
     '.github/workflows/pull-request-body.yml', '.github/rulesets/require-pull-request-body.json',
-    '.github/workflows/codex-delivery.yml', '.github/issue-metadata.yml', '.github/orchestration-policy.yml',
-    'scripts/issue-intake.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
+    '.github/workflows/codex-delivery.yml', '.github/workflows/agent-invocation.yml', '.github/agent-actors.json', '.github/issue-metadata.yml', '.github/orchestration-policy.yml',
+    'api/github/webhook.mjs', 'scripts/issue-intake.mjs', 'scripts/lib/agent-invocation.mjs', 'scripts/prepare-agent-invocation.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
     'scripts/lib/orchestration-policy.mjs', 'tests/helpers/organization-issue-forms.mjs',
   ]) await access(path.join(repositoryRoot, relativePath));
 
@@ -60,6 +60,10 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   const delivery = await text('.github/workflows/codex-delivery.yml');
   assert.ok(delivery.includes('workflow_call:'));
   assert.ok(!delivery.includes('types: [opened]'));
+  const invocation = parseRepositoryYaml(await text('.github/workflows/agent-invocation.yml'), 'agent invocation workflow');
+  assert.deepEqual(invocation.on.repository_dispatch.types, ['agent_invocation']);
+  assert.equal(invocation.jobs.intake.uses, './.github/workflows/issue-intake.yml');
+  assert.equal(invocation.jobs.intake.with.agent_invocation, true);
 
   const docs = await text('docs/delivery/README.md');
   assert.ok(docs.includes('pnpm branch:start'));
@@ -100,6 +104,11 @@ test('repository uses the organization pull request template and required-check 
   assert.deepEqual(requiredChecks.parameters.required_status_checks, [
     { context: 'Validate pull request body' },
   ]);
+
+  const actors = JSON.parse(await text('.github/agent-actors.json'));
+  assert.equal(actors.mention, '@agentic-delivery-bot');
+  assert.deepEqual(actors.human_permissions, ['write', 'maintain', 'admin']);
+  assert.deepEqual(actors.events.issue_comment, ['created', 'edited']);
 });
 
 test('repository instructions and ADR-0007 point to pnpm commands', async () => {

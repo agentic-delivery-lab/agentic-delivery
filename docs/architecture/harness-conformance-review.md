@@ -30,9 +30,10 @@ The documented architecture is therefore more complete than the demonstrated
 architecture. Local code and tests show that many controls are implemented and
 structurally exercised. They do not prove that a real source issue travelled
 through intake, a persistent session, validation, publication and human merge.
-GitHub Free also cannot technically prevent a different credential holder from
-pushing to `main`; the branch rule is policy plus post-event detection, not an
-external prevention control.
+The repository's public visibility makes the repository Rulesets API available,
+but no live branch rule has been verified on this review branch. Until an
+authorized maintainer activates it after merge, the branch rule remains policy
+plus post-event detection rather than an external prevention control.
 
 The current evidence supports one `agentic-delivery-governance` bounded
 context. The repository has technical components, but no conflicting domain
@@ -110,7 +111,7 @@ to prove that the intended chain works end to end.
 ## E. Architecture drift and ADR lifecycle findings
 
 - ADR-0001 and ADR-0004 should be amended to distinguish repository policy
-  from GitHub Free's lack of technical branch-protection enforcement.
+  from the unverified live branch-protection configuration.
 - ADR-0003 should be amended with the two new registered concepts and the
   structural-versus-semantic review boundary.
 - ADR-0009 should be amended with the evidence contract and the fact that
@@ -221,3 +222,21 @@ composable profiles for research, requirements, architecture, planning,
 implementation, validation, and coordination from structured issue and
 execution context. `docs/delivery/organization-metadata.md` records the
 organization provisioning and migration boundary.
+
+## L. Provisional conversation-driven invocation extension
+
+ADR-0017 adds a separate activation boundary for delivery requests expressed
+through GitHub conversation events. The versioned actor catalog in
+`.github/agent-actors.json` defines the `@agentic-delivery-bot` mention, the
+supported issue and pull-request comment/review event pairs, repository
+permissions for human actors, and a one-hop limit for allowlisted automation
+actors. It does not grant the App permission to invoke itself, and the initial
+external-agent allowlist is empty.
+
+The architecture map records `agent-invocation` as a runtime surface. Its
+required evidence is the immutable conversation event, invocation boundary,
+actor authorization, repository dispatch, idempotency key, hop limit, and
+correlated Actions run. The current baseline has structural catalog and policy
+evidence but no production webhook, App installation, Vercel request, or
+end-to-end Actions observation. Those runtime gaps remain explicitly
+unverified until the follow-up implementation is deployed and smoke-tested.

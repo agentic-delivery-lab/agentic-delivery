@@ -1,7 +1,7 @@
-// agentic-primitive: {"id":"orchestration-policy-validator","kind":"validator","enforcement":"deterministic","adrs":["ADR-0012","ADR-0015"],"domains":["agentic-delivery-governance"]}
+// agentic-primitive: {"id":"orchestration-policy-validator","kind":"validator","enforcement":"deterministic","adrs":["ADR-0012","ADR-0015","ADR-0017"],"domains":["agentic-delivery-governance"]}
 
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const TRIGGERS = new Set(['issue', 'comment', 'child-event', 'manual']);
+const TRIGGERS = new Set(['issue', 'comment', 'agent-invocation', 'child-event', 'manual']);
 const REQUIREMENTS = new Set(['valid-plan', 'resumable-session', 'unchanged-scope', 'lineage-root']);
 
 function list(value) {

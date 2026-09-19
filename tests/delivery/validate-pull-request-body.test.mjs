@@ -16,9 +16,12 @@ function completeBody() {
 
 Improve pull request governance with a deterministic description check.
 
-## Source and plan
+## Source
 
 - Source issue: Closes #44
+
+## Plan
+
 - Implementation plan: Issue #44, implementation plan
 - Plan deviations: None
 
@@ -72,7 +75,7 @@ test('rejects missing sections, unanswered fields, and unchecked items', () => {
 
   assert.equal(result.valid, false);
   assert.ok(result.errors.includes('Missing required section: ## Summary'));
-  assert.ok(result.errors.includes('Required field has no answer: Source and plan > Plan deviations'));
+  assert.ok(result.errors.includes('Required field has no answer: Plan > Plan deviations'));
   assert.ok(result.errors.includes('Author checklist contains unchecked items.'));
 });
 
@@ -84,6 +87,17 @@ test('accepts only the explicit Dependabot author without a body', () => {
   assert.equal(dependabot.exempt, true);
   assert.equal(anotherBot.valid, false);
   assert.equal(anotherBot.exempt, false);
+});
+
+test('requires Source and Plan as independent headings', () => {
+  const combined = completeBody()
+    .replace('## Source\n\n- Source issue: Closes #44\n\n## Plan\n', '## Source and plan\n\n- Source issue: Closes #44\n')
+    .replace('- Implementation plan: Issue #44, implementation plan\n', '- Implementation plan: Issue #44, implementation plan\n');
+  const result = validatePullRequestBody({ body: combined, author: 'octocat' });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.includes('Missing required section: ## Source'));
+  assert.ok(result.errors.includes('Missing required section: ## Plan'));
+  assert.ok(!result.errors.includes('Missing required section: ## Source and plan'));
 });
 
 test('command reports validation and explicit Dependabot exemption', async () => {

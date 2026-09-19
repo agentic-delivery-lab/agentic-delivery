@@ -43,7 +43,7 @@ test('domain-language guidance and workflow contracts use the ESM validator', as
 
 test('issue intake artifacts use the registered delivery-governance terms', async () => {
   const register = await text('docs/domain/ubiquitous-language.yml');
-  for (const term of ['issue type', 'lifecycle stage', 'delivery readiness', 'governance metadata', 'classification', 'lifecycle routing', 'readiness gate']) {
+  for (const term of ['issue type', 'lifecycle stage', 'delivery readiness', 'governance metadata', 'classification', 'lifecycle routing', 'readiness gate', 'conversation event', 'invocation boundary', 'agent invocation', 'automation actor', 'actor catalog']) {
     assert.ok(register.includes(`term: "${term}"`), `missing registered intake term: ${term}`);
   }
   const guide = await text('docs/delivery/README.md');

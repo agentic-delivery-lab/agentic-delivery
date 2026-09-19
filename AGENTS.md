@@ -1,6 +1,6 @@
 # Repository instructions
 
-<!-- agentic-primitive: {"id":"repository-governance-instructions","kind":"instruction","enforcement":"instructional","adrs":["ADR-0001","ADR-0002","ADR-0003","ADR-0004","ADR-0007","ADR-0012","ADR-0013","ADR-0014","ADR-0015","ADR-0016"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"repository-governance-instructions","kind":"instruction","enforcement":"instructional","adrs":["ADR-0001","ADR-0002","ADR-0003","ADR-0004","ADR-0007","ADR-0012","ADR-0013","ADR-0014","ADR-0015","ADR-0016","ADR-0017"],"domains":["agentic-delivery-governance"]} -->
 
 ## Architectural decisions
 
@@ -40,11 +40,13 @@
   refined goal may create only the validated child work items it needs, while
   the parent remains the lineage root.
 - Issue intake applies only a validated routing proposal before the Codex delivery primitive. People do not set lifecycle fields during normal work; manual intake dispatch using current approved fields is a rare break-glass recovery when semantic routing is unavailable. A new Plan run requires an open issue with a supported native type, valid Lifecycle Stage and Delivery Readiness fields, and cleared deterministic gates. Research, requirements, architecture, validation, and coordination routes do not implicitly invoke implementation. Historical `type:*` and `state:*` labels are migration evidence only; governance labels such as `adr:needed` remain orthogonal controls, and GitHub's `not planned` close reason remains the final disposition for rejected or abandoned work.
+- Conversation-driven agent runs require the explicit invocation boundary in [`.github/agent-actors.json`](.github/agent-actors.json): `@agentic-delivery-bot` must begin the first actionable line of a supported issue or pull-request comment/review event. The tag activates processing but does not select a route or bypass issue fields, readiness, plan validity, actor authorization, or orchestration policy. Untagged comments, quoted/code examples, native `@copilot` requests, and the orchestrator's own output remain outside this delivery invocation boundary.
 
 - For automated source issue execution, read [`.agents/codex-delivery.md`](.agents/codex-delivery.md) and [`docs/delivery/codex-workflow.md`](docs/delivery/codex-workflow.md). Preserve mandatory issue communication, clarification pauses, exact model settings, and the budget boundary.
 - Review pull requests through the read-only Harness Architecture Review when its workflow is available. Treat its deterministic violations as structural failures, and treat semantic findings or unavailable runtime evidence as cited review input rather than proof.
 - Use the organization pull request template from `agentic-delivery-lab/.github`; do not add a local template. Complete every section with evidence, or write `Not applicable` with a reason. Record the source issue, implementation plan, material plan deviations, verification, risks, rollback and review guidance. The `Validate pull request body` check enforces the structural contract for every pull request except one authored by `dependabot[bot]`; do not claim or extend that exception to another bot or app.
-- GitHub Free does not enforce branch protection or rulesets for this private repository. The main-branch protection and required-check rules below remain repository policy until the hosting plan supports enforcement; do not describe them as a hosting guarantee.
+- Keep `## Source` and `## Plan` as separate headings in every pull request. `Source` contains the source issue; `Plan` contains the implementation plan and deviations. The combined `## Source and plan` heading is not valid.
+- The repository is public, but a versioned branch-protection or ruleset definition is not itself live enforcement. Treat the main-branch protection and required-check rules below as repository policy until an authorized maintainer activates and verifies the corresponding GitHub rule; do not describe an unverified rule as a hosting guarantee.
 
 - Use `$delivery-workflow` for changes that affect branches, commit history, pull requests, releases or `CHANGELOG.md`. The skill is implicitly available.
 - Keep `main` deployable. Work on a short-lived feature branch and make that branch the review pull-request head; `main` is the protected base. Never create a pull request from `main`.

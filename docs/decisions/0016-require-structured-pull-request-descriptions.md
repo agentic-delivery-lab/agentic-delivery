@@ -22,23 +22,26 @@ itself is advisory: an author or coding agent can leave sections empty, while
 Dependabot does not know the repository's planning and evidence contract.
 
 GitHub can make a stable Actions job a required status check through a branch
-ruleset. This organization currently uses GitHub Free and this repository is
-private. GitHub therefore rejects the repository Rulesets API with HTTP 403.
-The repository must distinguish the desired, versioned rule from live hosting
-enforcement and must not claim that an unavailable control is active.
+ruleset. The repository was private when this decision was drafted and the
+Rulesets API rejected that scope. It is public now, so the repository endpoint
+is available, but the workflow is not yet on `main` and the active rule has not
+been verified. The repository must distinguish the desired, versioned rule
+from live hosting enforcement and must not claim that an unactivated control is
+active.
 
 ## Decision Drivers
 
 - Keep one organization pull request template as the canonical default.
-- Give reviewers the source issue, implementation plan, deviations, evidence,
+- Give reviewers separate `Source` and `Plan` sections for the source issue,
+  implementation plan and deviations, followed by evidence,
   risks, delivery guidance and requested review focus.
 - Make the structural contract deterministic and visible as one stable check.
 - Evaluate trusted base-branch validator code without executing pull-request
   code or exposing secrets.
 - Keep automated dependency updates usable without giving bots a broad ruleset
   bypass.
-- Preserve a reviewable ruleset definition until the hosting plan can enforce
-  it for a private repository.
+- Preserve a reviewable ruleset definition until an authorized maintainer
+  activates and verifies it after the workflow is on `main`.
 - Keep human merge authority and repository-specific semantic review.
 
 ## Considered Options
@@ -57,7 +60,9 @@ keeping repository-specific validation, agent instructions and review evidence
 under version control.
 
 The repository will not contain a local pull request template. Pull request
-authors and coding agents must complete the organization template. A dedicated
+authors and coding agents must complete the organization template, including
+separate `Source` and `Plan` headings. A combined `Source and plan` heading is
+invalid. A dedicated
 `pull_request_target` workflow checks the body for all relevant body and
 revision events. It checks out the trusted base commit, has read-only contents
 permission, uses no secrets and never executes code from the pull request.
@@ -70,9 +75,8 @@ because a ruleset bypass would waive more than the pull request body contract.
 
 The versioned ruleset requires the stable job on the default branch. It is a
 desired control, not current hosting state. An operator may activate it only
-after the organization plan supports rulesets for this private repository or
-the repository becomes public, the workflow has reported the expected check,
-and the live ruleset is verified through GitHub.
+after the workflow has reached `main`, reported the expected check, and the
+live ruleset has been verified through GitHub.
 
 ### Consequences
 
@@ -83,8 +87,8 @@ and the live ruleset is verified through GitHub.
   does not bypass unrelated review or status-check rules.
 - Bad, because the first pull request that introduces the workflow cannot run
   the new base-branch workflow until the change is merged.
-- Bad, because GitHub Free cannot currently enforce the versioned required
-  status check for this private repository.
+- Bad, because activation is a separate privileged operation after the
+  workflow merge and cannot be proven by repository files alone.
 - Neutral, because deterministic structure does not prove that an answer is
   complete or true; reviewers still assess meaning and evidence.
 
@@ -100,9 +104,9 @@ and the live ruleset is verified through GitHub.
   validator, and agentic primitives instruct coding agents to follow it.
 - The versioned ruleset has no bypass actors and requires only
   `Validate pull request body` on the default branch.
-- Until GitHub supports live rulesets for this private repository, documentation
-  records the observed HTTP 403 and the activation procedure as an operator
-  prerequisite.
+- The repository is public and the endpoint is now queryable; documentation
+  records the post-merge activation procedure and keeps live enforcement
+  unclaimed until an administrator verifies it.
 
 ## Pros and Cons of the Options
 

@@ -3,8 +3,20 @@ name: issue-intake
 on:
   issues:
     types: [opened, edited, reopened, typed, untyped, closed]
-  issue_comment:
-    types: [created]
+  workflow_call:
+    inputs:
+      agent_invocation:
+        description: Run from a validated GitHub App mention envelope
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      CODEX_DELIVERY_APP_PRIVATE_KEY:
+        required: true
+      CODEX_DELIVERY_APP_ID:
+        required: true
+      CODEX_DELIVERY_APP_INSTALLATION_ID:
+        required: false
   workflow_dispatch:
     inputs:
       issue:
@@ -20,13 +32,13 @@ on:
 permissions:
   contents: read
   issues: write
+  pull-requests: read
 
 jobs:
   classify:
     if: >-
       !github.event.issue.pull_request &&
-      (github.event_name != 'issue_comment' ||
-       (github.event.comment.user.type != 'Bot'))
+      (github.event_name != 'repository_dispatch' || inputs.agent_invocation)
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 10
     outputs:
@@ -36,6 +48,18 @@ jobs:
       lifecycle_stage: ${{ steps.intake.outputs.lifecycle_stage }}
       readiness: ${{ steps.intake.outputs.readiness }}
       orchestration_pattern: ${{ steps.intake.outputs.orchestration_pattern }}
+      invocation_accepted: ${{ steps.invocation.outputs.accepted || 'true' }}
+      source_issue: ${{ steps.invocation.outputs.source_issue || steps.intake.outputs.issue }}
+      invocation_event_name: ${{ steps.invocation.outputs.invocation_event_name }}
+      invocation_source_kind: ${{ steps.invocation.outputs.invocation_source_kind }}
+      invocation_comment_id: ${{ steps.invocation.outputs.invocation_comment_id }}
+      invocation_review_id: ${{ steps.invocation.outputs.invocation_review_id }}
+      invocation_pull_request_number: ${{ steps.invocation.outputs.invocation_pull_request_number }}
+      invocation_delivery_id: ${{ steps.invocation.outputs.invocation_delivery_id }}
+      invocation_actor: ${{ steps.invocation.outputs.invocation_actor }}
+      invocation_actor_kind: ${{ steps.invocation.outputs.invocation_actor_kind }}
+      invocation_authorized: ${{ steps.invocation.outputs.invocation_authorized }}
+      invocation_body_digest: ${{ steps.invocation.outputs.invocation_body_digest }}
     steps:
       - name: Check out trusted intake
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -52,26 +76,44 @@ jobs:
       - name: Install intake dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Validate and normalize explicit agent invocation
+        id: invocation
+        if: ${{ inputs.agent_invocation }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: node scripts/prepare-agent-invocation.mjs
+
       - name: Set up pinned Codex CLI
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.force }}
         run: node scripts/setup-runner-codex.mjs
 
       - name: Reason about and validate issue routing
         id: intake
+        if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_GRAPHQL: 'true'
           ISSUE_FIELD_BINDINGS_JSON: ${{ vars.ISSUE_FIELD_BINDINGS_JSON }}
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
           CODEX_MCP_SERVERS: ${{ vars.CODEX_MCP_SERVERS }}
-          SOURCE_ISSUE: ${{ inputs.issue || github.event.inputs.issue || github.event.issue.number }}
+          SOURCE_ISSUE: ${{ steps.invocation.outputs.source_issue || inputs.issue || github.event.inputs.issue || github.event.issue.number }}
           FORCE_ROUTE: ${{ inputs.force || false }}
+          INVOCATION_EVENT: ${{ inputs.agent_invocation && 'true' || 'false' }}
+          INVOCATION_ACTOR_KIND: ${{ steps.invocation.outputs.invocation_actor_kind }}
+          INVOCATION_AUTHORIZED: ${{ steps.invocation.outputs.invocation_authorized }}
+          GITHUB_EVENT_NAME: ${{ inputs.agent_invocation && 'issue_comment' || github.event_name }}
+          GITHUB_EVENT_PATH: ${{ steps.invocation.outputs.event_path || github.event_path }}
         run: node scripts/issue-intake.mjs
 
   deliver:
     needs: classify
     if: >-
       needs.classify.result == 'success' &&
+      needs.classify.outputs.invocation_accepted != 'false' &&
       (needs.classify.outputs.route == 'plan' ||
        needs.classify.outputs.route == 'implement' ||
        needs.classify.outputs.route == 'resume' ||
@@ -88,6 +130,16 @@ jobs:
     with:
       issue: ${{ needs.classify.outputs.issue }}
       route: ${{ needs.classify.outputs.route }}
+      invocation_event_name: ${{ needs.classify.outputs.invocation_event_name }}
+      invocation_source_kind: ${{ needs.classify.outputs.invocation_source_kind }}
+      invocation_comment_id: ${{ needs.classify.outputs.invocation_comment_id }}
+      invocation_review_id: ${{ needs.classify.outputs.invocation_review_id }}
+      invocation_pull_request_number: ${{ needs.classify.outputs.invocation_pull_request_number }}
+      invocation_delivery_id: ${{ needs.classify.outputs.invocation_delivery_id }}
+      invocation_actor: ${{ needs.classify.outputs.invocation_actor }}
+      invocation_actor_kind: ${{ needs.classify.outputs.invocation_actor_kind }}
+      invocation_authorized: ${{ needs.classify.outputs.invocation_authorized }}
+      invocation_body_digest: ${{ needs.classify.outputs.invocation_body_digest }}
     secrets:
       CODEX_DELIVERY_APP_ID: ${{ secrets.CODEX_DELIVERY_APP_ID }}
       CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
