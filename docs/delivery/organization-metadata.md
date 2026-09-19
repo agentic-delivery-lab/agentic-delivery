@@ -128,7 +128,7 @@ contains the source issue; `Plan` contains the implementation plan and
 material deviations. It also asks authors to provide verification evidence,
 assess delivery risk, and guide reviewers. The
 `pull-request-body.yml` workflow validates that contract with trusted
-base-branch code and read-only permissions. It reports the stable job name
+base-branch code and read-only permissions. It reports the stable check context
 `Validate pull request body` for every relevant pull-request event. The exact
 author `dependabot[bot]` receives a successful exemption; no other bot, App,
 user, team, or administrator is exempt.
@@ -143,10 +143,15 @@ are GitHub repository or organization resources rather than files discovered
 from `.github`; the JSON below is versioned as an auditable deployment input
 and must be applied through the Rulesets API by an authorized maintainer.
 
+This organization remains on GitHub Free. Organization-level rulesets are
+therefore not available; apply the reviewed repository ruleset separately to
+each public repository that contains the caller workflow. The `.github`
+repository must have its own caller before its repository ruleset is activated.
+
 The importable repository ruleset is
 [`require-pull-request-body.json`](../../.github/rulesets/require-pull-request-body.json).
 It targets the default branch, has no bypass actors, and requires the stable
-job name. The repository is public now, so the repository Rulesets API is
+`Validate pull request body` check context. The repository is public now, so the repository Rulesets API is
 available. Do not apply the active rule until this pull request (and the
 workflow it introduces) is merged; otherwise the required check does not yet
 exist on `main`. After merge, first let the workflow report the check and then
@@ -154,6 +159,9 @@ apply the reviewed definition:
 
 ```text
 gh api --method POST repos/agentic-delivery-lab/agentic-delivery/rulesets \
+  --input .github/rulesets/require-pull-request-body.json
+
+gh api --method POST repos/agentic-delivery-lab/.github/rulesets \
   --input .github/rulesets/require-pull-request-body.json
 ```
 
