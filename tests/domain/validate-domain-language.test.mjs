@@ -24,7 +24,7 @@ async function fixtureRoot(t, fixtureName) {
 
 test('accepts the repository domain register and valid fixture', async (t) => {
   const result = await validateDomainLanguage(repositoryRoot);
-  assert.deepEqual(result, { contexts: 2, terms: 82 });
+  assert.deepEqual(result, { contexts: 2, terms: 83 });
   const root = await fixtureRoot(t, 'valid.yml');
   assert.deepEqual(await validateDomainLanguage(root), { contexts: 1, terms: 2 });
 });
