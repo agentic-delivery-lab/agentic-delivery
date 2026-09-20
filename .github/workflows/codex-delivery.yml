@@ -19,6 +19,11 @@ on:
         required: false
         default: ''
         type: string
+      participant_mode:
+        description: Central participant mode resolved during intake
+        required: false
+        default: ''
+        type: string
       route:
         description: Authorized orchestration route selected by the intake policy
         required: true
@@ -98,6 +103,7 @@ jobs:
       CODEX_AUTH_HOME: /var/lib/github-runner/.codex
       ORIGIN_REPOSITORY: ${{ inputs.origin_repository }}
       ORIGIN_REPOSITORY_ID: ${{ inputs.origin_repository_id }}
+      CONTROL_PLANE_MODE: ${{ inputs.participant_mode }}
       GITHUB_EVENT_NAME: ${{ inputs.invocation_event_name == 'issues' && 'issues' || (inputs.invocation_event_name != '' && 'issue_comment' || github.event_name) }}
       GITHUB_TRIGGERING_ACTOR: ${{ inputs.invocation_actor || github.triggering_actor || github.actor }}
     permissions:

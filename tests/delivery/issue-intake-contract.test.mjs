@@ -68,6 +68,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.ok(intakeWorkflow.jobs.classify.outputs.lifecycle_stage);
   assert.ok(intakeWorkflow.jobs.classify.outputs.readiness);
   assert.ok(intakeWorkflow.jobs.classify.outputs.invocation_accepted);
+  assert.ok(intakeWorkflow.jobs.classify.outputs.participant_mode);
   assert.equal(intakeWorkflow.jobs.classify.needs, 'authorize');
   assert.ok(intakeWorkflow.jobs.authorize);
   assert.equal(intakeWorkflow.jobs.authorize['runs-on'], 'ubuntu-latest');
@@ -82,6 +83,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(intakeWorkflow.jobs.deliver.secrets.CODEX_DELIVERY_APP_PRIVATE_KEY, '${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}');
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.issue.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.route.required, true);
+  assert.equal(deliveryWorkflow.on.workflow_call.inputs.participant_mode.required, false);
   assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_APP_PRIVATE_KEY.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_APP_ID.required, true);
   assert.equal(deliveryWorkflow.jobs.deliver.permissions.contents, 'read');

@@ -177,6 +177,7 @@ jobs:
       route: ${{ needs.classify.outputs.route }}
       origin_repository: ${{ needs.classify.outputs.origin_repository }}
       origin_repository_id: ${{ needs.classify.outputs.origin_repository_id }}
+      participant_mode: ${{ needs.classify.outputs.participant_mode }}
       invocation_event_name: ${{ needs.classify.outputs.invocation_event_name }}
       invocation_source_kind: ${{ needs.classify.outputs.invocation_source_kind }}
       invocation_comment_id: ${{ needs.classify.outputs.invocation_comment_id }}
