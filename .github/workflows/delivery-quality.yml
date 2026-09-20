@@ -81,6 +81,9 @@ jobs:
       - name: Validate configuration files
         run: node scripts/validate-config-files.mjs "$GITHUB_WORKSPACE"
 
+      - name: Validate controller release and participant pins
+        run: node scripts/validate-controller-release.mjs "$GITHUB_WORKSPACE"
+
       - name: Validate ADR primitive traceability index
         run: node scripts/generate-adr-primitive-index.mjs --check
 

@@ -1,0 +1,19 @@
+{
+  "$schema": "../schemas/controller-release.v1.schema.json",
+  "schemaVersion": 1,
+  "controllerId": "agentic-delivery",
+  "version": "0.2.0",
+  "commit": "b160ae8826330ce280c41108e9459550c399e8c6",
+  "contracts": {
+    "eventEnvelope": 1,
+    "lifecycle": "1.0.0",
+    "stateMachine": "1.0.0",
+    "evidence": "1.0.0"
+  },
+  "compatibility": {
+    "eventEnvelope": 1,
+    "lifecycle": "1.0.0",
+    "stateMachine": "1.0.0",
+    "evidence": "1.0.0"
+  }
+}

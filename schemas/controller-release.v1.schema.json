@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/schemas/controller-release.v1.schema.json",
+  "title": "Agentic Delivery controller release v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "controllerId", "version", "commit", "contracts", "compatibility"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "controllerId": { "const": "agentic-delivery" },
+    "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "contracts": { "$ref": "#/$defs/contracts" },
+    "compatibility": {
+      "allOf": [
+        { "$ref": "#/$defs/contracts" },
+        { "description": "The oldest contract versions accepted by this release." }
+      ]
+    }
+  },
+  "$defs": {
+    "contracts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventEnvelope", "lifecycle", "stateMachine", "evidence"],
+      "properties": {
+        "eventEnvelope": { "type": "integer", "minimum": 1 },
+        "lifecycle": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+        "stateMachine": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+        "evidence": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" }
+      }
+    }
+  }
+}
