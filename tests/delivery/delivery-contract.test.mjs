@@ -29,6 +29,11 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     'config/github-app-contract.json', 'schemas/github-app-contract.v1.schema.json', 'scripts/validate-github-app-contract.mjs',
     '.github/workflows/agentic-delivery-quality.yml',
     '.github/workflows/agentic-delivery-architecture-review.yml',
+    'docs/delivery/operations/onboarding.md',
+    'docs/delivery/operations/upgrades.md',
+    'docs/delivery/operations/rollback.md',
+    'docs/delivery/operations/credential-rotation.md',
+    'docs/delivery/operations/incident-recovery.md',
   ]) await access(path.join(repositoryRoot, relativePath));
 
   const packageJson = JSON.parse(await text('package.json'));
