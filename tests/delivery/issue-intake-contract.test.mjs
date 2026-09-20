@@ -8,6 +8,7 @@ import {
   EXPECTED_ORGANIZATION_ISSUE_FORMS,
   loadOrganizationIssueForms,
 } from '../helpers/organization-issue-forms.mjs';
+import { validateIssueMetadataConfig } from '../../scripts/lib/issue-metadata.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -37,7 +38,20 @@ test('issue intake configuration keeps issue type, lifecycle stage, readiness, a
   assert.deepEqual(config.readiness.blocking_governance, ['adr:needed', 'adr:proposed', 'adr:removal']);
   assert.equal(config.authority.issue_type, 'organization-native');
   assert.equal(config.authority.lifecycle, 'organization-issue-field');
+  assert.equal(config.authority.delivery_state, 'organization-issue-field');
   assert.equal(config.authority.execution_state, 'runner-local');
+  assert.deepEqual(config.field_compatibility, {
+    canonical_key: 'delivery_state',
+    canonical_name: 'Delivery State',
+    legacy_key: 'readiness',
+    legacy_id: 'delivery-readiness',
+    legacy_name: 'Delivery Readiness',
+    mode: 'legacy-authoritative',
+    migration_adr: 'ADR-0019',
+    duplicate_field_forbidden: true,
+    option_identity: 'preserve',
+  });
+  assert.deepEqual(validateIssueMetadataConfig(config), { valid: true, errors: [] });
 });
 
 test('structured issue forms and generic fallback are present', async () => {

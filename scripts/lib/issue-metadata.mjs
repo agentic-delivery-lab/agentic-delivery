@@ -211,9 +211,30 @@ export function validateIssueMetadataConfig(config) {
   const expectedAuthority = {
     issue_type: 'organization-native',
     lifecycle: 'organization-issue-field',
+    delivery_state: 'organization-issue-field',
     execution_state: 'runner-local',
   };
   for (const [key, value] of Object.entries(expectedAuthority)) if (config.authority?.[key] !== value) errors.push(`authority.${key} must be ${value}`);
+  const compatibility = config.field_compatibility;
+  if (!compatibility || typeof compatibility !== 'object' || Array.isArray(compatibility)) {
+    errors.push('field_compatibility must be an object');
+  } else {
+    const expectedCompatibility = {
+      canonical_key: 'delivery_state',
+      canonical_name: 'Delivery State',
+      legacy_key: 'readiness',
+      legacy_id: 'delivery-readiness',
+      legacy_name: 'Delivery Readiness',
+      mode: 'legacy-authoritative',
+      migration_adr: 'ADR-0019',
+      duplicate_field_forbidden: true,
+      option_identity: 'preserve',
+    };
+    for (const [key, value] of Object.entries(expectedCompatibility)) {
+      if (compatibility[key] !== value) errors.push(`field_compatibility.${key} must be ${JSON.stringify(value)}`);
+    }
+    if (config.fields?.delivery_state !== undefined) errors.push('fields.delivery_state must not be introduced during the compatibility window');
+  }
   const types = issueTypes(config);
   const typeIds = new Set();
   for (const type of types) {
