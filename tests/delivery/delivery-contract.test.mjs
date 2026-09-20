@@ -27,6 +27,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     'api/github/webhook.mjs', 'scripts/issue-intake.mjs', 'scripts/lib/agent-invocation.mjs', 'scripts/prepare-agent-invocation.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
     'scripts/lib/orchestration-policy.mjs', 'tests/helpers/organization-issue-forms.mjs',
     'config/github-app-contract.json', 'schemas/github-app-contract.v1.schema.json', 'scripts/validate-github-app-contract.mjs',
+    '.github/workflows/agentic-delivery-quality.yml',
   ]) await access(path.join(repositoryRoot, relativePath));
 
   const packageJson = JSON.parse(await text('package.json'));
@@ -67,6 +68,14 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.ok(intake.includes('ref: main'));
   assert.ok(intake.includes("ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || 'main' }}"));
   assert.ok(!delivery.includes('types: [opened]'));
+  const consumerContract = parseRepositoryYaml(await text('.github/workflows/agentic-delivery-quality.yml'), 'consumer contract workflow');
+  assert.ok(consumerContract.on.workflow_call);
+  assert.equal(consumerContract.on.workflow_call.inputs.controller_commit.required, true);
+  assert.equal(consumerContract.jobs['control-plane-contract'].permissions, undefined);
+  const consumerContractText = await text('.github/workflows/agentic-delivery-quality.yml');
+  assert.ok(consumerContractText.includes('repository: agentic-delivery-lab/agentic-delivery'));
+  assert.ok(consumerContractText.includes('validate-github-app-contract.mjs'));
+  assert.ok(!consumerContractText.includes('secrets: inherit'));
   const invocation = parseRepositoryYaml(await text('.github/workflows/agent-invocation.yml'), 'agent invocation workflow');
   assert.deepEqual(invocation.on.repository_dispatch.types, ['agent_invocation']);
   assert.equal(invocation.jobs.intake.uses, './.github/workflows/issue-intake.yml');
