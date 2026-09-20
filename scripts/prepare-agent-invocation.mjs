@@ -14,6 +14,7 @@ import {
 } from './lib/agent-invocation.mjs';
 import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
 import { loadParticipantRegistry, participantForRepository } from './lib/participant-registry.mjs';
+import { validateEventEnvelope } from './lib/control-plane-contracts.mjs';
 import actorCatalog from '../.github/agent-actors.json' with { type: 'json' };
 
 const API_VERSION = '2026-03-10';
@@ -118,7 +119,8 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
   if (!env.GH_TOKEN || !env.GITHUB_EVENT_PATH || !env.GITHUB_REPOSITORY) throw new Error('Agent invocation preflight requires GitHub event, repository, and token context.');
   const event = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'));
   const envelope = event?.client_payload;
-  if (!envelope || envelope.version !== 1 || !invocationEventSupported(envelope.event, envelope.action)) throw new Error('The repository dispatch envelope is invalid.');
+  const envelopeValidation = validateEventEnvelope(envelope);
+  if (!envelopeValidation.valid) throw new Error(`The repository dispatch envelope is invalid: ${envelopeValidation.errors.join(' ')}`);
   const controllerRepository = env.GITHUB_REPOSITORY;
   if (String(event.repository?.full_name) !== controllerRepository) throw new Error('The dispatch controller repository boundary is invalid.');
   if (!/^[\w.-]+\/[\w.-]+$/.test(controllerRepository) || !/^[1-9][0-9]*$/.test(String(envelope.repository_id))
