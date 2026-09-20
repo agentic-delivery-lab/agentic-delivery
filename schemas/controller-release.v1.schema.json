@@ -4,13 +4,22 @@
   "title": "Agentic Delivery controller release v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "controllerId", "version", "commit", "contracts", "compatibility"],
+  "required": ["schemaVersion", "controllerId", "version", "commit", "contracts", "dependencies", "compatibility"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "controllerId": { "const": "agentic-delivery" },
     "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
     "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "contracts": { "$ref": "#/$defs/contracts" },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["architecture", "primitives"],
+      "properties": {
+        "architecture": { "$ref": "#/$defs/artifactPin" },
+        "primitives": { "$ref": "#/$defs/artifactPin" }
+      }
+    },
     "compatibility": {
       "$ref": "#/$defs/compatibility"
     }
@@ -42,14 +51,34 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["version", "commit", "contracts"],
+            "required": ["version", "commit", "contracts", "dependencies"],
             "properties": {
               "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
               "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-              "contracts": { "$ref": "#/$defs/contracts" }
+              "contracts": { "$ref": "#/$defs/contracts" },
+              "dependencies": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["architecture", "primitives"],
+                "properties": {
+                  "architecture": { "$ref": "#/$defs/artifactPin" },
+                  "primitives": { "$ref": "#/$defs/artifactPin" }
+                }
+              }
             }
           }
         }
+      }
+    },
+    "artifactPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "version", "commit", "contentSha256"],
+      "properties": {
+        "repository": { "type": "string", "pattern": "^agentic-delivery-lab/[A-Za-z0-9_.-]+$" },
+        "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "contentSha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" }
       }
     }
   }
