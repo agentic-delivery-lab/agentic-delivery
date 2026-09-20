@@ -34,6 +34,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     'docs/delivery/operations/rollback.md',
     'docs/delivery/operations/credential-rotation.md',
     'docs/delivery/operations/incident-recovery.md',
+    'README.md',
   ]) await access(path.join(repositoryRoot, relativePath));
 
   const packageJson = JSON.parse(await text('package.json'));
