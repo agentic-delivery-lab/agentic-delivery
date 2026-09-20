@@ -14,6 +14,18 @@
     "eventEnvelope": 1,
     "lifecycle": "1.0.0",
     "stateMachine": "1.0.0",
-    "evidence": "1.0.0"
+    "evidence": "1.0.0",
+    "controllers": [
+      {
+        "version": "0.2.0",
+        "commit": "b160ae8826330ce280c41108e9459550c399e8c6",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        }
+      }
+    ]
   }
 }

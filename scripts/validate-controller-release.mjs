@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
-import { validateControllerRelease as validateControllerReleaseDocument } from './lib/control-plane-contracts.mjs';
+import { controllerPinMatchesRelease, validateControllerRelease as validateControllerReleaseDocument } from './lib/control-plane-contracts.mjs';
 import { parseParticipantRegistry } from './lib/participant-registry.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -43,9 +43,7 @@ export async function validateControllerRelease({ repositoryRoot = path.resolve(
   if (!registry.valid) errors.push(...registry.errors.map((error) => `registry: ${error}`));
   if (releaseResult.valid && registry.valid) {
     for (const participant of registry.participants.values()) {
-      if (participant.controller.version !== release.version) errors.push(`registry.${participant.repositoryId}.controller.version must match release ${release.version}`);
-      if (participant.controller.commit.toLowerCase() !== release.commit.toLowerCase()) errors.push(`registry.${participant.repositoryId}.controller.commit must match release ${release.commit}`);
-      if (JSON.stringify(participant.contracts) !== JSON.stringify(release.contracts)) errors.push(`registry.${participant.repositoryId}.contracts must match the controller release`);
+      if (!controllerPinMatchesRelease(release, participant)) errors.push(`registry.${participant.repositoryId} references a controller pin not supported by release ${release.version}`);
     }
     const commit = await git(repositoryRoot, ['cat-file', '-t', release.commit]);
     if (commit !== 'commit') errors.push(`release.commit ${release.commit} is not a commit in this repository`);

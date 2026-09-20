@@ -25,8 +25,6 @@ import { GithubAppTokenProvider } from '../../scripts/lib/github-app.mjs';
 export const config = { api: { bodyParser: false } };
 
 const API_VERSION = '2026-03-10';
-const DEFAULT_CONTROLLER_REPOSITORY = 'agentic-delivery-lab/agentic-delivery';
-
 function header(req, name) {
   const value = req.headers?.[name] ?? req.headers?.[name.toLowerCase()];
   return Array.isArray(value) ? value[0] : value;
@@ -52,8 +50,7 @@ function reply(res, status, body = null) {
 function environment(env = process.env) {
   return {
     controllerRepository: env.AGENTIC_DELIVERY_CONTROLLER_REPOSITORY
-      || env.AGENTIC_DELIVERY_REPOSITORY
-      || DEFAULT_CONTROLLER_REPOSITORY,
+      || env.AGENTIC_DELIVERY_REPOSITORY,
     appId: env.AGENTIC_DELIVERY_APP_ID || env.CODEX_DELIVERY_APP_ID,
     privateKey: env.AGENTIC_DELIVERY_APP_PRIVATE_KEY || env.CODEX_DELIVERY_APP_PRIVATE_KEY,
     installationId: env.AGENTIC_DELIVERY_APP_INSTALLATION_ID || env.CODEX_DELIVERY_APP_INSTALLATION_ID,
@@ -127,6 +124,9 @@ export async function handleWebhook(req, res, {
   const catalog = validateActorCatalog(actorCatalog);
   if (!catalog.valid) return reply(res, 500, { error: 'The actor catalog is invalid.' });
   if (!config.webhookSecret) return reply(res, 500, { error: 'The webhook secret is not configured.' });
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(String(config.controllerRepository ?? ''))) {
+    return reply(res, 500, { error: 'The central controller repository is not configured.' });
+  }
   const raw = await rawBody(req);
   const signature = header(req, 'x-hub-signature-256');
   const signatureValid = webhookSignature({
