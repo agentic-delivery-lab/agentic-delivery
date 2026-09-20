@@ -82,6 +82,12 @@ decisions without retaining obsolete architectural context on `main`.
 
 The template intentionally lives beside README.md and the numbered records. Every record keeps a source-issue link, including when a separate ADR tracking issue is used.
 
+The ADR-0018 and ADR-0019 records currently reference Issue #52 because that
+issue is the plan-persistence source record. Issue #52 is not implementation
+authorization and must not be closed by an ADR or migration change. Their
+official review and acceptance require a separately authorized successor issue
+and pull request.
+
 | Number | Decision | Source | Review/implementation |
 | --- | --- | --- | --- |
 | [0001](0001-use-madr-for-architecture-decisions.md) | Use MADR and GitHub Issues for architectural decisions | [Issue #1](https://github.com/agentic-delivery-lab/agentic-delivery/issues/1) | [PR #2](https://github.com/agentic-delivery-lab/agentic-delivery/pull/2) |
