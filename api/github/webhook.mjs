@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 
-import { GithubAppTokenProvider } from '../../scripts/lib/github-app.mjs';
+// agentic-primitive: {"id":"organization-webhook-ingress","kind":"validator","enforcement":"deterministic","adrs":["ADR-0018","ADR-0017"],"domains":["agentic-delivery-control-plane","agentic-delivery-governance"]}
+
 import actorCatalog from '../../.github/agent-actors.json' with { type: 'json' };
 import {
   AGENT_BOT_LOGIN,
@@ -14,11 +15,16 @@ import {
   validateActorCatalog,
   webhookSignature,
 } from '../../scripts/lib/agent-invocation.mjs';
+import {
+  authorizeParticipation,
+  loadParticipantRegistry,
+} from '../../scripts/lib/participant-registry.mjs';
+import { GithubAppTokenProvider } from '../../scripts/lib/github-app.mjs';
 
 export const config = { api: { bodyParser: false } };
 
 const API_VERSION = '2026-03-10';
-const DEFAULT_REPOSITORY = 'agentic-delivery-lab/agentic-delivery';
+const DEFAULT_CONTROLLER_REPOSITORY = 'agentic-delivery-lab/agentic-delivery';
 
 function header(req, name) {
   const value = req.headers?.[name] ?? req.headers?.[name.toLowerCase()];
@@ -44,7 +50,9 @@ function reply(res, status, body = null) {
 
 function environment(env = process.env) {
   return {
-    repository: env.AGENTIC_DELIVERY_REPOSITORY || env.GITHUB_REPOSITORY || DEFAULT_REPOSITORY,
+    controllerRepository: env.AGENTIC_DELIVERY_CONTROLLER_REPOSITORY
+      || env.AGENTIC_DELIVERY_REPOSITORY
+      || DEFAULT_CONTROLLER_REPOSITORY,
     appId: env.AGENTIC_DELIVERY_APP_ID || env.CODEX_DELIVERY_APP_ID,
     privateKey: env.AGENTIC_DELIVERY_APP_PRIVATE_KEY || env.CODEX_DELIVERY_APP_PRIVATE_KEY,
     installationId: env.AGENTIC_DELIVERY_APP_INSTALLATION_ID || env.CODEX_DELIVERY_APP_INSTALLATION_ID,
@@ -57,10 +65,10 @@ function appActor(payload) {
 }
 
 async function repositoryApi({ repository, token, route, method = 'GET', body, fetchImpl = fetch }) {
-  const response = await fetchImpl(`https://api.github.com/repos/${repository}${route}`, {
+  const response = await fetchImpl('https://api.github.com/repos/' + repository + route, {
     method,
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: 'Bearer ' + token,
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': API_VERSION,
       'Content-Type': 'application/json',
@@ -69,14 +77,14 @@ async function repositoryApi({ repository, token, route, method = 'GET', body, f
     signal: AbortSignal.timeout(8_000),
   });
   if (!response.ok) {
-    const error = new Error(`GitHub ${method} ${route} failed (${response.status}).`);
+    const error = new Error('GitHub ' + method + ' ' + route + ' failed (' + response.status + ').');
     error.status = response.status;
     throw error;
   }
   return response.status === 204 ? null : response.json();
 }
 
-async function actorIsAuthorized({ actor, config, token, fetchImpl }) {
+async function actorIsAuthorized({ actor, repository, token, config, fetchImpl }) {
   const login = String(actor?.login ?? '');
   const isBot = actor?.type === 'Bot' || login.endsWith('[bot]');
   if (isBot) {
@@ -88,9 +96,9 @@ async function actorIsAuthorized({ actor, config, token, fetchImpl }) {
   if (!login || !/^[A-Za-z0-9_.-]+$/.test(login)) return { allowed: false, reason: 'The webhook actor login is invalid.' };
   try {
     const permission = await repositoryApi({
-      repository: config.repository,
+      repository,
       token,
-      route: `/collaborators/${encodeURIComponent(login)}/permission`,
+      route: '/collaborators/' + encodeURIComponent(login) + '/permission',
       fetchImpl,
     });
     if (!actorCatalog.human_permissions.includes(permission?.permission)) {
@@ -103,7 +111,16 @@ async function actorIsAuthorized({ actor, config, token, fetchImpl }) {
   }
 }
 
-export async function handleWebhook(req, res, { env = process.env, fetchImpl = fetch, tokenProvider } = {}) {
+function registryValue(value) {
+  return value?.participants instanceof Map ? value : null;
+}
+
+export async function handleWebhook(req, res, {
+  env = process.env,
+  fetchImpl = fetch,
+  tokenProvider,
+  participantRegistry,
+} = {}) {
   if (req.method !== 'POST') return reply(res, 405, { error: 'POST is required.' });
   const config = environment(env);
   const catalog = validateActorCatalog(actorCatalog);
@@ -124,46 +141,73 @@ export async function handleWebhook(req, res, { env = process.env, fetchImpl = f
   const eventName = String(header(req, 'x-github-event') ?? '');
   const action = String(payload?.action ?? '');
   if (!invocationEventSupported(eventName, action)) return reply(res, 204);
-  if (payload?.repository?.full_name !== config.repository) return reply(res, 403, { error: 'Webhook repository is not installed for this endpoint.' });
-  if (!payload?.repository?.id || !header(req, 'x-github-delivery')) return reply(res, 400, { error: 'GitHub delivery identity is missing.' });
+  if (!payload?.repository?.full_name || !payload?.repository?.id) return reply(res, 400, { error: 'Webhook repository identity is missing.' });
+  if (config.installationId && String(payload.installation?.id ?? '') !== String(config.installationId)) {
+    return reply(res, 403, { error: 'Webhook installation identity is not authorized.' });
+  }
 
   const body = invocationBody(eventName, payload);
-  if (!hasInvocationMention(body, AGENT_MENTION)) return reply(res, 204);
+  const issueLifecycleEvent = eventName === 'issues';
+  if (!issueLifecycleEvent && !hasInvocationMention(body, AGENT_MENTION)) return reply(res, 204);
+  const repository = String(payload.repository.full_name);
+  const repositoryId = String(payload.repository.id);
+  const registry = registryValue(participantRegistry) ?? registryValue(await loadParticipantRegistry());
   const actor = appActor(payload);
   const provider = tokenProvider ?? new GithubAppTokenProvider({
-    repository: config.repository,
+    repository: config.controllerRepository,
     appId: config.appId,
     privateKey: config.privateKey,
     installationId: config.installationId,
     permissions: { contents: 'write', metadata: 'read' },
     fetchImpl,
   });
-  const token = await provider.token();
-  const authorization = await actorIsAuthorized({ actor, config: { ...config, botLogin: AGENT_BOT_LOGIN, maxBotHops: actorCatalog.max_bot_hops }, token, fetchImpl });
+  let originToken;
+  try {
+    originToken = await provider.token({ repositoryIds: [repositoryId] });
+  } catch {
+    return reply(res, 403, { error: 'The GitHub App installation cannot access the event repository.' });
+  }
+  const participation = authorizeParticipation({
+    registry,
+    repositoryId,
+    repositoryFullName: repository,
+    appAccessVerified: true,
+  });
+  if (!participation.allowed) return reply(res, 403, { error: participation.reason });
+  if (!participation.participant.events.includes(eventName)) return reply(res, 204);
+
+  const authorization = await actorIsAuthorized({
+    actor,
+    repository,
+    token: originToken,
+    config: { botLogin: AGENT_BOT_LOGIN, maxBotHops: actorCatalog.max_bot_hops },
+    fetchImpl,
+  });
   if (!authorization.allowed) return reply(res, 403, { error: authorization.reason });
 
-  const source = sourceFromWebhook(eventName, payload);
   const deliveryId = header(req, 'x-github-delivery');
+  if (!/^[0-9a-f-]{20,}$/i.test(String(deliveryId ?? ''))) return reply(res, 400, { error: 'GitHub delivery identity is invalid.' });
   const envelope = invocationEnvelope({
     deliveryId,
     eventName,
     action,
-    repositoryId: payload.repository.id,
-    source,
+    repositoryId,
+    source: sourceFromWebhook(eventName, payload),
     actor,
     body,
     hop: actor?.type === 'Bot' || String(actor?.login ?? '').endsWith('[bot]') ? 1 : 0,
     parentDeliveryId: null,
   });
+  const controllerToken = await provider.token();
   await repositoryApi({
-    repository: config.repository,
-    token,
+    repository: config.controllerRepository,
+    token: controllerToken,
     route: '/dispatches',
     method: 'POST',
     body: { event_type: 'agent_invocation', client_payload: envelope },
     fetchImpl,
   });
-  return reply(res, 202, { accepted: true, delivery_id: deliveryId });
+  return reply(res, 202, { accepted: true, delivery_id: deliveryId, repository_id: repositoryId });
 }
 
 export default async function handler(req, res) {

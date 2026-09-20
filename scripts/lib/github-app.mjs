@@ -31,7 +31,7 @@ export class GithubAppTokenProvider {
     this.permissions = permissions;
     this.fetchImpl = fetchImpl;
     this.now = now;
-    this.cached = null;
+    this.cachedTokens = new Map();
   }
 
   async request(route, method, token, body) {
@@ -50,8 +50,13 @@ export class GithubAppTokenProvider {
     return response.status === 204 ? null : response.json();
   }
 
-  async token() {
-    if (this.cached && this.cached.expiresAt - this.now() > 90_000) return this.cached.value;
+  async token({ repositoryIds = [] } = {}) {
+    const narrowedIds = [...new Set((Array.isArray(repositoryIds) ? repositoryIds : [repositoryIds])
+      .map((value) => String(value))
+      .filter((value) => /^[1-9][0-9]*$/.test(value)))].sort();
+    const cacheKey = narrowedIds.join(',');
+    const cached = this.cachedTokens.get(cacheKey);
+    if (cached && cached.expiresAt - this.now() > 90_000) return cached.value;
     const appJwt = jwt({ appId: this.appId, privateKey: this.privateKey, now: this.now() });
     let installationId = this.installationId;
     if (!installationId) {
@@ -59,17 +64,20 @@ export class GithubAppTokenProvider {
       installationId = installation?.id;
     }
     if (!/^[1-9][0-9]*$/.test(String(installationId ?? ''))) throw new Error('GitHub App installation ID is invalid or unavailable.');
-    const result = await this.request(`/app/installations/${installationId}/access_tokens`, 'POST', appJwt, { permissions: this.permissions });
+    const body = { permissions: this.permissions };
+    if (narrowedIds.length > 0) body.repository_ids = narrowedIds;
+    const result = await this.request(`/app/installations/${installationId}/access_tokens`, 'POST', appJwt, body);
     if (!result?.token || !result.expires_at) throw new Error('GitHub App did not return an installation token.');
-    this.cached = { value: result.token, expiresAt: Date.parse(result.expires_at) };
+    this.cachedTokens.set(cacheKey, { value: result.token, expiresAt: Date.parse(result.expires_at) });
     return result.token;
   }
 
   async revoke() {
-    if (!this.cached) return;
-    const token = this.cached.value;
-    this.cached = null;
-    try { await this.request('/installation/token', 'DELETE', token); } catch { /* best effort; never hide delivery result */ }
+    const tokens = [...this.cachedTokens.values()];
+    this.cachedTokens.clear();
+    for (const { value } of tokens) {
+      try { await this.request('/installation/token', 'DELETE', value); } catch { /* best effort; never hide delivery result */ }
+    }
   }
 }
 

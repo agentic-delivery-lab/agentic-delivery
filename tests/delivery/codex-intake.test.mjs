@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
-import { intakeEvent, redact, checkPublicationText, deliveryExitCode } from '../../scripts/codex-delivery.mjs';
+import { intakeEvent, normalizeOriginEvent, redact, checkPublicationText, deliveryExitCode } from '../../scripts/codex-delivery.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -21,6 +21,24 @@ test('starts free-form source issues without a label or form requirement', () =>
   for (const body of ['An idea', 'Requirements', 'A decision']) {
     assert.equal(intakeEvent({action:'opened',issue:{number:15,body}},env).issue,'15');
   }
+});
+test('central delivery uses the explicit originating repository identity', () => {
+  const origin = 'agentic-delivery-lab/service-a';
+  const context = { ...env, ORIGIN_REPOSITORY: origin };
+  const event = { action: 'opened', repository: { full_name: origin }, issue: { number: 15 } };
+  assert.equal(intakeEvent(event, context).repository, origin);
+});
+test('central delivery normalizes the controller event to the authenticated origin identity', () => {
+  const normalized = normalizeOriginEvent({
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    client_payload: { event: 'issues', action: 'opened', source: { kind: 'issue', issue_number: 12 } },
+  }, {
+    ORIGIN_REPOSITORY: 'agentic-delivery-lab/service-a', ORIGIN_REPOSITORY_ID: '777777777',
+  });
+  assert.equal(normalized.repository.full_name, 'agentic-delivery-lab/service-a');
+  assert.equal(normalized.repository.id, 777777777);
+  assert.equal(normalized.action, 'opened');
+  assert.equal(normalized.issue.number, 12);
 });
 test('trusted owner comments carry their payload identity, including plain continuation text', () => {
   const context={...env,GITHUB_EVENT_NAME:'issue_comment',GITHUB_ACTOR:'rerun-actor',GITHUB_TRIGGERING_ACTOR:'rerun-actor'};

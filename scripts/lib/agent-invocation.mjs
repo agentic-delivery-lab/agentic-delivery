@@ -1,10 +1,11 @@
-// agentic-primitive: {"id":"agent-invocation-boundary","kind":"validator","enforcement":"deterministic","adrs":["ADR-0017"],"domains":["agentic-delivery-governance"]}
+// agentic-primitive: {"id":"agent-invocation-boundary","kind":"validator","enforcement":"deterministic","adrs":["ADR-0017","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 export const INVOCATION_VERSION = 1;
 export const AGENT_MENTION = '@agentic-delivery-lab-invoker-7f3a';
 export const AGENT_BOT_LOGIN = 'agentic-delivery-lab-invoker-7f3a[bot]';
 export const INVOCATION_EVENTS = Object.freeze({
+  issues: Object.freeze(['opened', 'edited', 'reopened', 'typed', 'untyped', 'labeled', 'unlabeled', 'closed']),
   issue_comment: Object.freeze(['created', 'edited']),
   pull_request_review: Object.freeze(['submitted', 'edited']),
   pull_request_review_comment: Object.freeze(['created', 'edited']),
@@ -101,6 +102,13 @@ export function validateActorCatalog(catalog) {
 export function sourceFromWebhook(eventName, payload) {
   const issue = payload?.issue;
   const pullRequest = payload?.pull_request ?? (issue?.pull_request ? issue : null);
+  if (eventName === 'issues') return {
+    issue_number: issue?.number ?? null,
+    pull_request_number: null,
+    comment_id: null,
+    review_id: null,
+    kind: 'issue',
+  };
   return {
     issue_number: issue?.number ?? null,
     pull_request_number: pullRequest?.number ?? null,
@@ -113,6 +121,7 @@ export function sourceFromWebhook(eventName, payload) {
 }
 
 export function invocationBody(eventName, payload) {
+  if (eventName === 'issues') return payload?.issue?.body ?? '';
   if (eventName === 'pull_request_review') return payload?.review?.body ?? '';
   return payload?.comment?.body ?? '';
 }

@@ -8,6 +8,9 @@ bounded-contexts:
   - id: agentic-delivery-governance
     register: docs/domain/ubiquitous-language.yml
     paths: [AGENTS.md, .agents/**, .github/**, docs/**, scripts/**, tests/**, package.json, pnpm-workspace.yaml]
+  - id: agentic-delivery-control-plane
+    register: docs/domain/ubiquitous-language.yml
+    paths: [api/github/**, .github/participants.yml, .github/workflows/agent-invocation.yml, .github/workflows/issue-intake.yml, .github/workflows/codex-delivery.yml, scripts/codex-delivery.mjs, scripts/issue-intake.mjs, scripts/prepare-agent-invocation.mjs, scripts/lib/github-app.mjs, scripts/lib/participant-registry.mjs]
 
 runtime-surfaces:
   - id: intake-and-routing

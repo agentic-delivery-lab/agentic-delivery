@@ -11,6 +11,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) decouples the delivery ingress and controller from the originating repository identity: enrolled repositories are resolved by numeric repository ID, central workflows normalize dispatch events, and issue/state/API/git operations use an origin-scoped GitHub App token.
+
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) adds provisional ADR-0018, the organization-wide Control Plane ownership, selected-repository enrollment, signed event boundary, immutable controller pins, compatibility policy, credential boundary, upgrade path, and rollback contract required before the repository split.
 
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) consolidates the repository-split, organization-wide Control Plane, Architecture Authority, Agentic Primitives, private publication, developer-environment distribution, execution-pattern, and migration design into one implementation-ready plan.
@@ -19,6 +21,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 - [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) aligns the invocation identity with the registered `Agentic Delivery Lab Invoker 7F3A` GitHub App name, slug, mention, and bot login across the actor catalog, code, tests, and agentic documentation.
 
 ### Added
+
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) adds the versioned participant registry, repository-ID enrollment checks, central-origin webhook/preflight contracts, scoped App-token tests, and multi-repository routing fixtures required for the first Control Plane migration slice.
 
 - [Issue #44](https://github.com/agentic-delivery-lab/agentic-delivery/issues/44) adds a tested pull-request-body check, an explicit Dependabot-only exemption, a versioned required-check ruleset, agent instructions, and a provisional architecture decision. The repository is now public; live ruleset activation remains an authorized post-merge operator step.
 

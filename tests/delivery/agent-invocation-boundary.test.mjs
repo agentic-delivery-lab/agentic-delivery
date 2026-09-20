@@ -17,6 +17,7 @@ import {
 } from '../../scripts/lib/agent-invocation.mjs';
 import { handleWebhook } from '../../api/github/webhook.mjs';
 import { prepareAgentInvocation } from '../../scripts/prepare-agent-invocation.mjs';
+import { parseParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -24,7 +25,7 @@ test('the configured App actor and event catalog are deterministic', async () =>
   assert.equal(AGENT_MENTION, '@agentic-delivery-lab-invoker-7f3a');
   assert.equal(AGENT_BOT_LOGIN, 'agentic-delivery-lab-invoker-7f3a[bot]');
   assert.deepEqual(validateActorCatalog(actorCatalog), { valid: true, errors: [] });
-  assert.deepEqual(Object.keys(INVOCATION_EVENTS), ['issue_comment', 'pull_request_review', 'pull_request_review_comment']);
+  assert.deepEqual(Object.keys(INVOCATION_EVENTS), ['issues', 'issue_comment', 'pull_request_review', 'pull_request_review_comment']);
   assert.ok((await readFile(path.join(repositoryRoot, '.github/agent-actors.json'), 'utf8')).includes('agentic-delivery-lab-invoker-7f3a[bot]'));
 });
 
@@ -45,6 +46,7 @@ test('webhook signatures and event actions require the supported contract', () =
   assert.equal(constantTimeSignatureValid({ secret, rawBody, signature }), true);
   assert.equal(constantTimeSignatureValid({ secret, rawBody, signature: `${signature}0` }), false);
   assert.equal(invocationEventSupported('issue_comment', 'created'), true);
+  assert.equal(invocationEventSupported('issues', 'opened'), true);
   assert.equal(invocationEventSupported('pull_request_review_comment', 'edited'), true);
   assert.equal(invocationEventSupported('repository_dispatch', 'created'), false);
 });
@@ -53,7 +55,7 @@ function response(status, value = {}) {
   return { ok: status >= 200 && status < 300, status, json: async () => value };
 }
 
-function request({ body, event = 'issue_comment', signature, delivery = 'delivery-12345678901234567890' }) {
+function request({ body, event = 'issue_comment', signature, delivery = '12345678-1234-4234-8234-123456789012' }) {
   return {
     method: 'POST',
     headers: {
@@ -78,7 +80,7 @@ function result() {
 test('webhook filters untagged comments before creating a repository dispatch', async () => {
   const body = JSON.stringify({
     action: 'created',
-    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 42 },
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
     issue: { number: 44 },
     comment: { id: 7, body: 'A normal review note.', user: { login: 'sjefsharp', type: 'User' } },
     sender: { login: 'sjefsharp', type: 'User' },
@@ -99,7 +101,7 @@ test('webhook rejects self-authored and unknown bot invocations', async () => {
   for (const login of ['agentic-delivery-lab-invoker-7f3a[bot]', 'unknown-automation[bot]']) {
     const payload = {
       action: 'created',
-      repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 42 },
+      repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
       issue: { number: 44 },
       comment: { id: 7, body: '@agentic-delivery-lab-invoker-7f3a continue', user: { login, type: 'Bot' } },
       sender: { login, type: 'Bot' },
@@ -119,7 +121,7 @@ test('webhook rejects self-authored and unknown bot invocations', async () => {
 test('webhook authorizes a tagged writer and dispatches only immutable metadata', async () => {
   const payload = {
     action: 'created',
-    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 42 },
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
     issue: { number: 44 },
     comment: { id: 7, body: '@agentic-delivery-lab-invoker-7f3a please continue', user: { login: 'sjefsharp', type: 'User' } },
     sender: { login: 'sjefsharp', type: 'User' },
@@ -146,6 +148,86 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
   assert.equal(Object.keys(dispatch.client_payload).length, 10);
 });
 
+test('webhook forwards an enrolled issue lifecycle event without requiring an invocation mention', async () => {
+  const payload = {
+    action: 'opened',
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    issue: { number: 45, body: 'A new delivery goal.', user: { login: 'sjefsharp', type: 'User' } },
+    sender: { login: 'sjefsharp', type: 'User' },
+  };
+  const body = JSON.stringify(payload);
+  const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
+  const output = result();
+  const calls = [];
+  await handleWebhook(request({ body, event: 'issues', signature }), output, {
+    env: { AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret', AGENTIC_DELIVERY_REPOSITORY: 'agentic-delivery-lab/agentic-delivery' },
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return url.includes('/permission') ? response(200, { permission: 'write' }) : response(204);
+    },
+    tokenProvider: { token: async () => 'installation-token' },
+  });
+  assert.equal(output.statusCode, 202);
+  const dispatch = JSON.parse(calls[1].options.body);
+  assert.equal(dispatch.client_payload.event, 'issues');
+  assert.equal(dispatch.client_payload.source.kind, 'issue');
+  assert.equal(dispatch.client_payload.source.issue_number, 45);
+});
+
+test('one central webhook accepts a second enrolled repository and dispatches to the controller', async () => {
+  const repositoryId = '777777777';
+  const repository = 'agentic-delivery-lab/service-a';
+  const registry = parseParticipantRegistry({
+    version: 1,
+    organization: 'agentic-delivery-lab',
+    repositories: {
+      [repositoryId]: {
+        expectedFullName: repository,
+        mode: 'active',
+        controller: { version: '0.1.0', commit: '0123456789abcdef0123456789abcdef01234567' },
+        contracts: { eventEnvelope: 1, lifecycle: '1.0.0', stateMachine: '1.0.0', evidence: '1.0.0' },
+        configurationProfile: 'standard',
+        events: ['issue_comment'],
+        localIntegration: { workflowBundle: 'none', managedByApp: false },
+      },
+    },
+  });
+  const payload = {
+    action: 'created',
+    repository: { full_name: repository, id: Number(repositoryId) },
+    issue: { number: 12 },
+    comment: { id: 9, body: '@agentic-delivery-lab-invoker-7f3a continue', user: { login: 'sjefsharp', type: 'User' } },
+    sender: { login: 'sjefsharp', type: 'User' },
+  };
+  const body = JSON.stringify(payload);
+  const signature = 'sha256=' + createHmac('sha256', 'test-secret').update(body).digest('hex');
+  const output = result();
+  const calls = [];
+  const tokens = [];
+  await handleWebhook(request({ body, signature }), output, {
+    env: {
+      AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
+      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+    },
+    participantRegistry: registry,
+    tokenProvider: {
+      token: async (options) => {
+        tokens.push(options ?? {});
+        return 'installation-token';
+      },
+    },
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return url.includes('/permission') ? response(200, { permission: 'write' }) : response(204);
+    },
+  });
+  assert.equal(output.statusCode, 202);
+  assert.equal(calls[0].url, 'https://api.github.com/repos/' + repository + '/collaborators/sjefsharp/permission');
+  assert.equal(calls[1].url, 'https://api.github.com/repos/agentic-delivery-lab/agentic-delivery/dispatches');
+  assert.equal(JSON.parse(calls[1].options.body).client_payload.repository_id, repositoryId);
+  assert.deepEqual(tokens[0], { repositoryIds: [repositoryId] });
+});
+
 test('agent preflight re-fetches the tagged issue comment and deduplicates deliveries', async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-invocation-'));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -154,13 +236,13 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
   const body = '@agentic-delivery-lab-invoker-7f3a resume the saved plan';
   const deliveryId = '12345678-1234-4234-8234-123456789012';
   await writeFile(eventPath, JSON.stringify({
-    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 42 },
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
     client_payload: {
       version: 1,
       delivery_id: deliveryId,
       event: 'issue_comment',
       action: 'created',
-      repository_id: '42',
+      repository_id: '1358455028',
       source: { kind: 'issue_comment', issue_number: 44, comment_id: 7, pull_request_number: null, review_id: null },
       actor: { login: 'sjefsharp', type: 'User' },
       hop: 0,
@@ -188,4 +270,124 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
 
   const duplicate = await prepareAgentInvocation({ env: baseEnv, fetchImpl });
   assert.equal(duplicate.accepted, false);
+});
+
+test('central preflight resolves and revalidates the originating repository from the participant registry', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-central-preflight-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const eventPath = path.join(root, 'event.json');
+  const outputPath = path.join(root, 'output');
+  const originRepository = 'agentic-delivery-lab/service-a';
+  const originRepositoryId = '777777777';
+  const body = '@agentic-delivery-lab-invoker-7f3a continue the saved plan';
+  const deliveryId = '22345678-1234-4234-8234-123456789012';
+  const registry = parseParticipantRegistry({
+    version: 1,
+    organization: 'agentic-delivery-lab',
+    repositories: {
+      [originRepositoryId]: {
+        expectedFullName: originRepository,
+        mode: 'active',
+        controller: { version: '0.1.0', commit: '0123456789abcdef0123456789abcdef01234567' },
+        contracts: { eventEnvelope: 1, lifecycle: '1.0.0', stateMachine: '1.0.0', evidence: '1.0.0' },
+        configurationProfile: 'standard',
+        events: ['issue_comment'],
+        localIntegration: { workflowBundle: 'none', managedByApp: false },
+      },
+    },
+  });
+  await writeFile(eventPath, JSON.stringify({
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    client_payload: {
+      version: 1,
+      delivery_id: deliveryId,
+      event: 'issue_comment',
+      action: 'created',
+      repository_id: originRepositoryId,
+      source: { kind: 'issue_comment', issue_number: 12, comment_id: 9, pull_request_number: null, review_id: null },
+      actor: { login: 'sjefsharp', type: 'User' },
+      hop: 0,
+      body_digest: (await import('../../scripts/lib/agent-invocation.mjs')).bodyDigest(body),
+    },
+  }));
+  const baseEnv = {
+    GH_TOKEN: 'token',
+    GITHUB_EVENT_PATH: eventPath,
+    GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+    GITHUB_OUTPUT: outputPath,
+    CODEX_DELIVERY_STATE_DIR: root,
+    RUNNER_TEMP: root,
+  };
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    if (url.endsWith('/issues/comments/9')) return response(200, { id: 9, body, user: { login: 'sjefsharp', type: 'User' }, author_association: 'OWNER' });
+    if (url.endsWith('/collaborators/sjefsharp/permission')) return response(200, { permission: 'write' });
+    throw new Error('Unexpected URL ' + url);
+  };
+  const accepted = await prepareAgentInvocation({ env: baseEnv, fetchImpl, participantRegistry: registry });
+  assert.equal(accepted.accepted, true);
+  assert.equal(accepted.sourceIssue, '12');
+  assert.equal(accepted.originRepository, originRepository);
+  assert.ok(calls.every((url) => url.includes('/repos/' + originRepository + '/')));
+  const normalizedEvent = JSON.parse(await readFile(accepted.normalizedPath, 'utf8'));
+  assert.equal(normalizedEvent.repository.full_name, originRepository);
+});
+
+test('central preflight accepts issue lifecycle envelopes without a comment', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-issue-preflight-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const eventPath = path.join(root, 'event.json');
+  const outputPath = path.join(root, 'output');
+  const originRepository = 'agentic-delivery-lab/service-a';
+  const originRepositoryId = '777777777';
+  const deliveryId = '32345678-1234-4234-8234-123456789012';
+  const registry = parseParticipantRegistry({
+    version: 1,
+    organization: 'agentic-delivery-lab',
+    repositories: {
+      [originRepositoryId]: {
+        expectedFullName: originRepository,
+        mode: 'active',
+        controller: { version: '0.1.0', commit: '0123456789abcdef0123456789abcdef01234567' },
+        contracts: { eventEnvelope: 1, lifecycle: '1.0.0', stateMachine: '1.0.0', evidence: '1.0.0' },
+        configurationProfile: 'standard',
+        events: ['issues'],
+        localIntegration: { workflowBundle: 'none', managedByApp: false },
+      },
+    },
+  });
+  await writeFile(eventPath, JSON.stringify({
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    client_payload: {
+      version: 1,
+      delivery_id: deliveryId,
+      event: 'issues',
+      action: 'opened',
+      repository_id: originRepositoryId,
+      source: { kind: 'issue', issue_number: 12, comment_id: null, pull_request_number: null, review_id: null },
+      actor: { login: 'sjefsharp', type: 'User' },
+      hop: 0,
+      body_digest: (await import('../../scripts/lib/agent-invocation.mjs')).bodyDigest('A new delivery goal.'),
+    },
+  }));
+  const baseEnv = {
+    GH_TOKEN: 'token',
+    GITHUB_EVENT_PATH: eventPath,
+    GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+    GITHUB_OUTPUT: outputPath,
+    CODEX_DELIVERY_STATE_DIR: root,
+    RUNNER_TEMP: root,
+  };
+  const fetchImpl = async (url) => {
+    if (url.endsWith('/collaborators/sjefsharp/permission')) return response(200, { permission: 'write' });
+    throw new Error(`Unexpected URL ${url}`);
+  };
+  const accepted = await prepareAgentInvocation({ env: baseEnv, fetchImpl, participantRegistry: registry });
+  assert.equal(accepted.accepted, true);
+  assert.equal(accepted.sourceIssue, '12');
+  const normalizedEvent = JSON.parse(await readFile(accepted.normalizedPath, 'utf8'));
+  assert.equal(normalizedEvent.issue.number, 12);
+  assert.equal(normalizedEvent.comment, undefined);
+  assert.equal(normalizedEvent.sender.login, 'sjefsharp');
 });

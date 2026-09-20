@@ -90,6 +90,7 @@ test('rejects direct commits on main and accepts an empty merge-only range', asy
 test('parses current configuration and rejects malformed JSON/YAML', async (t) => {
   const count = await validateConfigFiles({ repositoryRoot });
   assert.ok(count > 0);
+  assert.equal(await validateConfigFiles({ repositoryRoot, files: ['.github/participants.yml'] }), 1);
 
   const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-config-'));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -104,6 +105,15 @@ test('parses current configuration and rejects malformed JSON/YAML', async (t) =
   await assert.rejects(
     validateConfigFiles({ repositoryRoot: root, files: ['config/bad.yaml'] }),
     (error) => error.exitCode === 1 && /bad\.yaml/.test(error.message),
+  );
+
+  await writeFile(
+    path.join(root, 'config/participants.yml'),
+    'version: 1\norganization: agentic-delivery-lab\nrepositories:\n  "1":\n    mode: active\n',
+  );
+  await assert.rejects(
+    validateConfigFiles({ repositoryRoot: root, files: ['config/participants.yml'] }),
+    (error) => error.exitCode === 1 && /participant registry/.test(error.message),
   );
 });
 

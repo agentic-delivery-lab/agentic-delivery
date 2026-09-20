@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
+import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
 import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType, validateOrganizationIssueFields } from './lib/issue-field-api.mjs';
 import {
   classifyIssue,
@@ -231,11 +232,24 @@ export async function classifyAndRoute({
   graphqlImpl,
   controlPlaneReader = readIssueControlPlane,
 } = {}) {
-  const repository = env.GITHUB_REPOSITORY;
+  const repository = env.ORIGIN_REPOSITORY || env.GITHUB_REPOSITORY;
   const issueNumber = String(env.SOURCE_ISSUE ?? event?.issue?.number ?? '');
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !/^[1-9][0-9]*$/.test(issueNumber)) throw new Error('Invalid source repository or issue number.');
+  if (event?.repository?.full_name && event.repository.full_name !== repository) throw new Error('Event repository does not match the originating repository.');
   if (event?.issue?.pull_request) throw new Error('A pull request cannot enter issue intake.');
-  const api = githubApi({ repository, token: env.GH_TOKEN, fetchImpl });
+  const appConfig = appConfiguration(env);
+  const appProvider = appConfig.appId && appConfig.privateKey && env.ORIGIN_REPOSITORY_ID
+    ? new GithubAppTokenProvider({
+      repository: env.GITHUB_REPOSITORY,
+      ...appConfig,
+      permissions: { contents: 'read', issues: 'write', pull_requests: 'read', metadata: 'read' },
+      fetchImpl,
+    })
+    : null;
+  const originToken = appProvider
+    ? await appProvider.token({ repositoryIds: [env.ORIGIN_REPOSITORY_ID] })
+    : env.PUBLISH_TOKEN || env.GH_TOKEN;
+  const api = githubApi({ repository, token: originToken, fetchImpl });
   const routingEventKind = env.INVOCATION_EVENT === 'true' ? 'agent-invocation' : env.GITHUB_EVENT_NAME;
   const effectiveConfig = bindIssueMetadataConfig(config, env.ISSUE_FIELD_BINDINGS_JSON || {});
   const available = runnerAvailability(env, effectiveConfig);
@@ -243,7 +257,7 @@ export async function classifyAndRoute({
   if (issue.pull_request) throw new Error('A pull request cannot enter issue intake.');
   let graphql = graphqlImpl;
   const useGraphql = Boolean(graphqlImpl || env.GITHUB_GRAPHQL === 'true' || env.GITHUB_ACTIONS === 'true');
-  if (useGraphql && !graphql) graphql = githubGraphqlApi({ token: env.GH_TOKEN, fetchImpl });
+  if (useGraphql && !graphql) graphql = githubGraphqlApi({ token: originToken, fetchImpl });
   const readTrustedControlPlane = async (controlIssueNumber) => {
     const enriched = await controlPlaneReader({ graphql, repository, issueNumber: controlIssueNumber, organization: repository.split('/')[0] });
     const fieldContract = validateOrganizationIssueFields({ config: effectiveConfig, organizationIssueFields: enriched.organizationIssueFields });
