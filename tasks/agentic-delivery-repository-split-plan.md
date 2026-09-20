@@ -8,6 +8,14 @@ It is planning input, not an official architecture decision and not an active
 control-plane contract. Architecture decisions become official only after their
 own review pull requests are merged into `main`.
 
+Issue boundary: Issue #52 is the plan-persistence source issue. It must not be
+used as authorization to create repositories, change GitHub settings, activate
+the control plane, or execute the migration. Any implementation work must use
+a separately authorized successor issue that references this plan and records
+the approved migration slice. This keeps the plan from silently changing the
+meaning, lifecycle state, or completion criteria of the issue that requested
+its persistence.
+
 The source snapshots match the current default branches at these commits:
 
 - `agentic-delivery`: `8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`;
