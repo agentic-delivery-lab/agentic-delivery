@@ -50,7 +50,7 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "enum": ["issues", "issue_comment", "pull_request", "pull_request_review", "pull_request_review_comment", "installation_repositories", "workflow_run"] }
+          "items": { "enum": ["issues", "issue_comment", "pull_request", "pull_request_review", "pull_request_review_comment"] }
         },
         "localIntegration": {
           "type": "object",
