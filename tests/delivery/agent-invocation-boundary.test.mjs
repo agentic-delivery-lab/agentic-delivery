@@ -163,6 +163,20 @@ test('webhook fails closed when the central controller repository is not configu
   assert.match(output.body, /central controller repository is not configured/);
 });
 
+test('webhook fails closed when the central controller repository ID is invalid', async () => {
+  const output = result();
+  await handleWebhook(request({ body: '{}', signature: 'sha256=' + '0'.repeat(64) }), output, {
+    env: {
+      AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
+      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '0',
+    },
+    fetchImpl: async () => { throw new Error('invalid controller identity must fail before API access'); },
+  });
+  assert.equal(output.statusCode, 500);
+  assert.match(output.body, /central controller repository ID is not configured/);
+});
+
 test('webhook rejects self-authored and unknown bot invocations', async () => {
   for (const login of ['agentic-delivery-lab-invoker-7f3a[bot]', 'unknown-automation[bot]']) {
     const payload = {
@@ -369,7 +383,10 @@ test('one central webhook accepts a second enrolled repository and dispatches to
   assert.equal(calls[1].url, 'https://api.github.com/repos/agentic-delivery-lab/agentic-delivery/dispatches');
   assert.equal(JSON.parse(calls[1].options.body).client_payload.repository_id, repositoryId);
   assert.deepEqual(tokens[0], { repositoryIds: [repositoryId] });
-  assert.deepEqual(tokens[1], { permissions: { contents: 'write' } });
+  assert.deepEqual(tokens[1], {
+    repositoryIds: ['1358455028'],
+    permissions: { contents: 'write' },
+  });
 });
 
 test('agent preflight re-fetches the tagged issue comment and deduplicates deliveries', async (t) => {
