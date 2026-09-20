@@ -130,6 +130,10 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
   if (!registry.valid) throw new Error('The participant registry is invalid: ' + registry.errors.join(' '));
   const participant = participantForRepository(registry, envelope.repository_id);
   if (!participant || participant.mode === 'disabled') throw new Error('The dispatch repository is not an active participant.');
+  if (envelope.controller && (envelope.controller.version !== participant.controller.version
+    || envelope.controller.commit.toLowerCase() !== participant.controller.commit.toLowerCase())) {
+    throw new Error('The dispatch controller pin does not match the participant registry.');
+  }
   const originRepository = participant.expectedFullName;
   const appConfig = appConfiguration(env);
   const appProvider = appConfig.appId && appConfig.privateKey
@@ -166,6 +170,8 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
   await writeOutput('origin_repository', originRepository, env);
   await writeOutput('origin_repository_id', envelope.repository_id, env);
   await writeOutput('participant_mode', participant.mode, env);
+  await writeOutput('controller_version', participant.controller.version, env);
+  await writeOutput('controller_commit', participant.controller.commit, env);
   await writeOutput('event_path', normalizedPath, env);
   await writeOutput('invocation_event_name', envelope.event, env);
   await writeOutput('invocation_source_kind', envelope.source?.kind ?? '', env);

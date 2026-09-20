@@ -21,3 +21,12 @@ test('the boundary validator reports a hard-coded origin in runtime code', async
     (error) => error.exitCode === 1 && /fixed origin repository/.test(error.message),
   );
 });
+
+test('the boundary validator does not confuse a similarly prefixed repository name with the origin', async () => {
+  await assert.doesNotReject(
+    validateControlPlaneBoundary({
+      repositoryRoot: path.resolve(import.meta.dirname, '../..'),
+      files: ['scripts/validate-published-agents.mjs'],
+    }),
+  );
+});

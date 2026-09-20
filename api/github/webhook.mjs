@@ -200,6 +200,7 @@ export async function handleWebhook(req, res, {
     body,
     hop: actor?.type === 'Bot' || String(actor?.login ?? '').endsWith('[bot]') ? 1 : 0,
     parentDeliveryId: null,
+    controller: participation.participant.controller,
   });
   assertEventEnvelope(envelope);
   const controllerToken = await provider.token({

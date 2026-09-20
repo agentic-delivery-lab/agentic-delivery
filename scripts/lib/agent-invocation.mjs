@@ -126,7 +126,7 @@ export function invocationBody(eventName, payload) {
   return payload?.comment?.body ?? '';
 }
 
-export function invocationEnvelope({ deliveryId, eventName, action, repositoryId, source, actor, body, hop = 0, parentDeliveryId = null } = {}) {
+export function invocationEnvelope({ deliveryId, eventName, action, repositoryId, source, actor, body, hop = 0, parentDeliveryId = null, controller } = {}) {
   return {
     version: INVOCATION_VERSION,
     delivery_id: String(deliveryId ?? ''),
@@ -138,5 +138,6 @@ export function invocationEnvelope({ deliveryId, eventName, action, repositoryId
     hop,
     parent_delivery_id: parentDeliveryId,
     body_digest: bodyDigest(body),
+    ...(controller ? { controller: { version: controller.version, commit: controller.commit } } : {}),
   };
 }
