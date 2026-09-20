@@ -140,6 +140,9 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
     throw new Error('The dispatch controller pin does not match the participant registry.');
   }
   const originRepository = participant.expectedFullName;
+  if (envelope.repository_full_name !== undefined && envelope.repository_full_name !== originRepository) {
+    throw new Error('The dispatch repository full name does not match the participant registry.');
+  }
   const appConfig = appConfiguration(env);
   const appProvider = appConfig.appId && appConfig.privateKey
     ? new GithubAppTokenProvider({

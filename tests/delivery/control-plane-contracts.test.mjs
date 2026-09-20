@@ -64,6 +64,9 @@ test('valid event envelopes are accepted before central execution', () => {
     actor: { login: 'sjefsharp', type: 'User' },
     body: '@agentic-delivery-lab-invoker-7f3a continue',
     receivedAt: '2026-09-21T12:00:00.000Z',
+    organizationId: '327861320',
+    installationId: '163255060',
+    repositoryFullName: 'agentic-delivery-lab/agentic-delivery',
   });
   assert.deepEqual(validateEventEnvelope(envelope), { valid: true, errors: [] });
   assert.equal(assertEventEnvelope(envelope), envelope);

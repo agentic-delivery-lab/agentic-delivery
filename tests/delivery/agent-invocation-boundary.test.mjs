@@ -66,6 +66,32 @@ test('webhook signatures and event actions require the supported contract', () =
   assert.equal(invocationEventSupported('repository_dispatch', 'created'), false);
 });
 
+test('webhook rejects events from another organization or installation', async () => {
+  for (const override of [
+    { organization: { login: 'other-org', id: 999 }, installation: { id: 163255060 } },
+    { organization: { login: 'agentic-delivery-lab', id: 327861320 }, installation: { id: 999 } },
+  ]) {
+    const payload = githubPayload({
+      action: 'created',
+      repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+      issue: { number: 44 },
+      comment: { id: 17, body: '@agentic-delivery-lab-invoker-7f3a continue', user: { login: 'sjefsharp', type: 'User' } },
+      sender: { login: 'sjefsharp', type: 'User' },
+      ...override,
+    });
+    const body = JSON.stringify(payload);
+    const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
+    const output = result();
+    await handleWebhook(request({ body, signature }), output, {
+      env: { AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret', AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery' },
+      fetchImpl: async () => { throw new Error('identity rejection must happen before GitHub API access'); },
+      tokenProvider: { token: async () => 'installation-token' },
+    });
+    assert.equal(output.statusCode, 403);
+    assert.match(output.body, /identity is not authorized/);
+  }
+});
+
 function response(status, value = {}) {
   return { ok: status >= 200 && status < 300, status, json: async () => value };
 }
@@ -82,6 +108,14 @@ function request({ body, event = 'issue_comment', signature, delivery = '1234567
   };
 }
 
+function githubPayload(payload) {
+  return {
+    organization: { login: 'agentic-delivery-lab', id: 327861320 },
+    installation: { id: 163255060 },
+    ...payload,
+  };
+}
+
 function result() {
   return {
     statusCode: null,
@@ -93,13 +127,13 @@ function result() {
 }
 
 test('webhook filters untagged comments before creating a repository dispatch', async () => {
-  const body = JSON.stringify({
+  const body = JSON.stringify(githubPayload({
     action: 'created',
     repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
     issue: { number: 44 },
     comment: { id: 7, body: 'A normal review note.', user: { login: 'sjefsharp', type: 'User' } },
     sender: { login: 'sjefsharp', type: 'User' },
-  });
+  }));
   const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
   const output = result();
   let calls = 0;
@@ -138,7 +172,7 @@ test('webhook rejects self-authored and unknown bot invocations', async () => {
       comment: { id: 7, body: '@agentic-delivery-lab-invoker-7f3a continue', user: { login, type: 'Bot' } },
       sender: { login, type: 'Bot' },
     };
-    const body = JSON.stringify(payload);
+    const body = JSON.stringify(githubPayload(payload));
     const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
     const output = result();
     await handleWebhook(request({ body, signature }), output, {
@@ -158,7 +192,7 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
     comment: { id: 7, body: '@agentic-delivery-lab-invoker-7f3a please continue', user: { login: 'sjefsharp', type: 'User' } },
     sender: { login: 'sjefsharp', type: 'User' },
   };
-  const body = JSON.stringify(payload);
+  const body = JSON.stringify(githubPayload(payload));
   const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
   const output = result();
   const calls = [];
@@ -181,8 +215,11 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
     version: '0.2.0',
     commit: 'b160ae8826330ce280c41108e9459550c399e8c6',
   });
-  assert.equal(Object.keys(dispatch.client_payload).length, 12);
+  assert.equal(Object.keys(dispatch.client_payload).length, 15);
   assert.match(dispatch.client_payload.received_at, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(dispatch.client_payload.organization_id, '327861320');
+  assert.equal(dispatch.client_payload.installation_id, '163255060');
+  assert.equal(dispatch.client_payload.repository_full_name, 'agentic-delivery-lab/agentic-delivery');
 });
 
 test('webhook claims a delivery once and releases the claim when dispatch fails', async () => {
@@ -194,7 +231,7 @@ test('webhook claims a delivery once and releases the claim when dispatch fails'
     comment: { id: 77, body: '@agentic-delivery-lab-invoker-7f3a continue', user: { login: 'sjefsharp', type: 'User' } },
     sender: { login: 'sjefsharp', type: 'User' },
   };
-  const body = JSON.stringify(payload);
+  const body = JSON.stringify(githubPayload(payload));
   const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
   const env = {
     AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
@@ -260,7 +297,7 @@ test('webhook forwards an enrolled issue lifecycle event without requiring an in
     issue: { number: 45, body: 'A new delivery goal.', user: { login: 'sjefsharp', type: 'User' } },
     sender: { login: 'sjefsharp', type: 'User' },
   };
-  const body = JSON.stringify(payload);
+  const body = JSON.stringify(githubPayload(payload));
   const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
   const output = result();
   const calls = [];
@@ -305,7 +342,7 @@ test('one central webhook accepts a second enrolled repository and dispatches to
     comment: { id: 9, body: '@agentic-delivery-lab-invoker-7f3a continue', user: { login: 'sjefsharp', type: 'User' } },
     sender: { login: 'sjefsharp', type: 'User' },
   };
-  const body = JSON.stringify(payload);
+  const body = JSON.stringify(githubPayload(payload));
   const signature = 'sha256=' + createHmac('sha256', 'test-secret').update(body).digest('hex');
   const output = result();
   const calls = [];
