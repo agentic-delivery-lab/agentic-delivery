@@ -75,6 +75,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   const consumerContractText = await text('.github/workflows/agentic-delivery-quality.yml');
   assert.ok(consumerContractText.includes('repository: agentic-delivery-lab/agentic-delivery'));
   assert.ok(consumerContractText.includes('validate-github-app-contract.mjs'));
+  assert.ok(consumerContractText.includes('[[ "$CONTROLLER_COMMIT" =~'));
   assert.ok(!consumerContractText.includes('secrets: inherit'));
   const invocation = parseRepositoryYaml(await text('.github/workflows/agent-invocation.yml'), 'agent invocation workflow');
   assert.deepEqual(invocation.on.repository_dispatch.types, ['agent_invocation']);
