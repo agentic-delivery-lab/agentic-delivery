@@ -15,6 +15,7 @@ import {
 import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
 import { loadParticipantRegistry, participantForRepository } from './lib/participant-registry.mjs';
 import { validateEventEnvelope } from './lib/control-plane-contracts.mjs';
+import { validateReceivedAt } from './lib/replay-protection.mjs';
 import actorCatalog from '../.github/agent-actors.json' with { type: 'json' };
 
 const API_VERSION = '2026-03-10';
@@ -113,7 +114,7 @@ async function markDelivery({ repository, sourceIssue, deliveryId, env }) {
   }
 }
 
-export async function prepareAgentInvocation({ env = process.env, fetchImpl = fetch, participantRegistry } = {}) {
+export async function prepareAgentInvocation({ env = process.env, fetchImpl = fetch, participantRegistry, now = () => Date.now() } = {}) {
   const catalog = validateActorCatalog(actorCatalog);
   if (!catalog.valid) throw new Error(`The actor catalog is invalid: ${catalog.errors.join(' ')}`);
   if (!env.GH_TOKEN || !env.GITHUB_EVENT_PATH || !env.GITHUB_REPOSITORY) throw new Error('Agent invocation preflight requires GitHub event, repository, and token context.');
@@ -121,6 +122,10 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
   const envelope = event?.client_payload;
   const envelopeValidation = validateEventEnvelope(envelope);
   if (!envelopeValidation.valid) throw new Error(`The repository dispatch envelope is invalid: ${envelopeValidation.errors.join(' ')}`);
+  if (envelope.received_at !== undefined) {
+    const freshness = validateReceivedAt(envelope.received_at, { now: now() });
+    if (!freshness.valid) throw new Error(`The repository dispatch envelope is stale: ${freshness.reason}`);
+  }
   const controllerRepository = env.GITHUB_REPOSITORY;
   if (String(event.repository?.full_name) !== controllerRepository) throw new Error('The dispatch controller repository boundary is invalid.');
   if (!/^[\w.-]+\/[\w.-]+$/.test(controllerRepository) || !/^[1-9][0-9]*$/.test(String(envelope.repository_id))

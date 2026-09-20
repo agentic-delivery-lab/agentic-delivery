@@ -1,5 +1,6 @@
 // agentic-primitive: {"id":"control-plane-contract-validator","kind":"validator","enforcement":"deterministic","adrs":["ADR-0018"],"domains":["agentic-delivery-control-plane"]}
 import { invocationEventSupported } from './agent-invocation.mjs';
+import { validateReceivedAt } from './replay-protection.mjs';
 
 export const EVENT_ENVELOPE_VERSION = 1;
 export const CONTRACT_VERSIONS = Object.freeze({
@@ -120,6 +121,9 @@ export function validateEventEnvelope(envelope) {
     addError(errors, 'parent_delivery_id', 'must be null or a GitHub delivery identifier');
   }
   if (typeof envelope.body_digest !== 'string' || !SHA256.test(envelope.body_digest)) addError(errors, 'body_digest', 'must be a SHA-256 digest');
+  if (envelope.received_at !== undefined && !validateReceivedAt(envelope.received_at, { now: Date.parse(envelope.received_at) }).valid) {
+    addError(errors, 'received_at', 'must be an RFC3339 timestamp');
+  }
   if (envelope.controller !== undefined) {
     if (!envelope.controller || typeof envelope.controller !== 'object' || Array.isArray(envelope.controller)) addError(errors, 'controller', 'must be an object');
     else {

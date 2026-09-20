@@ -99,8 +99,10 @@ Conversation-driven continuation uses the separate
 issue comments, PR conversation comments, formal reviews, and inline review
 comments; only a tag on the first visible line can dispatch the deterministic
 preflight and `repository_dispatch` workflow. The actor catalog, digest,
-delivery-ID deduplication, and one-hop bot rule are versioned in this
-repository. This does not change native `@copilot` behavior.
+delivery-ID replay protection, timestamp freshness, and one-hop bot rule are
+versioned in this repository. See [webhook replay protection](replay-protection.md)
+for the gateway claim and retry contract. This does not change native
+`@copilot` behavior.
 
 ## Package manager and local preflight
 

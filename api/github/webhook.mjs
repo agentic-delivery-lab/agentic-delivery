@@ -21,10 +21,12 @@ import {
 } from '../../scripts/lib/participant-registry.mjs';
 import { assertEventEnvelope } from '../../scripts/lib/control-plane-contracts.mjs';
 import { GithubAppTokenProvider } from '../../scripts/lib/github-app.mjs';
+import { FileReplayStore, InMemoryReplayStore, claimDelivery, releaseDelivery } from '../../scripts/lib/replay-protection.mjs';
 
 export const config = { api: { bodyParser: false } };
 
 const API_VERSION = '2026-03-10';
+const replayStores = new WeakMap();
 function header(req, name) {
   const value = req.headers?.[name] ?? req.headers?.[name.toLowerCase()];
   return Array.isArray(value) ? value[0] : value;
@@ -55,7 +57,20 @@ function environment(env = process.env) {
     privateKey: env.AGENTIC_DELIVERY_APP_PRIVATE_KEY || env.CODEX_DELIVERY_APP_PRIVATE_KEY,
     installationId: env.AGENTIC_DELIVERY_APP_INSTALLATION_ID || env.CODEX_DELIVERY_APP_INSTALLATION_ID,
     webhookSecret: env.AGENTIC_DELIVERY_WEBHOOK_SECRET,
+    replayStateDirectory: env.AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY,
+    replayWindowMs: Number(env.AGENTIC_DELIVERY_REPLAY_WINDOW_MS || 300_000),
   };
+}
+
+function replayStoreFor(env, config) {
+  if (config.replayStateDirectory) return new FileReplayStore({ directory: config.replayStateDirectory });
+  if (!env || (typeof env !== 'object' && typeof env !== 'function')) return new InMemoryReplayStore();
+  let store = replayStores.get(env);
+  if (!store) {
+    store = new InMemoryReplayStore();
+    replayStores.set(env, store);
+  }
+  return store;
 }
 
 function appActor(payload) {
@@ -118,6 +133,8 @@ export async function handleWebhook(req, res, {
   fetchImpl = fetch,
   tokenProvider,
   participantRegistry,
+  replayStore,
+  now = () => Date.now(),
 } = {}) {
   if (req.method !== 'POST') return reply(res, 405, { error: 'POST is required.' });
   const config = environment(env);
@@ -152,7 +169,18 @@ export async function handleWebhook(req, res, {
   if (!issueLifecycleEvent && !hasInvocationMention(body, AGENT_MENTION)) return reply(res, 204);
   const repository = String(payload.repository.full_name);
   const repositoryId = String(payload.repository.id);
+  const deliveryId = header(req, 'x-github-delivery');
+  if (!/^[0-9a-f-]{20,}$/i.test(String(deliveryId ?? ''))) return reply(res, 400, { error: 'GitHub delivery identity is invalid.' });
   const registry = registryValue(participantRegistry) ?? registryValue(await loadParticipantRegistry());
+  const participation = authorizeParticipation({
+    registry,
+    repositoryId,
+    repositoryFullName: repository,
+    appAccessVerified: true,
+  });
+  if (!participation.allowed) return reply(res, 403, { error: participation.reason });
+  if (!participation.participant.events.includes(eventName)) return reply(res, 204);
+
   const actor = appActor(payload);
   const provider = tokenProvider ?? new GithubAppTokenProvider({
     repository: config.controllerRepository,
@@ -170,15 +198,6 @@ export async function handleWebhook(req, res, {
   } catch {
     return reply(res, 403, { error: 'The GitHub App installation cannot access the event repository.' });
   }
-  const participation = authorizeParticipation({
-    registry,
-    repositoryId,
-    repositoryFullName: repository,
-    appAccessVerified: true,
-  });
-  if (!participation.allowed) return reply(res, 403, { error: participation.reason });
-  if (!participation.participant.events.includes(eventName)) return reply(res, 204);
-
   const authorization = await actorIsAuthorized({
     actor,
     repository,
@@ -188,8 +207,14 @@ export async function handleWebhook(req, res, {
   });
   if (!authorization.allowed) return reply(res, 403, { error: authorization.reason });
 
-  const deliveryId = header(req, 'x-github-delivery');
-  if (!/^[0-9a-f-]{20,}$/i.test(String(deliveryId ?? ''))) return reply(res, 400, { error: 'GitHub delivery identity is invalid.' });
+  const activeReplayStore = replayStore ?? replayStoreFor(env, config);
+  const claimed = await claimDelivery(activeReplayStore, {
+    installationId: config.installationId,
+    deliveryId,
+    ttlMs: config.replayWindowMs,
+  });
+  if (!claimed) return reply(res, 200, { accepted: false, duplicate: true, delivery_id: deliveryId, repository_id: repositoryId });
+
   const envelope = invocationEnvelope({
     deliveryId,
     eventName,
@@ -201,19 +226,25 @@ export async function handleWebhook(req, res, {
     hop: actor?.type === 'Bot' || String(actor?.login ?? '').endsWith('[bot]') ? 1 : 0,
     parentDeliveryId: null,
     controller: participation.participant.controller,
+    receivedAt: new Date(now()).toISOString(),
   });
   assertEventEnvelope(envelope);
-  const controllerToken = await provider.token({
-    permissions: { contents: 'write' },
-  });
-  await repositoryApi({
-    repository: config.controllerRepository,
-    token: controllerToken,
-    route: '/dispatches',
-    method: 'POST',
-    body: { event_type: 'agent_invocation', client_payload: envelope },
-    fetchImpl,
-  });
+  try {
+    const controllerToken = await provider.token({
+      permissions: { contents: 'write' },
+    });
+    await repositoryApi({
+      repository: config.controllerRepository,
+      token: controllerToken,
+      route: '/dispatches',
+      method: 'POST',
+      body: { event_type: 'agent_invocation', client_payload: envelope },
+      fetchImpl,
+    });
+  } catch (error) {
+    await releaseDelivery(activeReplayStore, { installationId: config.installationId, deliveryId });
+    throw error;
+  }
   return reply(res, 202, { accepted: true, delivery_id: deliveryId, repository_id: repositoryId });
 }
 
