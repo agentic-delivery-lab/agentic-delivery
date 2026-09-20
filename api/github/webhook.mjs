@@ -21,7 +21,7 @@ import {
 } from '../../scripts/lib/participant-registry.mjs';
 import { assertEventEnvelope } from '../../scripts/lib/control-plane-contracts.mjs';
 import { GithubAppTokenProvider } from '../../scripts/lib/github-app.mjs';
-import { FileReplayStore, InMemoryReplayStore, claimDelivery, releaseDelivery } from '../../scripts/lib/replay-protection.mjs';
+import { FileReplayStore, InMemoryReplayStore, ReplayProtectionError, claimDelivery, releaseDelivery } from '../../scripts/lib/replay-protection.mjs';
 
 export const config = { api: { bodyParser: false } };
 
@@ -30,7 +30,6 @@ const DEFAULT_ORGANIZATION = 'agentic-delivery-lab';
 const DEFAULT_ORGANIZATION_ID = '327861320';
 const DEFAULT_CONTROLLER_REPOSITORY_ID = '1358455028';
 const DEFAULT_INSTALLATION_ID = '163255060';
-const replayStores = new WeakMap();
 function header(req, name) {
   const value = req.headers?.[name] ?? req.headers?.[name.toLowerCase()];
   return Array.isArray(value) ? value[0] : value;
@@ -71,13 +70,8 @@ function environment(env = process.env) {
 
 function replayStoreFor(env, config) {
   if (config.replayStateDirectory) return new FileReplayStore({ directory: config.replayStateDirectory });
-  if (!env || (typeof env !== 'object' && typeof env !== 'function')) return new InMemoryReplayStore();
-  let store = replayStores.get(env);
-  if (!store) {
-    store = new InMemoryReplayStore();
-    replayStores.set(env, store);
-  }
-  return store;
+  if (env?.AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY === 'true') return new InMemoryReplayStore();
+  throw new ReplayProtectionError('A durable replay store is required; configure AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY or inject a replayStore adapter.', 2);
 }
 
 function appActor(payload) {

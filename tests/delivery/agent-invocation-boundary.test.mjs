@@ -83,7 +83,7 @@ test('webhook rejects events from another organization or installation', async (
     const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
     const output = result();
     await handleWebhook(request({ body, signature }), output, {
-      env: { AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret', AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery' },
+      env: webhookEnv(),
       fetchImpl: async () => { throw new Error('identity rejection must happen before GitHub API access'); },
       tokenProvider: { token: async () => 'installation-token' },
     });
@@ -116,6 +116,15 @@ function githubPayload(payload) {
   };
 }
 
+function webhookEnv(overrides = {}) {
+  return {
+    AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
+    AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+    AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
+    ...overrides,
+  };
+}
+
 function result() {
   return {
     statusCode: null,
@@ -138,7 +147,7 @@ test('webhook filters untagged comments before creating a repository dispatch', 
   const output = result();
   let calls = 0;
   await handleWebhook(request({ body, signature }), output, {
-    env: { AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret', AGENTIC_DELIVERY_REPOSITORY: 'agentic-delivery-lab/agentic-delivery' },
+    env: webhookEnv({ AGENTIC_DELIVERY_REPOSITORY: 'agentic-delivery-lab/agentic-delivery' }),
     fetchImpl: async () => { calls += 1; return response(200, { permission: 'write' }); },
     tokenProvider: { token: async () => 'installation-token' },
   });
@@ -177,6 +186,26 @@ test('webhook fails closed when the central controller repository ID is invalid'
   assert.match(output.body, /central controller repository ID is not configured/);
 });
 
+test('webhook requires a durable replay store unless ephemeral mode is explicit', async () => {
+  const payload = githubPayload({
+    action: 'created',
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    issue: { number: 44 },
+    comment: { id: 18, body: '@agentic-delivery-lab-invoker-7f3a continue', user: { login: 'sjefsharp', type: 'User' } },
+    sender: { login: 'sjefsharp', type: 'User' },
+  });
+  const body = JSON.stringify(payload);
+  const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
+  await assert.rejects(handleWebhook(request({ body, signature }), result(), {
+    env: {
+      AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
+      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+    },
+    fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : response(204)),
+    tokenProvider: { token: async () => 'installation-token' },
+  }), /durable replay store is required/);
+});
+
 test('webhook rejects self-authored and unknown bot invocations', async () => {
   for (const login of ['agentic-delivery-lab-invoker-7f3a[bot]', 'unknown-automation[bot]']) {
     const payload = {
@@ -190,7 +219,7 @@ test('webhook rejects self-authored and unknown bot invocations', async () => {
     const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
     const output = result();
     await handleWebhook(request({ body, signature }), output, {
-      env: { AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret', AGENTIC_DELIVERY_REPOSITORY: 'agentic-delivery-lab/agentic-delivery' },
+      env: webhookEnv({ AGENTIC_DELIVERY_REPOSITORY: 'agentic-delivery-lab/agentic-delivery' }),
       fetchImpl: async () => response(500),
       tokenProvider: { token: async () => 'installation-token' },
     });
@@ -211,7 +240,7 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
   const output = result();
   const calls = [];
   await handleWebhook(request({ body, signature }), output, {
-    env: { AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret', AGENTIC_DELIVERY_REPOSITORY: 'agentic-delivery-lab/agentic-delivery' },
+    env: webhookEnv({ AGENTIC_DELIVERY_REPOSITORY: 'agentic-delivery-lab/agentic-delivery' }),
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
       return url.includes('/permission') ? response(200, { permission: 'write' }) : response(204);
@@ -250,6 +279,7 @@ test('webhook claims a delivery once and releases the claim when dispatch fails'
   const env = {
     AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
     AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+    AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
   };
   const requestFor = () => request({ body, signature, delivery: '98765432-1234-4234-8234-123456789012' });
   const output = result();
@@ -316,7 +346,7 @@ test('webhook forwards an enrolled issue lifecycle event without requiring an in
   const output = result();
   const calls = [];
   await handleWebhook(request({ body, event: 'issues', signature }), output, {
-    env: { AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret', AGENTIC_DELIVERY_REPOSITORY: 'agentic-delivery-lab/agentic-delivery' },
+    env: webhookEnv({ AGENTIC_DELIVERY_REPOSITORY: 'agentic-delivery-lab/agentic-delivery' }),
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
       return url.includes('/permission') ? response(200, { permission: 'write' }) : response(204);
@@ -365,6 +395,7 @@ test('one central webhook accepts a second enrolled repository and dispatches to
     env: {
       AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
       AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
     },
     participantRegistry: registry,
     tokenProvider: {

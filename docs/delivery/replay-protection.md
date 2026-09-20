@@ -21,7 +21,10 @@ It is suitable only for a single process or a shared filesystem. A
 multi-instance deployment must provide an equivalent durable atomic claim
 store through the `replayStore` adapter before activation; a process-local
 memory store is intended for tests and explicitly isolated single-process
-operation only.
+operation only. The default handler fails closed when neither a durable
+directory nor an injected adapter is available. Tests may set
+`AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY=true`; that flag is not a production
+fallback.
 
 Replay markers contain only the installation/delivery key and expiry. They do
 not contain App private keys, installation tokens, issue bodies, or model
