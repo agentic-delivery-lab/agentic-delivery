@@ -163,6 +163,7 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
   await writeOutput('source_issue', sourceIssue, env);
   await writeOutput('origin_repository', originRepository, env);
   await writeOutput('origin_repository_id', envelope.repository_id, env);
+  await writeOutput('participant_mode', participant.mode, env);
   await writeOutput('event_path', normalizedPath, env);
   await writeOutput('invocation_event_name', envelope.event, env);
   await writeOutput('invocation_source_kind', envelope.source?.kind ?? '', env);
@@ -174,7 +175,7 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
   await writeOutput('invocation_actor_kind', authorization.kind, env);
   await writeOutput('invocation_authorized', authorization.authorized ? 'true' : 'false', env);
   await writeOutput('invocation_body_digest', envelope.body_digest, env);
-  return { accepted, sourceIssue, normalizedPath, originRepository, authorization };
+  return { accepted, sourceIssue, normalizedPath, originRepository, participantMode: participant.mode, authorization };
 }
 
 const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

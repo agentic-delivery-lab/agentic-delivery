@@ -328,6 +328,7 @@ test('central preflight resolves and revalidates the originating repository from
   const accepted = await prepareAgentInvocation({ env: baseEnv, fetchImpl, participantRegistry: registry });
   assert.equal(accepted.accepted, true);
   assert.equal(accepted.sourceIssue, '12');
+  assert.equal(accepted.participantMode, 'active');
   assert.equal(accepted.originRepository, originRepository);
   assert.ok(calls.every((url) => url.includes('/repos/' + originRepository + '/')));
   const normalizedEvent = JSON.parse(await readFile(accepted.normalizedPath, 'utf8'));
