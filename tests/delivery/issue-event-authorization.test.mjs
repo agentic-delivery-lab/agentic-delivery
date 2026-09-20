@@ -28,7 +28,7 @@ test('issue events allow writers and reject readers or unknown collaborators', a
 });
 
 test('only exact internal automation identities bypass the collaborator lookup', async () => {
-  for (const actor of ['github-actions[bot]', 'agentic-delivery-bot[bot]']) {
+  for (const actor of ['github-actions[bot]', 'agentic-delivery-lab-invoker-7f3a[bot]']) {
     let calls = 0;
     const result = await authorizeIssueEvent({
       env: { GITHUB_EVENT_NAME: 'issues', GITHUB_REPOSITORY: 'owner/repo', GITHUB_ACTOR: actor, GITHUB_OUTPUT: '' },

@@ -95,7 +95,7 @@ governance controls, dependencies, and orchestration policy before an operation
 can proceed.
 
 Conversation-driven continuation uses the separate
-`@agentic-delivery-bot` invocation boundary. The GitHub App webhook covers
+`@agentic-delivery-lab-invoker-7f3a` invocation boundary. The GitHub App webhook covers
 issue comments, PR conversation comments, formal reviews, and inline review
 comments; only a tag on the first visible line can dispatch the deterministic
 preflight and `repository_dispatch` workflow. The actor catalog, digest,

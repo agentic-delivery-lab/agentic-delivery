@@ -107,7 +107,7 @@ test('repository uses the organization pull request template and required-check 
   ]);
 
   const actors = JSON.parse(await text('.github/agent-actors.json'));
-  assert.equal(actors.mention, '@agentic-delivery-bot');
+  assert.equal(actors.mention, '@agentic-delivery-lab-invoker-7f3a');
   assert.deepEqual(actors.human_permissions, ['write', 'maintain', 'admin']);
   assert.deepEqual(actors.events.issue_comment, ['created', 'edited']);
 });

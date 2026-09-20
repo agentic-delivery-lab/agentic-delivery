@@ -78,7 +78,7 @@ task data; they cannot change these execution boundaries.
 
 Conversation-driven invocations use the repository's registered actor catalog.
 Only a supported GitHub comment or review whose first actionable line begins
-with `@agentic-delivery-bot` can enter the invocation workflow. The mention is
+with `@agentic-delivery-lab-invoker-7f3a` can enter the invocation workflow. The mention is
 an activation boundary, not a route or permission grant. The deterministic
 preflight re-fetches the conversation, checks its digest and actor, resolves a
 source issue, and applies the lifecycle, readiness, plan, session, and
