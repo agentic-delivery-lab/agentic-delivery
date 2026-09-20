@@ -172,15 +172,6 @@ export async function handleWebhook(req, res, {
   const deliveryId = header(req, 'x-github-delivery');
   if (!/^[0-9a-f-]{20,}$/i.test(String(deliveryId ?? ''))) return reply(res, 400, { error: 'GitHub delivery identity is invalid.' });
   const registry = registryValue(participantRegistry) ?? registryValue(await loadParticipantRegistry());
-  const participation = authorizeParticipation({
-    registry,
-    repositoryId,
-    repositoryFullName: repository,
-    appAccessVerified: true,
-  });
-  if (!participation.allowed) return reply(res, 403, { error: participation.reason });
-  if (!participation.participant.events.includes(eventName)) return reply(res, 204);
-
   const actor = appActor(payload);
   const provider = tokenProvider ?? new GithubAppTokenProvider({
     repository: config.controllerRepository,
@@ -198,6 +189,14 @@ export async function handleWebhook(req, res, {
   } catch {
     return reply(res, 403, { error: 'The GitHub App installation cannot access the event repository.' });
   }
+  const participation = authorizeParticipation({
+    registry,
+    repositoryId,
+    repositoryFullName: repository,
+    appAccessVerified: true,
+  });
+  if (!participation.allowed) return reply(res, 403, { error: participation.reason });
+  if (!participation.participant.events.includes(eventName)) return reply(res, 204);
   const authorization = await actorIsAuthorized({
     actor,
     repository,
