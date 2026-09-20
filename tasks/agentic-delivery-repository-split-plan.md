@@ -773,6 +773,17 @@ Central execution uses separate directories:
 /workspace   origin repository default branch or authorized feature branch
 ```
 
+The Actions workflow is a two-stage trust boundary. Its fixed bootstrap
+checkout runs the trusted controller default branch only to authenticate the
+event, resolve the participant by repository ID, and validate the signed
+controller/version pin against the participant registry. It must not execute a
+payload-selected ref before that preflight succeeds. Only then may a second
+checkout load the exact immutable controller commit for intake and delivery;
+an invalid or duplicate invocation stops before that checkout and before model
+execution. Legacy envelopes without a pin use the current registry only as a
+compatibility bridge, and the resulting resolved pin is still passed to the
+delivery job.
+
 Replace implicit `GITHUB_REPOSITORY` coupling with explicit values:
 
 ```text
