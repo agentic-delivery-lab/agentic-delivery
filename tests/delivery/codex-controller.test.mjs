@@ -344,6 +344,13 @@ test('requires the dedicated publication credential before model execution', asy
   assert.equal(f.calls.clients,0);
 });
 
+test('rejects delivery execution for a shadow participant before model startup', async (t) => {
+  const f = await fixture(t);
+  f.env.CONTROL_PLANE_MODE = 'shadow';
+  await assert.rejects(f.run(), /Shadow participants are read-only/);
+  assert.equal(f.calls.clients, 0);
+});
+
 test('publication retry cannot push a clean but unverified replacement commit', async (t) => {
   const f = await fixture(t); f.faults.failPublish = true;
   await f.run();
