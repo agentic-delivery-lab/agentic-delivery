@@ -50,11 +50,12 @@ export class GithubAppTokenProvider {
     return response.status === 204 ? null : response.json();
   }
 
-  async token({ repositoryIds = [] } = {}) {
+  async token({ repositoryIds = [], permissions = this.permissions } = {}) {
     const narrowedIds = [...new Set((Array.isArray(repositoryIds) ? repositoryIds : [repositoryIds])
       .map((value) => String(value))
       .filter((value) => /^[1-9][0-9]*$/.test(value)))].sort();
-    const cacheKey = narrowedIds.join(',');
+    const requestedPermissions = permissions && typeof permissions === 'object' ? permissions : this.permissions;
+    const cacheKey = `${narrowedIds.join(',')}|${JSON.stringify(requestedPermissions ?? {})}`;
     const cached = this.cachedTokens.get(cacheKey);
     if (cached && cached.expiresAt - this.now() > 90_000) return cached.value;
     const appJwt = jwt({ appId: this.appId, privateKey: this.privateKey, now: this.now() });
@@ -64,7 +65,7 @@ export class GithubAppTokenProvider {
       installationId = installation?.id;
     }
     if (!/^[1-9][0-9]*$/.test(String(installationId ?? ''))) throw new Error('GitHub App installation ID is invalid or unavailable.');
-    const body = { permissions: this.permissions };
+    const body = { permissions: requestedPermissions ?? {} };
     if (narrowedIds.length > 0) body.repository_ids = narrowedIds;
     const result = await this.request(`/app/installations/${installationId}/access_tokens`, 'POST', appJwt, body);
     if (!result?.token || !result.expires_at) throw new Error('GitHub App did not return an installation token.');

@@ -226,6 +226,7 @@ test('one central webhook accepts a second enrolled repository and dispatches to
   assert.equal(calls[1].url, 'https://api.github.com/repos/agentic-delivery-lab/agentic-delivery/dispatches');
   assert.equal(JSON.parse(calls[1].options.body).client_payload.repository_id, repositoryId);
   assert.deepEqual(tokens[0], { repositoryIds: [repositoryId] });
+  assert.deepEqual(tokens[1], { permissions: { contents: 'write' } });
 });
 
 test('agent preflight re-fetches the tagged issue comment and deduplicates deliveries', async (t) => {

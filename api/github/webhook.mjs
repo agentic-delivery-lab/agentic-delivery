@@ -19,6 +19,7 @@ import {
   authorizeParticipation,
   loadParticipantRegistry,
 } from '../../scripts/lib/participant-registry.mjs';
+import { assertEventEnvelope } from '../../scripts/lib/control-plane-contracts.mjs';
 import { GithubAppTokenProvider } from '../../scripts/lib/github-app.mjs';
 
 export const config = { api: { bodyParser: false } };
@@ -158,7 +159,9 @@ export async function handleWebhook(req, res, {
     appId: config.appId,
     privateKey: config.privateKey,
     installationId: config.installationId,
-    permissions: { contents: 'write', metadata: 'read' },
+    // The origin token only authenticates read-only actor/replay checks. The
+    // unscoped controller token is minted separately with contents:write.
+    permissions: { contents: 'read', issues: 'read', pull_requests: 'read', metadata: 'read' },
     fetchImpl,
   });
   let originToken;
@@ -198,7 +201,10 @@ export async function handleWebhook(req, res, {
     hop: actor?.type === 'Bot' || String(actor?.login ?? '').endsWith('[bot]') ? 1 : 0,
     parentDeliveryId: null,
   });
-  const controllerToken = await provider.token();
+  assertEventEnvelope(envelope);
+  const controllerToken = await provider.token({
+    permissions: { contents: 'write' },
+  });
   await repositoryApi({
     repository: config.controllerRepository,
     token: controllerToken,
