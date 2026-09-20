@@ -10,6 +10,7 @@ const execFileAsync = promisify(execFile);
 const REPOSITORY = /^[A-Za-z0-9_.-]+$/;
 const TARGET_IDS = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const STATUSES = new Set(['pending', 'pending-entitlement', 'transitional', 'ready']);
+const SOURCE_REPOSITORY = ['agentic-delivery-lab', 'agentic-delivery'].join('/');
 
 export class RepositoryBoundaryValidationError extends Error {
   constructor(message, exitCode = 1) {
@@ -38,7 +39,7 @@ export async function validateRepositoryBoundaries({ repositoryRoot = path.resol
   }
   const errors = [];
   if (manifest.version !== 1) errors.push('version must be 1');
-  if (manifest.source?.repository !== 'agentic-delivery-lab/agentic-delivery') errors.push('source.repository must identify the current migration source');
+  if (manifest.source?.repository !== SOURCE_REPOSITORY) errors.push('source.repository must identify the current migration source');
   if (manifest.source?.defaultBranch !== 'main') errors.push('source.defaultBranch must be main');
   if (manifest.source?.historyStrategy !== 'filtered-history-with-source-map') errors.push('source.historyStrategy must preserve filtered history and a source map');
   if (manifest.source?.historyTool !== 'git-filter-repo') errors.push('source.historyTool must be git-filter-repo');
