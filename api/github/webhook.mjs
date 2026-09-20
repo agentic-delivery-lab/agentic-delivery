@@ -28,6 +28,7 @@ export const config = { api: { bodyParser: false } };
 const API_VERSION = '2026-03-10';
 const DEFAULT_ORGANIZATION = 'agentic-delivery-lab';
 const DEFAULT_ORGANIZATION_ID = '327861320';
+const DEFAULT_CONTROLLER_REPOSITORY_ID = '1358455028';
 const DEFAULT_INSTALLATION_ID = '163255060';
 const replayStores = new WeakMap();
 function header(req, name) {
@@ -56,6 +57,7 @@ function environment(env = process.env) {
   return {
     controllerRepository: env.AGENTIC_DELIVERY_CONTROLLER_REPOSITORY
       || env.AGENTIC_DELIVERY_REPOSITORY,
+    controllerRepositoryId: env.AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID || DEFAULT_CONTROLLER_REPOSITORY_ID,
     organization: env.AGENTIC_DELIVERY_ORGANIZATION || DEFAULT_ORGANIZATION,
     organizationId: env.AGENTIC_DELIVERY_ORGANIZATION_ID || DEFAULT_ORGANIZATION_ID,
     appId: env.AGENTIC_DELIVERY_APP_ID || env.CODEX_DELIVERY_APP_ID,
@@ -148,6 +150,9 @@ export async function handleWebhook(req, res, {
   if (!config.webhookSecret) return reply(res, 500, { error: 'The webhook secret is not configured.' });
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(String(config.controllerRepository ?? ''))) {
     return reply(res, 500, { error: 'The central controller repository is not configured.' });
+  }
+  if (!/^[1-9][0-9]*$/.test(String(config.controllerRepositoryId ?? ''))) {
+    return reply(res, 500, { error: 'The central controller repository ID is not configured.' });
   }
   const raw = await rawBody(req);
   const signature = header(req, 'x-hub-signature-256');
@@ -242,6 +247,7 @@ export async function handleWebhook(req, res, {
   assertEventEnvelope(envelope);
   try {
     const controllerToken = await provider.token({
+      repositoryIds: [config.controllerRepositoryId],
       permissions: { contents: 'write' },
     });
     await repositoryApi({

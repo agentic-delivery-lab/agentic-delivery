@@ -36,3 +36,9 @@ installation and override them with `AGENTIC_DELIVERY_ORGANIZATION`,
 `AGENTIC_DELIVERY_ORGANIZATION_ID`, and `AGENTIC_DELIVERY_APP_INSTALLATION_ID`
 when rotating or promoting the deployment. A mismatched organization or
 installation is rejected before actor authorization or dispatch.
+
+The dispatch token is independently narrowed to the configured numeric
+Control-Plane repository ID (`AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID`).
+The origin token and dispatch token therefore have separate repository scopes;
+the App installation's broader selected-repository access is not exposed to
+either API call.
