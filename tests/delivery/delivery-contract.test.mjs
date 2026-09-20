@@ -28,6 +28,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     'scripts/lib/orchestration-policy.mjs', 'tests/helpers/organization-issue-forms.mjs',
     'config/github-app-contract.json', 'schemas/github-app-contract.v1.schema.json', 'scripts/validate-github-app-contract.mjs',
     '.github/workflows/agentic-delivery-quality.yml',
+    '.github/workflows/agentic-delivery-architecture-review.yml',
   ]) await access(path.join(repositoryRoot, relativePath));
 
   const packageJson = JSON.parse(await text('package.json'));
@@ -77,6 +78,13 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.ok(consumerContractText.includes('validate-github-app-contract.mjs'));
   assert.ok(consumerContractText.includes('[[ "$CONTROLLER_COMMIT" =~'));
   assert.ok(!consumerContractText.includes('secrets: inherit'));
+  const architectureReview = await text('.github/workflows/agentic-delivery-architecture-review.yml');
+  assert.ok(architectureReview.includes('workflow_call:'));
+  assert.ok(architectureReview.includes('architecture_commit:'));
+  assert.ok(architectureReview.includes('agentic-delivery-lab/agentic-delivery-architecture'));
+  assert.ok(architectureReview.includes('validate-architecture-release.mjs'));
+  assert.ok(architectureReview.includes('pnpm --dir architecture architecture:check'));
+  assert.ok(!architectureReview.includes('secrets: inherit'));
   const invocation = parseRepositoryYaml(await text('.github/workflows/agent-invocation.yml'), 'agent invocation workflow');
   assert.deepEqual(invocation.on.repository_dispatch.types, ['agent_invocation']);
   assert.equal(invocation.jobs.intake.uses, './.github/workflows/issue-intake.yml');
