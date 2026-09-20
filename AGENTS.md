@@ -1,6 +1,6 @@
 # Repository instructions
 
-<!-- agentic-primitive: {"id":"repository-governance-instructions","kind":"instruction","enforcement":"instructional","adrs":["ADR-0001","ADR-0002","ADR-0003","ADR-0004","ADR-0007","ADR-0012","ADR-0013","ADR-0014","ADR-0015","ADR-0016","ADR-0017"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"repository-governance-instructions","kind":"instruction","enforcement":"instructional","adrs":["ADR-0001","ADR-0002","ADR-0003","ADR-0004","ADR-0007","ADR-0012","ADR-0013","ADR-0015","ADR-0016","ADR-0017","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]} -->
 
 ## Architectural decisions
 

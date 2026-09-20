@@ -22,10 +22,11 @@ execution request would start work accidentally; treating comments only as
 free-form text would make execution intent ambiguous.
 
 The harness also needs an attributable identity for event-producing operations.
-The existing repository-scoped GitHub App decision in
-[ADR-0014](0014-use-a-repository-scoped-github-app.md) establishes the token
-boundary, but it does not define the conversation activation contract, the
-actor catalog, or the handoff rules for registered automation actors.
+The organization-wide GitHub App distribution decision in
+[ADR-0018](0018-organization-wide-agentic-delivery-control-plane-distribution-and-versioning.md)
+establishes the token boundary, while this record defines the conversation
+activation contract, actor catalog, and handoff rules for registered
+automation actors.
 
 ## Decision Drivers
 
@@ -36,7 +37,8 @@ actor catalog, or the handoff rules for registered automation actors.
   schema, state, capability, and idempotency checks.
 - Support issue comments, pull-request conversation comments, formal reviews,
   and inline review comments with one unambiguous activation boundary.
-- Use one repository-scoped GitHub App identity for event-producing operations.
+- Use one organization-installed GitHub App identity for event-producing
+  operations, narrowed to the originating repository at token issuance.
 - Prevent self-triggering, duplicate dispatch, unbounded bot-to-bot handoffs,
   and scope expansion by automation actors.
 - Keep webhook secrets, App private keys, and installation tokens out of files,
@@ -122,7 +124,7 @@ webhook and `repository_dispatch` into one correlated Actions run.
 ### GitHub App webhook with an explicit invocation boundary
 
 - Good, because the App has a distinct attributable bot identity and can use
-  short-lived installation tokens.
+  short-lived installation tokens narrowed to one originating repository.
 - Good, because filtering and signature validation happen before Actions work
   is queued.
 - Bad, because Vercel deployment, GitHub App lifecycle, and secret rotation
@@ -139,8 +141,8 @@ webhook and `repository_dispatch` into one correlated Actions run.
 ### Long-lived PAT or user identity
 
 - Good, because it is quick to bootstrap.
-- Bad, because attribution, rotation, scope, and revocation are weaker than a
-  repository-scoped App installation.
+- Bad, because attribution, rotation, scope, and revocation are weaker than an
+  organization-installed App narrowed to one originating repository.
 
 ### Native GitHub or Copilot mentions only
 
@@ -154,7 +156,7 @@ webhook and `repository_dispatch` into one correlated Actions run.
 - Follow-up implementation issue: [#48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48).
 - Related source issue: [#44](https://github.com/agentic-delivery-lab/agentic-delivery/issues/44).
 - [Use GitHub as the lifecycle control plane](0012-use-github-as-the-lifecycle-control-plane.md).
-- [Use a repository-scoped GitHub App](0014-use-a-repository-scoped-github-app.md).
+- [Organization-wide Agentic Delivery control-plane distribution and versioning](0018-organization-wide-agentic-delivery-control-plane-distribution-and-versioning.md).
 - [Isolate resumable runner execution](0015-isolate-resumable-runner-execution.md).
 - [GitHub workflow events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows).
 - [Validate webhook deliveries](https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries).

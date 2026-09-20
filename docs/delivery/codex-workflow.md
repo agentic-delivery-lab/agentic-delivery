@@ -1,4 +1,4 @@
-<!-- agentic-primitive: {"id":"codex-delivery-workflow-guide","kind":"instruction","enforcement":"instructional","adrs":["ADR-0009","ADR-0012","ADR-0014","ADR-0015","ADR-0017"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"codex-delivery-workflow-guide","kind":"instruction","enforcement":"instructional","adrs":["ADR-0009","ADR-0012","ADR-0015","ADR-0017","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]} -->
 
 # Codex source issue workflow
 
@@ -8,7 +8,7 @@ changes, validation, and a review pull request. Its decision is recorded in
 The control-plane, traceability, App, and runner-isolation extensions are
 recorded in [ADR-0012](../decisions/0012-use-github-as-the-lifecycle-control-plane.md),
 [ADR-0013](../decisions/0013-derive-adr-traceability-from-agentic-primitives.md),
-[ADR-0014](../decisions/0014-use-a-repository-scoped-github-app.md), and
+[ADR-0018](../decisions/0018-organization-wide-agentic-delivery-control-plane-distribution-and-versioning.md), and
 [ADR-0015](../decisions/0015-isolate-resumable-runner-execution.md).
 
 GitHub is the control plane: native issue types, pinned issue fields,
@@ -80,8 +80,8 @@ on repositories that it is authorized to operate.
 
 The Vercel ingress requests only Metadata read and Contents write for its
 permission lookup and `repository_dispatch` handoff. The runner's publication
-token follows the existing ADR-0014 Contents, Issues, Pull requests, and
-Workflows boundary. The webhook secret and App private key are stored only in
+token follows the organization-wide ADR-0018 Contents, Issues, Pull requests,
+and Workflows boundary. The webhook secret and App private key are stored only in
 Vercel Production environment variables
 (`AGENTIC_DELIVERY_WEBHOOK_SECRET`, `AGENTIC_DELIVERY_APP_ID`,
 `AGENTIC_DELIVERY_APP_PRIVATE_KEY`, and

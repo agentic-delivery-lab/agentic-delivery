@@ -11,6 +11,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) adds provisional ADR-0018, the organization-wide Control Plane ownership, selected-repository enrollment, signed event boundary, immutable controller pins, compatibility policy, credential boundary, upgrade path, and rollback contract required before the repository split.
+
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) consolidates the repository-split, organization-wide Control Plane, Architecture Authority, Agentic Primitives, private publication, developer-environment distribution, execution-pattern, and migration design into one implementation-ready plan.
 
 - [Issue #42](https://github.com/agentic-delivery-lab/agentic-delivery/issues/42) makes the published organization issue forms canonical for this repository. The repository has no local issue-form override, blank issues remain available, and CI validates the live organization source.
