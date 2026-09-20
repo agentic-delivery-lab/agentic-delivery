@@ -90,8 +90,11 @@ Contents, Issues, and Pull requests boundary; Actions `workflows:write` is not
 required by the App contract. The webhook secret and App private key are stored only in
 Vercel Production environment variables
 (`AGENTIC_DELIVERY_WEBHOOK_SECRET`, `AGENTIC_DELIVERY_APP_ID`,
-`AGENTIC_DELIVERY_APP_PRIVATE_KEY`, and
-`AGENTIC_DELIVERY_APP_INSTALLATION_ID`). The Actions controller receives the
+`AGENTIC_DELIVERY_APP_PRIVATE_KEY`, `AGENTIC_DELIVERY_APP_INSTALLATION_ID`,
+`AGENTIC_DELIVERY_ORGANIZATION`, `AGENTIC_DELIVERY_ORGANIZATION_ID`, and
+`AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID`). The replay store must be a
+durable atomic adapter in a multi-instance deployment; a file-backed store is
+only valid for one process or a shared filesystem. The Actions controller receives the
 corresponding `CODEX_DELIVERY_APP_ID`, `CODEX_DELIVERY_APP_PRIVATE_KEY`, and
 optional `CODEX_DELIVERY_APP_INSTALLATION_ID` as repository Actions secrets.
 Rotate both the webhook secret and private key through the GitHub App and
