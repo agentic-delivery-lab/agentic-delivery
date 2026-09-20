@@ -717,7 +717,9 @@ Initial subscriptions:
   closed;
 - `pull_request_review`: submitted, edited;
 - `pull_request_review_comment`: created, edited;
-- `installation_repositories`: added, removed.
+- `installation_repositories`: added, removed (future onboarding audit event;
+  not enabled in the current issue-lifecycle contract until a dedicated
+  participant-change dispatcher exists).
 
 An event is input, not a transition. The lifecycle policy determines whether it
 is ignored, observed, routed, or authorized. New issue events may enter intake.

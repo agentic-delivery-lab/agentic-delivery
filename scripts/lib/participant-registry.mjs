@@ -12,8 +12,6 @@ const EVENT_NAMES = new Set([
   'pull_request',
   'pull_request_review',
   'pull_request_review_comment',
-  'installation_repositories',
-  'workflow_run',
 ]);
 const REPOSITORY_ID = /^[1-9][0-9]*$/;
 const FULL_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
