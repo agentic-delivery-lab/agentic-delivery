@@ -35,6 +35,7 @@ targets:
       - docs/decisions/0012-*.md
       - docs/decisions/0013-*.md
       - docs/decisions/0016-*.md
+      - docs/decisions/0018-*.md
       - docs/decisions/0019-*.md
     bridge: old architecture paths remain read-only references until Architecture v1 is released
 
@@ -76,7 +77,6 @@ targets:
       - docs/decisions/0009-*.md
       - docs/decisions/0015-*.md
       - docs/decisions/0017-*.md
-      - docs/decisions/0018-*.md
       - AGENTS.md
       - CHANGELOG.md
       - package.json
