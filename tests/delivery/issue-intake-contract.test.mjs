@@ -75,6 +75,11 @@ test('issue events invoke intake and only an authorized route invokes reusable d
     await text('.github/workflows/issue-intake.yml'),
     /steps\.invocation\.outputs\.controller_commit \|\| github\.event\.client_payload\.controller\.commit/,
   );
+  const intakeSource = await text('.github/workflows/issue-intake.yml');
+  assert.match(intakeSource, /Check out the validated controller release/);
+  assert.match(intakeSource, /ref: main/);
+  assert.ok(intakeSource.indexOf('Validate and normalize explicit agent invocation')
+    < intakeSource.indexOf('Check out the validated controller release'));
   assert.equal(intakeWorkflow.jobs.classify.needs, 'authorize');
   assert.ok(intakeWorkflow.jobs.authorize);
   assert.equal(intakeWorkflow.jobs.authorize['runs-on'], 'ubuntu-latest');
