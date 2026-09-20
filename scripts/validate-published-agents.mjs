@@ -8,7 +8,7 @@ import { parseRepositoryYaml } from './lib/yaml.mjs';
 const AGENT_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SHA1 = /^[0-9a-f]{40}$/i;
 const SHA256 = /^[0-9a-f]{64}$/i;
-const ALLOWED_ROOT_ENTRIES = new Set(['profile', 'agents', 'provenance', '.github', 'AGENTS.md', 'README.md']);
+const ALLOWED_ROOT_ENTRIES = new Set(['profile', 'agents', 'provenance', '.github', '.gitignore', 'AGENTS.md', 'README.md']);
 const ALLOWED_TOOLS = new Set(['codebase', 'editFiles', 'fetch', 'githubRepo', 'search', 'terminal']);
 const SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]+ PRIVATE KEY-----/i,
@@ -51,7 +51,13 @@ export async function validatePublishedAgents({ publicationRoot, allowedTools = 
   const root = path.resolve(publicationRoot ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.github-private'));
   const errors = [];
   const entries = await directoryEntries(root);
-  for (const entry of entries) if (!ALLOWED_ROOT_ENTRIES.has(entry.name)) errors.push(`unexpected top-level entry ${entry.name}`);
+  for (const entry of entries) {
+    // A normal checkout contains the VCS metadata directory. It is not part
+    // of the published surface and must not make the repository fail its own
+    // publication check.
+    if (entry.name === '.git') continue;
+    if (!ALLOWED_ROOT_ENTRIES.has(entry.name)) errors.push(`unexpected top-level entry ${entry.name}`);
+  }
   const lockPath = path.join(root, 'provenance', 'agents.lock.json');
   let lock;
   try { lock = JSON.parse(await readFile(lockPath, 'utf8')); } catch (error) {
