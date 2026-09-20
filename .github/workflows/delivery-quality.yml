@@ -87,6 +87,9 @@ jobs:
       - name: Validate repository-independent control-plane boundary
         run: node scripts/validate-control-plane-boundary.mjs "$GITHUB_WORKSPACE"
 
+      - name: Validate repository-boundary migration manifest
+        run: node scripts/validate-repository-boundaries.mjs "$GITHUB_WORKSPACE"
+
       - name: Validate ADR primitive traceability index
         run: node scripts/generate-adr-primitive-index.mjs --check
 

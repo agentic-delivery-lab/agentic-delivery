@@ -1,0 +1,133 @@
+version: 1
+
+source:
+  repository: agentic-delivery-lab/agentic-delivery
+  defaultBranch: main
+  historyStrategy: filtered-history-with-source-map
+  historyTool: git-filter-repo
+  issueAndPullRequestUrls: preserve
+
+# This is a migration manifest, not a second runtime registry. It describes
+# where existing source is extracted and which repository becomes canonical.
+# Empty sourcePaths deliberately mean that the target starts new history.
+targets:
+  - id: architecture-authority
+    repository: agentic-delivery-architecture
+    visibility: public
+    status: pending
+    canonical: true
+    sourcePaths:
+      - docs/architecture/**
+      - docs/domain/**
+      - scripts/generate-adr-primitive-index.mjs
+      - scripts/validate-adrs.mjs
+      - scripts/validate-domain-language.mjs
+      - docs/decisions/README.md
+      - docs/decisions/adr-template.md
+      - docs/decisions/0001-*.md
+      - docs/decisions/0002-*.md
+      - docs/decisions/0003-*.md
+      - docs/decisions/0004-*.md
+      - docs/decisions/0005-*.md
+      - docs/decisions/0006-*.md
+      - docs/decisions/0007-*.md
+      - docs/decisions/0011-*.md
+      - docs/decisions/0012-*.md
+      - docs/decisions/0013-*.md
+      - docs/decisions/0016-*.md
+      - docs/decisions/0019-*.md
+    bridge: old architecture paths remain read-only references until Architecture v1 is released
+
+  - id: delivery-control-plane
+    repository: agentic-delivery
+    visibility: public
+    status: transitional
+    canonical: true
+    sourcePaths:
+      - api/github/**
+      - config/**
+      - schemas/**
+      - scripts/authorize-issue-event.mjs
+      - scripts/codex-delivery.mjs
+      - scripts/codex-handoff-check.mjs
+      - scripts/codex-preflight.mjs
+      - scripts/codex-sandbox-check.mjs
+      - scripts/harness-architecture-review.mjs
+      - scripts/issue-intake.mjs
+      - scripts/lib/**
+      - scripts/migrate-issue-metadata.mjs
+      - scripts/prepare-agent-invocation.mjs
+      - scripts/run-delivery-tests.mjs
+      - scripts/setup-runner-codex.mjs
+      - scripts/start-issue-branch.mjs
+      - scripts/validate-config-files.mjs
+      - scripts/validate-control-plane-boundary.mjs
+      - scripts/validate-controller-release.mjs
+      - scripts/validate-main-history.mjs
+      - scripts/validate-toolchain.mjs
+      - migration/**
+      - .github/agent-actors.json
+      - .github/issue-metadata.yml
+      - .github/orchestration-policy.yml
+      - .github/participants.yml
+      - .github/workflows/**
+      - docs/delivery/**
+      - docs/decisions/0008-*.md
+      - docs/decisions/0009-*.md
+      - docs/decisions/0015-*.md
+      - docs/decisions/0017-*.md
+      - docs/decisions/0018-*.md
+      - AGENTS.md
+      - CHANGELOG.md
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - commitlint.config.mjs
+      - .markdownlint-cli2.jsonc
+      - .node-version
+    bridge: current repository remains the migration source until the central controller release is active
+
+  - id: agentic-primitives
+    repository: agentic-delivery-primitives
+    visibility: public
+    status: pending
+    canonical: true
+    sourcePaths:
+      - .agents/**
+      - scripts/validate-branch-name.mjs
+      - scripts/validate-commit-range.mjs
+      - scripts/validate-changelog.mjs
+      - scripts/validate-gitmoji.mjs
+      - scripts/validate-pull-request-body.mjs
+      - scripts/validate-pull-request-branch.mjs
+      - scripts/validate-pull-request-title.mjs
+      - scripts/validate-source-issue.mjs
+    bridge: local primitive paths remain forwarding fallbacks until Primitive v1 is released
+
+  - id: developer-distribution
+    repository: agentic-delivery-distribution
+    visibility: public
+    status: pending
+    canonical: true
+    sourcePaths: []
+    bridge: starts new history; generated projections record their Primitive and Control Plane source digests
+
+  - id: private-publication
+    repository: .github-private
+    visibility: private
+    status: pending-entitlement
+    canonical: false
+    sourcePaths: []
+    bridge: starts new history; published agents are promoted projections from Agentic Primitives
+
+projections:
+  - id: organization-copilot-agent
+    canonicalTarget: agentic-primitives
+    projectionTarget: private-publication
+    targetPath: agents/*.agent.md
+    provenance: provenance/agents.lock.json
+    editableProjection: false
+
+exclusions:
+  - docs/decisions/0014-use-a-repository-scoped-github-app.md
+  - tasks/**

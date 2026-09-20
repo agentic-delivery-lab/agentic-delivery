@@ -78,10 +78,11 @@ webhook URL. Register only these App webhook events: `issue_comment`,
 `pull_request_review`, and `pull_request_review_comment`. Install the App only
 on repositories that it is authorized to operate.
 
-The Vercel ingress requests only Metadata read and Contents write for its
-permission lookup and `repository_dispatch` handoff. The runner's publication
-token follows the organization-wide ADR-0018 Contents, Issues, Pull requests,
-and Workflows boundary. The webhook secret and App private key are stored only in
+The Vercel ingress mints a repository-scoped read token for origin actor and
+source checks, then a separate controller token with only Contents write for
+the `repository_dispatch` handoff. The runner's publication token follows the
+organization-wide ADR-0018 Contents, Issues, Pull requests, and Workflows
+boundary. The webhook secret and App private key are stored only in
 Vercel Production environment variables
 (`AGENTIC_DELIVERY_WEBHOOK_SECRET`, `AGENTIC_DELIVERY_APP_ID`,
 `AGENTIC_DELIVERY_APP_PRIVATE_KEY`, and
