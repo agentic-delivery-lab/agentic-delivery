@@ -30,6 +30,8 @@ test('repository decision and runner contracts are present', async () => {
     'main', 'ADR tracking issue', 'Closes #', 'Approval alone does not close',
     'adr:needed', 'adr:proposed', 'adr:removal', 'adr:rejected',
     'Do not add an `adr:accepted` label',
+    'Issue #52 is not implementation',
+    'separately authorized successor issue',
   ]) assert.ok(decisions.includes(phrase), `missing decision contract: ${phrase}`);
   assert.ok(decisions.includes('(0012-use-github-as-the-lifecycle-control-plane.md)'));
   const lifecycleDecision = await text('docs/decisions/0012-use-github-as-the-lifecycle-control-plane.md');
