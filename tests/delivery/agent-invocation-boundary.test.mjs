@@ -20,6 +20,20 @@ import { prepareAgentInvocation } from '../../scripts/prepare-agent-invocation.m
 import { parseParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
+const testDependencies = {
+  architecture: {
+    repository: 'agentic-delivery-lab/agentic-delivery-architecture',
+    version: '0.1.0-draft.1',
+    commit: '0123456789abcdef0123456789abcdef01234567',
+    contentSha256: null,
+  },
+  primitives: {
+    repository: 'agentic-delivery-lab/agentic-delivery-primitives',
+    version: '0.1.0-draft.1',
+    commit: '0123456789abcdef0123456789abcdef01234567',
+    contentSha256: null,
+  },
+};
 
 test('the configured App actor and event catalog are deterministic', async () => {
   assert.equal(AGENT_MENTION, '@agentic-delivery-lab-invoker-7f3a');
@@ -207,6 +221,7 @@ test('one central webhook accepts a second enrolled repository and dispatches to
         mode: 'active',
         controller: { version: '0.1.0', commit: '0123456789abcdef0123456789abcdef01234567' },
         contracts: { eventEnvelope: 1, lifecycle: '1.0.0', stateMachine: '1.0.0', evidence: '1.0.0' },
+        dependencies: testDependencies,
         configurationProfile: 'standard',
         events: ['issue_comment'],
         localIntegration: { workflowBundle: 'none', managedByApp: false },
@@ -312,6 +327,7 @@ test('central preflight resolves and revalidates the originating repository from
         mode: 'active',
         controller: { version: '0.1.0', commit: '0123456789abcdef0123456789abcdef01234567' },
         contracts: { eventEnvelope: 1, lifecycle: '1.0.0', stateMachine: '1.0.0', evidence: '1.0.0' },
+        dependencies: testDependencies,
         configurationProfile: 'standard',
         events: ['issue_comment'],
         localIntegration: { workflowBundle: 'none', managedByApp: false },
@@ -376,6 +392,7 @@ test('central preflight rejects a controller pin that differs from the participa
         mode: 'active',
         controller: { version: '0.1.0', commit: '0123456789abcdef0123456789abcdef01234567' },
         contracts: { eventEnvelope: 1, lifecycle: '1.0.0', stateMachine: '1.0.0', evidence: '1.0.0' },
+        dependencies: testDependencies,
         configurationProfile: 'standard',
         events: ['issue_comment'],
         localIntegration: { workflowBundle: 'none', managedByApp: false },
@@ -431,6 +448,7 @@ test('central preflight accepts issue lifecycle envelopes without a comment', as
         mode: 'active',
         controller: { version: '0.1.0', commit: '0123456789abcdef0123456789abcdef01234567' },
         contracts: { eventEnvelope: 1, lifecycle: '1.0.0', stateMachine: '1.0.0', evidence: '1.0.0' },
+        dependencies: testDependencies,
         configurationProfile: 'standard',
         events: ['issues'],
         localIntegration: { workflowBundle: 'none', managedByApp: false },

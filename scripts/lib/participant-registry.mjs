@@ -16,6 +16,7 @@ const EVENT_NAMES = new Set([
 const REPOSITORY_ID = /^[1-9][0-9]*$/;
 const FULL_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SHA = /^[0-9a-f]{40}$/i;
+const SHA256_OR_NULL = /^(?:[0-9a-f]{64})$/i;
 const SEMVER = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 function addError(errors, pathName, message) {
@@ -31,6 +32,17 @@ function validSemVer(value) {
   return typeof value === 'string' && SEMVER.test(value);
 }
 
+function validateArtifactPin(pin, prefix, expectedRepository, errors) {
+  if (!pin || typeof pin !== 'object' || Array.isArray(pin)) {
+    addError(errors, prefix, 'must be an object');
+    return;
+  }
+  if (pin.repository !== expectedRepository) addError(errors, `${prefix}.repository`, `must be ${expectedRepository}`);
+  if (!validSemVer(pin.version)) addError(errors, `${prefix}.version`, 'must use SemVer');
+  if (!SHA.test(String(pin.commit ?? ''))) addError(errors, `${prefix}.commit`, 'must be a 40-character hexadecimal SHA');
+  if (pin.contentSha256 !== null && !SHA256_OR_NULL.test(String(pin.contentSha256 ?? ''))) addError(errors, `${prefix}.contentSha256`, 'must be a SHA-256 digest or null');
+}
+
 function normalizeAppRepositoryIds(value) {
   if (value instanceof Set) return new Set([...value].map(asRepositoryId).filter(Boolean));
   if (!Array.isArray(value)) return new Set();
@@ -42,6 +54,13 @@ function validateEntry(repositoryId, entry, errors) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
     addError(errors, prefix, 'must be an object');
     return null;
+  }
+  const dependencies = entry.dependencies;
+  if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) {
+    addError(errors, prefix + '.dependencies', 'must be an object');
+  } else {
+    validateArtifactPin(dependencies.architecture, prefix + '.dependencies.architecture', `${ORGANIZATION}/agentic-delivery-architecture`, errors);
+    validateArtifactPin(dependencies.primitives, prefix + '.dependencies.primitives', `${ORGANIZATION}/agentic-delivery-primitives`, errors);
   }
   if (entry.mode === undefined || !MODES.has(entry.mode)) {
     addError(errors, prefix + '.mode', 'must be one of disabled, shadow, active');
@@ -96,6 +115,7 @@ function validateEntry(repositoryId, entry, errors) {
     mode: entry.mode,
     controller: entry.controller,
     contracts: entry.contracts,
+    dependencies: entry.dependencies,
     configurationProfile: entry.configurationProfile,
     events: [...(entry.events ?? [])],
     localIntegration: entry.localIntegration,

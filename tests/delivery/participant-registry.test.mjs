@@ -21,6 +21,20 @@ const validEntry = {
     stateMachine: '1.0.0',
     evidence: '1.0.0',
   },
+  dependencies: {
+    architecture: {
+      repository: 'agentic-delivery-lab/agentic-delivery-architecture',
+      version: '0.1.0-draft.1',
+      commit: '0123456789abcdef0123456789abcdef01234567',
+      contentSha256: null,
+    },
+    primitives: {
+      repository: 'agentic-delivery-lab/agentic-delivery-primitives',
+      version: '0.1.0-draft.1',
+      commit: '0123456789abcdef0123456789abcdef01234567',
+      contentSha256: null,
+    },
+  },
   configurationProfile: 'standard',
   events: ['issues', 'issue_comment'],
   localIntegration: {
@@ -52,6 +66,7 @@ test('rejects malformed identities, modes, pins, contracts, and event catalogs',
   registry.repositories[repositoryId].expectedFullName = 'other-org/repo';
   registry.repositories[repositoryId].controller.commit = 'main';
   registry.repositories[repositoryId].contracts.lifecycle = 'latest';
+  registry.repositories[repositoryId].dependencies.architecture.commit = 'main';
   registry.repositories[repositoryId].events = ['unknown-event'];
 
   const result = parseParticipantRegistry(registry);
@@ -63,6 +78,7 @@ test('rejects malformed identities, modes, pins, contracts, and event catalogs',
     'expectedFullName must belong to agentic-delivery-lab',
     'controller.commit must be a 40-character hexadecimal SHA',
     'contracts.lifecycle must use SemVer',
+    'dependencies.architecture.commit must be a 40-character hexadecimal SHA',
     'events contains unsupported event name unknown-event',
   ]) assert.ok(result.errors.some((error) => error.includes(phrase)), phrase);
 });
