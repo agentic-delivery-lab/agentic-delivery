@@ -9,12 +9,14 @@ const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 
 test('organization GitHub App contract includes lifecycle events and central credential boundaries', async () => {
   const contract = JSON.parse(await readFile(path.join(repositoryRoot, 'config/github-app-contract.json'), 'utf8'));
+  const deliverySource = await readFile(path.join(repositoryRoot, 'scripts/codex-delivery.mjs'), 'utf8');
   assert.deepEqual(validateGithubAppContract(contract), { valid: true, errors: [] });
   assert.equal(contract.installation.access, 'selected-repositories');
   assert.equal(contract.credentials.privateKey, 'central-deployment-only');
   assert.equal(contract.tokenScopes.origin.repositoryIds, 'origin-event-repository');
   assert.equal(contract.tokenScopes.controller.repositoryIds, 'controller-repository');
   assert.equal(contract.permissions.workflows, 'none');
+  assert.doesNotMatch(deliverySource, /workflows\s*:\s*['"]write['"]/);
 });
 
 test('GitHub App contract rejects a missing issue subscription or broad workflow permission', async () => {

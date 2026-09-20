@@ -373,7 +373,11 @@ export async function deliver(env = process.env, dependencies = {}) {
     ? new GithubAppTokenProvider({
       repository: env.GITHUB_REPOSITORY,
       ...appConfiguration(env),
-      permissions: { contents: 'write', issues: 'write', pull_requests: 'write', workflows: 'write' },
+      // Workflow files are never mutated by the delivery runtime. Keep the
+      // installation token aligned with config/github-app-contract.json and
+      // the least-privilege App contract: workflow distribution is a separate
+      // reviewed projection owned by the Distribution boundary.
+      permissions: { contents: 'write', issues: 'write', pull_requests: 'write' },
     })
     : null;
   const originToken = appProvider
