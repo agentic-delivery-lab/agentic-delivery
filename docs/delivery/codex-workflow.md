@@ -74,15 +74,20 @@ router still rechecks authorization before any state mutation.
 
 The follow-up invocation boundary is implemented by the GitHub App named
 `Agentic Delivery Lab Invoker 7F3A` and the production Vercel Function at the configured
-webhook URL. Register only these App webhook events: `issue_comment`,
-`pull_request_review`, and `pull_request_review_comment`. Install the App only
-on repositories that it is authorized to operate.
+webhook URL. The organization-wide App contract registers `issues` as well as
+the conversation events `issue_comment`, `pull_request_review`, and
+`pull_request_review_comment`; issue events are the lifecycle entry point for
+every active participant, while conversation events still require the explicit
+invocation mention. Install the App with selected-repository access only; App
+access is necessary but does not enroll a repository without the central
+participant registry.
 
 The Vercel ingress mints a repository-scoped read token for origin actor and
-source checks, then a separate controller token with only Contents write for
-the `repository_dispatch` handoff. The runner's publication token follows the
-organization-wide ADR-0018 Contents, Issues, Pull requests, and Workflows
-boundary. The webhook secret and App private key are stored only in
+source checks, then a separate controller token narrowed to the controller
+repository with only Contents write for the `repository_dispatch` handoff.
+The runner's publication token follows the organization-wide ADR-0018
+Contents, Issues, and Pull requests boundary; Actions `workflows:write` is not
+required by the App contract. The webhook secret and App private key are stored only in
 Vercel Production environment variables
 (`AGENTIC_DELIVERY_WEBHOOK_SECRET`, `AGENTIC_DELIVERY_APP_ID`,
 `AGENTIC_DELIVERY_APP_PRIVATE_KEY`, and

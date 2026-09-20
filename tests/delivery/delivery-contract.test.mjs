@@ -26,6 +26,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     '.github/workflows/codex-delivery.yml', '.github/workflows/agent-invocation.yml', '.github/agent-actors.json', '.github/issue-metadata.yml', '.github/orchestration-policy.yml',
     'api/github/webhook.mjs', 'scripts/issue-intake.mjs', 'scripts/lib/agent-invocation.mjs', 'scripts/prepare-agent-invocation.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
     'scripts/lib/orchestration-policy.mjs', 'tests/helpers/organization-issue-forms.mjs',
+    'config/github-app-contract.json', 'schemas/github-app-contract.v1.schema.json', 'scripts/validate-github-app-contract.mjs',
   ]) await access(path.join(repositoryRoot, relativePath));
 
   const packageJson = JSON.parse(await text('package.json'));
@@ -33,6 +34,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.equal(packageJson.scripts['branch:start'], 'node scripts/start-issue-branch.mjs');
   assert.equal(packageJson.scripts['lint:branch'], 'node scripts/validate-branch-name.mjs');
   assert.equal(packageJson.scripts['lint:commits'], 'node scripts/validate-commit-range.mjs');
+  assert.equal(packageJson.scripts['github-app:check'], 'node scripts/validate-github-app-contract.mjs');
   assert.match(packageJson.scripts.test, /^node --test/);
   for (const dependency of ['@commitlint/cli', '@commitlint/config-conventional', 'gitmojis', 'yaml']) {
     assert.ok(packageJson.devDependencies[dependency]);

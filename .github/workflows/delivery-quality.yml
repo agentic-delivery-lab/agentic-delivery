@@ -84,6 +84,9 @@ jobs:
       - name: Validate controller release and participant pins
         run: node scripts/validate-controller-release.mjs "$GITHUB_WORKSPACE"
 
+      - name: Validate organization GitHub App contract
+        run: node scripts/validate-github-app-contract.mjs "$GITHUB_WORKSPACE"
+
       - name: Validate repository-independent control-plane boundary
         run: node scripts/validate-control-plane-boundary.mjs "$GITHUB_WORKSPACE"
 
