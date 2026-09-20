@@ -1,0 +1,27 @@
+# agentic-primitive: {"id":"participant-registry","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0018"],"domains":["agentic-delivery-control-plane"]}
+version: 1
+organization: agentic-delivery-lab
+
+repositories:
+  "1358455028":
+    expectedFullName: agentic-delivery-lab/agentic-delivery
+    mode: shadow
+    controller:
+      version: 0.1.0
+      commit: 8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99
+    contracts:
+      eventEnvelope: 1
+      lifecycle: 1.0.0
+      stateMachine: 1.0.0
+      evidence: 1.0.0
+    configurationProfile: standard
+    events:
+      - issues
+      - issue_comment
+      - pull_request
+      - pull_request_review
+      - pull_request_review_comment
+      - installation_repositories
+    localIntegration:
+      workflowBundle: none
+      managedByApp: false

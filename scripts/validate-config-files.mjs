@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { parseRepositoryYaml, YamlParseError } from './lib/yaml.mjs';
 import { validateIssueMetadataConfig } from './lib/issue-metadata.mjs';
 import { validateOrchestrationPolicy } from './lib/orchestration-policy.mjs';
+import { parseParticipantRegistry } from './lib/participant-registry.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -29,7 +30,7 @@ async function gitFiles(repositoryRoot) {
       .filter((file) => /\.(?:json|ya?ml)$/.test(file))
       .filter((file) => file !== 'pnpm-lock.yaml')
       .filter((file) => !/^tests\/.*\/fixtures\//.test(file));
-    for (const file of ['.github/issue-metadata.yml', '.github/orchestration-policy.yml']) {
+    for (const file of ['.github/issue-metadata.yml', '.github/orchestration-policy.yml', '.github/participants.yml']) {
       if (!tracked.includes(file)) tracked.push(file);
     }
     // These repository-local files were replaced by organization metadata and
@@ -51,6 +52,10 @@ export async function validateConfigFiles({ repositoryRoot = path.resolve(path.d
     let source;
     try {
       source = await readFile(filePath, 'utf8');
+      if (relativeFile === '.github/participants.yml' || relativeFile.endsWith('/participants.yml') || relativeFile === 'participants.yml') {
+        const result = parseParticipantRegistry(parseRepositoryYaml(source, relativeFile));
+        if (!result.valid) errors.push(relativeFile + ': participant registry: ' + result.errors.join('; '));
+      }
     } catch (error) {
       errors.push(`${relativeFile}: cannot read configuration: ${error.message}`);
       continue;

@@ -1,6 +1,6 @@
 name: agent-invocation
 
-# agentic-primitive: {"id":"agent-invocation-workflow","kind":"workflow","enforcement":"deterministic","adrs":["ADR-0017"],"domains":["agentic-delivery-governance"]}
+# agentic-primitive: {"id":"agent-invocation-workflow","kind":"workflow","enforcement":"deterministic","adrs":["ADR-0017","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 
 on:
   repository_dispatch:

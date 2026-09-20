@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"agent-invocation-preflight","kind":"validator","enforcement":"deterministic","adrs":["ADR-0017"],"domains":["agentic-delivery-governance"]}
+// agentic-primitive: {"id":"agent-invocation-preflight","kind":"validator","enforcement":"deterministic","adrs":["ADR-0017","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +12,8 @@ import {
   sourceFromWebhook,
   validateActorCatalog,
 } from './lib/agent-invocation.mjs';
+import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
+import { loadParticipantRegistry, participantForRepository } from './lib/participant-registry.mjs';
 import actorCatalog from '../.github/agent-actors.json' with { type: 'json' };
 
 const API_VERSION = '2026-03-10';
@@ -51,6 +53,7 @@ function sourceIssueFromPullRequest(pullRequest) {
 async function currentSource({ event, envelope, api }) {
   const source = envelope.source ?? {};
   if (source.kind === 'issue_comment') return String(source.issue_number);
+  if (source.kind === 'issue') return String(source.issue_number);
   const pullRequestNumber = String(source.pull_request_number ?? '');
   if (!/^[1-9][0-9]*$/.test(pullRequestNumber)) throw new Error('The invocation does not identify a pull request.');
   const pullRequest = await api(`/pulls/${pullRequestNumber}`);
@@ -62,6 +65,7 @@ async function currentSource({ event, envelope, api }) {
 
 async function currentComment({ envelope, api }) {
   const source = envelope.source ?? {};
+  if (envelope.event === 'issues') return null;
   let item;
   if (envelope.event === 'issue_comment') item = await api(`/issues/comments/${source.comment_id}`);
   else if (envelope.event === 'pull_request_review') item = await api(`/pulls/${source.pull_request_number}/reviews/${source.review_id}`);
@@ -108,31 +112,57 @@ async function markDelivery({ repository, sourceIssue, deliveryId, env }) {
   }
 }
 
-export async function prepareAgentInvocation({ env = process.env, fetchImpl = fetch } = {}) {
+export async function prepareAgentInvocation({ env = process.env, fetchImpl = fetch, participantRegistry } = {}) {
   const catalog = validateActorCatalog(actorCatalog);
   if (!catalog.valid) throw new Error(`The actor catalog is invalid: ${catalog.errors.join(' ')}`);
   if (!env.GH_TOKEN || !env.GITHUB_EVENT_PATH || !env.GITHUB_REPOSITORY) throw new Error('Agent invocation preflight requires GitHub event, repository, and token context.');
   const event = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'));
   const envelope = event?.client_payload;
   if (!envelope || envelope.version !== 1 || !invocationEventSupported(envelope.event, envelope.action)) throw new Error('The repository dispatch envelope is invalid.');
-  if (String(event.repository?.full_name) !== env.GITHUB_REPOSITORY || String(envelope.repository_id) !== String(event.repository?.id)) throw new Error('The dispatch repository boundary is invalid.');
-  if (!/^[\w.-]+\/[\w.-]+$/.test(env.GITHUB_REPOSITORY) || !/^[0-9a-f-]{20,}$/i.test(String(envelope.delivery_id))) throw new Error('The dispatch identity is invalid.');
+  const controllerRepository = env.GITHUB_REPOSITORY;
+  if (String(event.repository?.full_name) !== controllerRepository) throw new Error('The dispatch controller repository boundary is invalid.');
+  if (!/^[\w.-]+\/[\w.-]+$/.test(controllerRepository) || !/^[1-9][0-9]*$/.test(String(envelope.repository_id))
+    || !/^[0-9a-f-]{20,}$/i.test(String(envelope.delivery_id))) throw new Error('The dispatch identity is invalid.');
   if (!/^[A-Za-z0-9_.\[\]-]+$/.test(String(envelope.actor?.login ?? ''))) throw new Error('The dispatch actor is invalid.');
-  const api = apiClient({ repository: env.GITHUB_REPOSITORY, token: env.GH_TOKEN, fetchImpl });
+  const registry = participantRegistry ?? await loadParticipantRegistry();
+  if (!registry.valid) throw new Error('The participant registry is invalid: ' + registry.errors.join(' '));
+  const participant = participantForRepository(registry, envelope.repository_id);
+  if (!participant || participant.mode === 'disabled') throw new Error('The dispatch repository is not an active participant.');
+  const originRepository = participant.expectedFullName;
+  const appConfig = appConfiguration(env);
+  const appProvider = appConfig.appId && appConfig.privateKey
+    ? new GithubAppTokenProvider({
+      repository: controllerRepository,
+      ...appConfig,
+      permissions: { contents: 'read', issues: 'read', pull_requests: 'read', metadata: 'read' },
+      fetchImpl,
+    })
+    : null;
+  const originToken = appProvider
+    ? await appProvider.token({ repositoryIds: [String(envelope.repository_id)] })
+    : env.GH_TOKEN;
+  const api = apiClient({ repository: originRepository, token: originToken, fetchImpl });
+  const originEvent = {
+    ...event,
+    repository: { ...event.repository, id: Number(envelope.repository_id), full_name: originRepository },
+  };
   const authorization = await authorizeActor({ envelope, api });
-  const sourceIssue = await currentSource({ event, envelope, api });
+  const sourceIssue = await currentSource({ event: originEvent, envelope, api });
   if (!/^[1-9][0-9]*$/.test(sourceIssue)) throw new Error('The source issue number is invalid.');
   const comment = await currentComment({ envelope, api });
-  const accepted = await markDelivery({ repository: env.GITHUB_REPOSITORY, sourceIssue, deliveryId: envelope.delivery_id, env });
+  const accepted = await markDelivery({ repository: originRepository, sourceIssue, deliveryId: envelope.delivery_id, env });
   const normalizedPath = path.join(path.resolve(env.RUNNER_TEMP || '/tmp'), `agent-invocation-${envelope.delivery_id}.json`);
   await writeFile(normalizedPath, JSON.stringify({
-    action: envelope.action,
-    repository: event.repository,
+    action: envelope.event === 'issues' ? envelope.action : 'created',
+    repository: originEvent.repository,
     issue: { number: Number(sourceIssue) },
-    comment,
+    ...(comment ? { comment } : {}),
+    sender: envelope.actor,
   }), { mode: 0o600 });
   await writeOutput('accepted', accepted ? 'true' : 'false', env);
   await writeOutput('source_issue', sourceIssue, env);
+  await writeOutput('origin_repository', originRepository, env);
+  await writeOutput('origin_repository_id', envelope.repository_id, env);
   await writeOutput('event_path', normalizedPath, env);
   await writeOutput('invocation_event_name', envelope.event, env);
   await writeOutput('invocation_source_kind', envelope.source?.kind ?? '', env);
@@ -144,7 +174,7 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
   await writeOutput('invocation_actor_kind', authorization.kind, env);
   await writeOutput('invocation_authorized', authorization.authorized ? 'true' : 'false', env);
   await writeOutput('invocation_body_digest', envelope.body_digest, env);
-  return { accepted, sourceIssue, normalizedPath, authorization };
+  return { accepted, sourceIssue, normalizedPath, originRepository, authorization };
 }
 
 const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

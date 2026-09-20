@@ -9,6 +9,16 @@ on:
         description: Open source issue number to plan or implement
         required: true
         type: string
+      origin_repository:
+        description: Fully qualified repository that owns the source issue
+        required: false
+        default: ''
+        type: string
+      origin_repository_id:
+        description: Numeric repository identity that owns the source issue
+        required: false
+        default: ''
+        type: string
       route:
         description: Authorized orchestration route selected by the intake policy
         required: true
@@ -86,6 +96,10 @@ jobs:
     timeout-minutes: 350
     env:
       CODEX_AUTH_HOME: /var/lib/github-runner/.codex
+      ORIGIN_REPOSITORY: ${{ inputs.origin_repository }}
+      ORIGIN_REPOSITORY_ID: ${{ inputs.origin_repository_id }}
+      GITHUB_EVENT_NAME: ${{ inputs.invocation_event_name == 'issues' && 'issues' || (inputs.invocation_event_name != '' && 'issue_comment' || github.event_name) }}
+      GITHUB_TRIGGERING_ACTOR: ${{ inputs.invocation_actor || github.triggering_actor || github.actor }}
     permissions:
       contents: read
       issues: write
