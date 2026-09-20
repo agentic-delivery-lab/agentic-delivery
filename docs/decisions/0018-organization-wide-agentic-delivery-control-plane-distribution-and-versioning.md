@@ -33,6 +33,12 @@ repository would preserve the smell rather than solve it. The decision is
 therefore required before extracting Architecture Authority, Agentic Primitives
 or Distribution repositories.
 
+The linked Issue #52 is the plan-persistence and intake record for this
+repository split. It is not implementation authorization, does not define the
+acceptance criteria for this ADR, and must not be closed as a side effect of
+this local extraction. The ADR becomes an official implementation decision only
+through a separately authorized successor issue and its review pull request.
+
 The GitHub platform supplies several separate mechanisms, and they must not be
 collapsed into one contract:
 
