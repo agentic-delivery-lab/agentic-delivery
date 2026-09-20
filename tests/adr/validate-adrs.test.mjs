@@ -19,7 +19,7 @@ async function newFixture(t) {
 }
 
 test('accepts the repository ADR set', async () => {
-  assert.equal(await validateAdrs(repositoryRoot), 16);
+  assert.equal(await validateAdrs(repositoryRoot), 17);
 });
 
 test('accepts historical ADR number gaps after a record is removed', async (t) => {

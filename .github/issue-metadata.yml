@@ -1,4 +1,4 @@
-# agentic-primitive: {"id":"issue-metadata-contract","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012","ADR-0013"],"domains":["agentic-delivery-governance"]}
+# agentic-primitive: {"id":"issue-metadata-contract","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012","ADR-0013","ADR-0019"],"domains":["agentic-delivery-governance"]}
 version: 1
 
 organization: agentic-delivery-lab

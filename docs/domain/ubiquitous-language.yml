@@ -158,7 +158,12 @@ terms:
     definition: "An organization-level issue field configured to appear for the relevant issue types, including the universal Lifecycle Stage and Delivery Readiness fields."
   - context: "agentic-delivery-governance"
     term: "delivery readiness"
-    definition: "An orthogonal issue-field value describing whether the next authorized operation needs information, is ready, is working, is waiting, awaits a human, or is blocked. It is not a lifecycle stage or execution record."
+    definition: "The legacy name for the orthogonal Delivery State issue-field value during the compatibility migration. Current values describe whether the next authorized operation needs information, is ready, is working, is waiting, awaits a human, or is blocked. It is not a lifecycle stage or execution record."
+    avoid:
+      - "second lifecycle"
+  - context: "agentic-delivery-governance"
+    term: "delivery state"
+    definition: "The canonical orthogonal organization issue-field dimension that authorizes or holds the next delivery operation independently of Lifecycle Stage, native Issue Type, governance metadata, and runner execution state. Delivery Readiness is its legacy field name during migration."
   - context: "agentic-delivery-governance"
     term: "governance metadata"
     definition: "Cross-cutting labels or equivalent metadata that record controls, constraints, required reviews, architecture decision work, or resolution separately from issue type, lifecycle stage, delivery readiness, and execution state."

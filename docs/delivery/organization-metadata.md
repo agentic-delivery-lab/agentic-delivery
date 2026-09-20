@@ -1,4 +1,4 @@
-<!-- agentic-primitive: {"id":"organization-metadata-runbook","kind":"instruction","enforcement":"instructional","adrs":["ADR-0012","ADR-0013","ADR-0015","ADR-0016","ADR-0017"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"organization-metadata-runbook","kind":"instruction","enforcement":"instructional","adrs":["ADR-0012","ADR-0013","ADR-0015","ADR-0016","ADR-0017","ADR-0019"],"domains":["agentic-delivery-governance"]} -->
 
 # Organization GitHub metadata runbook
 
@@ -27,6 +27,12 @@ workflow state machine. Readiness is an orthogonal gate; it does not add
 temporary conditions to the lifecycle vocabulary. The runner stores its
 resumable session and operation state under the protected per-issue state
 directory.
+
+The target architecture calls this orthogonal field `Delivery State`. The
+current `Delivery Readiness` name and logical `readiness` key remain the
+authoritative compatibility contract until ADR-0019's separately authorized
+field migration is complete; do not create a second field or rename it from a
+content pull request.
 
 Run the dry-run manifest before changing organization settings:
 

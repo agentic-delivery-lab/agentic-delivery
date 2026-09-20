@@ -272,6 +272,7 @@
         "agent-invocation-workflow",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
+        "control-plane-contract-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
         "organization-webhook-ingress",
@@ -280,13 +281,32 @@
         "repository-governance-instructions",
         "semantic-architecture-review"
       ]
+    },
+    {
+      "id": "ADR-0019",
+      "file": "docs/decisions/0019-canonicalize-delivery-state-field.md",
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "semantic"
+      ],
+      "primitives": [
+        "delivery-state-domain-language",
+        "issue-metadata-contract",
+        "issue-metadata-resolver",
+        "organization-metadata-runbook"
+      ]
     }
   ],
   "domains": [
     {
       "id": "agentic-delivery-control-plane",
       "adrs": [
-        "ADR-0018"
+        "ADR-0018",
+        "ADR-0019"
       ],
       "primitives": [
         "agent-invocation-boundary",
@@ -294,6 +314,7 @@
         "agent-invocation-workflow",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
+        "control-plane-contract-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
         "organization-webhook-ingress",
@@ -321,7 +342,8 @@
         "ADR-0015",
         "ADR-0016",
         "ADR-0017",
-        "ADR-0018"
+        "ADR-0018",
+        "ADR-0019"
       ],
       "primitives": [
         "adr-structure-validator",
@@ -334,6 +356,7 @@
         "codex-delivery-workflow-guide",
         "commit-format-validator",
         "curated-changelog",
+        "delivery-state-domain-language",
         "domain-language-validator",
         "harness-architecture-review",
         "issue-branch-name-validator",
@@ -493,6 +516,19 @@
       ]
     },
     {
+      "id": "control-plane-contract-validator",
+      "path": "scripts/lib/control-plane-contracts.mjs",
+      "location": "scripts/lib/control-plane-contracts.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
       "id": "curated-changelog",
       "path": "CHANGELOG.md",
       "anchor": "#changelog",
@@ -501,6 +537,19 @@
       "enforcement": "instructional",
       "adrs": [
         "ADR-0006"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "delivery-state-domain-language",
+      "path": "docs/domain/README.md",
+      "location": "docs/domain/README.md",
+      "kind": "customization",
+      "enforcement": "semantic",
+      "adrs": [
+        "ADR-0019"
       ],
       "domains": [
         "agentic-delivery-governance"
@@ -620,7 +669,8 @@
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0012",
-        "ADR-0013"
+        "ADR-0013",
+        "ADR-0019"
       ],
       "domains": [
         "agentic-delivery-governance"
@@ -662,7 +712,8 @@
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0012",
-        "ADR-0013"
+        "ADR-0013",
+        "ADR-0019"
       ],
       "domains": [
         "agentic-delivery-governance"
@@ -735,7 +786,8 @@
         "ADR-0013",
         "ADR-0015",
         "ADR-0016",
-        "ADR-0017"
+        "ADR-0017",
+        "ADR-0019"
       ],
       "domains": [
         "agentic-delivery-governance"
