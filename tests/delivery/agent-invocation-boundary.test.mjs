@@ -439,6 +439,9 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
       actor: { login: 'sjefsharp', type: 'User' },
       hop: 0,
       body_digest: (await import('../../scripts/lib/agent-invocation.mjs')).bodyDigest(body),
+      organization_id: '327861320',
+      installation_id: '163255060',
+      repository_full_name: 'agentic-delivery-lab/agentic-delivery',
     },
   }));
   const baseEnv = {
@@ -448,6 +451,8 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
     GITHUB_OUTPUT: outputPath,
     CODEX_DELIVERY_STATE_DIR: root,
     RUNNER_TEMP: root,
+    AGENTIC_DELIVERY_ORGANIZATION_ID: '327861320',
+    CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060',
   };
   const fetchImpl = async (url) => {
     if (url.endsWith('/issues/comments/7')) return response(200, { id: 7, body, user: { login: 'sjefsharp', type: 'User' }, author_association: 'OWNER' });
@@ -462,6 +467,15 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
 
   const duplicate = await prepareAgentInvocation({ env: baseEnv, fetchImpl });
   assert.equal(duplicate.accepted, false);
+
+  const tamperedEvent = JSON.parse(await readFile(eventPath, 'utf8'));
+  tamperedEvent.client_payload.installation_id = '999';
+  tamperedEvent.client_payload.delivery_id = '22345678-1234-4234-8234-123456789012';
+  await writeFile(eventPath, JSON.stringify(tamperedEvent));
+  await assert.rejects(
+    prepareAgentInvocation({ env: baseEnv, fetchImpl }),
+    /installation identity does not match/,
+  );
 });
 
 test('central preflight resolves and revalidates the originating repository from the participant registry', async (t) => {
