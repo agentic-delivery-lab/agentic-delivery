@@ -50,7 +50,7 @@ jobs:
       - name: Check out trusted authorization
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.controller_commit) || 'main' }}
+          ref: main
           path: trusted-intake
           persist-credentials: false
 
@@ -100,7 +100,7 @@ jobs:
       - name: Check out trusted intake
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.controller_commit) || 'main' }}
+          ref: main
           persist-credentials: false
 
       - name: Set up pnpm and Node.js
@@ -125,6 +125,13 @@ jobs:
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
           RUNNER_TEMP: ${{ runner.temp }}
         run: node scripts/prepare-agent-invocation.mjs
+
+      - name: Check out the validated controller release
+        if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || 'main' }}
+          persist-credentials: false
 
       - name: Set up pinned Codex CLI
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.force }}
