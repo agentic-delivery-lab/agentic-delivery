@@ -7,19 +7,28 @@ import { invocationEnvelope } from '../../scripts/lib/agent-invocation.mjs';
 import {
   CONTRACT_VERSIONS,
   assertEventEnvelope,
+  validateControllerRelease,
   validateEventEnvelope,
 } from '../../scripts/lib/control-plane-contracts.mjs';
+import { validateControllerRelease as validateReleaseManifest } from '../../scripts/validate-controller-release.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 
 test('contract schemas are present and self-identifying', async () => {
-  for (const file of ['event-envelope.v1.schema.json', 'participant-registry.v1.schema.json']) {
+  for (const file of ['event-envelope.v1.schema.json', 'participant-registry.v1.schema.json', 'controller-release.v1.schema.json']) {
     const schema = JSON.parse(await readFile(path.join(repositoryRoot, 'schemas', file), 'utf8'));
     assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
     assert.match(schema.$id, /agentic-delivery-lab\/agentic-delivery\/blob\/main\/schemas\//);
     assert.equal(schema.type, 'object');
     assert.ok(schema.title);
   }
+});
+
+test('the checked-in controller release pins every enrolled participant', async () => {
+  const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
+  assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
+  const validated = await validateReleaseManifest({ repositoryRoot });
+  assert.equal(validated.commit, release.commit);
 });
 
 test('valid event envelopes are accepted before central execution', () => {

@@ -13,6 +13,8 @@ const DELIVERY_ID = /^[0-9a-f-]{20,}$/i;
 const REPOSITORY_ID = /^[1-9][0-9]*$/;
 const LOGIN = /^[A-Za-z0-9_.\[\]-]+$/;
 const SHA256 = /^[0-9a-f]{64}$/i;
+const SHA1 = /^[0-9a-f]{40}$/i;
+const SEMVER = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const SOURCE_KINDS = new Set([
   'issue',
   'issue_comment',
@@ -109,4 +111,33 @@ export function assertEventEnvelope(envelope) {
   return envelope;
 }
 
-export { DELIVERY_ID, REPOSITORY_ID, SHA256 };
+export function validateControllerRelease(release) {
+  const errors = [];
+  if (!release || typeof release !== 'object' || Array.isArray(release)) return { valid: false, errors: ['release must be an object'] };
+  if (release.schemaVersion !== 1) addError(errors, 'schemaVersion', 'must be 1');
+  if (release.controllerId !== 'agentic-delivery') addError(errors, 'controllerId', 'must be agentic-delivery');
+  if (typeof release.version !== 'string' || !SEMVER.test(release.version)) addError(errors, 'version', 'must use SemVer');
+  if (typeof release.commit !== 'string' || !SHA1.test(release.commit)) addError(errors, 'commit', 'must be a 40-character hexadecimal SHA');
+  const contracts = release.contracts;
+  if (!contracts || typeof contracts !== 'object' || Array.isArray(contracts)) addError(errors, 'contracts', 'must be an object');
+  else {
+    if (!Number.isInteger(contracts.eventEnvelope) || contracts.eventEnvelope < 1) addError(errors, 'contracts.eventEnvelope', 'must be a positive integer');
+    for (const name of ['lifecycle', 'stateMachine', 'evidence']) {
+      if (typeof contracts[name] !== 'string' || !SEMVER.test(contracts[name])) addError(errors, `contracts.${name}`, 'must use SemVer');
+    }
+  }
+  if (!release.compatibility || typeof release.compatibility !== 'object' || Array.isArray(release.compatibility)) {
+    addError(errors, 'compatibility', 'must be an object');
+  } else {
+    for (const name of ['eventEnvelope', 'lifecycle', 'stateMachine', 'evidence']) {
+      if (name === 'eventEnvelope') {
+        if (!Number.isInteger(release.compatibility[name]) || release.compatibility[name] < 1) addError(errors, `compatibility.${name}`, 'must be a positive integer');
+      } else if (typeof release.compatibility[name] !== 'string' || !SEMVER.test(release.compatibility[name])) {
+        addError(errors, `compatibility.${name}`, 'must use SemVer');
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+export { DELIVERY_ID, REPOSITORY_ID, SHA1, SHA256 };
