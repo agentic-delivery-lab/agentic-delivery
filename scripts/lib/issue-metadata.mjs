@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"issue-metadata-resolver","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012","ADR-0013"],"domains":["agentic-delivery-governance"]}
+// agentic-primitive: {"id":"issue-metadata-resolver","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012","ADR-0013","ADR-0019"],"domains":["agentic-delivery-governance"]}
 
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const NATIVE_TYPE_SOURCES = ['issueType', 'issue_type', 'issue-type', 'type'];
