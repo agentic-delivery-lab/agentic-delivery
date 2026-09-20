@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const ORIGIN_REPOSITORY = ['agentic-delivery-lab', 'agentic-delivery'].join('/');
+const ORIGIN_REPOSITORY_PATTERN = new RegExp(`(?:^|[^A-Za-z0-9-])${ORIGIN_REPOSITORY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|[^A-Za-z0-9-])`);
 const RUNTIME_ROOTS = ['api/github', 'scripts'];
 
 export class ControlPlaneBoundaryError extends Error {
@@ -30,7 +31,7 @@ export async function validateControlPlaneBoundary({ repositoryRoot = path.resol
   const findings = [];
   for (const relativeFile of relativeFiles) {
     const source = await readFile(path.join(repositoryRoot, relativeFile), 'utf8');
-    if (source.includes(ORIGIN_REPOSITORY)) findings.push(`${relativeFile} contains the fixed origin repository ${ORIGIN_REPOSITORY}`);
+    if (ORIGIN_REPOSITORY_PATTERN.test(source)) findings.push(`${relativeFile} contains the fixed origin repository ${ORIGIN_REPOSITORY}`);
   }
   if (findings.length > 0) {
     throw new ControlPlaneBoundaryError(`${findings.map((finding) => `Control-plane boundary check: ${finding}`).join('\n')}\nControl-plane boundary check failed with ${findings.length} finding(s).`);

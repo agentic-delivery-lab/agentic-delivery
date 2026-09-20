@@ -60,6 +60,9 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.ok(intake.includes('readiness'));
   const delivery = await text('.github/workflows/codex-delivery.yml');
   assert.ok(delivery.includes('workflow_call:'));
+  assert.ok(delivery.includes("ref: ${{ inputs.controller_commit || 'main' }}"));
+  assert.ok(intake.includes('controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit }}'));
+  assert.ok(intake.includes("ref: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.controller_commit) || 'main' }}"));
   assert.ok(!delivery.includes('types: [opened]'));
   const invocation = parseRepositoryYaml(await text('.github/workflows/agent-invocation.yml'), 'agent invocation workflow');
   assert.deepEqual(invocation.on.repository_dispatch.types, ['agent_invocation']);

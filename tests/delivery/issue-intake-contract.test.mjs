@@ -69,6 +69,12 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.ok(intakeWorkflow.jobs.classify.outputs.readiness);
   assert.ok(intakeWorkflow.jobs.classify.outputs.invocation_accepted);
   assert.ok(intakeWorkflow.jobs.classify.outputs.participant_mode);
+  assert.ok(intakeWorkflow.jobs.classify.outputs.controller_version);
+  assert.ok(intakeWorkflow.jobs.classify.outputs.controller_commit);
+  assert.match(
+    await text('.github/workflows/issue-intake.yml'),
+    /steps\.invocation\.outputs\.controller_commit \|\| github\.event\.client_payload\.controller\.commit/,
+  );
   assert.equal(intakeWorkflow.jobs.classify.needs, 'authorize');
   assert.ok(intakeWorkflow.jobs.authorize);
   assert.equal(intakeWorkflow.jobs.authorize['runs-on'], 'ubuntu-latest');
@@ -84,6 +90,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.issue.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.route.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.participant_mode.required, false);
+  assert.equal(deliveryWorkflow.on.workflow_call.inputs.controller_commit.required, false);
   assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_APP_PRIVATE_KEY.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_APP_ID.required, true);
   assert.equal(deliveryWorkflow.jobs.deliver.permissions.contents, 'read');

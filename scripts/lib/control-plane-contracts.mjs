@@ -97,6 +97,13 @@ export function validateEventEnvelope(envelope) {
     addError(errors, 'parent_delivery_id', 'must be null or a GitHub delivery identifier');
   }
   if (typeof envelope.body_digest !== 'string' || !SHA256.test(envelope.body_digest)) addError(errors, 'body_digest', 'must be a SHA-256 digest');
+  if (envelope.controller !== undefined) {
+    if (!envelope.controller || typeof envelope.controller !== 'object' || Array.isArray(envelope.controller)) addError(errors, 'controller', 'must be an object');
+    else {
+      if (typeof envelope.controller.version !== 'string' || !SEMVER.test(envelope.controller.version)) addError(errors, 'controller.version', 'must use SemVer');
+      if (typeof envelope.controller.commit !== 'string' || !SHA1.test(envelope.controller.commit)) addError(errors, 'controller.commit', 'must be a 40-character hexadecimal SHA');
+    }
+  }
   return { valid: errors.length === 0, errors };
 }
 

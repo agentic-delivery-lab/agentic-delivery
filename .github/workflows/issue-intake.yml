@@ -50,7 +50,7 @@ jobs:
       - name: Check out trusted authorization
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: main
+          ref: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.controller_commit) || 'main' }}
           path: trusted-intake
           persist-credentials: false
 
@@ -84,6 +84,8 @@ jobs:
       origin_repository: ${{ steps.invocation.outputs.origin_repository || github.repository }}
       origin_repository_id: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
       participant_mode: ${{ steps.invocation.outputs.participant_mode }}
+      controller_version: ${{ steps.invocation.outputs.controller_version || github.event.client_payload.controller.version }}
+      controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit }}
       invocation_event_name: ${{ steps.invocation.outputs.invocation_event_name }}
       invocation_source_kind: ${{ steps.invocation.outputs.invocation_source_kind }}
       invocation_comment_id: ${{ steps.invocation.outputs.invocation_comment_id }}
@@ -98,7 +100,7 @@ jobs:
       - name: Check out trusted intake
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: main
+          ref: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.controller_commit) || 'main' }}
           persist-credentials: false
 
       - name: Set up pnpm and Node.js
@@ -151,6 +153,7 @@ jobs:
           ORIGIN_REPOSITORY: ${{ steps.invocation.outputs.origin_repository || github.repository }}
           ORIGIN_REPOSITORY_ID: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
           CONTROL_PLANE_MODE: ${{ steps.invocation.outputs.participant_mode }}
+          CONTROL_PLANE_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit }}
         run: node scripts/issue-intake.mjs
 
   deliver:
@@ -178,6 +181,7 @@ jobs:
       origin_repository: ${{ needs.classify.outputs.origin_repository }}
       origin_repository_id: ${{ needs.classify.outputs.origin_repository_id }}
       participant_mode: ${{ needs.classify.outputs.participant_mode }}
+      controller_commit: ${{ needs.classify.outputs.controller_commit }}
       invocation_event_name: ${{ needs.classify.outputs.invocation_event_name }}
       invocation_source_kind: ${{ needs.classify.outputs.invocation_source_kind }}
       invocation_comment_id: ${{ needs.classify.outputs.invocation_comment_id }}

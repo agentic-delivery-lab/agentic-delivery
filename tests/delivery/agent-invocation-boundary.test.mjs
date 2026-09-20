@@ -162,7 +162,11 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
   assert.equal(dispatch.client_payload.source.comment_id, 7);
   assert.equal(dispatch.client_payload.actor.login, 'sjefsharp');
   assert.equal(dispatch.client_payload.body_digest.length, 64);
-  assert.equal(Object.keys(dispatch.client_payload).length, 10);
+  assert.deepEqual(dispatch.client_payload.controller, {
+    version: '0.2.0',
+    commit: 'b160ae8826330ce280c41108e9459550c399e8c6',
+  });
+  assert.equal(Object.keys(dispatch.client_payload).length, 11);
 });
 
 test('webhook forwards an enrolled issue lifecycle event without requiring an invocation mention', async () => {
@@ -326,6 +330,7 @@ test('central preflight resolves and revalidates the originating repository from
       actor: { login: 'sjefsharp', type: 'User' },
       hop: 0,
       body_digest: (await import('../../scripts/lib/agent-invocation.mjs')).bodyDigest(body),
+      controller: { version: '0.1.0', commit: '0123456789abcdef0123456789abcdef01234567' },
     },
   }));
   const baseEnv = {
@@ -348,9 +353,65 @@ test('central preflight resolves and revalidates the originating repository from
   assert.equal(accepted.sourceIssue, '12');
   assert.equal(accepted.participantMode, 'active');
   assert.equal(accepted.originRepository, originRepository);
+  const output = await readFile(outputPath, 'utf8');
+  assert.match(output, /controller_commit<<AGENT_INVOCATION_EOF\n0123456789abcdef0123456789abcdef01234567/);
   assert.ok(calls.every((url) => url.includes('/repos/' + originRepository + '/')));
   const normalizedEvent = JSON.parse(await readFile(accepted.normalizedPath, 'utf8'));
   assert.equal(normalizedEvent.repository.full_name, originRepository);
+});
+
+test('central preflight rejects a controller pin that differs from the participant registry', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-controller-pin-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const eventPath = path.join(root, 'event.json');
+  const originRepository = 'agentic-delivery-lab/service-a';
+  const originRepositoryId = '777777777';
+  const body = '@agentic-delivery-lab-invoker-7f3a continue';
+  const registry = parseParticipantRegistry({
+    version: 1,
+    organization: 'agentic-delivery-lab',
+    repositories: {
+      [originRepositoryId]: {
+        expectedFullName: originRepository,
+        mode: 'active',
+        controller: { version: '0.1.0', commit: '0123456789abcdef0123456789abcdef01234567' },
+        contracts: { eventEnvelope: 1, lifecycle: '1.0.0', stateMachine: '1.0.0', evidence: '1.0.0' },
+        configurationProfile: 'standard',
+        events: ['issue_comment'],
+        localIntegration: { workflowBundle: 'none', managedByApp: false },
+      },
+    },
+  });
+  await writeFile(eventPath, JSON.stringify({
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    client_payload: {
+      version: 1,
+      delivery_id: '42345678-1234-4234-8234-123456789012',
+      event: 'issue_comment',
+      action: 'created',
+      repository_id: originRepositoryId,
+      source: { kind: 'issue_comment', issue_number: 12, comment_id: 9, pull_request_number: null, review_id: null },
+      actor: { login: 'sjefsharp', type: 'User' },
+      hop: 0,
+      body_digest: (await import('../../scripts/lib/agent-invocation.mjs')).bodyDigest(body),
+      controller: { version: '0.2.0', commit: 'b160ae8826330ce280c41108e9459550c399e8c6' },
+    },
+  }));
+  await assert.rejects(
+    prepareAgentInvocation({
+      env: {
+        GH_TOKEN: 'token',
+        GITHUB_EVENT_PATH: eventPath,
+        GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+        GITHUB_OUTPUT: path.join(root, 'output'),
+        CODEX_DELIVERY_STATE_DIR: root,
+        RUNNER_TEMP: root,
+      },
+      fetchImpl: async () => { throw new Error('origin API must not be called'); },
+      participantRegistry: registry,
+    }),
+    /controller pin does not match the participant registry/,
+  );
 });
 
 test('central preflight accepts issue lifecycle envelopes without a comment', async (t) => {
