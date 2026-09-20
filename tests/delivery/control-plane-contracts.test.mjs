@@ -7,6 +7,7 @@ import { invocationEnvelope } from '../../scripts/lib/agent-invocation.mjs';
 import {
   CONTRACT_VERSIONS,
   assertEventEnvelope,
+  controllerPinMatchesRelease,
   validateControllerRelease,
   validateEventEnvelope,
 } from '../../scripts/lib/control-plane-contracts.mjs';
@@ -29,6 +30,24 @@ test('the checked-in controller release pins every enrolled participant', async 
   assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
   const validated = await validateReleaseManifest({ repositoryRoot });
   assert.equal(validated.commit, release.commit);
+  assert.equal(controllerPinMatchesRelease(release, {
+    controller: { version: '0.2.0', commit: release.commit },
+    contracts: release.contracts,
+  }), true);
+  assert.equal(controllerPinMatchesRelease(release, {
+    controller: { version: '0.1.0', commit: '8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99' },
+    contracts: release.contracts,
+  }), false);
+  const upgraded = structuredClone(release);
+  upgraded.compatibility.controllers.push({
+    version: '0.1.0',
+    commit: '8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99',
+    contracts: release.contracts,
+  });
+  assert.equal(controllerPinMatchesRelease(upgraded, {
+    controller: { version: '0.1.0', commit: '8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99' },
+    contracts: release.contracts,
+  }), true);
 });
 
 test('valid event envelopes are accepted before central execution', () => {

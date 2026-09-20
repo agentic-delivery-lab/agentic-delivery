@@ -136,8 +136,39 @@ export function validateControllerRelease(release) {
         addError(errors, `compatibility.${name}`, 'must use SemVer');
       }
     }
+    if (!Array.isArray(release.compatibility.controllers) || release.compatibility.controllers.length === 0) {
+      addError(errors, 'compatibility.controllers', 'must contain at least one supported controller pin');
+    } else {
+      const pins = new Set();
+      for (const [index, pin] of release.compatibility.controllers.entries()) {
+        if (!pin || typeof pin !== 'object' || Array.isArray(pin)) {
+          addError(errors, `compatibility.controllers.${index}`, 'must be an object');
+          continue;
+        }
+        if (typeof pin.version !== 'string' || !SEMVER.test(pin.version)) addError(errors, `compatibility.controllers.${index}.version`, 'must use SemVer');
+        if (typeof pin.commit !== 'string' || !SHA1.test(pin.commit)) addError(errors, `compatibility.controllers.${index}.commit`, 'must be a 40-character hexadecimal SHA');
+        const identity = `${pin.version}@${pin.commit}`;
+        if (pins.has(identity)) addError(errors, `compatibility.controllers.${index}`, 'duplicates a controller pin');
+        pins.add(identity);
+        const pinContracts = pin.contracts;
+        if (!pinContracts || typeof pinContracts !== 'object' || Array.isArray(pinContracts)) addError(errors, `compatibility.controllers.${index}.contracts`, 'must be an object');
+        else {
+          if (!Number.isInteger(pinContracts.eventEnvelope) || pinContracts.eventEnvelope < 1) addError(errors, `compatibility.controllers.${index}.contracts.eventEnvelope`, 'must be a positive integer');
+          for (const name of ['lifecycle', 'stateMachine', 'evidence']) if (typeof pinContracts[name] !== 'string' || !SEMVER.test(pinContracts[name])) addError(errors, `compatibility.controllers.${index}.contracts.${name}`, 'must use SemVer');
+        }
+      }
+    }
   }
   return { valid: errors.length === 0, errors };
+}
+
+export function controllerPinMatchesRelease(release, participant) {
+  const expected = participant?.controller;
+  const expectedContracts = participant?.contracts;
+  if (!expected || !expectedContracts || !release?.compatibility?.controllers) return false;
+  return release.compatibility.controllers.some((pin) => pin.version === expected.version
+    && pin.commit.toLowerCase() === String(expected.commit).toLowerCase()
+    && JSON.stringify(pin.contracts) === JSON.stringify(expectedContracts));
 }
 
 export { DELIVERY_ID, REPOSITORY_ID, SHA1, SHA256 };

@@ -12,10 +12,7 @@
     "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "contracts": { "$ref": "#/$defs/contracts" },
     "compatibility": {
-      "allOf": [
-        { "$ref": "#/$defs/contracts" },
-        { "description": "The oldest contract versions accepted by this release." }
-      ]
+      "$ref": "#/$defs/compatibility"
     }
   },
   "$defs": {
@@ -28,6 +25,31 @@
         "lifecycle": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
         "stateMachine": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
         "evidence": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" }
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventEnvelope", "lifecycle", "stateMachine", "evidence", "controllers"],
+      "properties": {
+        "eventEnvelope": { "type": "integer", "minimum": 1 },
+        "lifecycle": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+        "stateMachine": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+        "evidence": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+        "controllers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["version", "commit", "contracts"],
+            "properties": {
+              "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+              "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+              "contracts": { "$ref": "#/$defs/contracts" }
+            }
+          }
+        }
       }
     }
   }

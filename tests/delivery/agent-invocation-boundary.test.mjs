@@ -97,6 +97,23 @@ test('webhook filters untagged comments before creating a repository dispatch', 
   assert.equal(calls, 0);
 });
 
+test('webhook fails closed when the central controller repository is not configured', async () => {
+  const body = JSON.stringify({
+    action: 'created',
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    issue: { number: 44 },
+    comment: { id: 7, body: '@agentic-delivery-lab-invoker-7f3a continue', user: { login: 'sjefsharp', type: 'User' } },
+    sender: { login: 'sjefsharp', type: 'User' },
+  });
+  const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
+  const output = result();
+  await handleWebhook(request({ body, signature }), output, {
+    env: { AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret' },
+  });
+  assert.equal(output.statusCode, 500);
+  assert.match(output.body, /central controller repository is not configured/);
+});
+
 test('webhook rejects self-authored and unknown bot invocations', async () => {
   for (const login of ['agentic-delivery-lab-invoker-7f3a[bot]', 'unknown-automation[bot]']) {
     const payload = {
