@@ -21,21 +21,21 @@ import { prepareAgentInvocation } from '../../scripts/prepare-agent-invocation.m
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 
 test('the configured App actor and event catalog are deterministic', async () => {
-  assert.equal(AGENT_MENTION, '@agentic-delivery-bot');
-  assert.equal(AGENT_BOT_LOGIN, 'agentic-delivery-bot[bot]');
+  assert.equal(AGENT_MENTION, '@agentic-delivery-lab-invoker-7f3a');
+  assert.equal(AGENT_BOT_LOGIN, 'agentic-delivery-lab-invoker-7f3a[bot]');
   assert.deepEqual(validateActorCatalog(actorCatalog), { valid: true, errors: [] });
   assert.deepEqual(Object.keys(INVOCATION_EVENTS), ['issue_comment', 'pull_request_review', 'pull_request_review_comment']);
-  assert.ok((await readFile(path.join(repositoryRoot, '.github/agent-actors.json'), 'utf8')).includes('agentic-delivery-bot[bot]'));
+  assert.ok((await readFile(path.join(repositoryRoot, '.github/agent-actors.json'), 'utf8')).includes('agentic-delivery-lab-invoker-7f3a[bot]'));
 });
 
 test('only an explicit first visible line invokes the orchestrator', () => {
-  assert.equal(hasInvocationMention('@agentic-delivery-bot please continue'), true);
-  assert.equal(hasInvocationMention('\n\n@agentic-delivery-bot\nPlease continue'), true);
-  assert.equal(hasInvocationMention('> @agentic-delivery-bot please continue'), false);
-  assert.equal(hasInvocationMention('```\n@agentic-delivery-bot please continue\n```'), false);
-  assert.equal(hasInvocationMention('`@agentic-delivery-bot` please continue'), false);
-  assert.equal(hasInvocationMention('@agentic-delivery-bot-extra please continue'), false);
-  assert.equal(hasInvocationMention('@agentic-delivery-bot'), true);
+  assert.equal(hasInvocationMention('@agentic-delivery-lab-invoker-7f3a please continue'), true);
+  assert.equal(hasInvocationMention('\n\n@agentic-delivery-lab-invoker-7f3a\nPlease continue'), true);
+  assert.equal(hasInvocationMention('> @agentic-delivery-lab-invoker-7f3a please continue'), false);
+  assert.equal(hasInvocationMention('```\n@agentic-delivery-lab-invoker-7f3a please continue\n```'), false);
+  assert.equal(hasInvocationMention('`@agentic-delivery-lab-invoker-7f3a` please continue'), false);
+  assert.equal(hasInvocationMention('@agentic-delivery-lab-invoker-7f3a-extra please continue'), false);
+  assert.equal(hasInvocationMention('@agentic-delivery-lab-invoker-7f3a'), true);
 });
 
 test('webhook signatures and event actions require the supported contract', () => {
@@ -96,12 +96,12 @@ test('webhook filters untagged comments before creating a repository dispatch', 
 });
 
 test('webhook rejects self-authored and unknown bot invocations', async () => {
-  for (const login of ['agentic-delivery-bot[bot]', 'unknown-automation[bot]']) {
+  for (const login of ['agentic-delivery-lab-invoker-7f3a[bot]', 'unknown-automation[bot]']) {
     const payload = {
       action: 'created',
       repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 42 },
       issue: { number: 44 },
-      comment: { id: 7, body: '@agentic-delivery-bot continue', user: { login, type: 'Bot' } },
+      comment: { id: 7, body: '@agentic-delivery-lab-invoker-7f3a continue', user: { login, type: 'Bot' } },
       sender: { login, type: 'Bot' },
     };
     const body = JSON.stringify(payload);
@@ -121,7 +121,7 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
     action: 'created',
     repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 42 },
     issue: { number: 44 },
-    comment: { id: 7, body: '@agentic-delivery-bot please continue', user: { login: 'sjefsharp', type: 'User' } },
+    comment: { id: 7, body: '@agentic-delivery-lab-invoker-7f3a please continue', user: { login: 'sjefsharp', type: 'User' } },
     sender: { login: 'sjefsharp', type: 'User' },
   };
   const body = JSON.stringify(payload);
@@ -151,7 +151,7 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
   t.after(() => rm(root, { recursive: true, force: true }));
   const eventPath = path.join(root, 'event.json');
   const outputPath = path.join(root, 'output');
-  const body = '@agentic-delivery-bot resume the saved plan';
+  const body = '@agentic-delivery-lab-invoker-7f3a resume the saved plan';
   const deliveryId = '12345678-1234-4234-8234-123456789012';
   await writeFile(eventPath, JSON.stringify({
     repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 42 },

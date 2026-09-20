@@ -53,7 +53,7 @@ invoking an implementer.
 
 The direct `issue_comment` workflow trigger is removed. A supported issue or
 pull-request comment/review can enter through the explicit
-`@agentic-delivery-bot` invocation boundary after the
+`@agentic-delivery-lab-invoker-7f3a` invocation boundary after the
 GitHub App webhook and deterministic preflight validate its signature, actor,
 immutable conversation, source issue, and digest. The mention activates
 processing; it does not select the route. Every accepted invocation is
@@ -73,7 +73,7 @@ router still rechecks authorization before any state mutation.
 ## Conversation invocation operations
 
 The follow-up invocation boundary is implemented by the GitHub App named
-`Agentic Delivery Bot` and the production Vercel Function at the configured
+`Agentic Delivery Lab Invoker 7F3A` and the production Vercel Function at the configured
 webhook URL. Register only these App webhook events: `issue_comment`,
 `pull_request_review`, and `pull_request_review_comment`. Install the App only
 on repositories that it is authorized to operate.

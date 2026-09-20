@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "mention": "@agentic-delivery-bot",
-  "bot_login": "agentic-delivery-bot[bot]",
+  "mention": "@agentic-delivery-lab-invoker-7f3a",
+  "bot_login": "agentic-delivery-lab-invoker-7f3a[bot]",
   "human_permissions": ["write", "maintain", "admin"],
   "events": {
     "issue_comment": ["created", "edited"],
@@ -11,7 +11,7 @@
   "max_bot_hops": 1,
   "actors": [
     {
-      "login": "agentic-delivery-bot[bot]",
+      "login": "agentic-delivery-lab-invoker-7f3a[bot]",
       "kind": "orchestrator",
       "can_invoke": false,
       "reason": "The orchestrator must never invoke itself from its own output."

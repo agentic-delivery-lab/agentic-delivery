@@ -59,7 +59,7 @@ invocation boundary**, because it gives the repository an attributable
 identity, filters irrelevant comments before Actions work is queued, and
 preserves a deterministic handoff into the existing control plane.
 
-The registered activation mention is `@agentic-delivery-bot`. It is valid only
+The registered activation mention is `@agentic-delivery-lab-invoker-7f3a`. It is valid only
 when it starts the first actionable Markdown line. Mentions in blockquotes,
 inline code, fenced code, or examples are not activation requests. The
 webhook accepts the following event/action pairs:

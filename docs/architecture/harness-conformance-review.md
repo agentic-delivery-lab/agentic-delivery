@@ -227,7 +227,7 @@ organization provisioning and migration boundary.
 
 ADR-0017 adds a separate activation boundary for delivery requests expressed
 through GitHub conversation events. The versioned actor catalog in
-`.github/agent-actors.json` defines the `@agentic-delivery-bot` mention, the
+`.github/agent-actors.json` defines the `@agentic-delivery-lab-invoker-7f3a` mention, the
 supported issue and pull-request comment/review event pairs, repository
 permissions for human actors, and a one-hop limit for allowlisted automation
 actors. It does not grant the App permission to invoke itself, and the initial

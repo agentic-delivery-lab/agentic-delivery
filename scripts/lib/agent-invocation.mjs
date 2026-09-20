@@ -2,8 +2,8 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 export const INVOCATION_VERSION = 1;
-export const AGENT_MENTION = '@agentic-delivery-bot';
-export const AGENT_BOT_LOGIN = 'agentic-delivery-bot[bot]';
+export const AGENT_MENTION = '@agentic-delivery-lab-invoker-7f3a';
+export const AGENT_BOT_LOGIN = 'agentic-delivery-lab-invoker-7f3a[bot]';
 export const INVOCATION_EVENTS = Object.freeze({
   issue_comment: Object.freeze(['created', 'edited']),
   pull_request_review: Object.freeze(['submitted', 'edited']),
