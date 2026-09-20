@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/schemas/github-app-contract.v1.schema.json",
+  "title": "Agentic Delivery organization GitHub App contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "organization", "installation", "controller", "events", "permissions", "credentials", "tokenScopes"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "organization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["login", "id"],
+      "properties": {
+        "login": { "const": "agentic-delivery-lab" },
+        "id": { "type": "string", "pattern": "^[1-9][0-9]*$" }
+      }
+    },
+    "installation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["access", "idEnv"],
+      "properties": {
+        "access": { "const": "selected-repositories" },
+        "idEnv": { "const": "AGENTIC_DELIVERY_APP_INSTALLATION_ID" }
+      }
+    },
+    "controller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "idEnv"],
+      "properties": {
+        "repository": { "type": "string", "pattern": "^agentic-delivery-lab/[A-Za-z0-9_.-]+$" },
+        "idEnv": { "const": "AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID" }
+      }
+    },
+    "events": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issues", "issue_comment", "pull_request_review", "pull_request_review_comment"],
+      "properties": {
+        "issues": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "issue_comment": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "pull_request_review": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "pull_request_review_comment": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metadata", "contents", "issues", "pull_requests", "workflows"],
+      "properties": {
+        "metadata": { "const": "read" },
+        "contents": { "const": "write" },
+        "issues": { "const": "write" },
+        "pull_requests": { "const": "write" },
+        "workflows": { "const": "none" }
+      }
+    },
+    "credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["privateKey", "webhookSecret", "storage"],
+      "properties": {
+        "privateKey": { "const": "central-deployment-only" },
+        "webhookSecret": { "const": "central-gateway-only" },
+        "storage": { "const": "central-secret-store" }
+      }
+    },
+    "tokenScopes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["origin", "controller"],
+      "properties": {
+        "origin": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repositoryIds", "permissions"],
+          "properties": {
+            "repositoryIds": { "const": "origin-event-repository" },
+            "permissions": { "const": "read-minimum" }
+          }
+        },
+        "controller": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repositoryIds", "permissions"],
+          "properties": {
+            "repositoryIds": { "const": "controller-repository" },
+            "permissions": { "const": "contents-write-dispatch-only" }
+          }
+        }
+      }
+    }
+  }
+}
