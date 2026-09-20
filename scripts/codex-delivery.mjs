@@ -92,6 +92,13 @@ function commentId(value) {
   return id;
 }
 
+export function invocationSourceRoute({ sourceKind, sourceId, pullRequestNumber } = {}) {
+  const id = commentId(sourceId);
+  if (sourceKind === 'issue_comment' || sourceKind === 'pull_request_comment') return `/issues/comments/${id}`;
+  if (sourceKind === 'pull_request_review') return `/pulls/${commentId(pullRequestNumber)}/reviews/${id}`;
+  return `/pulls/comments/${id}`;
+}
+
 function canonicalSessionId(value) {
   if (typeof value !== 'string' || !SESSION_ID_PATTERN.test(value)) throw new Error('Codex session ID is invalid.');
   return value;
@@ -342,11 +349,11 @@ export async function deliver(env = process.env, dependencies = {}) {
   if (env.INVOCATION_EVENT === 'true') {
     const sourceKind = String(env.INVOCATION_SOURCE_KIND ?? '');
     const sourceId = commentId(env.INVOCATION_COMMENT_ID || env.INVOCATION_REVIEW_ID);
-    const route = sourceKind === 'issue_comment' || sourceKind === 'pull_request_comment'
-      ? `/issues/${sourceKind === 'pull_request_comment' ? commentId(env.INVOCATION_PULL_REQUEST_NUMBER) : issue}/comments/${sourceId}`
-      : sourceKind === 'pull_request_review'
-        ? `/pulls/${commentId(env.INVOCATION_PULL_REQUEST_NUMBER)}/reviews/${sourceId}`
-        : `/pulls/comments/${sourceId}`;
+    const route = invocationSourceRoute({
+      sourceKind,
+      sourceId,
+      pullRequestNumber: env.INVOCATION_PULL_REQUEST_NUMBER,
+    });
     const current = await api(route);
     const body = String(current?.body ?? '');
     if (env.INVOCATION_BODY_DIGEST && bodyDigest(body) !== env.INVOCATION_BODY_DIGEST) throw new Error('The invocation comment changed after preflight; start a new tagged invocation.');

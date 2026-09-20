@@ -5,13 +5,20 @@ import { promisify } from 'node:util';
 import { mkdtemp, readFile, writeFile, mkdir, rm, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { deliver } from '../../scripts/codex-delivery.mjs';
+import { deliver, invocationSourceRoute } from '../../scripts/codex-delivery.mjs';
 import { validatePullRequestBody } from '../../scripts/validate-pull-request-body.mjs';
 
 const exec = promisify(execFile);
 const plan = {status:'ready', kind:'requirements', summary:'Add the requested file.', plan:'Add result.txt and verify it.', tasks:['Add result.txt.'], questions:[], changeType:'feat', title:'feat: ✨ add requested file'};
 const SESSION_ID = '019fb023-24b8-7881-9119-509f078b610e';
 const REPLACEMENT_SESSION_ID = '019fb023-24b8-7881-9119-509f078b611f';
+
+test('uses the global GitHub issue-comment route for conversation comments', () => {
+  assert.equal(invocationSourceRoute({ sourceKind: 'issue_comment', sourceId: '7', pullRequestNumber: '44' }), '/issues/comments/7');
+  assert.equal(invocationSourceRoute({ sourceKind: 'pull_request_comment', sourceId: '7', pullRequestNumber: '44' }), '/issues/comments/7');
+  assert.equal(invocationSourceRoute({ sourceKind: 'pull_request_review', sourceId: '7', pullRequestNumber: '44' }), '/pulls/44/reviews/7');
+  assert.equal(invocationSourceRoute({ sourceKind: 'pull_request_review_comment', sourceId: '7', pullRequestNumber: '44' }), '/pulls/comments/7');
+});
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'codex-controller-'));
