@@ -51,3 +51,9 @@ test('rejects wildcard tools and secret-like publication content', async (t) => 
   const secret = await fixture(t, { secret: true });
   await assert.rejects(validatePublishedAgents({ publicationRoot: secret }), /secret or credential/);
 });
+
+test('rejects an agent file without a provenance record', async (t) => {
+  const root = await fixture(t);
+  await writeFile(path.join(root, 'agents/unlisted.agent.md'), '---\nname: unlisted\ndescription: Unlisted\ntools: [codebase]\n---\n');
+  await assert.rejects(validatePublishedAgents({ publicationRoot: root }), /not declared in provenance/);
+});

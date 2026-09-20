@@ -103,6 +103,17 @@ export async function validatePublishedAgents({ publicationRoot, allowedTools = 
       }
     }
   }
+  try {
+    const publishedEntries = await readdir(path.join(root, 'agents'), { withFileTypes: true });
+    for (const entry of publishedEntries) {
+      if (entry.isFile() && entry.name.endsWith('.agent.md')) {
+        const targetPath = `agents/${entry.name}`;
+        if (!paths.has(targetPath)) errors.push(`${targetPath} is not declared in provenance/agents.lock.json`);
+      }
+    }
+  } catch (error) {
+    errors.push(`agents directory cannot be read: ${error.message}`);
+  }
   checkSecrets(JSON.stringify(lock ?? {}), 'provenance/agents.lock.json', errors);
   if (errors.length > 0) throw new PublishedAgentValidationError(`${errors.map((error) => `Published-agent check: ${error}`).join('\n')}\nPublished-agent check failed with ${errors.length} error(s).`);
   return { agents: lock.agents.length, root };
