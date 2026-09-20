@@ -24,7 +24,7 @@ jobs:
           CONTROLLER_COMMIT: ${{ inputs.controller_commit }}
         run: |
           set -euo pipefail
-          test "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$
+          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
 
       - name: Check out the pinned Control Plane
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
