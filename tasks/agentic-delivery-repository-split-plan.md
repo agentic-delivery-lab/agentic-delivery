@@ -16,6 +16,32 @@ the approved migration slice. This keeps the plan from silently changing the
 meaning, lifecycle state, or completion criteria of the issue that requested
 its persistence.
 
+### Successor-issue handoff contract
+
+When implementation starts, create or identify a separate issue for one
+approved migration slice. That issue must:
+
+1. use `Refs #52` (not `Closes #52`) when linking the persisted plan;
+2. state the exact phase, repositories, artifact families, external changes,
+   compatibility bridge, deterministic checks, rollback, and completion
+   evidence in scope;
+3. name the architecture decision or explicitly state why the slice is
+   already covered by an approved decision;
+4. state which parts are deliberately out of scope, especially repository
+   creation, App installation, organization settings, `.github-private`
+   activation, and lifecycle-field mutation unless separately authorized;
+5. use its own issue type, lifecycle stage, delivery state/readiness, and
+   pull-request closure reference; and
+6. never redefine #52's completion criteria or close #52 as a side effect.
+
+The first implementation issue should be the hard architecture gate for
+organization-wide Control Plane ownership, participation, distribution, and
+versioning. Later issues may implement the approved extraction slices. A
+pull request for this planning issue may therefore contain only the persisted
+plan and deletion of superseded task documents; implementation commits belong
+to the separately authorized successor issue even when they are developed on
+the same local worktree.
+
 The source snapshots match the current default branches at these commits:
 
 - `agentic-delivery`: `8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`;
