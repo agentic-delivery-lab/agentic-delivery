@@ -63,7 +63,7 @@ async function currentSource({ event, envelope, api }) {
 async function currentComment({ envelope, api }) {
   const source = envelope.source ?? {};
   let item;
-  if (envelope.event === 'issue_comment') item = await api(`/issues/${source.issue_number}/comments/${source.comment_id}`);
+  if (envelope.event === 'issue_comment') item = await api(`/issues/comments/${source.comment_id}`);
   else if (envelope.event === 'pull_request_review') item = await api(`/pulls/${source.pull_request_number}/reviews/${source.review_id}`);
   else item = await api(`/pulls/comments/${source.comment_id}`);
   const body = String(item?.body ?? '');

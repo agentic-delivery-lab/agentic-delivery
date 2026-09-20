@@ -176,7 +176,7 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
     RUNNER_TEMP: root,
   };
   const fetchImpl = async (url) => {
-    if (url.endsWith('/issues/44/comments/7')) return response(200, { id: 7, body, user: { login: 'sjefsharp', type: 'User' }, author_association: 'OWNER' });
+    if (url.endsWith('/issues/comments/7')) return response(200, { id: 7, body, user: { login: 'sjefsharp', type: 'User' }, author_association: 'OWNER' });
     if (url.endsWith('/collaborators/sjefsharp/permission')) return response(200, { permission: 'write' });
     throw new Error(`Unexpected URL ${url}`);
   };
