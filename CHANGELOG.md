@@ -12,6 +12,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) decouples the delivery ingress and controller from the originating repository identity: enrolled repositories are resolved by numeric repository ID, central workflows normalize dispatch events, and issue/state/API/git operations use an origin-scoped GitHub App token.
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) keeps shadow participants read-only: central intake may evaluate a routed proposal and publish evidence, but skips lifecycle, issue-comment, native-type, and delivery execution mutations until explicit activation.
 
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) adds provisional ADR-0018, the organization-wide Control Plane ownership, selected-repository enrollment, signed event boundary, immutable controller pins, compatibility policy, credential boundary, upgrade path, and rollback contract required before the repository split.
 
