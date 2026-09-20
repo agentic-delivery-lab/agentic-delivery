@@ -186,6 +186,31 @@ test('central intake mints an origin-scoped App token instead of using the contr
   assert.ok(apiCalls.length > 0 && apiCalls.every((authorization) => authorization === 'Bearer origin-scoped-token'));
 });
 
+test('shadow participant intake evaluates routing without mutating origin issue state', async () => {
+  const origin = 'agentic-delivery-lab/service-a';
+  const fixture = apiFixture({
+    state: 'open', title: 'Task: shadow routing', body: 'Evaluate this route.',
+    labels: [{ name: 'type:task' }, { name: 'state:requirements' }],
+  }, 'write', [], origin);
+  const result = await classifyAndRoute({
+    env: {
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      ORIGIN_REPOSITORY: origin,
+      SOURCE_ISSUE: '17',
+      GH_TOKEN: 'token',
+      GITHUB_ACTOR: 'maintainer',
+      CONTROL_PLANE_MODE: 'shadow',
+    },
+    event: { action: 'edited', issue: {}, repository: { full_name: origin } },
+    fetchImpl: fixture.fetchImpl,
+    config,
+    reasonRoute: modelRoute('plan', 'task', 'ready-for-plan'),
+  });
+  assert.equal(result.route, 'plan');
+  assert.equal(result.metadata.shadow, true);
+  assert.equal(fixture.calls.some((call) => call.method === 'POST'), false);
+});
+
 test('classifies and hands off a ready issue only after metadata reconciliation and actor authorization', async () => {
   const fixture = apiFixture({
     state: 'open', title: 'Task: implement routing', body: 'Deliver the routing harness.',
