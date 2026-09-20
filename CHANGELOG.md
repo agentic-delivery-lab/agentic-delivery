@@ -11,6 +11,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) binds webhook envelopes to the configured organization, App installation, origin repository, and controller repository identities; dispatch tokens are narrowed independently and production replay protection fails closed without a durable claim store.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) decouples the delivery ingress and controller from the originating repository identity: enrolled repositories are resolved by numeric repository ID, central workflows normalize dispatch events, and issue/state/API/git operations use an origin-scoped GitHub App token.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) keeps shadow participants read-only: central intake may evaluate a routed proposal and publish evidence, but skips lifecycle, issue-comment, native-type, and delivery execution mutations until explicit activation.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) carries the participant's immutable controller commit through the signed dispatch envelope and checks out that revision for intake and delivery only after trusted bootstrap authorization and preflight, instead of executing payload-selected code before validation.
@@ -24,6 +25,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) adds a machine-validated organization GitHub App contract and a secret-free, SHA-pinned reusable consumer quality workflow; Distribution records separate workflow-source and Control-Plane release pins.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) adds the versioned participant registry, repository-ID enrollment checks, central-origin webhook/preflight contracts, scoped App-token tests, and multi-repository routing fixtures required for the first Control Plane migration slice.
 
 - [Issue #44](https://github.com/agentic-delivery-lab/agentic-delivery/issues/44) adds a tested pull-request-body check, an explicit Dependabot-only exemption, a versioned required-check ruleset, agent instructions, and a provisional architecture decision. The repository is now public; live ruleset activation remains an authorized post-merge operator step.
