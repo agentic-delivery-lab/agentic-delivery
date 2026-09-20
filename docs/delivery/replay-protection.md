@@ -45,3 +45,9 @@ Control-Plane repository ID (`AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID`).
 The origin token and dispatch token therefore have separate repository scopes;
 the App installation's broader selected-repository access is not exposed to
 either API call.
+
+The central Actions preflight repeats the installation and organization
+identity checks when those envelope fields and controller configuration are
+present, then resolves the origin full name from the numeric participant
+registry entry. A forged or misrouted dispatch therefore cannot redirect the
+run by changing only the readable repository name.

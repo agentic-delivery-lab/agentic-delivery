@@ -144,6 +144,15 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
     throw new Error('The dispatch repository full name does not match the participant registry.');
   }
   const appConfig = appConfiguration(env);
+  const configuredOrganizationId = env.AGENTIC_DELIVERY_ORGANIZATION_ID || env.CODEX_DELIVERY_ORGANIZATION_ID;
+  if (envelope.organization_id !== undefined && configuredOrganizationId !== undefined
+    && String(envelope.organization_id) !== String(configuredOrganizationId)) {
+    throw new Error('The dispatch organization identity does not match the controller configuration.');
+  }
+  if (envelope.installation_id !== undefined && appConfig.installationId !== undefined
+    && String(envelope.installation_id) !== String(appConfig.installationId)) {
+    throw new Error('The dispatch installation identity does not match the controller configuration.');
+  }
   const appProvider = appConfig.appId && appConfig.privateKey
     ? new GithubAppTokenProvider({
       repository: controllerRepository,
