@@ -22,9 +22,32 @@ const SOURCE_KINDS = new Set([
   'pull_request_review',
   'pull_request_review_comment',
 ]);
+const ARTIFACT_REPOSITORIES = Object.freeze({
+  architecture: 'agentic-delivery-lab/agentic-delivery-architecture',
+  primitives: 'agentic-delivery-lab/agentic-delivery-primitives',
+});
 
 function addError(errors, path, message) {
   errors.push(`${path} ${message}`);
+}
+
+function validateArtifactPin(pin, path, expectedRepository, errors) {
+  if (!pin || typeof pin !== 'object' || Array.isArray(pin)) {
+    addError(errors, path, 'must be an object');
+    return;
+  }
+  if (pin.repository !== expectedRepository) addError(errors, `${path}.repository`, `must be ${expectedRepository}`);
+  if (typeof pin.version !== 'string' || !SEMVER.test(pin.version)) addError(errors, `${path}.version`, 'must use SemVer');
+  if (typeof pin.commit !== 'string' || !SHA1.test(pin.commit)) addError(errors, `${path}.commit`, 'must be a 40-character hexadecimal SHA');
+  if (pin.contentSha256 !== null && (typeof pin.contentSha256 !== 'string' || !SHA256.test(pin.contentSha256))) addError(errors, `${path}.contentSha256`, 'must be a SHA-256 digest or null');
+}
+
+function validateDependencies(dependencies, path, errors) {
+  if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) {
+    addError(errors, path, 'must be an object');
+    return;
+  }
+  for (const [name, repository] of Object.entries(ARTIFACT_REPOSITORIES)) validateArtifactPin(dependencies[name], `${path}.${name}`, repository, errors);
 }
 
 function validIssueNumber(value) {
@@ -133,6 +156,7 @@ export function validateControllerRelease(release) {
       if (typeof contracts[name] !== 'string' || !SEMVER.test(contracts[name])) addError(errors, `contracts.${name}`, 'must use SemVer');
     }
   }
+  validateDependencies(release.dependencies, 'dependencies', errors);
   if (!release.compatibility || typeof release.compatibility !== 'object' || Array.isArray(release.compatibility)) {
     addError(errors, 'compatibility', 'must be an object');
   } else {
@@ -163,6 +187,7 @@ export function validateControllerRelease(release) {
           if (!Number.isInteger(pinContracts.eventEnvelope) || pinContracts.eventEnvelope < 1) addError(errors, `compatibility.controllers.${index}.contracts.eventEnvelope`, 'must be a positive integer');
           for (const name of ['lifecycle', 'stateMachine', 'evidence']) if (typeof pinContracts[name] !== 'string' || !SEMVER.test(pinContracts[name])) addError(errors, `compatibility.controllers.${index}.contracts.${name}`, 'must use SemVer');
         }
+        validateDependencies(pin.dependencies, `compatibility.controllers.${index}.dependencies`, errors);
       }
     }
   }
@@ -172,10 +197,12 @@ export function validateControllerRelease(release) {
 export function controllerPinMatchesRelease(release, participant) {
   const expected = participant?.controller;
   const expectedContracts = participant?.contracts;
+  const expectedDependencies = participant?.dependencies;
   if (!expected || !expectedContracts || !release?.compatibility?.controllers) return false;
   return release.compatibility.controllers.some((pin) => pin.version === expected.version
     && pin.commit.toLowerCase() === String(expected.commit).toLowerCase()
-    && JSON.stringify(pin.contracts) === JSON.stringify(expectedContracts));
+    && JSON.stringify(pin.contracts) === JSON.stringify(expectedContracts)
+    && JSON.stringify(pin.dependencies) === JSON.stringify(expectedDependencies));
 }
 
 export { DELIVERY_ID, REPOSITORY_ID, SHA1, SHA256 };
