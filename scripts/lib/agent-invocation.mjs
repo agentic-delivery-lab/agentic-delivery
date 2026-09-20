@@ -126,7 +126,7 @@ export function invocationBody(eventName, payload) {
   return payload?.comment?.body ?? '';
 }
 
-export function invocationEnvelope({ deliveryId, eventName, action, repositoryId, source, actor, body, hop = 0, parentDeliveryId = null, controller, receivedAt } = {}) {
+export function invocationEnvelope({ deliveryId, eventName, action, repositoryId, source, actor, body, hop = 0, parentDeliveryId = null, controller, receivedAt, organizationId, installationId, repositoryFullName } = {}) {
   return {
     version: INVOCATION_VERSION,
     delivery_id: String(deliveryId ?? ''),
@@ -139,6 +139,9 @@ export function invocationEnvelope({ deliveryId, eventName, action, repositoryId
     parent_delivery_id: parentDeliveryId,
     body_digest: bodyDigest(body),
     ...(receivedAt ? { received_at: String(receivedAt) } : {}),
+    ...(organizationId ? { organization_id: String(organizationId) } : {}),
+    ...(installationId ? { installation_id: String(installationId) } : {}),
+    ...(repositoryFullName ? { repository_full_name: String(repositoryFullName) } : {}),
     ...(controller ? { controller: { version: controller.version, commit: controller.commit } } : {}),
   };
 }

@@ -26,3 +26,13 @@ operation only.
 Replay markers contain only the installation/delivery key and expiry. They do
 not contain App private keys, installation tokens, issue bodies, or model
 output.
+
+The gateway also binds every supported event to the configured organization
+login, numeric organization ID, and App installation ID before it mints an
+origin-scoped token. The deployment defaults are the current
+`agentic-delivery-lab` organization (`327861320`) and installation
+(`163255060`); operators must verify these values against the live App
+installation and override them with `AGENTIC_DELIVERY_ORGANIZATION`,
+`AGENTIC_DELIVERY_ORGANIZATION_ID`, and `AGENTIC_DELIVERY_APP_INSTALLATION_ID`
+when rotating or promoting the deployment. A mismatched organization or
+installation is rejected before actor authorization or dispatch.

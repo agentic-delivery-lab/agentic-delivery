@@ -26,6 +26,9 @@ import { FileReplayStore, InMemoryReplayStore, claimDelivery, releaseDelivery } 
 export const config = { api: { bodyParser: false } };
 
 const API_VERSION = '2026-03-10';
+const DEFAULT_ORGANIZATION = 'agentic-delivery-lab';
+const DEFAULT_ORGANIZATION_ID = '327861320';
+const DEFAULT_INSTALLATION_ID = '163255060';
 const replayStores = new WeakMap();
 function header(req, name) {
   const value = req.headers?.[name] ?? req.headers?.[name.toLowerCase()];
@@ -53,9 +56,11 @@ function environment(env = process.env) {
   return {
     controllerRepository: env.AGENTIC_DELIVERY_CONTROLLER_REPOSITORY
       || env.AGENTIC_DELIVERY_REPOSITORY,
+    organization: env.AGENTIC_DELIVERY_ORGANIZATION || DEFAULT_ORGANIZATION,
+    organizationId: env.AGENTIC_DELIVERY_ORGANIZATION_ID || DEFAULT_ORGANIZATION_ID,
     appId: env.AGENTIC_DELIVERY_APP_ID || env.CODEX_DELIVERY_APP_ID,
     privateKey: env.AGENTIC_DELIVERY_APP_PRIVATE_KEY || env.CODEX_DELIVERY_APP_PRIVATE_KEY,
-    installationId: env.AGENTIC_DELIVERY_APP_INSTALLATION_ID || env.CODEX_DELIVERY_APP_INSTALLATION_ID,
+    installationId: env.AGENTIC_DELIVERY_APP_INSTALLATION_ID || env.CODEX_DELIVERY_APP_INSTALLATION_ID || DEFAULT_INSTALLATION_ID,
     webhookSecret: env.AGENTIC_DELIVERY_WEBHOOK_SECRET,
     replayStateDirectory: env.AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY,
     replayWindowMs: Number(env.AGENTIC_DELIVERY_REPLAY_WINDOW_MS || 300_000),
@@ -159,10 +164,14 @@ export async function handleWebhook(req, res, {
   const eventName = String(header(req, 'x-github-event') ?? '');
   const action = String(payload?.action ?? '');
   if (!invocationEventSupported(eventName, action)) return reply(res, 204);
-  if (!payload?.repository?.full_name || !payload?.repository?.id) return reply(res, 400, { error: 'Webhook repository identity is missing.' });
-  if (config.installationId && String(payload.installation?.id ?? '') !== String(config.installationId)) {
+  if (payload?.organization?.login !== config.organization
+    || String(payload.organization?.id ?? '') !== String(config.organizationId)) {
+    return reply(res, 403, { error: 'Webhook organization identity is not authorized.' });
+  }
+  if (String(payload.installation?.id ?? '') !== String(config.installationId)) {
     return reply(res, 403, { error: 'Webhook installation identity is not authorized.' });
   }
+  if (!payload?.repository?.full_name || !payload?.repository?.id) return reply(res, 400, { error: 'Webhook repository identity is missing.' });
 
   const body = invocationBody(eventName, payload);
   const issueLifecycleEvent = eventName === 'issues';
@@ -226,6 +235,9 @@ export async function handleWebhook(req, res, {
     parentDeliveryId: null,
     controller: participation.participant.controller,
     receivedAt: new Date(now()).toISOString(),
+    organizationId: config.organizationId,
+    installationId: config.installationId,
+    repositoryFullName: repository,
   });
   assertEventEnvelope(envelope);
   try {

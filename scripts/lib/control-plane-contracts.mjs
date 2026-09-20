@@ -124,6 +124,15 @@ export function validateEventEnvelope(envelope) {
   if (envelope.received_at !== undefined && !validateReceivedAt(envelope.received_at, { now: Date.parse(envelope.received_at) }).valid) {
     addError(errors, 'received_at', 'must be an RFC3339 timestamp');
   }
+  for (const name of ['organization_id', 'installation_id']) {
+    if (envelope[name] !== undefined && (typeof envelope[name] !== 'string' || !REPOSITORY_ID.test(envelope[name]))) {
+      addError(errors, name, 'must be a positive numeric identity');
+    }
+  }
+  if (envelope.repository_full_name !== undefined
+    && (typeof envelope.repository_full_name !== 'string' || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(envelope.repository_full_name))) {
+    addError(errors, 'repository_full_name', 'must be an owner/repository name');
+  }
   if (envelope.controller !== undefined) {
     if (!envelope.controller || typeof envelope.controller !== 'object' || Array.isArray(envelope.controller)) addError(errors, 'controller', 'must be an object');
     else {

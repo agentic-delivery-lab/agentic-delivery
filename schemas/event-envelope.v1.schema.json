@@ -54,6 +54,9 @@
     },
     "body_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "received_at": { "type": "string", "format": "date-time" },
+    "organization_id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "installation_id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "repository_full_name": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
     "controller": {
       "type": "object",
       "additionalProperties": false,
