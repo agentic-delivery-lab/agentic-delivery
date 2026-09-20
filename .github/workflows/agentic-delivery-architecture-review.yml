@@ -10,6 +10,10 @@ on:
         description: Immutable Architecture Authority commit to validate
         required: true
         type: string
+      affected_identifiers:
+        description: JSON array of architecture identifiers affected by this change
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -61,3 +65,27 @@ jobs:
         run: |
           pnpm --dir architecture install --frozen-lockfile --ignore-scripts
           pnpm --dir architecture architecture:check
+
+      - name: Create the immutable conformance request
+        env:
+          ARCHITECTURE_COMMIT: ${{ inputs.architecture_commit }}
+          AFFECTED_IDENTIFIERS: ${{ inputs.affected_identifiers }}
+          IMPLEMENTATION_COMMIT: ${{ github.sha }}
+          REQUEST_PATH: ${{ runner.temp }}/architecture-conformance-request.json
+        run: |
+          set -euo pipefail
+          REQUEST_PATH="$REQUEST_PATH" ARCHITECTURE_COMMIT="$ARCHITECTURE_COMMIT" AFFECTED_IDENTIFIERS="$AFFECTED_IDENTIFIERS" IMPLEMENTATION_COMMIT="$IMPLEMENTATION_COMMIT" node --input-type=module -e '
+            import { writeFileSync } from "node:fs";
+            const identifiers = JSON.parse(process.env.AFFECTED_IDENTIFIERS);
+            writeFileSync(process.env.REQUEST_PATH, JSON.stringify({
+              schemaVersion: 1,
+              architectureCommit: process.env.ARCHITECTURE_COMMIT,
+              implementationCommit: process.env.IMPLEMENTATION_COMMIT,
+              affectedIdentifiers: identifiers,
+            }) + "\\n");
+          '
+
+      - name: Validate the conformance request against the pinned Architecture
+        env:
+          ARCHITECTURE_COMMIT: ${{ inputs.architecture_commit }}
+        run: node architecture/tools/validate-conformance-request.mjs "$RUNNER_TEMP/architecture-conformance-request.json" "$ARCHITECTURE_COMMIT"
