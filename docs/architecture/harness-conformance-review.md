@@ -35,9 +35,12 @@ but no live branch rule has been verified on this review branch. Until an
 authorized maintainer activates it after merge, the branch rule remains policy
 plus post-event detection rather than an external prevention control.
 
-The current evidence supports one `agentic-delivery-governance` bounded
-context. The repository has technical components, but no conflicting domain
-meaning that requires a second context.
+The baseline evidence supported one `agentic-delivery-governance` bounded
+context. The provisional repository-split implementation now adds the
+`agentic-delivery-control-plane` context for organization-aware event intake,
+enrollment, versioned contracts and controlled write-back. The two contexts are
+transitional co-residents here and must be separated during extraction; their
+terms are not interchangeable.
 
 ## B. ADR evidence matrix
 
@@ -60,25 +63,28 @@ observation.
 | ADR-0011 Layered architecture review | Deterministic checks are the failure gate; semantic review is advisory and cites bounded evidence | review map, deterministic/semantic scripts, read-only workflow | `scripts/lib/architecture-review.mjs`; `scripts/lib/architecture-review-agent.mjs`; `.github/workflows/harness-architecture-review.yml`; architecture tests | No live review run or Codex session evidence is available | None found in the baseline | Runtime review results and human findings unavailable | deterministic plus semantic advisory | moderate | aligned for declared/encoded behavior; runtime unverified | keep and extend with generated traceability |
 | ADR-0012 GitHub lifecycle control plane | GitHub owns work state; Codex proposes; deterministic transition validation gates mutations; refinement and conditional child lineage are iterative; execution failures do not advance work state | lifecycle config, transition validator, refinement schema, controller state v3, coordination | `.github/issue-lifecycle.yml`; `scripts/lib/lifecycle-transitions.mjs`; `scripts/lib/codex-loop.mjs`; `scripts/codex-delivery.mjs`; lifecycle tests | No live issue or Actions run is available | Real GitHub labels, sub-issue linkage, and parent acceptance remain unobserved | End-to-end `boe` intake and child coordination | deterministic and policy; runtime unverified | strong for structural tests | provisional and awaiting review | keep on feature branch; verify after merge |
 | ADR-0013 Primitive-owned ADR traceability | Primitives reference ADRs/domains locally; reverse index is generated; required enforcement and deletion outcomes are deterministic | metadata parser, generated index, review checks | `scripts/lib/adr-traceability.mjs`; `scripts/generate-adr-primitive-index.mjs`; `docs/architecture/adr-primitive-index.json`; traceability tests | No independent index regeneration run in CI is available at the cutoff | None found in the provisional tree | PR deletion/remapping scenarios and semantic intent review | deterministic plus semantic policy | strong for local generation/tests | provisional and awaiting review | keep on feature branch; fail stale/dangling indexes |
-| ADR-0014 Repository-scoped GitHub App | App tokens are short-lived and least privilege; GITHUB_TOKEN remains default where sufficient; credentials never reach model tools | App provider, workflow secrets, publication boundary | `scripts/lib/github-app.mjs`; `.github/workflows/codex-delivery.yml`; `scripts/codex-delivery.mjs`; authentication tests | App installation and token refresh are unavailable in this environment | Legacy PAT compatibility remains in controller code but is not configured by workflows | Real installation permissions, rotation, event triggering, and revocation | deterministic security boundary; runtime unverified | moderate | provisional and awaiting installation smoke test | remove compatibility fallback after operational migration if desired |
+| ADR-0018 Organization-wide Control Plane distribution and versioning | One selected-repository App installation, explicit participant enrollment, short-lived origin-scoped tokens, immutable controller pins, and no credential access from model tools | App provider, workflow secrets, publication boundary, participant registry (planned) | `scripts/lib/github-app.mjs`; `.github/workflows/codex-delivery.yml`; `scripts/codex-delivery.mjs`; authentication tests | App installation, token refresh and two-repository routing are unavailable in this environment | Current webhook and workflows still contain repository-local coupling; decoupling is the next migration slice | Real installation permissions, rotation, event triggering, participant enrollment, upgrade and rollback | deterministic security boundary; runtime unverified | provisional and awaiting installation smoke test | implement generic repository identity and registry before architecture extraction |
 | ADR-0015 Isolated resumable runner execution | Per-issue state and per-run temporary tools/home; auth bridge is ephemeral; completion cleans sensitive execution material | controller path isolation, cleanup, state migration | `scripts/codex-delivery.mjs`; `scripts/lib/codex-client.mjs`; `docs/delivery/codex-workflow.md`; controller tests | No live runner process or retained state directory is available | Shared service login remains only as the protected source for a temporary auth bridge | Kill/retry cleanup and self-hosted smoke evidence | deterministic security boundary; runtime unverified | strong for focused tests | provisional and awaiting smoke test | keep on feature branch; inspect runner retention |
 
 ## C. Domain-model conformance review
 
-The register, guide, skill and structural validator correctly establish one
-bounded context and avoid a repository-wide forbidden-word scan. The existing
-validator proves YAML shape, duplicate detection, context references and
-`avoid` integrity. It does not prove that `scripts/codex-delivery.mjs`, issue
-comments, ADR prose, or test names use the registered meanings.
+The register, guide, skill and structural validator correctly establish two
+explicit transitional bounded contexts and avoid a repository-wide
+forbidden-word scan. The existing validator proves YAML shape, duplicate
+detection, context references and `avoid` integrity. It does not prove that
+`scripts/codex-delivery.mjs`, issue comments, ADR prose, or test names use the
+registered meanings.
 
 The core registered concepts are used consistently in the controller and
 delivery guide: source issue, implementation plan, delivery run, continuation
 state, `awaiting-human`, Codex session, budget boundary, waiting comment
 boundary, review pull request, provisional decision and official decision.
-The evidence review found two durable concepts introduced by the proposed
-review mechanism but absent from the register: `architecture conformance
-review` and `evidence contract`. They belong to the existing bounded context.
-No second bounded context is justified.
+The new Control Plane register adds `delivery controller`, `participating
+repository`, `enrollment`, `participant registry`, `event envelope`,
+`controller pin`, `contract version`, `shadow mode`, `controller release`,
+and `state-machine version`. Architecture conformance and evidence remain
+governance terms; the two contexts translate at the repository boundary rather
+than sharing an unbounded vocabulary.
 
 Semantic DDD evidence remains weak because live issue comments, historical
 session records and an independent reviewer are unavailable. The recurring

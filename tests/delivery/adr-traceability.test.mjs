@@ -19,7 +19,7 @@ test('generated traceability covers every active ADR and required enforcement', 
     index: (await import('../../docs/architecture/adr-primitive-index.json', { with: { type: 'json' } })).default,
     adrs,
     primitives,
-    domainIds: ['agentic-delivery-governance'],
+    domainIds: ['agentic-delivery-governance', 'agentic-delivery-control-plane'],
   });
   assert.equal(result.valid, true, result.errors.join('\n'));
 });

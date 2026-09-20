@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"github-app-token-provider","kind":"script","enforcement":"deterministic","adrs":["ADR-0014"],"domains":["agentic-delivery-governance"]}
+// agentic-primitive: {"id":"github-app-token-provider","kind":"script","enforcement":"deterministic","adrs":["ADR-0018"],"domains":["agentic-delivery-control-plane"]}
 import { createPrivateKey, createSign } from 'node:crypto';
 
 function base64url(value) {
