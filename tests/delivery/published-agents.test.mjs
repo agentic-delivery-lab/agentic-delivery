@@ -14,6 +14,8 @@ async function fixture(t, { secret = false, badTool = false } = {}) {
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(path.join(root, 'agents'), { recursive: true });
   await mkdir(path.join(root, 'provenance'), { recursive: true });
+  await mkdir(path.join(root, '.git'), { recursive: true });
+  await writeFile(path.join(root, '.gitignore'), '# repository-local credentials and caches\n');
   const tool = badTool ? "'*'" : 'codebase';
   const source = `---\nname: example-reviewer\ndescription: Read-only example reviewer\ntools: [${tool}]\n---\n\nReview the approved change.\n${secret ? 'token: ghp_12345678901234567890\n' : ''}`;
   await writeFile(path.join(root, 'agents/example-reviewer.agent.md'), source);
