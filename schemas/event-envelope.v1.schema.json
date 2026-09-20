@@ -53,6 +53,7 @@
       "pattern": "^[0-9a-f-]{20,}$"
     },
     "body_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "received_at": { "type": "string", "format": "date-time" },
     "controller": {
       "type": "object",
       "additionalProperties": false,

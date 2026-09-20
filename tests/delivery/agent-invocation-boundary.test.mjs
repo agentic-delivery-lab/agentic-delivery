@@ -18,6 +18,7 @@ import {
 import { handleWebhook } from '../../api/github/webhook.mjs';
 import { prepareAgentInvocation } from '../../scripts/prepare-agent-invocation.mjs';
 import { parseParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
+import { InMemoryReplayStore, validateReceivedAt } from '../../scripts/lib/replay-protection.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const testDependencies = {
@@ -180,7 +181,76 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
     version: '0.2.0',
     commit: 'b160ae8826330ce280c41108e9459550c399e8c6',
   });
-  assert.equal(Object.keys(dispatch.client_payload).length, 11);
+  assert.equal(Object.keys(dispatch.client_payload).length, 12);
+  assert.match(dispatch.client_payload.received_at, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test('webhook claims a delivery once and releases the claim when dispatch fails', async () => {
+  const replayStore = new InMemoryReplayStore();
+  const payload = {
+    action: 'created',
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    issue: { number: 44 },
+    comment: { id: 77, body: '@agentic-delivery-lab-invoker-7f3a continue', user: { login: 'sjefsharp', type: 'User' } },
+    sender: { login: 'sjefsharp', type: 'User' },
+  };
+  const body = JSON.stringify(payload);
+  const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
+  const env = {
+    AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
+    AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+  };
+  const requestFor = () => request({ body, signature, delivery: '98765432-1234-4234-8234-123456789012' });
+  const output = result();
+  let dispatches = 0;
+  await handleWebhook(requestFor(), output, {
+    env,
+    replayStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    fetchImpl: async (url) => {
+      if (url.includes('/permission')) return response(200, { permission: 'write' });
+      dispatches += 1;
+      return response(204);
+    },
+  });
+  assert.equal(output.statusCode, 202);
+  assert.equal(dispatches, 1);
+
+  const duplicate = result();
+  await handleWebhook(requestFor(), duplicate, {
+    env,
+    replayStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : (() => { throw new Error('duplicate must not dispatch'); })()),
+  });
+  assert.equal(duplicate.statusCode, 200);
+  assert.match(duplicate.body, /"duplicate":true/);
+
+  const failingStore = new InMemoryReplayStore();
+  await assert.rejects(handleWebhook(requestFor(), result(), {
+    env,
+    replayStore: failingStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    fetchImpl: async (url) => {
+      if (url.includes('/permission')) return response(200, { permission: 'write' });
+      return response(500);
+    },
+  }));
+  const retried = result();
+  await handleWebhook(requestFor(), retried, {
+    env,
+    replayStore: failingStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : response(204)),
+  });
+  assert.equal(retried.statusCode, 202);
+});
+
+test('received-at validation rejects stale and future event envelopes', () => {
+  const now = Date.parse('2026-09-21T12:00:00.000Z');
+  assert.equal(validateReceivedAt('2026-09-21T11:59:00.000Z', { now }).valid, true);
+  assert.equal(validateReceivedAt('2026-09-21T11:00:00.000Z', { now }).valid, false);
+  assert.equal(validateReceivedAt('2026-09-21T12:01:00.000Z', { now }).valid, false);
 });
 
 test('webhook forwards an enrolled issue lifecycle event without requiring an invocation mention', async () => {

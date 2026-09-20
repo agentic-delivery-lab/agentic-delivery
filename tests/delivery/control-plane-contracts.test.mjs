@@ -63,10 +63,27 @@ test('valid event envelopes are accepted before central execution', () => {
     source: { kind: 'issue_comment', issue_number: 44, pull_request_number: null, comment_id: 7, review_id: null },
     actor: { login: 'sjefsharp', type: 'User' },
     body: '@agentic-delivery-lab-invoker-7f3a continue',
+    receivedAt: '2026-09-21T12:00:00.000Z',
   });
   assert.deepEqual(validateEventEnvelope(envelope), { valid: true, errors: [] });
   assert.equal(assertEventEnvelope(envelope), envelope);
   assert.deepEqual(CONTRACT_VERSIONS, { eventEnvelope: 1, lifecycle: '1.0.0', stateMachine: '1.0.0', evidence: '1.0.0' });
+});
+
+test('event envelopes reject malformed gateway receipt timestamps', () => {
+  const envelope = invocationEnvelope({
+    deliveryId: '32345678-1234-4234-8234-123456789012',
+    eventName: 'issues',
+    action: 'opened',
+    repositoryId: '1358455028',
+    source: { kind: 'issue', issue_number: 44, pull_request_number: null, comment_id: null, review_id: null },
+    actor: { login: 'sjefsharp', type: 'User' },
+    body: 'A new issue',
+    receivedAt: 'not-a-timestamp',
+  });
+  const result = validateEventEnvelope(envelope);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => error.startsWith('received_at')));
 });
 
 test('pull-request review envelopes use the pull-request identity until source issue resolution', () => {
