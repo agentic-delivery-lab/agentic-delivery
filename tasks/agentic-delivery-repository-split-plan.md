@@ -93,9 +93,9 @@ repository.
 | Local slice | Evidence | Status boundary |
 | --- | --- | --- |
 | Generic Control Plane contracts and signed gateway | `config/`, `api/github/`, `scripts/lib/participant-registry.mjs`, `scripts/validate-multi-repository-acceptance.mjs` | Draft and shadow-only; no live App installation or mutation |
-| Pull-request observation path | `.github/workflows/agent-observation.yml`, `scripts/validate-observation-event.mjs`, draft24 release with draft23 bootstrap | Read-only observation; no lifecycle write-back or model execution |
+| Pull-request observation path | `.github/workflows/agent-observation.yml`, `scripts/validate-observation-event.mjs`, draft25 release with draft23 bootstrap | Read-only observation; no lifecycle write-back or model execution |
 | Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json` plus source maps | Local-prepared; no remote repository or publication claim |
-| Distribution/bootstrap | `agentic-delivery-distribution`, draft10 bundle, 7/7 tests | Opt-in fixture and PR projection; no consumer enrollment |
+| Distribution/bootstrap | `agentic-delivery-distribution`, draft11 bundle, 7/7 tests | Opt-in fixture and PR projection; no consumer enrollment |
 | Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
 
 The local checks supporting these slices are `pnpm control-plane:check`,
@@ -124,15 +124,19 @@ that a remote repository, branch protection, or organization access exists.
 
 The Control Plane gateway now requires both the App installation ID and the
 central controller repository ID from protected deployment configuration; it
-has no fallback for either identity. Current draft controller `0.2.0-draft.24`
-is pinned to `1c33a16b9a5a7e6480410c69bdda32648126eabc`; draft23 at
-`30197d5c8731ea6e682ae4de5e629b964e278aab` is the explicit rollback pin and
-also remains the trusted bootstrap commit for this release.
-The current controller pins Architecture draft `0.1.0-draft.4` at
-`61b2285334b5cff4ae2dba7875b132ad2a4a8502` and Primitive draft
-`0.1.0-draft.4` at `51e94992c5f39c59046f752e0cf6cff2ed3fff32`, including
-canonical content digests. The Distribution workflow source and the private
-publication validator are pinned to the immutable workflow-source commit
+has no fallback for either identity. Current draft controller `0.2.0-draft.25`
+is pinned to `81fa558aad0f998876bc29871080f2380b2c8582`; draft24 at
+`1c33a16b9a5a7e6480410c69bdda32648126eabc` remains the explicit rollback pin,
+while draft23 at `30197d5c8731ea6e682ae4de5e629b964e278aab` remains the trusted
+bootstrap commit for this release.
+The current controller pins Architecture draft `0.1.0-draft.5` at
+`2bfe92c8c641a2258d4393a37785c793d8a46c48` with digest
+`341bc5e446446af71893135eedb52b520c37162929f3ac6af2e74a494e6014ea`, and
+Primitive draft `0.1.0-draft.4` at
+`51e94992c5f39c59046f752e0cf6cff2ed3fff32` with its canonical digest. The
+Architecture release now self-validates its ADR/context IDs and conformance
+and tooling-lock digests. The Distribution workflow source and the private
+publication validator remain pinned to the immutable workflow-source commit
 `c3d0d2c7be0a68ca9d6ae83174f8ebae754826f4`; the private workflow does not
 receive central App credentials. This is still local, draft, and shadow-only;
 it does not activate a GitHub App or change any organization issue.
@@ -201,7 +205,7 @@ unchanged. This proves the bootstrap boundary does not claim or overwrite
 repository-specific CI; it does not claim that a live consumer workflow has
 run in GitHub.
 
-The Distribution draft10 bundle now emits structurally valid reusable-workflow
+The Distribution draft11 bundle now emits structurally valid reusable-workflow
 YAML, and its validator rejects malformed job indentation instead of checking
 only source pins. The Control Plane release-chain check also verifies that the
 immutable workflow-source commit contains the publication validator and both
