@@ -14,6 +14,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.14` at
+  `707a4a74c8d331f2400fffa2714f04b8a7d59b9b`, requiring the pinned
+  Architecture content digest in conformance requests and retaining draft13
+  and earlier controller pins for rollback.
+
 - The draft controller release advances to `0.2.0-draft.13` at
   `52e7a2092a1e7807ee091264a3dbbe97b8764593`, extending the offline
   multi-repository acceptance evidence through API, git, pull-request, and
