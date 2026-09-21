@@ -14,6 +14,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.15` at
+  `ce6a0144edeefbb8125962c06f70b9c9c91cde78`, pinning Primitive release
+  `0.1.0-draft.2` at `cfd86652d9f3a830c28d3dd40f6e762588c0af75` with its
+  canonical content digest while retaining draft14 and earlier rollback pins.
+
 - The draft controller release advances to `0.2.0-draft.14` at
   `707a4a74c8d331f2400fffa2714f04b8a7d59b9b`, requiring the pinned
   Architecture content digest in conformance requests and retaining draft13
