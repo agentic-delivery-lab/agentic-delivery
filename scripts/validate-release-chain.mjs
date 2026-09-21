@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -13,6 +14,10 @@ const execFileAsync = promisify(execFile);
 const SHA1 = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
 
 export class ReleaseChainValidationError extends Error {
   constructor(message, exitCode = 1) {
@@ -54,13 +59,25 @@ async function readTextAtCommit(repository, commit, relativePath) {
   }
 }
 
+async function readTextAtCommitRaw(repository, commit, relativePath) {
+  try {
+    return await gitRaw(repository, ['show', `${commit}:${relativePath}`]);
+  } catch (error) {
+    throw new ReleaseChainValidationError(`cannot read ${relativePath} at ${commit} in ${repository}: ${error.message}`);
+  }
+}
+
 async function git(repository, args) {
+  return (await gitRaw(repository, args)).trim();
+}
+
+async function gitRaw(repository, args) {
   try {
     return (await execFileAsync('git', ['-C', repository, ...args], {
       encoding: 'utf8',
       windowsHide: true,
       maxBuffer: 32 * 1024 * 1024,
-    })).stdout.trim();
+    })).stdout;
   } catch (error) {
     throw new ReleaseChainValidationError(`git ${args.join(' ')} failed in ${repository}: ${error.message}`, 2);
   }
@@ -183,6 +200,7 @@ export async function validateReleaseChain({
   );
   const bundle = await readJson(path.join(distributionRoot, 'manifests/workflow-bundle.json'));
   const sourceLock = await readJson(path.join(distributionRoot, 'manifests/sources.lock.json'));
+  const automationLock = await readJson(path.join(distributionRoot, 'manifests/automation-projections.lock.json'));
   const capabilities = await readJson(path.join(distributionRoot, 'manifests/capabilities.lock.json'));
   const plugin = await readJson(path.join(distributionRoot, 'packages/agent-plugin/plugin.json'));
   const privateLock = await readJson(path.join(privateRoot, 'provenance/agents.lock.json'));
@@ -298,6 +316,33 @@ export async function validateReleaseChain({
   equal(errors, 'Agent Plugin Architecture commit', plugin.generatedFrom?.architectureCommit, architectureDependency.commit);
   equal(errors, 'Agent Plugin Architecture digest', plugin.generatedFrom?.architectureContentSha256, architectureDependency.contentSha256);
   equal(errors, 'Agent Plugin Control Plane commit', plugin.generatedFrom?.controlPlaneCommit, controller.commit);
+  equal(errors, 'Automation projection canonical repository', automationLock.canonicalRepository, 'agentic-delivery-lab/agentic-delivery');
+  equal(errors, 'Automation projection source commit', automationLock.sourceCommit, controller.commit);
+  equal(errors, 'Automation projection repository', automationLock.projectionRepository, 'agentic-delivery-lab/agentic-delivery-distribution');
+  equal(errors, 'Agent Plugin automation source commit', plugin.generatedFrom?.automationSourceCommit, automationLock.sourceCommit);
+  const automationIds = new Set();
+  for (const [index, template] of (automationLock.templates ?? []).entries()) {
+    const prefix = `Automation projection ${index}`;
+    if (!template || typeof template !== 'object' || Array.isArray(template)) {
+      errors.push(`${prefix} must be an object`);
+      continue;
+    }
+    if (automationIds.has(template.id)) errors.push(`${prefix} duplicates id ${template.id}`);
+    automationIds.add(template.id);
+    if (!SHA1.test(template.sourceRef ?? '') || template.sourceRef !== automationLock.sourceCommit) errors.push(`${prefix} sourceRef must equal the immutable source commit`);
+    if (!SHA256.test(template.contentSha256 ?? '')) errors.push(`${prefix} contentSha256 must be a SHA-256 digest`);
+    if (typeof template.sourcePath !== 'string' || template.sourcePath.includes('..')) errors.push(`${prefix} sourcePath is unsafe`);
+    if (typeof template.targetPath !== 'string' || template.targetPath.includes('..') || !template.targetPath.startsWith('packages/agent-plugin/automations/')) errors.push(`${prefix} targetPath is unsafe`);
+    if (!SHA1.test(automationLock.sourceCommit ?? '')) continue;
+    try {
+      const source = await readTextAtCommitRaw(controlPlaneRoot, automationLock.sourceCommit, template.sourcePath);
+      const projection = await readText(path.join(distributionRoot, template.targetPath));
+      equal(errors, `${prefix} projection content`, projection, source);
+      equal(errors, `${prefix} source digest`, sha256(source), template.contentSha256);
+    } catch (error) {
+      errors.push(`${prefix} source/projection could not be reproduced: ${error.message}`);
+    }
+  }
 
   if (!issueIntakeWorkflow.includes(`ref: ${controller.bootstrapCommit}`)) errors.push('issue-intake bootstrap must pin the release bootstrap commit');
   if (/^\s*ref:\s*main\s*$/m.test(issueIntakeWorkflow)) errors.push('issue-intake must not check out a moving main ref');
@@ -328,7 +373,7 @@ export async function validateReleaseChain({
     primitives: { version: primitiveDependency.version, commit: primitiveDependency.commit, contentSha256: primitiveDependency.contentSha256 },
     primitiveSelection: { version: primitiveSelection.source.version, commit: primitiveSelection.source.commit, contentSha256: primitiveSelection.source.contentSha256 },
     eventCatalog: { version: eventCatalog.version },
-    distribution: { bundleVersion: bundle.bundleVersion, workflowCommit: bundle.workflowSource.commit },
+    distribution: { bundleVersion: bundle.bundleVersion, workflowCommit: bundle.workflowSource.commit, automationProjectionRelease: automationLock.projectionRelease },
     privatePublicationAgents: Array.isArray(privateLock.agents) ? privateLock.agents.length : 0,
   };
 }
