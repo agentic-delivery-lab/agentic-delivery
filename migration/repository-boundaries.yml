@@ -67,6 +67,7 @@ targets:
       - scripts/validate-main-history.mjs
       - scripts/validate-toolchain.mjs
       - migration/**
+      - automations/**
       - .github/agent-actors.json
       - .github/issue-metadata.yml
       - .github/orchestration-policy.yml
