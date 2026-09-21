@@ -2,6 +2,13 @@
 
 const EVENT_ROLES = new Set(['lifecycle-input', 'invocation-input', 'observation-input']);
 const EVENT_NAMES = ['issues', 'issue_comment', 'pull_request', 'pull_request_review', 'pull_request_review_comment'];
+const EXPECTED_ROLES = new Map([
+  ['issues', 'lifecycle-input'],
+  ['issue_comment', 'invocation-input'],
+  ['pull_request', 'observation-input'],
+  ['pull_request_review', 'invocation-input'],
+  ['pull_request_review_comment', 'invocation-input'],
+]);
 const ID = /^[a-z0-9_]+$/;
 const ACTION = /^[a-z0-9_]+$/;
 
@@ -27,6 +34,7 @@ export function validateEventCatalog(catalog) {
       continue;
     }
     if (!EVENT_ROLES.has(entry.role)) errors.push(`events.${eventName}.role is unsupported`);
+    else if (entry.role !== EXPECTED_ROLES.get(eventName)) errors.push(`events.${eventName}.role must be ${EXPECTED_ROLES.get(eventName)}`);
     const actions = list(entry.actions);
     if (!actions.length) errors.push(`events.${eventName}.actions must be non-empty`);
     if (new Set(actions).size !== actions.length) errors.push(`events.${eventName}.actions must be unique`);
