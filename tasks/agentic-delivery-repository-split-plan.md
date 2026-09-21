@@ -47,6 +47,41 @@ The source snapshots match the current default branches at these commits:
 - `agentic-delivery`: `8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`;
 - `.github`: `58316e9bbfa48a9288e9d022266d3c8a3b52cc96`.
 
+### Issue-creation safety gate
+
+This plan can change the scope and acceptance criteria of a future
+implementation issue, so the issue must not be opened from memory or from a
+moving branch. Before creating the successor issue:
+
+1. freeze this plan at an identified commit and put that commit in the issue;
+2. confirm that the issue is a successor to #52 and uses `Refs #52`, never
+   `Closes #52`;
+3. select one bounded migration slice, name its affected repositories and
+   files, and state the compatibility bridge, deterministic checks, rollback,
+   and explicit exclusions;
+4. include the hard organization-wide Control Plane gate when the slice can
+   affect lifecycle, routing, orchestration, App ingress, workflow
+   distribution, enrollment, or versioning; and
+5. obtain human confirmation of any visual/reference material that cannot be
+   independently retrieved by the implementation agent.
+
+The supplied ChatGPT share URL for the reference image currently resolves to
+an unauthenticated landing page for the available read-only browser, not to
+the image or its conversation contents. The plan therefore records the
+diagram concepts explicitly provided in the task and treats the image as
+unverified evidence. No successor issue may claim that the image was fully
+validated until an authorized reviewer confirms the image contents or supplies
+an accessible export. This is an evidence boundary, not permission to broaden
+the issue or to block the already persisted plan.
+
+The current open issue remains #52, whose only requested outcome is plan
+persistence and cleanup of superseded task documents. The local implementation
+work recorded below is not authorization to alter #52, create repositories,
+activate the App, change organization fields, or open a migration pull
+request. The first successor issue must explicitly state whether it consumes
+the image-reference confirmation or leaves that confirmation as a separate
+precondition.
+
 ### Local implementation progress
 
 The implementation branch has begun Phase 2 without activating any external
