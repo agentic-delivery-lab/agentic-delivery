@@ -96,7 +96,8 @@ The locally prepared Architecture Authority and Agentic Primitives extractions
 now also carry `migration/manifest.json`, a pinned `git-filter-repo` tool
 identity, and a complete `migration/source-commit-map.csv`. Their repository
 CI and tests validate that evidence before either target is considered for
-operator publication. The manifests remain `local-prepared`; they do not claim
+operator publication. The central boundary manifest records Architecture,
+Primitives, and Distribution as `local-prepared`; that status does not claim
 that a remote repository, branch protection, or organization access exists.
 
 The Control Plane gateway now requires both the App installation ID and the
