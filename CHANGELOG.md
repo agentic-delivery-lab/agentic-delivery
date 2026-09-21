@@ -9,6 +9,9 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Entries that reference issue #52 use it only as the persisted-plan context;
+they do not authorize migration, alter that issue's scope, or close it.
+
 ### Changed
 
 - The draft controller release advances to `0.2.0-draft.11` at
