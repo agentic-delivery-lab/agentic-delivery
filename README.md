@@ -38,6 +38,7 @@ pnpm traceability:check
 pnpm control-plane:check
 pnpm acceptance:check
 pnpm organization:inventory
+pnpm special-surfaces:check
 ```
 
 `pnpm acceptance:check` is an offline two-repository fixture matrix. It proves
