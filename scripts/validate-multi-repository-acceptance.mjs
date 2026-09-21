@@ -30,7 +30,7 @@ function secondParticipant(registry, first) {
     ...structuredClone(source),
     expectedFullName: SECOND_REPOSITORY,
     mode: 'active',
-    events: ['issues', 'issue_comment'],
+    events: ['issues', 'issue_comment', 'pull_request'],
     localIntegration: { workflowBundle: 'none', managedByApp: false },
   };
 }
@@ -98,6 +98,22 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
     });
     const envelopeResult = validateEventEnvelope(envelope);
     assertCondition(envelopeResult.valid, `${repository} envelope is invalid: ${envelopeResult.errors.join('; ')}`);
+    const pullRequestObservation = invocationEnvelope({
+      deliveryId: `9100000${index + 1}-1234-4234-8234-123456789012`,
+      eventName: 'pull_request',
+      action: 'synchronize',
+      repositoryId,
+      source: { kind: 'pull_request', issue_number: null, pull_request_number: 19, comment_id: null, review_id: null },
+      actor: { login: 'acceptance-contributor', type: 'User' },
+      body: 'A pull-request observation fixture.',
+      organizationId: '327861320',
+      installationId: '163255060',
+      repositoryFullName: repository,
+      receivedAt: '2026-09-21T12:00:00.000Z',
+    });
+    const pullRequestResult = validateEventEnvelope(pullRequestObservation);
+    assertCondition(pullRequestResult.valid, `${repository} pull-request observation is invalid: ${pullRequestResult.errors.join('; ')}`);
+    assertCondition(pullRequestObservation.source.kind === 'pull_request', `${repository} pull-request observation lost its source kind`);
     const normalized = normalizeOriginEvent({
       repository: { id: Number(first.repositoryId), full_name: controllerRepository },
       client_payload: envelope,
@@ -274,6 +290,7 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
       downstreamIdentity: 'passed',
       lifecycleIssueNamespace: 'passed',
       participationContract: 'passed',
+      pullRequestObservation: 'passed',
       lifecycleWriteback: 'passed',
       controllerUpgrade: 'passed',
       controllerRollback: 'passed',
