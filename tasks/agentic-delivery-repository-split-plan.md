@@ -113,7 +113,7 @@ These checks are evidence for implementation readiness, not evidence that the
 corresponding GitHub repositories, settings, App installation, or publication
 surface exist.
 
-The latest local regression evidence is: Control Plane `307/307` tests,
+The latest local regression evidence is: Control Plane `308/308` tests,
 Architecture `8/8`, Agentic Primitives `6/6`, Distribution `7/7`, and the
 private publication validator with zero projections. The Control Plane release
 chain suite includes the regression fixture that mutates a dependency
@@ -121,6 +121,11 @@ worktree tool and still requires the exact pinned tool source. All five prepared
 checkouts are clean after their local commits; the separate public `.github`
 checkout retains pre-existing user changes and is intentionally not modified
 by this migration work.
+
+The Control Plane now also carries scoped `AGENTS.md` instructions for App
+ingress, contract configuration, central workflows, runtime libraries, and
+migration evidence. The repository-audit test guards those boundaries so the
+legacy root guidance cannot silently become a second ownership model.
 
 The locally prepared Architecture Authority and Agentic Primitives extractions
 now also carry `migration/manifest.json`, a pinned `git-filter-repo` tool

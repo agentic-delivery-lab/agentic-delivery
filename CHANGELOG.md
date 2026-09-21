@@ -16,6 +16,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Control Plane ingress, contract configuration, workflows, runtime libraries,
+  and migration manifests now have scoped `AGENTS.md` boundaries so the
+  repository's generic lifecycle implementation remains distinct from
+  organization governance, architecture, and Primitive ownership.
+
 - The draft controller release advances to `0.2.0-draft.32` at
   `00f2daf3a02ea0ca5610d44d8b17aa3b8bb228eb`; runtime invocation,
   observation, and lifecycle route maps now derive from the canonical event
