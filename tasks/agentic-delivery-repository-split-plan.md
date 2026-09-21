@@ -102,14 +102,14 @@ that a remote repository, branch protection, or organization access exists.
 
 The Control Plane gateway now requires both the App installation ID and the
 central controller repository ID from protected deployment configuration; it
-has no fallback for either identity. Draft controller `0.2.0-draft.14` at
-`707a4a74c8d331f2400fffa2714f04b8a7d59b9b` and its
-Distribution/private validator projections pin the resulting immutable source
-chain, including Architecture commit
-`112a4163f7f8cb9142005568fb6270eef6df85cb` and its content digest. Draft13
-remains the explicit rollback pin. This is still local, draft, and
-shadow-only; it does not activate a GitHub App or change any organization
-issue.
+has no fallback for either identity. Draft controller `0.2.0-draft.15` at
+`ce6a0144edeefbb8125962c06f70b9c9c91cde78` pins Architecture commit
+`112a4163f7f8cb9142005568fb6270eef6df85cb` and Primitive release
+`0.1.0-draft.2` at `cfd86652d9f3a830c28d3dd40f6e762588c0af75`, including
+canonical content digests. Draft14 and earlier remain explicit rollback pins.
+The Distribution and private-validator projections use the same immutable
+chain. This is still local, draft, and shadow-only; it does not activate a
+GitHub App or change any organization issue.
 
 The gateway contract test also dispatches an enrolled second repository through
 an explicitly configured controller name and repository ID different from the
