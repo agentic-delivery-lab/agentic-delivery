@@ -1352,7 +1352,7 @@ must not depend on an external Kroki service.
 | delivery evidence schema | Control Plane `schemas/delivery-evidence.v1.schema.json` | Canonical executable evidence contract |
 | architecture review policy | Architecture `policies/conformance.yml` | Canonical conformance rules |
 | architecture review execution | Control Plane reusable workflow/controller | Pinned Architecture release |
-| global ADRs | Architecture `decisions/ADA-*` | History-filtered; legacy aliases retained |
+| global ADRs | Architecture top-level `decisions/<stable-ADR-id>-*.md` | History-filtered; historical numeric names remain where required, new records use `ADA-*`; legacy aliases retained |
 | local Codex/App/runner ADRs | Control Plane `docs/decisions/ADCP-*` | Repository-local engineering architecture |
 | `docs/delivery/**` | Control Plane `docs/operations/**` | Operational documentation |
 | `docs/domain/**` | Architecture `architecture/domain/**` | Canonical domain model; temporary old-path reference |
