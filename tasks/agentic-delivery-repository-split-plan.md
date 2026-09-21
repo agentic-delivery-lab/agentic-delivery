@@ -102,16 +102,17 @@ that a remote repository, branch protection, or organization access exists.
 
 The Control Plane gateway now requires both the App installation ID and the
 central controller repository ID from protected deployment configuration; it
-has no fallback for either identity. Draft controller `0.2.0-draft.20` at
-`213036f87776dcf75e349355ff7983ded476c42e` pins Architecture draft
-`0.1.0-draft.4` at `61b2285334b5cff4ae2dba7875b132ad2a4a8502` and Primitive
-draft `0.1.0-draft.4` at `51e94992c5f39c59046f752e0cf6cff2ed3fff32`, including
-canonical content digests. Draft19 and earlier remain explicit rollback pins.
-The Distribution workflow source is pinned to
-`c3bf78d51836be737eb069b4408f7b16f21c0877`, and the private publication
-validator is pinned to that same Control Plane source chain. This is still
-local, draft, and shadow-only; it does not activate a GitHub App or change any
-organization issue.
+has no fallback for either identity. Current draft controller `0.2.0-draft.22`
+is pinned to `ccbe92fffd41d0e5cdc906a170e74f2a723e7386`; draft21 at
+`9634a711ded35f54a69e4c361fc3369100d84290` is the explicit rollback pin.
+The current controller pins Architecture draft `0.1.0-draft.4` at
+`61b2285334b5cff4ae2dba7875b132ad2a4a8502` and Primitive draft
+`0.1.0-draft.4` at `51e94992c5f39c59046f752e0cf6cff2ed3fff32`, including
+canonical content digests. The Distribution workflow source and the private
+publication validator are pinned to the immutable workflow-source commit
+`c3d0d2c7be0a68ca9d6ae83174f8ebae754826f4`; the private workflow does not
+receive central App credentials. This is still local, draft, and shadow-only;
+it does not activate a GitHub App or change any organization issue.
 
 Distribution now also validates a schema-backed capabilities lock, includes
 the Primitive source in its source lock, and carries the Architecture content
