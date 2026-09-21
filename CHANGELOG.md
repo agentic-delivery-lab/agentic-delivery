@@ -36,6 +36,8 @@ they do not authorize migration, alter that issue's scope, or close it.
   publication workflow.
 - The same acceptance matrix now requires the private publication validator to
   use an immutable Control Plane pin and credential-free checkouts.
+- The same matrix now proves that App repository access and participant-registry
+  enrollment are both required, and that removing either condition fails closed.
 
 - The draft controller release advances to `0.2.0-draft.16` at
   `9e4ca88eb69a4df69067162d0fbc7100bd6cf691`, aligning Architecture draft

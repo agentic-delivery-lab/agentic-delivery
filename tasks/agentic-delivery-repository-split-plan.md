@@ -131,6 +131,9 @@ credentials in its publication workflow. Its repository ID remains a fixture
 until the private repository and App access are verified by an authorized
 operator. The matrix also requires the private validator to use the central
 Control Plane repository at an immutable SHA and credential-free checkouts.
+It now also proves both halves of the enrollment contract: selected App access
+and a matching participant-registry record; removing either fails closed before
+state mutation.
 
 The gateway contract test also dispatches an enrolled second repository through
 an explicitly configured controller name and repository ID different from the
