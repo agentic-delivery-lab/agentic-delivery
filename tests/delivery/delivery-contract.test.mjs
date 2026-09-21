@@ -27,7 +27,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     '.github/workflows/agent-observation.yml',
     'api/github/webhook.mjs', 'scripts/issue-intake.mjs', 'scripts/lib/agent-invocation.mjs', 'scripts/prepare-agent-invocation.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
     'scripts/lib/orchestration-policy.mjs', 'scripts/lib/primitive-selection.mjs', 'tests/helpers/organization-issue-forms.mjs',
-    'config/github-app-contract.json', 'config/event-catalog.yml', 'config/primitive-selection.yml', 'schemas/event-catalog.v1.schema.json', 'schemas/github-app-contract.v1.schema.json', 'schemas/primitive-selection.v1.schema.json', 'scripts/lib/event-catalog.mjs', 'scripts/validate-github-app-contract.mjs',
+    'config/github-app-contract.json', 'config/event-catalog.yml', 'config/primitive-selection.yml', 'schemas/event-catalog.v1.schema.json', 'schemas/github-app-contract.v1.schema.json', 'schemas/primitive-selection.v1.schema.json', 'schemas/github-inventory.v1.schema.json', 'scripts/lib/event-catalog.mjs', 'scripts/validate-github-app-contract.mjs',
     '.github/workflows/agentic-delivery-quality.yml',
     '.github/workflows/agentic-delivery-architecture-review.yml',
     'docs/delivery/operations/onboarding.md',

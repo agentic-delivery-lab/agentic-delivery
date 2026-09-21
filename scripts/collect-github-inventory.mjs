@@ -8,6 +8,7 @@ const execFileAsync = promisify(execFile);
 const ORGANIZATION = /^[A-Za-z0-9_.-]+$/;
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const API_VERSION = '2022-11-28';
+const SPECIAL_SURFACE_NAMES = ['.github', '.github-private'];
 
 export class GithubInventoryError extends Error {
   constructor(message, exitCode = 1) {
@@ -31,6 +32,19 @@ function endpointObserved(items) {
 
 function endpointUnavailable(error) {
   return { status: 'unavailable', reason: sanitize(error?.message ?? error) };
+}
+
+function errorText(error) {
+  return [
+    error?.message,
+    error?.stderr,
+    error?.cause?.message,
+    error?.cause?.stderr,
+  ].filter(Boolean).map((value) => sanitize(value)).join(' ');
+}
+
+function isNotFound(error) {
+  return /(?:\b404\b|not[ -]?found)/i.test(errorText(error));
 }
 
 function parseJson(stdout, label) {
@@ -157,6 +171,45 @@ async function observeRepository(repository, organization, run) {
   };
 }
 
+async function observeSpecialSurface(name, organization, run) {
+  const repository = `${organization}/${name}`;
+  const endpoint = `repos/${repository}`;
+  try {
+    const value = await getJson(endpoint, run);
+    return {
+      repository,
+      status: 'observed',
+      identity: {
+        id: value?.id == null ? null : String(value.id),
+        name: String(value?.name ?? name),
+      },
+      visibility: value?.visibility ?? (value?.private ? 'private' : null),
+      defaultBranch: value?.default_branch ?? null,
+      evidence: `GET ${endpoint} returned repository metadata.`,
+    };
+  } catch (error) {
+    const detail = errorText(error);
+    if (isNotFound(error)) {
+      return {
+        repository,
+        status: 'not-found-unverified',
+        identity: null,
+        visibility: null,
+        defaultBranch: null,
+        evidence: `GET ${endpoint} returned 404; the identity cannot distinguish absence from inaccessible private metadata.`,
+      };
+    }
+    return {
+      repository,
+      status: 'unavailable',
+      identity: null,
+      visibility: null,
+      defaultBranch: null,
+      evidence: `GET ${endpoint} was unavailable: ${detail}`,
+    };
+  }
+}
+
 const CAPABILITY_ENDPOINTS = {
   organizationActions: (organization) => `orgs/${organization}/actions/permissions`,
   organizationVariables: (organization) => `orgs/${organization}/actions/variables?per_page=100`,
@@ -223,6 +276,8 @@ export async function collectGithubInventory({ organization = 'agentic-delivery-
   const capabilities = {};
   for (const [id, endpoint] of Object.entries(CAPABILITY_ENDPOINTS)) capabilities[id] = await observeCapability(endpoint(organization), run);
   capabilities.projectsV2 = await observeProjectsV2(organization, run);
+  const specialSurfaces = [];
+  for (const name of SPECIAL_SURFACE_NAMES) specialSurfaces.push(await observeSpecialSurface(name, organization, run));
   const warnings = [];
   let organizationId = null;
   let organizationPlan = null;
@@ -241,6 +296,7 @@ export async function collectGithubInventory({ organization = 'agentic-delivery-
   }
   if (repositorySummaries.some((repository) => repository.status !== 'observed')) warnings.push('One or more repository sub-inventories were unavailable; absence must not be inferred from a permission error.');
   for (const [id, endpoint] of Object.entries(capabilities)) if (endpoint.status === 'unavailable') warnings.push(`Capability ${id} was not readable; treat it as an evidence gap, not as absence.`);
+  if (specialSurfaces.some((surface) => surface.status !== 'observed')) warnings.push('One or more GitHub special surfaces were not fully observed; a 404 or permission error is an evidence gap, not proof that the surface is absent.');
   return {
     schemaVersion: 1,
     organization: { login: organization, id: organizationId, plan: organizationPlan },
@@ -248,6 +304,7 @@ export async function collectGithubInventory({ organization = 'agentic-delivery-
     evidenceClass: 'live-read-only',
     readOnly: true,
     repositories: repositorySummaries,
+    specialSurfaces,
     capabilities,
     warnings,
   };

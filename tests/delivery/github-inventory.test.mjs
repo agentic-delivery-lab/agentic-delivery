@@ -20,6 +20,10 @@ function fakeRunner() {
         { id: 2, name: 'agentic-delivery', full_name: 'agentic-delivery-lab/agentic-delivery', visibility: 'public', default_branch: 'main', private: false },
       ]), stderr: '' };
     }
+    if (endpoint === 'repos/agentic-delivery-lab/.github') {
+      return { stdout: JSON.stringify({ id: 2, name: '.github', full_name: 'agentic-delivery-lab/.github', visibility: 'public', default_branch: 'main', private: false }), stderr: '' };
+    }
+    if (endpoint === 'repos/agentic-delivery-lab/.github-private') throw new Error('HTTP 404: Not Found');
     if (endpoint === 'orgs/agentic-delivery-lab') return { stdout: JSON.stringify({ id: 99, login: 'agentic-delivery-lab', plan: { name: 'free', private_repos: 0, collaborators: 2 } }), stderr: '' };
     if (endpoint.includes('/issues?')) return { stdout: JSON.stringify([{ number: 52, body: 'See agentic-delivery-lab/agentic-delivery#52', pull_request: undefined }]), stderr: '' };
     if (endpoint.includes('/pulls?')) return { stdout: JSON.stringify([{ number: 8, body: 'Related to https://github.com/agentic-delivery-lab/.github/issues/4', head: { ref: 'docs/issue-52-plan' }, base: { ref: 'main' } }]), stderr: '' };
@@ -41,6 +45,12 @@ test('collects a redacted, read-only organization inventory without persisting i
   assert.equal(report.organization.id, '99');
   assert.deepEqual(report.organization.plan, { name: 'free', privateRepositories: 0, collaborators: 2 });
   assert.deepEqual(report.repositories.map((repository) => repository.fullName), ['agentic-delivery-lab/.github', 'agentic-delivery-lab/agentic-delivery']);
+  assert.deepEqual(report.specialSurfaces.map((surface) => ({ repository: surface.repository, status: surface.status })), [
+    { repository: 'agentic-delivery-lab/.github', status: 'observed' },
+    { repository: 'agentic-delivery-lab/.github-private', status: 'not-found-unverified' },
+  ]);
+  assert.match(report.specialSurfaces[1].evidence, /cannot distinguish absence from inaccessible private metadata/);
+  assert.ok(report.warnings.some((warning) => warning.includes('special surfaces')));
   assert.equal(report.repositories[1].openIssues.items[0].number, 52);
   assert.equal(report.capabilities.projectsV2.items[0].fields[0].name, 'Lifecycle Stage');
   assert.equal(report.capabilities.projectsV2.items[0].views[0].layout, 'BOARD');
@@ -59,6 +69,19 @@ test('records capability permission gaps without treating them as absence', asyn
   const report = await collectGithubInventory({ run: wrapped });
   assert.equal(report.capabilities.copilotBilling.status, 'unavailable');
   assert.ok(report.warnings.some((warning) => warning.includes('copilotBilling')));
+});
+
+test('records a private special-surface permission error as unavailable', async () => {
+  const { run } = fakeRunner();
+  const wrapped = async (args) => {
+    if (args.at(-1) === 'repos/agentic-delivery-lab/.github-private') throw new Error('HTTP 403: Resource not accessible by integration');
+    return run(args);
+  };
+  const report = await collectGithubInventory({ run: wrapped });
+  const surface = report.specialSurfaces.find((item) => item.repository.endsWith('/.github-private'));
+  assert.equal(surface.status, 'unavailable');
+  assert.match(surface.evidence, /HTTP 403/);
+  assert.ok(report.warnings.some((warning) => warning.includes('special surfaces')));
 });
 
 test('rejects invalid organization names before invoking gh', async () => {
