@@ -224,6 +224,9 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
     const privateWorkflow = await readFile(privateWorkflowPath, 'utf8');
     assertCondition(!privateWorkflow.includes('APP_PRIVATE_KEY'), 'private publication validation must not receive the App private key');
     assertCondition(!privateWorkflow.includes('AGENTIC_DELIVERY_WEBHOOK_SECRET'), 'private publication validation must not receive the webhook secret');
+    assertCondition(/repository:\s*agentic-delivery-lab\/agentic-delivery\s*$/m.test(privateWorkflow), 'private publication validator must use the central Control Plane repository');
+    assertCondition(/ref:\s*[0-9a-f]{40}\s*$/m.test(privateWorkflow), 'private publication validator must pin an immutable Control Plane commit');
+    assertCondition((privateWorkflow.match(/persist-credentials:\s*false/g) ?? []).length >= 2, 'private publication checkouts must not retain credentials');
     privateSurface = { status: 'passed', workflow: '.github-private/.github/workflows/validate-published-agents.yml' };
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
