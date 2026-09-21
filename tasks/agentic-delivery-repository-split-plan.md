@@ -95,7 +95,7 @@ repository.
 | Generic Control Plane contracts and signed gateway | `config/`, `api/github/`, `scripts/lib/participant-registry.mjs`, `scripts/validate-multi-repository-acceptance.mjs` | Draft and shadow-only; no live App installation or mutation |
 | Pull-request observation path | `.github/workflows/agent-observation.yml`, `scripts/validate-observation-event.mjs`, draft24 release with draft23 bootstrap | Read-only observation; no lifecycle write-back or model execution |
 | Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json` plus source maps | Local-prepared; no remote repository or publication claim |
-| Distribution/bootstrap | `agentic-delivery-distribution`, draft9 bundle, 7/7 tests | Opt-in fixture and PR projection; no consumer enrollment |
+| Distribution/bootstrap | `agentic-delivery-distribution`, draft10 bundle, 7/7 tests | Opt-in fixture and PR projection; no consumer enrollment |
 | Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
 
 The local checks supporting these slices are `pnpm control-plane:check`,
