@@ -88,6 +88,8 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.ok(architectureReview.includes('workflow_call:'));
   assert.ok(architectureReview.includes('architecture_commit:'));
   assert.ok(architectureReview.includes('affected_identifiers:'));
+  assert.ok(architectureReview.includes('architecture-content-digest.mjs'));
+  assert.ok(architectureReview.includes('ARCHITECTURE_DIGEST'));
   assert.ok(architectureReview.includes('agentic-delivery-lab/agentic-delivery-architecture'));
   assert.ok(architectureReview.includes('validate-architecture-release.mjs'));
   assert.ok(architectureReview.includes('validate-conformance-request.mjs'));

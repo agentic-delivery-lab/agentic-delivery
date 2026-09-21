@@ -66,9 +66,20 @@ jobs:
           pnpm --dir architecture install --frozen-lockfile --ignore-scripts
           pnpm --dir architecture architecture:check
 
+      - name: Compute the immutable Architecture content digest
+        id: architecture-digest
+        env:
+          ARCHITECTURE_COMMIT: ${{ inputs.architecture_commit }}
+        run: |
+          set -euo pipefail
+          digest="$(node architecture/tools/architecture-content-digest.mjs architecture "$ARCHITECTURE_COMMIT")"
+          [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+          printf 'value=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+
       - name: Create the immutable conformance request
         env:
           ARCHITECTURE_COMMIT: ${{ inputs.architecture_commit }}
+          ARCHITECTURE_DIGEST: ${{ steps.architecture-digest.outputs.value }}
           AFFECTED_IDENTIFIERS: ${{ inputs.affected_identifiers }}
           IMPLEMENTATION_COMMIT: ${{ github.sha }}
           REQUEST_PATH: ${{ runner.temp }}/architecture-conformance-request.json
@@ -80,6 +91,7 @@ jobs:
             writeFileSync(process.env.REQUEST_PATH, JSON.stringify({
               schemaVersion: 1,
               architectureCommit: process.env.ARCHITECTURE_COMMIT,
+              architectureDigest: process.env.ARCHITECTURE_DIGEST,
               implementationCommit: process.env.IMPLEMENTATION_COMMIT,
               affectedIdentifiers: identifiers,
             }) + "\\n");
@@ -88,4 +100,5 @@ jobs:
       - name: Validate the conformance request against the pinned Architecture
         env:
           ARCHITECTURE_COMMIT: ${{ inputs.architecture_commit }}
-        run: node architecture/tools/validate-conformance-request.mjs "$RUNNER_TEMP/architecture-conformance-request.json" "$ARCHITECTURE_COMMIT"
+          ARCHITECTURE_DIGEST: ${{ steps.architecture-digest.outputs.value }}
+        run: node architecture/tools/validate-conformance-request.mjs "$RUNNER_TEMP/architecture-conformance-request.json" "$ARCHITECTURE_COMMIT" "$ARCHITECTURE_DIGEST"
