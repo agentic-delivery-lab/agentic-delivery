@@ -23,7 +23,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     '.agents/skills/delivery-workflow/agents/openai.yaml',
     '.github/workflows/delivery-quality.yml', '.github/workflows/issue-intake.yml',
     '.github/workflows/pull-request-body.yml', '.github/rulesets/require-pull-request-body.json',
-    '.github/workflows/codex-delivery.yml', '.github/workflows/agent-invocation.yml', 'config/agent-actors.json', 'config/participants.yml', '.github/issue-metadata.yml', '.github/orchestration-policy.yml',
+    '.github/workflows/codex-delivery.yml', '.github/workflows/agent-invocation.yml', 'config/agent-actors.json', 'config/participants.yml', 'config/issue-metadata.yml', 'config/orchestration-policy.yml',
     'api/github/webhook.mjs', 'scripts/issue-intake.mjs', 'scripts/lib/agent-invocation.mjs', 'scripts/prepare-agent-invocation.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
     'scripts/lib/orchestration-policy.mjs', 'tests/helpers/organization-issue-forms.mjs',
     'config/github-app-contract.json', 'schemas/github-app-contract.v1.schema.json', 'scripts/validate-github-app-contract.mjs',

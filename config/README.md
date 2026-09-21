@@ -8,12 +8,16 @@ Delivery Control Plane.
   versions, and local integration profiles.
 - `controller-release.json` defines the immutable controller release and its
   dependency pins.
+- `issue-metadata.yml` defines the native issue type, lifecycle stage, delivery
+  state/readiness compatibility contract, governance metadata, and field
+  transitions.
+- `orchestration-policy.yml` defines the versioned routing and execution
+  policy.
 - `github-app-contract.json` defines the organization App and credential
   boundary.
 
-The lifecycle and orchestration documents under `.github/` are retained as a
-read-only migration bridge until their split into `config/lifecycle.yml`,
-`config/issue-fields.yml`, and `config/orchestration-policy.yml` is approved
-and validated. They are not GitHub organization-default files: this repository
-is the Control Plane, while the separate public `.github` repository owns
-community-health defaults.
+These files are Control Plane configuration, not GitHub organization-default
+files. The separate public `.github` repository owns community-health
+defaults. Any future split of lifecycle and field definitions into separate
+files must preserve one authoritative executable contract and be introduced
+through a versioned migration.
