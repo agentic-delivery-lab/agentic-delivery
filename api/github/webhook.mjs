@@ -254,7 +254,10 @@ export async function handleWebhook(req, res, {
       token: controllerToken,
       route: '/dispatches',
       method: 'POST',
-      body: { event_type: 'agent_invocation', client_payload: envelope },
+      body: {
+        event_type: observationEvent ? 'agent_observation' : 'agent_invocation',
+        client_payload: envelope,
+      },
       fetchImpl,
     });
   } catch (error) {

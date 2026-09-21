@@ -58,6 +58,7 @@ targets:
       - scripts/lib/**
       - scripts/migrate-issue-metadata.mjs
       - scripts/prepare-agent-invocation.mjs
+      - scripts/validate-observation-event.mjs
       - scripts/run-delivery-tests.mjs
       - scripts/setup-runner-codex.mjs
       - scripts/start-issue-branch.mjs
