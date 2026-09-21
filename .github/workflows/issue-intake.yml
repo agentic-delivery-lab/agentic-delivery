@@ -10,6 +10,11 @@ on:
         required: false
         default: false
         type: boolean
+      controller_commit:
+        description: Immutable controller commit used when the event has no participant envelope
+        required: false
+        default: '30197d5c8731ea6e682ae4de5e629b964e278aab'
+        type: string
     secrets:
       CODEX_DELIVERY_APP_PRIVATE_KEY:
         required: true
@@ -28,6 +33,11 @@ on:
         required: false
         default: false
         type: boolean
+      controller_commit:
+        description: Immutable controller commit for this manual run
+        required: false
+        default: '30197d5c8731ea6e682ae4de5e629b964e278aab'
+        type: string
 
 permissions:
   contents: read
@@ -50,7 +60,8 @@ jobs:
       - name: Check out trusted authorization
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: main
+          # Bootstrap pin: config/controller-release.json bootstrapCommit.
+          ref: 30197d5c8731ea6e682ae4de5e629b964e278aab
           path: trusted-intake
           persist-credentials: false
 
@@ -85,7 +96,7 @@ jobs:
       origin_repository_id: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
       participant_mode: ${{ steps.invocation.outputs.participant_mode }}
       controller_version: ${{ steps.invocation.outputs.controller_version || github.event.client_payload.controller.version }}
-      controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit }}
+      controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '30197d5c8731ea6e682ae4de5e629b964e278aab' }}
       invocation_event_name: ${{ steps.invocation.outputs.invocation_event_name }}
       invocation_source_kind: ${{ steps.invocation.outputs.invocation_source_kind }}
       invocation_comment_id: ${{ steps.invocation.outputs.invocation_comment_id }}
@@ -100,7 +111,8 @@ jobs:
       - name: Check out trusted intake
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: main
+          # Bootstrap pin: config/controller-release.json bootstrapCommit.
+          ref: 30197d5c8731ea6e682ae4de5e629b964e278aab
           persist-credentials: false
 
       - name: Set up pnpm and Node.js
@@ -128,11 +140,19 @@ jobs:
         run: node scripts/prepare-agent-invocation.mjs
         working-directory: trusted-intake
 
+      - name: Validate the selected controller commit
+        if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
+        env:
+          CONTROLLER_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '30197d5c8731ea6e682ae4de5e629b964e278aab' }}
+        run: |
+          set -euo pipefail
+          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+
       - name: Check out the validated controller release
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || 'main' }}
+          ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '30197d5c8731ea6e682ae4de5e629b964e278aab' }}
           persist-credentials: false
 
       - name: Set up pinned Codex CLI
@@ -162,7 +182,7 @@ jobs:
           ORIGIN_REPOSITORY: ${{ steps.invocation.outputs.origin_repository || github.repository }}
           ORIGIN_REPOSITORY_ID: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
           CONTROL_PLANE_MODE: ${{ steps.invocation.outputs.participant_mode }}
-          CONTROL_PLANE_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit }}
+          CONTROL_PLANE_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '30197d5c8731ea6e682ae4de5e629b964e278aab' }}
         run: node scripts/issue-intake.mjs
 
   deliver:

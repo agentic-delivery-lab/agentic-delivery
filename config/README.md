@@ -6,8 +6,9 @@ Delivery Control Plane.
 - `agent-actors.json` defines the explicit conversation-invocation boundary.
 - `participants.yml` defines repository enrollment, controller pins, contract
   versions, and local integration profiles.
-- `controller-release.json` defines the immutable controller release and its
-  dependency pins.
+- `controller-release.json` defines the immutable controller release, its
+  dependency pins, and the exact bootstrap commit used before a participant
+  pin is trusted.
 - `issue-metadata.yml` defines the native issue type, lifecycle stage, delivery
   state/readiness compatibility contract, governance metadata, and field
   transitions.

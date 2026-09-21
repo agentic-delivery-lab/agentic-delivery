@@ -117,6 +117,8 @@ export async function validateReleaseChain({
   const privateLock = await readJson(path.join(privateRoot, 'provenance/agents.lock.json'));
   const privateSurface = parseRepositoryYaml(await readText(path.join(privateRoot, 'provenance/surface.yml')), path.join(privateRoot, 'provenance/surface.yml'));
   const privateWorkflow = await readText(path.join(privateRoot, '.github/workflows/validate-published-agents.yml'));
+  const issueIntakeWorkflow = await readText(path.join(controlPlaneRoot, '.github/workflows/issue-intake.yml'));
+  const codexDeliveryWorkflow = await readText(path.join(controlPlaneRoot, '.github/workflows/codex-delivery.yml'));
 
   if (!architectureDependency || !primitiveDependency) {
     throw new ReleaseChainValidationError(`release-chain check failed:\n${errors.join('\n')}`);
@@ -137,6 +139,7 @@ export async function validateReleaseChain({
   await assertCommit(architectureRoot, architectureDependency.commit, 'Architecture dependency commit', errors);
   await assertCommit(primitivesRoot, primitiveDependency.commit, 'Primitive dependency commit', errors);
   await assertCommit(controlPlaneRoot, controller.commit, 'Control Plane release commit', errors);
+  await assertCommit(controlPlaneRoot, controller.bootstrapCommit, 'Control Plane bootstrap commit', errors);
   await assertCommit(controlPlaneRoot, bundle.workflowSource?.commit, 'Distribution workflow source commit', errors);
   const architectureDigest = await digestWith(architectureRoot, 'tools/architecture-content-digest.mjs', architectureDependency.commit, 'Architecture', errors);
   const primitiveDigest = await digestWith(primitivesRoot, 'tools/primitive-content-digest.mjs', primitiveDependency.commit, 'Primitive', errors);
@@ -144,6 +147,7 @@ export async function validateReleaseChain({
   equal(errors, 'Primitive dependency digest', primitiveDigest, primitiveDependency.contentSha256);
 
   equal(errors, 'Distribution Control Plane commit', bundle.controlPlane?.commit, controller.commit);
+  equal(errors, 'Control Plane bootstrap commit', controller.bootstrapCommit, controller.commit);
   equal(errors, 'Distribution Architecture commit', bundle.architecture?.commit, architectureDependency.commit);
   equal(errors, 'Distribution Architecture digest', bundle.architecture?.contentSha256, architectureDependency.contentSha256);
   equal(errors, 'Distribution workflow repository', bundle.workflowSource?.repository, bundle.controlPlane?.repository);
@@ -166,6 +170,10 @@ export async function validateReleaseChain({
   equal(errors, 'Agent Plugin Architecture digest', plugin.generatedFrom?.architectureContentSha256, architectureDependency.contentSha256);
   equal(errors, 'Agent Plugin Control Plane commit', plugin.generatedFrom?.controlPlaneCommit, controller.commit);
 
+  if (!issueIntakeWorkflow.includes(`ref: ${controller.bootstrapCommit}`)) errors.push('issue-intake bootstrap must pin the release bootstrap commit');
+  if (/^\s*ref:\s*main\s*$/m.test(issueIntakeWorkflow)) errors.push('issue-intake must not check out a moving main ref');
+  if (codexDeliveryWorkflow.includes("|| 'main'")) errors.push('codex delivery must not fall back to a moving main ref');
+
   equal(errors, 'Private surface repository name', privateSurface.repositoryName, '.github-private');
   equal(errors, 'Private surface visibility', privateSurface.requiredVisibility, 'private');
   equal(errors, 'Private publication canonical repository', privateLock.canonicalRepository, primitiveDependency.repository);
@@ -186,7 +194,7 @@ export async function validateReleaseChain({
   if (errors.length > 0) throw new ReleaseChainValidationError(`release-chain check failed:\n${errors.join('\n')}`);
   return {
     status: 'passed',
-    controller: { version: controller.version, commit: controller.commit },
+    controller: { version: controller.version, commit: controller.commit, bootstrapCommit: controller.bootstrapCommit },
     architecture: { version: architectureDependency.version, commit: architectureDependency.commit, contentSha256: architectureDependency.contentSha256 },
     primitives: { version: primitiveDependency.version, commit: primitiveDependency.commit, contentSha256: primitiveDependency.contentSha256 },
     distribution: { bundleVersion: bundle.bundleVersion, workflowCommit: bundle.workflowSource.commit },
