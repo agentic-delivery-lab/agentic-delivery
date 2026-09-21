@@ -37,10 +37,11 @@
     "events": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["issues", "issue_comment", "pull_request_review", "pull_request_review_comment"],
+      "required": ["issues", "issue_comment", "pull_request", "pull_request_review", "pull_request_review_comment"],
       "properties": {
         "issues": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
         "issue_comment": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "pull_request": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
         "pull_request_review": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
         "pull_request_review_comment": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
       }

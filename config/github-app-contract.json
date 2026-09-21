@@ -16,6 +16,7 @@
   "events": {
     "issues": ["opened", "edited", "reopened", "typed", "untyped", "labeled", "unlabeled", "closed"],
     "issue_comment": ["created", "edited"],
+    "pull_request": ["opened", "edited", "synchronize", "reopened", "ready_for_review", "closed"],
     "pull_request_review": ["submitted", "edited"],
     "pull_request_review_comment": ["created", "edited"]
   },

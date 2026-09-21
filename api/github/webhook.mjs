@@ -9,7 +9,8 @@ import {
   actorEntry,
   invocationBody,
   invocationEnvelope,
-  invocationEventSupported,
+  observationEventSupported,
+  webhookEventSupported,
   hasInvocationMention,
   sourceFromWebhook,
   validateActorCatalog,
@@ -163,7 +164,7 @@ export async function handleWebhook(req, res, {
   try { payload = JSON.parse(raw.toString('utf8')); } catch { return reply(res, 400, { error: 'Webhook payload is not valid JSON.' }); }
   const eventName = String(header(req, 'x-github-event') ?? '');
   const action = String(payload?.action ?? '');
-  if (!invocationEventSupported(eventName, action)) return reply(res, 204);
+  if (!webhookEventSupported(eventName, action)) return reply(res, 204);
   if (payload?.organization?.login !== config.organization
     || String(payload.organization?.id ?? '') !== String(config.organizationId)) {
     return reply(res, 403, { error: 'Webhook organization identity is not authorized.' });
@@ -175,7 +176,8 @@ export async function handleWebhook(req, res, {
 
   const body = invocationBody(eventName, payload);
   const issueLifecycleEvent = eventName === 'issues';
-  if (!issueLifecycleEvent && !hasInvocationMention(body, AGENT_MENTION)) return reply(res, 204);
+  const observationEvent = observationEventSupported(eventName, action);
+  if (!issueLifecycleEvent && !observationEvent && !hasInvocationMention(body, AGENT_MENTION)) return reply(res, 204);
   const repository = String(payload.repository.full_name);
   const repositoryId = String(payload.repository.id);
   const deliveryId = header(req, 'x-github-delivery');
@@ -206,13 +208,15 @@ export async function handleWebhook(req, res, {
   });
   if (!participation.allowed) return reply(res, 403, { error: participation.reason });
   if (!participation.participant.events.includes(eventName)) return reply(res, 204);
-  const authorization = await actorIsAuthorized({
-    actor,
-    repository,
-    token: originToken,
-    config: { botLogin: AGENT_BOT_LOGIN, maxBotHops: actorCatalog.max_bot_hops },
-    fetchImpl,
-  });
+  const authorization = observationEvent
+    ? { allowed: true, kind: 'github-event', permission: 'event' }
+    : await actorIsAuthorized({
+      actor,
+      repository,
+      token: originToken,
+      config: { botLogin: AGENT_BOT_LOGIN, maxBotHops: actorCatalog.max_bot_hops },
+      fetchImpl,
+    });
   if (!authorization.allowed) return reply(res, 403, { error: authorization.reason });
 
   const activeReplayStore = replayStore ?? replayStoreFor(env, config);
