@@ -84,13 +84,28 @@ precondition.
 
 ### Local implementation progress
 
-The implementation branch has begun Phase 2 without activating any external
-GitHub surface: enrollment, release, and App contracts live under the Control
-Plane `config/` boundary, and the executable issue metadata and orchestration
-contracts now live at `config/issue-metadata.yml` and
-`config/orchestration-policy.yml`. This progress note records local state only;
-it does not change Issue #52's scope, lifecycle, or completion criteria, and it
-does not make the Control Plane active for any repository.
+The implementation branch has progressed through the local portions of Phases
+2, 3, 5, and 6 without activating any external GitHub surface. This progress
+note records local state only; it does not change Issue #52's scope, lifecycle,
+or completion criteria, and it does not make the Control Plane active for any
+repository.
+
+| Local slice | Evidence | Status boundary |
+| --- | --- | --- |
+| Generic Control Plane contracts and signed gateway | `config/`, `api/github/`, `scripts/lib/participant-registry.mjs`, `scripts/validate-multi-repository-acceptance.mjs` | Draft and shadow-only; no live App installation or mutation |
+| Pull-request observation path | `.github/workflows/agent-observation.yml`, `scripts/validate-observation-event.mjs`, draft23 release pin | Read-only observation; no lifecycle write-back or model execution |
+| Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json` plus source maps | Local-prepared; no remote repository or publication claim |
+| Distribution/bootstrap | `agentic-delivery-distribution`, draft8 bundle, 7/7 tests | Opt-in fixture and PR projection; no consumer enrollment |
+| Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
+
+The local checks supporting these slices are `pnpm control-plane:check`,
+`pnpm github-app:check`, `pnpm control-plane:boundary`,
+`pnpm acceptance:check`, `pnpm migration:check`, `pnpm traceability:check`,
+and the explicit-root `pnpm release-chain:check`. The Distribution checkout
+also runs `pnpm test`, including its repository-local CI isolation fixture.
+These checks are evidence for implementation readiness, not evidence that the
+corresponding GitHub repositories, settings, App installation, or publication
+surface exist.
 
 The locally prepared Architecture Authority and Agentic Primitives extractions
 now also carry `migration/manifest.json`, a pinned `git-filter-repo` tool
