@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -73,5 +73,34 @@ test('strict publication mode requires the GitHub-supported private surface', as
   await assert.rejects(
     validatePublishedAgents({ publicationRoot: incomplete, requireSurface: true }),
     /profile\/README\.md cannot be read/,
+  );
+});
+
+test('optionally reproduces a publication from the pinned Primitive source', async (t) => {
+  const publication = await fixture(t);
+  const primitiveRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-primitive-source-'));
+  t.after(() => rm(primitiveRoot, { recursive: true, force: true }));
+  await mkdir(path.join(primitiveRoot, 'agents/copilot'), { recursive: true });
+  await mkdir(path.join(primitiveRoot, 'manifests'), { recursive: true });
+  const source = `---\nname: example-reviewer\ndescription: Read-only example reviewer\ntools: [codebase]\n---\n\n<!-- agentic-primitive: {"id":"example-reviewer","kind":"agent","enforcement":"instructional","adrs":["ADR-0018"]} -->\n\nReview the approved change.\n`;
+  await writeFile(path.join(primitiveRoot, 'agents/copilot/example-reviewer.agent.md'), source);
+  await writeFile(path.join(primitiveRoot, 'manifests/primitive-release.json'), JSON.stringify({
+    schemaVersion: 1,
+    releaseId: 'urn:agentic-delivery:primitive-release:1.0.0',
+    sourceCommit: '0123456789abcdef0123456789abcdef01234567',
+    capabilityPolicyVersion: '1.0.0',
+  }));
+  await writeFile(path.join(publication, 'agents/example-reviewer.agent.md'), source);
+  const lockPath = path.join(publication, 'provenance/agents.lock.json');
+  const lock = JSON.parse(await readFile(lockPath, 'utf8'));
+  lock.agents[0].contentSha256 = sha256(source);
+  lock.agents[0].promotionRelease = 'urn:agentic-delivery:primitive-release:1.0.0';
+  lock.agents[0].toolPolicyVersion = '1.0.0';
+  await writeFile(lockPath, JSON.stringify(lock, null, 2));
+  assert.equal((await validatePublishedAgents({ publicationRoot: publication, primitiveRoot })).agents, 1);
+  await writeFile(path.join(publication, 'agents/example-reviewer.agent.md'), `${source}tampered\n`);
+  await assert.rejects(
+    validatePublishedAgents({ publicationRoot: publication, primitiveRoot }),
+    /canonical Primitive source/,
   );
 });

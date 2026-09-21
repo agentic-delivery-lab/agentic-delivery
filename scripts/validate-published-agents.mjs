@@ -39,6 +39,17 @@ function frontmatter(source, file) {
   return parseRepositoryYaml(lines.slice(1, closing).join('\n'), `${file} frontmatter`);
 }
 
+function primitiveMetadata(source, file) {
+  const marker = /<!--\s*agentic-primitive:\s*(\{[\s\S]*?\})\s*-->/u.exec(source);
+  if (!marker) throw new Error(`${file} must contain an agentic-primitive metadata block`);
+  let value;
+  try { value = JSON.parse(marker[1]); } catch (error) { throw new Error(`${file} primitive metadata is invalid JSON: ${error.message}`); }
+  const primitiveId = String(value.id ?? '').startsWith('urn:')
+    ? String(value.id)
+    : `urn:agentic-delivery:primitive:${String(value.id ?? '')}`;
+  return { ...value, primitiveId };
+}
+
 function checkSecrets(value, file, errors) {
   if (SECRET_PATTERNS.some((pattern) => pattern.test(value))) errors.push(`${file} contains a secret or credential-like value`);
 }
@@ -56,7 +67,41 @@ async function regularFile(filePath, label) {
   return readFile(filePath, 'utf8');
 }
 
-export async function validatePublishedAgents({ publicationRoot, allowedTools = ALLOWED_TOOLS, requireSurface = false } = {}) {
+async function loadPrimitiveSource({ primitiveRoot, errors }) {
+  const result = { release: null, agents: new Map() };
+  try {
+    result.release = JSON.parse(await regularFile(path.join(primitiveRoot, 'manifests/primitive-release.json'), 'Primitive release manifest'));
+    if (result.release.schemaVersion !== 1 || !SHA1.test(result.release.sourceCommit ?? '')) {
+      errors.push('Primitive release manifest must contain schemaVersion 1 and an immutable sourceCommit');
+    }
+  } catch (error) {
+    errors.push(`Primitive release manifest cannot be read: ${error.message}`);
+    return result;
+  }
+  let entries;
+  try { entries = await readdir(path.join(primitiveRoot, 'agents/copilot'), { withFileTypes: true }); }
+  catch (error) {
+    if (error.code !== 'ENOENT') errors.push(`Primitive agent source directory cannot be read: ${error.message}`);
+    return result;
+  }
+  for (const entry of entries.filter((item) => item.isFile() && item.name.endsWith('.agent.md')).sort((left, right) => left.name.localeCompare(right.name))) {
+    const sourcePath = `agents/copilot/${entry.name}`;
+    try {
+      const source = await regularFile(path.join(primitiveRoot, sourcePath), sourcePath);
+      const metadata = primitiveMetadata(source, sourcePath);
+      const parsed = frontmatter(source, sourcePath);
+      const agentId = String(parsed?.name ?? '');
+      if (!AGENT_ID.test(agentId)) throw new Error('frontmatter name must use lowercase kebab-case');
+      if (result.agents.has(agentId)) throw new Error(`duplicate canonical agent ${agentId}`);
+      result.agents.set(agentId, { sourcePath, source, agentId, metadata });
+    } catch (error) {
+      errors.push(`Primitive source ${sourcePath} cannot be read or parsed: ${error.message}`);
+    }
+  }
+  return result;
+}
+
+export async function validatePublishedAgents({ publicationRoot, primitiveRoot, allowedTools = ALLOWED_TOOLS, requireSurface = false } = {}) {
   const root = path.resolve(publicationRoot ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.github-private'));
   const errors = [];
   const entries = await directoryEntries(root);
@@ -87,6 +132,7 @@ export async function validatePublishedAgents({ publicationRoot, allowedTools = 
   if (!lock || lock.schemaVersion !== 1) errors.push('publication lock schemaVersion must be 1');
   if (lock?.canonicalRepository !== 'agentic-delivery-lab/agentic-delivery-primitives') errors.push('publication lock canonicalRepository must be Agentic Primitives');
   if (!Array.isArray(lock?.agents)) errors.push('publication lock agents must be an array');
+  const primitive = primitiveRoot ? await loadPrimitiveSource({ primitiveRoot: path.resolve(primitiveRoot), errors }) : null;
   const names = new Set();
   const paths = new Set();
   for (const [index, record] of (lock?.agents ?? []).entries()) {
@@ -108,6 +154,17 @@ export async function validatePublishedAgents({ publicationRoot, allowedTools = 
     if (typeof record.promotionRelease !== 'string' || !record.promotionRelease.trim()) errors.push(`${prefix}.promotionRelease must be non-empty`);
     if (typeof record.promotedAt !== 'string' || Number.isNaN(Date.parse(record.promotedAt))) errors.push(`${prefix}.promotedAt must be an RFC3339 timestamp`);
     if (!Array.isArray(record.compatibilityTargets) || record.compatibilityTargets.length === 0 || record.compatibilityTargets.some((target) => typeof target !== 'string' || !target.trim())) errors.push(`${prefix}.compatibilityTargets must be non-empty strings`);
+    if (primitive?.release) {
+      if (record.sourceCommit !== primitive.release.sourceCommit) errors.push(`${prefix}.sourceCommit must match the checked-out Primitive release sourceCommit`);
+      if (record.promotionRelease !== primitive.release.releaseId) errors.push(`${prefix}.promotionRelease must match the checked-out Primitive release`);
+      if (record.toolPolicyVersion !== primitive.release.capabilityPolicyVersion) errors.push(`${prefix}.toolPolicyVersion must match the checked-out Primitive capability policy`);
+      const canonical = primitive.agents.get(record.agentId);
+      if (!canonical) errors.push(`${prefix}.agentId has no canonical Primitive source file`);
+      else {
+        if (digest(canonical.source) !== String(record.contentSha256).toLowerCase()) errors.push(`${prefix}.contentSha256 does not match the canonical Primitive source`);
+        if (canonical.metadata.primitiveId !== record.primitiveId) errors.push(`${prefix}.primitiveId does not match the canonical Primitive metadata`);
+      }
+    }
     const target = path.join(root, record.targetPath ?? '');
     if (!target.startsWith(path.join(root, 'agents') + path.sep)) errors.push(`${prefix}.targetPath escapes agents/`);
     else {
@@ -123,6 +180,8 @@ export async function validatePublishedAgents({ publicationRoot, allowedTools = 
         for (const tool of metadata?.tools ?? []) {
           if (typeof tool !== 'string' || !allowedTools.has(tool) || tool.includes('*')) errors.push(`${record.targetPath} declares an unapproved tool: ${tool}`);
         }
+        const canonical = primitive?.agents.get(record.agentId);
+        if (canonical && source !== canonical.source) errors.push(`${record.targetPath} does not match the canonical Primitive source`);
       } catch (error) {
         errors.push(`${record.targetPath} cannot be read or parsed: ${error.message}`);
       }
@@ -148,8 +207,18 @@ const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === fileUR
 if (isMainModule) {
   try {
     const args = process.argv.slice(2);
-    const publicationRoot = args.find((arg) => !arg.startsWith('--'));
-    const result = await validatePublishedAgents({ publicationRoot, requireSurface: args.includes('--require-surface') });
+    let publicationRoot;
+    let primitiveRoot;
+    for (let index = 0; index < args.length; index += 1) {
+      const arg = args[index];
+      if (arg === '--require-surface') continue;
+      if (arg === '--primitive-root') {
+        primitiveRoot = args[++index];
+        continue;
+      }
+      if (!arg.startsWith('--') && publicationRoot === undefined) publicationRoot = arg;
+    }
+    const result = await validatePublishedAgents({ publicationRoot, primitiveRoot, requireSurface: args.includes('--require-surface') });
     process.stdout.write(`Published-agent check passed: ${result.agents} agent projection(s).\n`);
   } catch (error) {
     process.stderr.write(`${error.message}\n`);

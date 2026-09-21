@@ -54,6 +54,10 @@ test('the pinned workflow source contains the validator and reusable workflow en
     return;
   }
   await assert.doesNotReject(() => validateReleaseChain({ controlPlaneRoot: repositoryRoot, ...siblingRoots }));
+  const workflow = await readFile(path.join(siblingRoots.privateRoot, '.github/workflows/validate-published-agents.yml'), 'utf8');
+  assert.match(workflow, /agentic-delivery-primitives/);
+  assert.match(workflow, /steps\.provenance\.outputs\.source_commit/);
+  assert.match(workflow, /--primitive-root primitives/);
 });
 
 test('release-chain validation reads Architecture and Primitive manifests from their pinned commits', async (t) => {

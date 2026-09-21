@@ -140,6 +140,18 @@ function sourceById(sources, id) {
   return (sources ?? []).find((source) => source.id === id);
 }
 
+async function primitiveAgentAtCommit(repository, commit, agentId) {
+  const files = (await git(repository, ['ls-tree', '-r', '--name-only', commit, '--', 'agents/copilot']))
+    .split(/\r?\n/).filter((file) => file.endsWith('.agent.md'));
+  for (const file of files) {
+    const source = await readTextAtCommitRaw(repository, commit, file);
+    const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(source)?.[1] ?? '';
+    const name = /^name:\s*([a-z0-9]+(?:-[a-z0-9]+)*)\s*$/mu.exec(frontmatter)?.[1];
+    if (name === agentId) return { path: file, source };
+  }
+  return null;
+}
+
 /**
  * Validate the immutable release graph across the explicitly supplied
  * repositories. The paths are inputs to a release-coordination check; no
@@ -372,6 +384,28 @@ export async function validateReleaseChain({
     equal(errors, `${prefix} source ref`, agent.sourceRef, primitiveDependency.commit);
     equal(errors, `${prefix} promotion release`, agent.promotionRelease, primitiveRelease.releaseId);
     if (!SHA256.test(agent.contentSha256 ?? '')) errors.push(`${prefix} contentSha256 must be a SHA-256 digest`);
+    if (!/^agents\/[a-z0-9]+(?:-[a-z0-9-]*[a-z0-9])?\.agent\.md$/.test(String(agent.targetPath ?? ''))) {
+      errors.push(`${prefix} targetPath must identify a published .agent.md file`);
+      continue;
+    }
+    const canonicalAgent = SHA1.test(String(primitiveDependency.commit ?? ''))
+      ? await primitiveAgentAtCommit(primitivesRoot, primitiveDependency.commit, agent.agentId).catch((error) => {
+        errors.push(`${prefix} canonical Primitive source could not be enumerated: ${error.message}`);
+        return null;
+      })
+      : null;
+    if (!canonicalAgent) errors.push(`${prefix} canonical Primitive source for ${agent.agentId} is missing`);
+    if (SHA1.test(String(primitiveDependency.commit ?? '')) && SHA256.test(agent.contentSha256 ?? '')) {
+      try {
+        if (!canonicalAgent) throw new Error('canonical Primitive source is missing');
+        const canonical = canonicalAgent.source;
+        const projection = await readText(path.join(privateRoot, agent.targetPath));
+        equal(errors, `${prefix} source/projection content`, projection, canonical);
+        equal(errors, `${prefix} source digest`, sha256(canonical), agent.contentSha256);
+      } catch (error) {
+        errors.push(`${prefix} source/projection could not be reproduced: ${error.message}`);
+      }
+    }
   }
 
   if (errors.length > 0) throw new ReleaseChainValidationError(`release-chain check failed:\n${errors.join('\n')}`);
