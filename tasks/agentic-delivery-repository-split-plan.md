@@ -1096,13 +1096,27 @@ Controller release manifest:
 {
   "version": "1.2.0",
   "commit": "<sha>",
-  "eventEnvelopeVersions": [1],
-  "lifecycleVersions": ["1.0"],
-  "stateMachineVersions": ["1.0"],
-  "evidenceVersions": ["1.0"],
-  "primitiveCompatibility": ["1.x"],
-  "architectureCompatibility": ["1.x"],
-  "minimumBootstrapVersion": "1.0.0"
+  "contracts": {
+    "eventEnvelope": "1.0.0",
+    "lifecycle": "1.0.0",
+    "stateMachine": "1.0.0",
+    "evidence": "1.0.0"
+  },
+  "support": {
+    "eventEnvelopeVersions": [1],
+    "lifecycleVersions": ["1.0.0"],
+    "stateMachineVersions": ["1.0.0"],
+    "evidenceVersions": ["1.0.0"],
+    "primitiveCompatibility": ["1.x"],
+    "architectureCompatibility": ["1.x"],
+    "minimumBootstrapVersion": "1.0.0",
+    "policy": {
+      "supportWindowDays": 90,
+      "majorStrategy": "current-and-immediately-previous",
+      "preReleaseException": "no-previous-ga-major",
+      "securityRevocation": "fail-closed-with-incident"
+    }
+  }
 }
 ```
 
