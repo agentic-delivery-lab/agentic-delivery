@@ -7,8 +7,8 @@ repositories:
     expectedFullName: agentic-delivery-lab/agentic-delivery
     mode: shadow
     controller:
-      version: 0.2.0-draft.16
-      commit: 9e4ca88eb69a4df69067162d0fbc7100bd6cf691
+      version: 0.2.0-draft.17
+      commit: a788cd2eec8e92e9cad05530ed624fec80770f41
     contracts:
       eventEnvelope: 1
       lifecycle: 1.0.0
@@ -17,13 +17,13 @@ repositories:
     dependencies:
       architecture:
         repository: agentic-delivery-lab/agentic-delivery-architecture
-        version: 0.1.0-draft.3
-        commit: d4714c9489fb14824ef0967903d34a73c3e437fb
-        contentSha256: 0afe23f5dcf6a250940112d979e013fdc052a6372c41518aa757402d69099484
+        version: 0.1.0-draft.4
+        commit: 61b2285334b5cff4ae2dba7875b132ad2a4a8502
+        contentSha256: 8a5143f2a09e5324cf8fcb5cc9652a0c62b5562371c29bc869a6536aeab4f6d3
       primitives:
         repository: agentic-delivery-lab/agentic-delivery-primitives
-        version: 0.1.0-draft.3
-        commit: 8d99a4a7a7240a02090ab2ac81cdb7676b8a42ad
+        version: 0.1.0-draft.4
+        commit: 51e94992c5f39c59046f752e0cf6cff2ed3fff32
         contentSha256: 36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0
     configurationProfile: standard
     events:

@@ -14,6 +14,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.17` at
+  `a788cd2eec8e92e9cad05530ed624fec80770f41`, aligning Architecture draft
+  `0.1.0-draft.4` and Primitive draft `0.1.0-draft.4` with immutable content
+  digests while retaining draft16 and earlier rollback pins.
+
 - The offline organization acceptance matrix now exercises `.github-private`
   as an origin-event participant without placing central App credentials in its
   publication workflow.
