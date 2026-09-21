@@ -16,6 +16,10 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.31` at
+  `ba7a161b93f3f35849362139ee3a281318e9183c`, enforcing role semantics in
+  the organization event catalog; draft30 remains the explicit rollback pin.
+
 - The draft controller release advances to `0.2.0-draft.30` at
   `069475071cfa6b725446e8179ad1db164dc2d96e`, making the organization
   event/action catalog explicit and validating the GitHub App contract against
