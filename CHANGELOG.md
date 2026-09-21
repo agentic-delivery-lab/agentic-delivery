@@ -14,6 +14,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.20` at
+  `213036f87776dcf75e349355ff7983ded476c42e`, carrying the explicit
+  two-part enrollment fail-closed acceptance contract while retaining draft19
+  and earlier rollback pins.
+
 - The draft controller release advances to `0.2.0-draft.19` at
   `02b742c86f77700e8c787ae17f31959d22bbdf2e`, retaining the acyclic
   Architecture draft4 / Primitive draft4 release chain at immutable commits
