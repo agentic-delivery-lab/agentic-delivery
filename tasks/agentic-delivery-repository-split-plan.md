@@ -108,10 +108,10 @@ has no fallback for either identity. Draft controller `0.2.0-draft.18` at
 draft `0.1.0-draft.4` at `13acf15d7d2c5ed12b9158d57ff45fcce93d1a06`, including
 canonical content digests. Draft17 and earlier remain explicit rollback pins.
 The Distribution workflow source is pinned to
-`267484a7b2f1a232ce44951e70042981dad20301`, and the private publication
-validator uses that same source chain. This is still local, draft, and
-shadow-only; it does not activate a GitHub App or change any organization
-issue.
+`02b742c004a805ae6cddc8b27e18b0641e85b763`, and the private publication
+validator is pinned to that same Control Plane source chain. This is still
+local, draft, and shadow-only; it does not activate a GitHub App or change any
+organization issue.
 
 Distribution now also validates a schema-backed capabilities lock, includes
 the Primitive source in its source lock, and carries the Architecture content
