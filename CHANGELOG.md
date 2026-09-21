@@ -33,6 +33,10 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Added an offline two-repository acceptance matrix that proves shared
+  controller identity, isolated issue namespaces, compatibility rollback, and
+  the central App credential boundary without claiming live GitHub activation.
+
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) adds a machine-validated organization GitHub App contract and a secret-free, SHA-pinned reusable consumer quality workflow; Distribution records separate workflow-source and Control-Plane release pins.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) adds the versioned participant registry, repository-ID enrollment checks, central-origin webhook/preflight contracts, scoped App-token tests, and multi-repository routing fixtures required for the first Control Plane migration slice.
 

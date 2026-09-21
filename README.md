@@ -36,7 +36,15 @@ pnpm metadata:check
 pnpm migration:check
 pnpm traceability:check
 pnpm control-plane:check
+pnpm acceptance:check
 ```
+
+`pnpm acceptance:check` is an offline two-repository fixture matrix. It proves
+that one controller preserves origin repository identity, isolates equal issue
+numbers, retains an older compatible pin, and keeps App credentials central.
+It deliberately reports live GitHub App installation, webhook delivery,
+organization-field, and repository-local CI evidence as external checks; it
+does not imply that those operator surfaces are active.
 
 The organization App private key and webhook secrets belong only in the
 central deployment boundary. Participant onboarding, upgrades, rollback,
