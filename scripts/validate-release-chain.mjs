@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
+import { validatePrimitiveSelection } from './lib/primitive-selection.mjs';
 
 const execFileAsync = promisify(execFile);
 const SHA1 = /^[0-9a-f]{40}$/;
@@ -155,6 +156,24 @@ export async function validateReleaseChain({
       : await readText(path.join(architectureRoot, 'architecture/references/primitive-catalog.lock.yml')),
     path.join(architectureRoot, 'architecture/references/primitive-catalog.lock.yml'),
   );
+  const primitiveCatalog = parseRepositoryYaml(
+    primitiveDependency?.commit && SHA1.test(primitiveDependency.commit)
+      ? await readTextAtCommit(primitivesRoot, primitiveDependency.commit, 'manifests/primitive-catalog.yml')
+      : await readText(path.join(primitivesRoot, 'manifests/primitive-catalog.yml')),
+    path.join(primitivesRoot, 'manifests/primitive-catalog.yml'),
+  );
+  const primitiveSelection = parseRepositoryYaml(
+    controller.commit && SHA1.test(controller.commit)
+      ? await readTextAtCommit(controlPlaneRoot, controller.commit, 'config/primitive-selection.yml')
+      : await readText(path.join(controlPlaneRoot, 'config/primitive-selection.yml')),
+    path.join(controlPlaneRoot, 'config/primitive-selection.yml'),
+  );
+  const orchestrationPolicy = parseRepositoryYaml(
+    controller.commit && SHA1.test(controller.commit)
+      ? await readTextAtCommit(controlPlaneRoot, controller.commit, 'config/orchestration-policy.yml')
+      : await readText(path.join(controlPlaneRoot, 'config/orchestration-policy.yml')),
+    path.join(controlPlaneRoot, 'config/orchestration-policy.yml'),
+  );
   const bundle = await readJson(path.join(distributionRoot, 'manifests/workflow-bundle.json'));
   const sourceLock = await readJson(path.join(distributionRoot, 'manifests/sources.lock.json'));
   const capabilities = await readJson(path.join(distributionRoot, 'manifests/capabilities.lock.json'));
@@ -177,6 +196,17 @@ export async function validateReleaseChain({
   equal(errors, 'Primitive release version', primitiveRelease.version, primitiveDependency.version);
   equal(errors, 'Primitive release id', primitiveRelease.releaseId, `urn:agentic-delivery:primitive-release:${primitiveDependency.version}`);
   equal(errors, 'Primitive release digest', primitiveRelease.contentSha256, primitiveDependency.contentSha256);
+  const primitiveSelectionResult = validatePrimitiveSelection(primitiveSelection, {
+    policy: orchestrationPolicy,
+    primitiveCatalog,
+  });
+  if (!primitiveSelectionResult.valid) errors.push(...primitiveSelectionResult.errors.map((error) => `Primitive selection: ${error}`));
+  equal(errors, 'Primitive selection repository', primitiveSelection.source?.repository, primitiveDependency.repository);
+  equal(errors, 'Primitive selection release id', primitiveSelection.source?.releaseId, primitiveRelease.releaseId);
+  equal(errors, 'Primitive selection version', primitiveSelection.source?.version, primitiveDependency.version);
+  equal(errors, 'Primitive selection commit', primitiveSelection.source?.commit, primitiveDependency.commit);
+  equal(errors, 'Primitive selection digest', primitiveSelection.source?.contentSha256, primitiveDependency.contentSha256);
+  equal(errors, 'Primitive selection capability policy', primitiveSelection.source?.capabilityPolicyVersion, primitiveRelease.capabilityPolicyVersion);
   equal(errors, 'Architecture lock repository', primitiveLock.source?.repository, primitiveDependency.repository);
   equal(errors, 'Architecture lock release version', primitiveLock.source?.releaseVersion, primitiveDependency.version);
   equal(errors, 'Architecture lock source commit', primitiveLock.source?.sourceCommit, primitiveDependency.commit);
@@ -273,6 +303,7 @@ export async function validateReleaseChain({
     controller: { version: controller.version, commit: controller.commit, bootstrapCommit: controller.bootstrapCommit },
     architecture: { version: architectureDependency.version, commit: architectureDependency.commit, contentSha256: architectureDependency.contentSha256 },
     primitives: { version: primitiveDependency.version, commit: primitiveDependency.commit, contentSha256: primitiveDependency.contentSha256 },
+    primitiveSelection: { version: primitiveSelection.source.version, commit: primitiveSelection.source.commit, contentSha256: primitiveSelection.source.contentSha256 },
     distribution: { bundleVersion: bundle.bundleVersion, workflowCommit: bundle.workflowSource.commit },
     privatePublicationAgents: Array.isArray(privateLock.agents) ? privateLock.agents.length : 0,
   };
