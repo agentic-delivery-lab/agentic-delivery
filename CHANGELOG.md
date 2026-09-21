@@ -53,6 +53,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) runs the central intake preflight from its checked-out trusted controller path, so dependency installation and explicit invocation normalization do not execute from an empty Actions workspace.
+
 - [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) corrects conversation-comment revalidation to use GitHub's global issue-comment endpoint, allowing a tagged invocation to pass preflight and continue into the delivery controller.
 
 - [Issue #47](https://github.com/agentic-delivery-lab/agentic-delivery/issues/47) pins the native issue-field GraphQL control plane to GitHub API version `2026-03-10`, so live Lifecycle Stage and Delivery Readiness fields are not hidden by an older schema version.
