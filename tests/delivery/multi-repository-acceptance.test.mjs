@@ -18,4 +18,10 @@ test('offline organization acceptance matrix keeps two repositories on one contr
   assert.equal(report.checks.controllerUpgrade, 'passed');
   assert.equal(report.checks.controllerRollback, 'passed');
   assert.equal(report.checks.centralCredentialBoundary, 'passed');
+  assert.equal(report.checks.privateIssueParticipation, 'passed');
+  assert.deepEqual(report.privateSurface.participant, {
+    repositoryId: '900000002',
+    repository: 'agentic-delivery-lab/.github-private',
+    stateNamespace: '900000002/17',
+  });
 });

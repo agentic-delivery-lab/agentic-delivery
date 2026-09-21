@@ -12,6 +12,8 @@ import { reconcileFields } from './issue-intake.mjs';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECOND_REPOSITORY_ID = '900000001';
 const SECOND_REPOSITORY = 'agentic-delivery-lab/acceptance-service';
+const PRIVATE_REPOSITORY_ID = '900000002';
+const PRIVATE_REPOSITORY = 'agentic-delivery-lab/.github-private';
 const ISSUE_NUMBER = 17;
 
 function assertCondition(condition, message) {
@@ -190,6 +192,32 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
   assertCondition(appContract.tokenScopes?.controller?.repositoryIds === 'controller-repository', 'controller token must be controller-scoped');
   assertCondition(appContract.permissions?.workflows === 'none', 'App workflow permission must remain disabled');
 
+  // Exercise the private special-repository boundary as an ordinary
+  // origin-event participant without supplying its workflow with central App
+  // credentials. This is an offline fixture only; the real repository ID and
+  // App installation access still require operator verification.
+  const privateEnvelope = acceptanceEnvelope({
+    repositoryId: PRIVATE_REPOSITORY_ID,
+    repository: PRIVATE_REPOSITORY,
+    delivery: '90000003-1234-4234-8234-123456789012',
+  });
+  const privateEnvelopeResult = validateEventEnvelope(privateEnvelope);
+  assertCondition(privateEnvelopeResult.valid, `private surface envelope is invalid: ${privateEnvelopeResult.errors.join('; ')}`);
+  const privateNormalized = normalizeOriginEvent({
+    repository: { id: Number(first.repositoryId), full_name: controllerRepository },
+    client_payload: privateEnvelope,
+  }, { ORIGIN_REPOSITORY: PRIVATE_REPOSITORY, ORIGIN_REPOSITORY_ID: PRIVATE_REPOSITORY_ID });
+  const privateContext = intakeEvent(privateNormalized, {
+    SOURCE_ISSUE: String(ISSUE_NUMBER),
+    GITHUB_REPOSITORY: controllerRepository,
+    ORIGIN_REPOSITORY: PRIVATE_REPOSITORY,
+    ORIGIN_REPOSITORY_ID: PRIVATE_REPOSITORY_ID,
+    GITHUB_EVENT_NAME: 'issues',
+    GITHUB_ACTOR: 'acceptance-owner',
+  });
+  assertCondition(privateContext.repository === PRIVATE_REPOSITORY, 'private surface lost origin repository identity during intake');
+  assertCondition(privateContext.issue === String(ISSUE_NUMBER), 'private surface changed the source issue number');
+
   const privateWorkflowPath = path.resolve(root, '../.github-private/.github/workflows/validate-published-agents.yml');
   let privateSurface = { status: 'unavailable', reason: 'local .github-private checkout is not present' };
   try {
@@ -216,11 +244,12 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
       controllerRollback: 'passed',
       centralCredentialBoundary: 'passed',
       privatePublicationBoundary: privateSurface.status,
+      privateIssueParticipation: privateSurface.status === 'passed' ? 'passed' : 'not-run',
       repositoryLocalCi: 'not-run-by-this-check',
     },
     participants: identityRows,
     controller: { version: release.version, commit: release.commit, rollback: { version: rollbackPin.version, commit: rollbackPin.commit } },
-    privateSurface,
+    privateSurface: { ...privateSurface, participant: { repositoryId: PRIVATE_REPOSITORY_ID, repository: PRIVATE_REPOSITORY, stateNamespace: `${PRIVATE_REPOSITORY_ID}/${ISSUE_NUMBER}` } },
   };
 }
 
