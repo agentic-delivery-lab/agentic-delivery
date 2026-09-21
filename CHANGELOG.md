@@ -16,6 +16,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.32` at
+  `00f2daf3a02ea0ca5610d44d8b17aa3b8bb228eb`; runtime invocation,
+  observation, and lifecycle route maps now derive from the canonical event
+  catalog, and draft31 remains the explicit rollback pin.
+
 - The draft controller release advances to `0.2.0-draft.31` at
   `ba7a161b93f3f35849362139ee3a281318e9183c`, enforcing role semantics in
   the organization event catalog; draft30 remains the explicit rollback pin.
