@@ -14,6 +14,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.16` at
+  `9e4ca88eb69a4df69067162d0fbc7100bd6cf691`, aligning Architecture draft
+  `0.1.0-draft.3` and Primitive draft `0.1.0-draft.3` with immutable content
+  digests while retaining draft15 and earlier rollback pins.
+
 - The draft controller release advances to `0.2.0-draft.15` at
   `ce6a0144edeefbb8125962c06f70b9c9c91cde78`, pinning Primitive release
   `0.1.0-draft.2` at `cfd86652d9f3a830c28d3dd40f6e762588c0af75` with its
