@@ -87,7 +87,7 @@ the human-authorized event, and each delivery ID, conversation ID, and content
 digest is deduplicated. Status reactions or comments published by the App
 never contain the activation mention.
 
-The versioned actor catalog in `.github/agent-actors.json` is the deterministic source for the activation
+The versioned actor catalog in `config/agent-actors.json` is the deterministic source for the activation
 mention, supported event pairs, human permission levels, App login, and
 bot-handoff limits. The initial external-agent allowlist is empty. Adding an
 automation actor requires a reviewed catalog change containing its exact

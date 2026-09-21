@@ -68,10 +68,10 @@ targets:
       - scripts/validate-toolchain.mjs
       - migration/**
       - automations/**
-      - .github/agent-actors.json
+      - config/agent-actors.json
       - .github/issue-metadata.yml
       - .github/orchestration-policy.yml
-      - .github/participants.yml
+      - config/participants.yml
       - .github/workflows/**
       - docs/delivery/**
       - docs/decisions/0008-*.md

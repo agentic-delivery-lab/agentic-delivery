@@ -8,7 +8,7 @@ fails closed.
    name.
 2. Grant the organization GitHub App selected-repository access through the
    operator-owned GitHub settings.
-3. Add a reviewed entry to `.github/participants.yml` with `mode: shadow`, an
+3. Add a reviewed entry to `config/participants.yml` with `mode: shadow`, an
    immutable controller commit, contract versions, Architecture and Primitive
    release pins, and the required event catalog.
 4. Add the optional Distribution caller only when repository-local Actions
@@ -21,4 +21,3 @@ fails closed.
 
 The App private key remains in the central deployment boundary. The participant
 repository receives no private key and does not become a second state store.
-

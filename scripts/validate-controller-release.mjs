@@ -28,7 +28,7 @@ async function git(repositoryRoot, args) {
 
 export async function validateControllerRelease({ repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..') } = {}) {
   const releasePath = path.join(repositoryRoot, 'config', 'controller-release.json');
-  const registryPath = path.join(repositoryRoot, '.github', 'participants.yml');
+  const registryPath = path.join(repositoryRoot, 'config', 'participants.yml');
   let release;
   let registry;
   try {
