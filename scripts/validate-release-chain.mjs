@@ -151,6 +151,22 @@ export async function validateReleaseChain({
   await assertCommit(controlPlaneRoot, controller.bootstrapCommit, 'Control Plane bootstrap commit', errors);
   await assertCommit(controlPlaneRoot, bundle.workflowSource?.commit, 'Distribution workflow source commit', errors);
   for (const relativePath of [
+    'scripts/authorize-issue-event.mjs',
+    'scripts/prepare-agent-invocation.mjs',
+    'scripts/lib/participant-registry.mjs',
+    'config/participants.yml',
+    'package.json',
+    'pnpm-lock.yaml',
+  ]) {
+    await assertPathAtCommit(
+      controlPlaneRoot,
+      controller.bootstrapCommit,
+      relativePath,
+      'Control Plane bootstrap content',
+      errors,
+    );
+  }
+  for (const relativePath of [
     'scripts/validate-published-agents.mjs',
     'package.json',
     'pnpm-lock.yaml',
