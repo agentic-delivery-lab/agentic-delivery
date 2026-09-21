@@ -137,6 +137,7 @@ export async function validateReleaseChain({
   equal(errors, 'Primitive dependency repository', primitiveDependency.repository, 'agentic-delivery-lab/agentic-delivery-primitives');
   equal(errors, 'Architecture release version', architectureRelease.version, architectureDependency.version);
   equal(errors, 'Architecture release source repository', architectureRelease.sourceRepository, architectureDependency.repository);
+  equal(errors, 'Architecture release digest', architectureRelease.contentSha256, architectureDependency.contentSha256);
   equal(errors, 'Primitive release version', primitiveRelease.version, primitiveDependency.version);
   equal(errors, 'Primitive release id', primitiveRelease.releaseId, `urn:agentic-delivery:primitive-release:${primitiveDependency.version}`);
   equal(errors, 'Primitive release digest', primitiveRelease.contentSha256, primitiveDependency.contentSha256);

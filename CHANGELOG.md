@@ -16,6 +16,13 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.25` at
+  `81fa558aad0f998876bc29871080f2380b2c8582`, pinning Architecture draft
+  `0.1.0-draft.5` at `2bfe92c8c641a2258d4393a37785c793d8a46c48` with a
+  reproducible non-null content digest. Release-chain validation now also
+  compares the Architecture release manifest's declared digest with the
+  controller dependency pin; draft24 remains the explicit rollback pin.
+
 - The draft controller release advances to `0.2.0-draft.24` at
   `1c33a16b9a5a7e6480410c69bdda32648126eabc`. The trusted intake bootstrap
   remains explicitly pinned to the supported draft23 commit while participant
