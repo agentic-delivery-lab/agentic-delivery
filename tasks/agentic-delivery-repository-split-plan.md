@@ -93,9 +93,10 @@ repository.
 | Local slice | Evidence | Status boundary |
 | --- | --- | --- |
 | Generic Control Plane contracts and signed gateway | `config/`, `api/github/`, `scripts/lib/participant-registry.mjs`, `scripts/validate-multi-repository-acceptance.mjs` | Draft and shadow-only; no live App installation or mutation |
-| Pull-request observation path | `.github/workflows/agent-observation.yml`, `scripts/validate-observation-event.mjs`, draft27 release with draft23 bootstrap | Read-only observation; no lifecycle write-back or model execution |
+| Pull-request observation path | `.github/workflows/agent-observation.yml`, `scripts/validate-observation-event.mjs`, draft29 release with draft23 bootstrap | Read-only observation; no lifecycle write-back or model execution |
+| Primitive selection contract | `config/primitive-selection.yml`, `schemas/primitive-selection.v1.schema.json`, `scripts/lib/primitive-selection.mjs` | Release-bound profile-to-Primitive mapping; validates against the pinned Primitive catalog and does not duplicate Primitive content |
 | Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json` plus source maps | Local-prepared; no remote repository or publication claim |
-| Distribution/bootstrap | `agentic-delivery-distribution`, draft13 bundle, 7/7 tests | Opt-in fixture and PR projection; no consumer enrollment |
+| Distribution/bootstrap | `agentic-delivery-distribution`, draft15 bundle, 7/7 tests | Opt-in fixture and PR projection; no consumer enrollment |
 | Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
 
 The release-chain validator reads both dependency manifests and their digest
@@ -111,7 +112,7 @@ These checks are evidence for implementation readiness, not evidence that the
 corresponding GitHub repositories, settings, App installation, or publication
 surface exist.
 
-The latest local regression evidence is: Control Plane `302/302` tests,
+The latest local regression evidence is: Control Plane `305/305` tests,
 Architecture `8/8`, Agentic Primitives `6/6`, Distribution `7/7`, and the
 private publication validator with zero projections. The Control Plane release
 chain suite includes the regression fixture that mutates a dependency
@@ -130,12 +131,15 @@ that a remote repository, branch protection, or organization access exists.
 
 The Control Plane gateway now requires both the App installation ID and the
 central controller repository ID from protected deployment configuration; it
-has no fallback for either identity. Current draft controller `0.2.0-draft.27`
-is pinned to `b52464571e1c0d3adfa5986bd54668d3c7da4a13`; draft26 at
-`81fa558aad0f998876bc29871080f2380b2c8582` remains the explicit rollback
+has no fallback for either identity. Current draft controller `0.2.0-draft.29`
+is pinned to `7061773305054da9eb33b4ef872a7b7c63364d65`; draft28 at
+`0956144e5b9229209ad0fb82299a1d99a366ac66` remains the explicit rollback
 release, while draft23 at `30197d5c8731ea6e682ae4de5e629b964e278aab` remains
-the trusted bootstrap commit for this release.
-The current controller draft `0.2.0-draft.27` pins Architecture draft
+the trusted bootstrap commit for this release. The release-bound primitive
+selection contract pins Primitive draft `0.1.0-draft.4` at
+`51e94992c5f39c59046f752e0cf6cff2ed3fff32` and its canonical digest, and
+checks every profile against the pinned catalog and orchestration policy.
+The current controller draft `0.2.0-draft.29` pins Architecture draft
 `0.1.0-draft.6` at `5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b` with digest
 `3bcc5f617de6ecf93f6b1c55bece5f97c03bcd979ccb1aa1c7d2431199383a3c`, and
 Primitive draft `0.1.0-draft.4` at
