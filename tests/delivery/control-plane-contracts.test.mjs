@@ -54,6 +54,16 @@ test('the checked-in controller release pins every enrolled participant', async 
   }), true);
 });
 
+test('the current controller release pins immutable Architecture and Primitive content digests', async () => {
+  const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
+  for (const dependency of [release.dependencies.architecture, release.dependencies.primitives]) {
+    assert.match(dependency.commit, /^[0-9a-f]{40}$/);
+    assert.match(dependency.contentSha256, /^[0-9a-f]{64}$/);
+  }
+  assert.equal(release.dependencies.architecture.version, '0.1.0-draft.3');
+  assert.equal(release.dependencies.primitives.version, '0.1.0-draft.3');
+});
+
 test('the release catalog retains an older immutable pin for intentional rollback', async () => {
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   assert.ok(release.compatibility.controllers.some((pin) => (
