@@ -26,7 +26,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     '.github/workflows/codex-delivery.yml', '.github/workflows/agent-invocation.yml', 'config/agent-actors.json', 'config/participants.yml', 'config/issue-metadata.yml', 'config/orchestration-policy.yml',
     '.github/workflows/agent-observation.yml',
     'api/github/webhook.mjs', 'scripts/issue-intake.mjs', 'scripts/lib/agent-invocation.mjs', 'scripts/prepare-agent-invocation.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
-    'scripts/lib/orchestration-policy.mjs', 'scripts/lib/primitive-selection.mjs', 'tests/helpers/organization-issue-forms.mjs',
+    'scripts/lib/orchestration-policy.mjs', 'scripts/lib/primitive-selection.mjs', 'scripts/validate-automation-templates.mjs', 'automations/AGENTS.md', 'automations/templates/manifest.json', 'automations/templates/manifest.v1.schema.json', 'automations/templates/review-delivery-queue.automation.md', 'automations/templates/prepare-validation-evidence.automation.md', 'tests/helpers/organization-issue-forms.mjs',
     'config/github-app-contract.json', 'config/event-catalog.yml', 'config/primitive-selection.yml', 'schemas/event-catalog.v1.schema.json', 'schemas/github-app-contract.v1.schema.json', 'schemas/primitive-selection.v1.schema.json', 'schemas/github-inventory.v1.schema.json', 'scripts/lib/event-catalog.mjs', 'scripts/validate-github-app-contract.mjs',
     '.github/workflows/agentic-delivery-quality.yml',
     '.github/workflows/agentic-delivery-architecture-review.yml',

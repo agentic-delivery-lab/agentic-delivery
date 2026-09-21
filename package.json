@@ -24,6 +24,7 @@
     "control-plane:boundary": "node scripts/validate-control-plane-boundary.mjs",
     "acceptance:check": "node scripts/validate-multi-repository-acceptance.mjs",
     "organization:inventory": "node scripts/collect-github-inventory.mjs",
+    "automation:check": "node scripts/validate-automation-templates.mjs",
     "migration:check": "node scripts/validate-repository-boundaries.mjs",
     "special-surfaces:check": "node scripts/validate-special-surfaces.mjs",
     "publication:check": "node scripts/validate-published-agents.mjs",

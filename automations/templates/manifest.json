@@ -1,0 +1,28 @@
+{
+  "$schema": "./manifest.v1.schema.json",
+  "schemaVersion": 1,
+  "status": "draft",
+  "canonicalRepository": "agentic-delivery-lab/agentic-delivery",
+  "templates": [
+    {
+      "id": "review-delivery-queue",
+      "sourcePath": "automations/templates/review-delivery-queue.automation.md",
+      "executionPolicy": "read-only-advisory",
+      "compatibilityTargets": ["vscode-automations", "agent-plugin"],
+      "projection": {
+        "repository": "agentic-delivery-lab/agentic-delivery-distribution",
+        "targetPath": "packages/agent-plugin/automations/review-delivery-queue.automation.md"
+      }
+    },
+    {
+      "id": "prepare-validation-evidence",
+      "sourcePath": "automations/templates/prepare-validation-evidence.automation.md",
+      "executionPolicy": "read-only-advisory",
+      "compatibilityTargets": ["vscode-automations", "agent-plugin"],
+      "projection": {
+        "repository": "agentic-delivery-lab/agentic-delivery-distribution",
+        "targetPath": "packages/agent-plugin/automations/prepare-validation-evidence.automation.md"
+      }
+    }
+  ]
+}
