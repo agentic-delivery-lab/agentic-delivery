@@ -11,6 +11,11 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.10` at
+  `8c883b754dc03498788615160ee7f6cf2effb6fc`, adding the offline
+  multi-repository acceptance matrix while retaining draft9 and earlier
+  rollback pins.
+
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft controller release to `0.2.0-draft.9` at `379fd73526054037e1f4dcf7ef728dcf01baaa6c`, requiring an explicit controller repository ID while retaining draft8, draft7, draft6, and draft2 rollback pins.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft controller release to `0.2.0-draft.8` at `eeef545c40d5b9e9a590e335c5ab193deaaac928`, requiring an explicit App installation identity while retaining draft7, draft6, and draft2 rollback pins.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft controller release to `0.2.0-draft.7` at `48bc83b2c52e0d9aeee47905d4877ba75657c354`, the first pin that contains the canonical executable `config/` boundary, while retaining immutable draft6 and draft2 rollback pins.
