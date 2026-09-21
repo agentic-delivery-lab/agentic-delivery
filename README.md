@@ -34,9 +34,11 @@ pnpm github-app:check
 pnpm control-plane:boundary
 pnpm metadata:check
 pnpm migration:check
+pnpm plan:check
 pnpm traceability:check
 pnpm control-plane:check
 pnpm acceptance:check
+pnpm release-chain:check -- --architecture-root <path> --primitives-root <path> --distribution-root <path> --private-root <path>
 pnpm organization:inventory
 pnpm special-surfaces:check
 ```
