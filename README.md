@@ -19,6 +19,12 @@ Features, bootstrap, and thin consumer callers. `.github` and
 `.github-private` remain GitHub-defined governance/publication adapters rather
 than runtime locations.
 
+Executable enrollment and invocation configuration lives under [`config/`](config/);
+the participant registry and actor catalog are not organization-profile or
+community-health files. The lifecycle and orchestration YAML under `.github/`
+remains a read-only compatibility bridge until its planned split into canonical
+`config/` files.
+
 ## Local checks
 
 ```text
@@ -41,4 +47,3 @@ The repository-split plan is retained in
 Issue #52 remains the plan-persistence source record; implementation and
 activation require separately authorized successor issues and operator
 actions.
-
