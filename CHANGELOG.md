@@ -11,7 +11,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft controller release to `0.2.0-draft.5` at `4a52effdf11c38dace441b5ec7222bae4fdb92b4`, including the canonical `config/` enrollment boundary and origin-ID authorization; existing participants remain shadow-only.
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft controller release to `0.2.0-draft.6` at `564a35fd798e75800a3bf15223afb8bd87d59581`, including the canonical `config/` enrollment boundary, origin-ID authorization, and default origin-scoped App tokens; existing participants remain shadow-only.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) retains the prior immutable `0.2.0-draft.2` controller pin in the compatibility catalog so participant upgrades and exact-commit rollback remain intentional.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft Control Plane pin to the locally validated organization-aware controller commit and aligns its Architecture and Primitive dependency pins; the release remains draft and shadow-only pending authorized rollout.
 
@@ -91,4 +91,5 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) makes unscoped GitHub App installation tokens an explicit non-production test opt-in; every production token path must provide the originating or controller repository ID.
 - Subscription-only delivery pauses when credit spillover is possible or credit telemetry is unavailable, in addition to the 98-percent usage boundary.

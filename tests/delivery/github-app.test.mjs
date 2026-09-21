@@ -22,11 +22,20 @@ test('GitHub App provider mints scoped installation tokens and refreshes near ex
     repository: 'owner/repo', appId: '123', privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }), installationId: '456',
     permissions: { contents: 'write', issues: 'write' }, fetchImpl, now: () => now,
   });
-  assert.equal(await provider.token(), 'installation-1');
-  assert.equal(await provider.token(), 'installation-1');
+  assert.equal(await provider.token({ allowInstallationWide: true }), 'installation-1');
+  assert.equal(await provider.token({ allowInstallationWide: true }), 'installation-1');
   now += 3_550_000;
-  assert.equal(await provider.token(), 'installation-2');
+  assert.equal(await provider.token({ allowInstallationWide: true }), 'installation-2');
   assert.equal(requests, 2);
+});
+
+test('GitHub App provider rejects an unscoped token unless a test opts in explicitly', async () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const provider = new GithubAppTokenProvider({
+    repository: 'owner/repo', appId: '123', privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+    installationId: '456', fetchImpl: async () => { throw new Error('unscoped token must fail before API access'); },
+  });
+  await assert.rejects(provider.token(), /repository-scoped installation token/);
 });
 
 test('GitHub App provider can narrow an installation token to repository IDs', async () => {

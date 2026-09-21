@@ -50,10 +50,13 @@ export class GithubAppTokenProvider {
     return response.status === 204 ? null : response.json();
   }
 
-  async token({ repositoryIds = [], permissions = this.permissions } = {}) {
+  async token({ repositoryIds = [], permissions = this.permissions, allowInstallationWide = false } = {}) {
     const narrowedIds = [...new Set((Array.isArray(repositoryIds) ? repositoryIds : [repositoryIds])
       .map((value) => String(value))
       .filter((value) => /^[1-9][0-9]*$/.test(value)))].sort();
+    if (narrowedIds.length === 0 && allowInstallationWide !== true) {
+      throw new Error('A repository-scoped installation token is required; an installation-wide token needs an explicit non-production test opt-in.');
+    }
     const requestedPermissions = permissions && typeof permissions === 'object' ? permissions : this.permissions;
     const cacheKey = `${narrowedIds.join(',')}|${JSON.stringify(requestedPermissions ?? {})}`;
     const cached = this.cachedTokens.get(cacheKey);
