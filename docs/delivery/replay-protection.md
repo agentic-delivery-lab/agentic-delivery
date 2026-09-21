@@ -42,6 +42,8 @@ actor authorization or dispatch.
 
 The dispatch token is independently narrowed to the configured numeric
 Control-Plane repository ID (`AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID`).
+That value has no runtime default: a deployment that omits it fails closed
+before it can mint an installation token or dispatch an event.
 The origin token and dispatch token therefore have separate repository scopes;
 the App installation's broader selected-repository access is not exposed to
 either API call.

@@ -28,7 +28,6 @@ export const config = { api: { bodyParser: false } };
 const API_VERSION = '2026-03-10';
 const DEFAULT_ORGANIZATION = 'agentic-delivery-lab';
 const DEFAULT_ORGANIZATION_ID = '327861320';
-const DEFAULT_CONTROLLER_REPOSITORY_ID = '1358455028';
 function header(req, name) {
   const value = req.headers?.[name] ?? req.headers?.[name.toLowerCase()];
   return Array.isArray(value) ? value[0] : value;
@@ -55,7 +54,7 @@ function environment(env = process.env) {
   return {
     controllerRepository: env.AGENTIC_DELIVERY_CONTROLLER_REPOSITORY
       || env.AGENTIC_DELIVERY_REPOSITORY,
-    controllerRepositoryId: env.AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID || DEFAULT_CONTROLLER_REPOSITORY_ID,
+    controllerRepositoryId: env.AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID,
     organization: env.AGENTIC_DELIVERY_ORGANIZATION || DEFAULT_ORGANIZATION,
     organizationId: env.AGENTIC_DELIVERY_ORGANIZATION_ID || DEFAULT_ORGANIZATION_ID,
     appId: env.AGENTIC_DELIVERY_APP_ID || env.CODEX_DELIVERY_APP_ID,

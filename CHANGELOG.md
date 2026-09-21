@@ -60,6 +60,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) removes the central controller repository-ID runtime default; the gateway now requires an explicit `AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID` before dispatch.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) makes every controller compatibility and rollback pin resolve to an actual commit in the Control Plane history before release validation succeeds.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) requires delivery execution to carry an authenticated numeric origin repository ID and rejects mismatches before model startup or GitHub mutation; App installation tokens are never requested without an origin scope.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) runs the central intake preflight from its checked-out trusted controller path, so dependency installation and explicit invocation normalization do not execute from an empty Actions workspace.
