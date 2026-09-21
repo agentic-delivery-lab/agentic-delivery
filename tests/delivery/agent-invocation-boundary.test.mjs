@@ -304,8 +304,8 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
   assert.equal(dispatch.client_payload.actor.login, 'sjefsharp');
   assert.equal(dispatch.client_payload.body_digest.length, 64);
   assert.deepEqual(dispatch.client_payload.controller, {
-    version: '0.2.0-draft.11',
-    commit: '83f164388096e0e343b1641c27ee399e509bf68b',
+    version: '0.2.0-draft.12',
+    commit: '3ea621d64507c0ef187181a487e5f8ff190e5aa3',
   });
   assert.equal(Object.keys(dispatch.client_payload).length, 15);
   assert.match(dispatch.client_payload.received_at, /^\d{4}-\d{2}-\d{2}T/);
