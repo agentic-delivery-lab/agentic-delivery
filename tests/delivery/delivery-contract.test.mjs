@@ -24,6 +24,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     '.github/workflows/delivery-quality.yml', '.github/workflows/issue-intake.yml',
     '.github/workflows/pull-request-body.yml', '.github/rulesets/require-pull-request-body.json',
     '.github/workflows/codex-delivery.yml', '.github/workflows/agent-invocation.yml', 'config/agent-actors.json', 'config/participants.yml', 'config/issue-metadata.yml', 'config/orchestration-policy.yml',
+    '.github/workflows/agent-observation.yml',
     'api/github/webhook.mjs', 'scripts/issue-intake.mjs', 'scripts/lib/agent-invocation.mjs', 'scripts/prepare-agent-invocation.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
     'scripts/lib/orchestration-policy.mjs', 'tests/helpers/organization-issue-forms.mjs',
     'config/github-app-contract.json', 'schemas/github-app-contract.v1.schema.json', 'scripts/validate-github-app-contract.mjs',
@@ -99,6 +100,17 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.deepEqual(invocation.on.repository_dispatch.types, ['agent_invocation']);
   assert.equal(invocation.jobs.intake.uses, './.github/workflows/issue-intake.yml');
   assert.equal(invocation.jobs.intake.with.agent_invocation, true);
+  const observation = parseRepositoryYaml(await text('.github/workflows/agent-observation.yml'), 'agent observation workflow');
+  assert.deepEqual(observation.on.repository_dispatch.types, ['agent_observation']);
+  assert.equal(observation.jobs.validate.permissions, undefined);
+  const observationText = await text('.github/workflows/agent-observation.yml');
+  assert.ok(observationText.includes('CONTROLLER_COMMIT: ${{ github.event.client_payload.controller.commit }}'));
+  assert.ok(observationText.includes('ref: ${{ github.event.client_payload.controller.commit }}'));
+  assert.ok(observationText.includes('path: controller'));
+  assert.ok(observationText.includes('node controller/scripts/validate-observation-event.mjs controller'));
+  assert.ok(!observationText.includes('ref: main'));
+  assert.ok(!observationText.includes('CODEX_DELIVERY_APP_PRIVATE_KEY'));
+  assert.ok(!observationText.includes('AGENTIC_DELIVERY_WEBHOOK_SECRET'));
 
   const docs = await text('docs/delivery/README.md');
   assert.ok(docs.includes('pnpm branch:start'));

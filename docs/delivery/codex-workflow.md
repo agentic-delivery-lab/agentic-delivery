@@ -83,6 +83,11 @@ still require the explicit invocation mention. Install the App with
 selected-repository access only; App access is necessary but does not enroll a
 repository without the central participant registry.
 
+The central pull-request observation dispatch workflow checks out the
+participant's immutable controller commit from the signed event envelope before
+loading its registry and validator. It never follows a moving `main` ref for
+observation validation and it has no App private-key or webhook-secret input.
+
 The Vercel ingress mints a repository-scoped read token for origin actor and
 source checks, then a separate controller token narrowed to the controller
 repository with only Contents write for the `repository_dispatch` handoff.
