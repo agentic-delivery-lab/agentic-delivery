@@ -311,9 +311,10 @@ Read-only GitHub inspection found:
 - `.github` and `agentic-delivery` are public;
 - no `.github-private` repository was returned by the visible repository
   inventory, and the organization reports zero visible private repositories;
-  the direct private-repository lookup was not readable with the current
-  identity, so this is an unverified absence rather than proof that no such
-  repository exists;
+  a direct read-only `GET /repos/agentic-delivery-lab/.github-private` also
+  returned `404 Not Found` for the current token. GitHub can use that response
+  for an inaccessible private repository as well as an absent one, so this is
+  still an unverified absence rather than proof that no such repository exists;
 - both repositories use `main` as their default branch;
 - `agentic-delivery` has no open pull requests and only the `main` branch;
 - `.github` has four stale feature branches and no open pull requests;
