@@ -48,4 +48,5 @@ jobs:
           node control-plane/scripts/validate-controller-release.mjs control-plane
           node control-plane/scripts/validate-github-app-contract.mjs control-plane
           node control-plane/scripts/validate-control-plane-boundary.mjs control-plane
+          node control-plane/scripts/validate-multi-repository-acceptance.mjs control-plane
           node control-plane/scripts/validate-repository-boundaries.mjs control-plane
