@@ -119,6 +119,12 @@ digest into the consumer provenance lock. Cross-file checks reject drift
 between the Primitive release, Architecture release, Control Plane release,
 workflow source, and Agent Plugin projection.
 
+The draft release graph remains acyclic: Architecture draft4 indexes the
+Primitive draft4 snapshot, while that Primitive release retains the preceding
+Architecture draft3 as its governing pin. A later stable release may advance
+both only through an explicit, ordered promotion rather than by creating
+mutually self-referential release metadata.
+
 The offline acceptance matrix additionally exercises `.github-private` as an
 origin-event participant with an isolated issue namespace and no central App
 credentials in its publication workflow. Its repository ID remains a fixture
