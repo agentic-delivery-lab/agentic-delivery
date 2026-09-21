@@ -9,7 +9,7 @@ import { parseRepositoryYaml } from './lib/yaml.mjs';
 const execFileAsync = promisify(execFile);
 const REPOSITORY = /^[A-Za-z0-9_.-]+$/;
 const TARGET_IDS = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const STATUSES = new Set(['pending', 'pending-entitlement', 'transitional', 'ready']);
+const STATUSES = new Set(['pending', 'local-prepared', 'pending-entitlement', 'transitional', 'ready']);
 const SOURCE_REPOSITORY = ['agentic-delivery-lab', 'agentic-delivery'].join('/');
 
 export class RepositoryBoundaryValidationError extends Error {

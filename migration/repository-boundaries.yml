@@ -14,7 +14,7 @@ targets:
   - id: architecture-authority
     repository: agentic-delivery-architecture
     visibility: public
-    status: pending
+    status: local-prepared
     canonical: true
     sourcePaths:
       - docs/architecture/**
@@ -91,7 +91,7 @@ targets:
   - id: agentic-primitives
     repository: agentic-delivery-primitives
     visibility: public
-    status: pending
+    status: local-prepared
     canonical: true
     sourcePaths:
       - .agents/**
@@ -108,7 +108,7 @@ targets:
   - id: developer-distribution
     repository: agentic-delivery-distribution
     visibility: public
-    status: pending
+    status: local-prepared
     canonical: true
     sourcePaths: []
     bridge: starts new history; generated projections record their Primitive and Control Plane source digests

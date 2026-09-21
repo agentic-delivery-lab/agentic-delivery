@@ -14,6 +14,10 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The migration boundary manifest now distinguishes locally prepared
+  Architecture, Primitives, and Distribution checkouts from remote-ready
+  targets; local preparation does not imply publication or activation.
+
 - The draft controller release advances to `0.2.0-draft.12` at
   `3ea621d64507c0ef187181a487e5f8ff190e5aa3`, adding deterministic lifecycle
   write-back coverage to the two-repository acceptance matrix while retaining
