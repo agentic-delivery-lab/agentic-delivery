@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 
@@ -50,4 +50,16 @@ test('the pinned workflow source contains the validator and reusable workflow en
     return;
   }
   await assert.doesNotReject(() => validateReleaseChain({ controlPlaneRoot: repositoryRoot, ...siblingRoots }));
+});
+
+test('release-chain validation reads Architecture and Primitive manifests from their pinned commits', async (t) => {
+  const available = await Promise.all(Object.values(siblingRoots).map(exists));
+  if (!available.every(Boolean)) {
+    t.skip('split repositories are not checked out in this workspace');
+    return;
+  }
+  const result = await validateReleaseChain({ controlPlaneRoot: repositoryRoot, ...siblingRoots });
+  const controller = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
+  assert.equal(result.architecture.commit, controller.dependencies.architecture.commit);
+  assert.equal(result.primitives.commit, controller.dependencies.primitives.commit);
 });

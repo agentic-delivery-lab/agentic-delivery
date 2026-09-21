@@ -35,6 +35,22 @@ async function readText(file) {
   }
 }
 
+async function readJsonAtCommit(repository, commit, relativePath) {
+  try {
+    return JSON.parse(await git(repository, ['show', `${commit}:${relativePath}`]));
+  } catch (error) {
+    throw new ReleaseChainValidationError(`cannot read ${relativePath} at ${commit} in ${repository}: ${error.message}`);
+  }
+}
+
+async function readTextAtCommit(repository, commit, relativePath) {
+  try {
+    return await git(repository, ['show', `${commit}:${relativePath}`]);
+  } catch (error) {
+    throw new ReleaseChainValidationError(`cannot read ${relativePath} at ${commit} in ${repository}: ${error.message}`);
+  }
+}
+
 async function git(repository, args) {
   try {
     return (await execFileAsync('git', ['-C', repository, ...args], {
@@ -113,10 +129,16 @@ export async function validateReleaseChain({
   const primitiveDependency = controller.dependencies?.primitives;
   if (!architectureDependency || !primitiveDependency) errors.push('controller release must declare Architecture and Primitive dependencies');
 
-  const architectureRelease = await readJson(path.join(architectureRoot, 'architecture/generated/architecture-release.json'));
-  const primitiveRelease = await readJson(path.join(primitivesRoot, 'manifests/primitive-release.json'));
+  const architectureRelease = architectureDependency?.commit && SHA1.test(architectureDependency.commit)
+    ? await readJsonAtCommit(architectureRoot, architectureDependency.commit, 'architecture/generated/architecture-release.json')
+    : await readJson(path.join(architectureRoot, 'architecture/generated/architecture-release.json'));
+  const primitiveRelease = primitiveDependency?.commit && SHA1.test(primitiveDependency.commit)
+    ? await readJsonAtCommit(primitivesRoot, primitiveDependency.commit, 'manifests/primitive-release.json')
+    : await readJson(path.join(primitivesRoot, 'manifests/primitive-release.json'));
   const primitiveLock = parseRepositoryYaml(
-    await readText(path.join(architectureRoot, 'architecture/references/primitive-catalog.lock.yml')),
+    architectureDependency?.commit && SHA1.test(architectureDependency.commit)
+      ? await readTextAtCommit(architectureRoot, architectureDependency.commit, 'architecture/references/primitive-catalog.lock.yml')
+      : await readText(path.join(architectureRoot, 'architecture/references/primitive-catalog.lock.yml')),
     path.join(architectureRoot, 'architecture/references/primitive-catalog.lock.yml'),
   );
   const bundle = await readJson(path.join(distributionRoot, 'manifests/workflow-bundle.json'));
