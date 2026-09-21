@@ -15,6 +15,12 @@ Delivery Control Plane.
   policy.
 - `github-app-contract.json` defines the organization App and credential
   boundary.
+- `controller-release.json` is checked against the explicitly supplied
+  Architecture, Primitives, Distribution, and `.github-private` checkouts by
+  `scripts/validate-release-chain.mjs`. That release-coordination check
+  reproduces the pinned content digests, workflow source SHA, plugin inputs,
+  and private-publication provenance; it does not create runtime imports or
+  infer repository paths.
 - Repository-root `schemas/github-inventory.v1.schema.json` and
   `scripts/collect-github-inventory.mjs` define a redacted, read-only
   organization inventory used to separate observed GitHub state from

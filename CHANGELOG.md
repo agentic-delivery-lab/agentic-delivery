@@ -14,6 +14,13 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Added `release-chain:check` and `scripts/validate-release-chain.mjs`. An
+  explicitly supplied set of Architecture Authority, Agentic Primitives,
+  Distribution, and `.github-private` checkouts must now reproduce the
+  Control Plane's immutable release pins, content digests, workflow source,
+  Agent Plugin inputs, and publication provenance. The check is a release
+  coordination gate and does not activate or mutate any GitHub surface.
+
 - The draft controller release advances to `0.2.0-draft.20` at
   `213036f87776dcf75e349355ff7983ded476c42e`, carrying the explicit
   two-part enrollment fail-closed acceptance contract while retaining draft19

@@ -19,6 +19,7 @@
     "traceability:check": "node scripts/generate-adr-primitive-index.mjs --check",
     "metadata:check": "node scripts/validate-config-files.mjs",
     "control-plane:check": "node scripts/validate-controller-release.mjs",
+    "release-chain:check": "node scripts/validate-release-chain.mjs",
     "github-app:check": "node scripts/validate-github-app-contract.mjs",
     "control-plane:boundary": "node scripts/validate-control-plane-boundary.mjs",
     "acceptance:check": "node scripts/validate-multi-repository-acceptance.mjs",
