@@ -43,3 +43,13 @@ test('the organization event catalog is the source projection for App actions', 
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((error) => error.includes('events.pull_request must match the organization event catalog')));
 });
+
+test('event route roles are validated from the canonical catalog', async () => {
+  const source = await readFile(path.join(repositoryRoot, 'config/event-catalog.yml'), 'utf8');
+  const catalog = parseRepositoryYaml(source, 'event catalog');
+  const invalid = structuredClone(catalog);
+  invalid.events.pull_request.routes = ['invocation'];
+  const result = validateEventCatalog(invalid);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => error.includes('events.pull_request.routes must be ["observation"]')));
+});
