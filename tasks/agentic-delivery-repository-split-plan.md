@@ -100,6 +100,7 @@ repository.
 | Distribution/bootstrap | `agentic-delivery-distribution`, draft18 bundle, 7/7 tests | Opt-in fixture and PR projection; no consumer enrollment |
 | Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
 | GitHub special-surface contract | `migration/special-surfaces.yml`, `scripts/validate-special-surfaces.mjs` | Migration evidence distinguishes GitHub-consumed paths from governance paths and forbids runtime ownership |
+| Preview Automation templates | `automations/templates/*.automation.md`, manifest and validator | Two manual read-only canonical templates; projection remains a separate Distribution step and `.github-private` remains excluded |
 
 The release-chain validator reads both dependency manifests and their digest
 implementations from the exact pinned Architecture and Primitive commits. It
@@ -108,7 +109,8 @@ does not validate a dependency with a mutable sibling worktree tool.
 The local checks supporting these slices are `pnpm control-plane:check`,
 `pnpm github-app:check`, `pnpm control-plane:boundary`,
 `pnpm acceptance:check`, `pnpm migration:check`,
-`pnpm special-surfaces:check`, `pnpm traceability:check`,
+`pnpm special-surfaces:check`, `pnpm automation:check`,
+`pnpm traceability:check`,
 and the explicit-root `pnpm release-chain:check`. The Distribution checkout
 also runs `pnpm test`, including its repository-local CI isolation fixture.
 These checks are evidence for implementation readiness, not evidence that the
@@ -1903,6 +1905,12 @@ Never use a moving Architecture `main` as unrecorded review context.
 VS Code shareable Automations are preview/gradual-rollout functionality. Keep
 canonical `*.automation.md` templates in Control Plane and publish reviewed
 projections through Distribution. `.github-private` has no documented role.
+
+The current Control Plane source contains two manual, read-only pilots in
+`automations/templates/`: `review-delivery-queue` and
+`prepare-validation-evidence`. Their supported portable frontmatter is
+validated by `pnpm automation:check`; no client-local workspace, provider,
+model, permission, enabled-state, or run-history fields are admitted.
 
 Templates may contain the supported portable definition, including ID, name,
 prompt, schedule, and schema version. They must not pretend to configure local

@@ -16,6 +16,12 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The Control Plane now carries two manually triggered, read-only VS Code
+  Automation templates with a strict portable-frontmatter validator and an
+  explicit Distribution projection contract. Client-local schedule, model,
+  permission, enabled-state, and run-history data remains outside GitHub
+  lifecycle authority.
+
 - The read-only organization inventory now probes `.github` and
   `.github-private` as GitHub special surfaces and records a private-surface
   404 as `not-found-unverified`, preserving the distinction between an absent

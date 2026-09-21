@@ -1,14 +1,17 @@
 # Preview automation templates
 
-This directory is reserved for verified VS Code/Copilot shareable
-`*.automation.md` templates. The feature is preview/gradual-rollout and its
-schema is not a lifecycle contract. Do not add a template until the exact
-supported frontmatter and client behavior have been verified against the
-currently used Microsoft/VS Code implementation and recorded in the tooling
-lock.
+These are the Control Plane's canonical, reviewed source templates for VS
+Code/Copilot shareable Automations. The feature remains preview and rolls out
+gradually. The supported format is documented by [VS Code's Automation
+documentation](https://code.visualstudio.com/docs/agents/run/automations) and
+the [Agent Plugins automation-template
+format](https://code.visualstudio.com/docs/agent-customization/agent-plugins).
 
-When a template is admitted, keep its source here and publish only a reviewed
-projection through Distribution. Local schedule, provider/model selection,
-permissions, enabled state, and run history remain client-local; GitHub Issues,
-Projects, Actions, and the Control Plane remain the authoritative delivery
-surfaces.
+The checked-in templates are deliberately manual and read-only. They do not
+set a workspace, provider, model, permissions, enabled state, or run history.
+Those values remain client-local. GitHub Issues, organization fields, Projects,
+Actions, and the Control Plane remain the authoritative delivery surfaces.
+
+`manifest.json` is the source-level contract. Distribution publishes only a
+reviewed, hash-pinned projection into its Agent Plugin package. `.github` and
+`.github-private` are not automation sources.
