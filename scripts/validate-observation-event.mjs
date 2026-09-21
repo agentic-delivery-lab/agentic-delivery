@@ -34,15 +34,17 @@ export async function validateObservationEvent({
   eventPath,
   repositoryRoot: root = repositoryRoot,
   participantRegistry,
-  controllerRepository = 'agentic-delivery-lab/agentic-delivery',
+  controllerRepository,
 } = {}) {
   if (!eventPath) throw new ObservationValidationError('GITHUB_EVENT_PATH is required', 2);
   const event = await readJson(eventPath);
   const envelope = event?.client_payload;
+  const configuredController = controllerRepository
+    ?? (await readJson(path.join(root, 'config/github-app-contract.json'))).controller?.repository;
   const errors = [];
   const envelopeResult = validateEventEnvelope(envelope);
   if (!envelopeResult.valid) errors.push(...envelopeResult.errors);
-  if (event?.repository?.full_name !== controllerRepository) errors.push('dispatch repository is not the configured Control Plane repository');
+  if (event?.repository?.full_name !== configuredController) errors.push('dispatch repository is not the configured Control Plane repository');
   if (envelope?.event !== 'pull_request') errors.push('observation dispatch must carry a pull_request event');
   if (!observationEventSupported(envelope?.event, envelope?.action)) errors.push('observation action is not in the observation catalog');
   if (invocationEventSupported(envelope?.event, envelope?.action)) errors.push('observation event must not be an invocation event');
@@ -79,7 +81,7 @@ if (isMainModule) {
     const result = await validateObservationEvent({
       eventPath: process.env.GITHUB_EVENT_PATH,
       repositoryRoot: process.argv[2] ?? repositoryRoot,
-      controllerRepository: process.env.GITHUB_REPOSITORY ?? 'agentic-delivery-lab/agentic-delivery',
+      controllerRepository: process.env.GITHUB_REPOSITORY,
     });
     process.stdout.write(`Observation ${result.status}: ${result.repository}#${result.repositoryId} ${result.action}.\n`);
   } catch (error) {
