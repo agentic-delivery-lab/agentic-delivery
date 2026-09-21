@@ -57,6 +57,13 @@ contracts now live at `config/issue-metadata.yml` and
 it does not change Issue #52's scope, lifecycle, or completion criteria, and it
 does not make the Control Plane active for any repository.
 
+The locally prepared Architecture Authority and Agentic Primitives extractions
+now also carry `migration/manifest.json`, a pinned `git-filter-repo` tool
+identity, and a complete `migration/source-commit-map.csv`. Their repository
+CI and tests validate that evidence before either target is considered for
+operator publication. The manifests remain `local-prepared`; they do not claim
+that a remote repository, branch protection, or organization access exists.
+
 ## Executive summary
 
 Split the mixed-responsibility `agentic-delivery` repository into six minimum
