@@ -304,8 +304,11 @@ Read-only GitHub inspection found:
 
 - organization `agentic-delivery-lab` is currently on GitHub Free;
 - `.github` and `agentic-delivery` are public;
-- `.github-private` does not exist, and the organization reports zero private
-  repositories;
+- no `.github-private` repository was returned by the visible repository
+  inventory, and the organization reports zero visible private repositories;
+  the direct private-repository lookup was not readable with the current
+  identity, so this is an unverified absence rather than proof that no such
+  repository exists;
 - both repositories use `main` as their default branch;
 - `agentic-delivery` has no open pull requests and only the `main` branch;
 - `.github` has four stale feature branches and no open pull requests;
