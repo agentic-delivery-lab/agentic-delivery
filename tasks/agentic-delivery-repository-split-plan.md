@@ -102,11 +102,11 @@ that a remote repository, branch protection, or organization access exists.
 
 The Control Plane gateway now requires both the App installation ID and the
 central controller repository ID from protected deployment configuration; it
-has no fallback for either identity. Draft controller `0.2.0-draft.19` at
-`02b742c86f77700e8c787ae17f31959d22bbdf2e` pins Architecture draft
+has no fallback for either identity. Draft controller `0.2.0-draft.20` at
+`213036f87776dcf75e349355ff7983ded476c42e` pins Architecture draft
 `0.1.0-draft.4` at `61b2285334b5cff4ae2dba7875b132ad2a4a8502` and Primitive
 draft `0.1.0-draft.4` at `51e94992c5f39c59046f752e0cf6cff2ed3fff32`, including
-canonical content digests. Draft18 and earlier remain explicit rollback pins.
+canonical content digests. Draft19 and earlier remain explicit rollback pins.
 The Distribution workflow source is pinned to
 `5401a3d8c3ace20661eb749245e80bd2b511cafe`, and the private publication
 validator is pinned to that same Control Plane source chain. This is still
