@@ -13,6 +13,7 @@ test('offline organization acceptance matrix keeps two repositories on one contr
   assert.equal(new Set(report.participants.map((participant) => participant.stateNamespace)).size, 2);
   assert.equal(report.checks.sharedController, 'passed');
   assert.equal(report.checks.repositoryIdentity, 'passed');
+  assert.equal(report.checks.lifecycleWriteback, 'passed');
   assert.equal(report.checks.controllerUpgrade, 'passed');
   assert.equal(report.checks.controllerRollback, 'passed');
   assert.equal(report.checks.centralCredentialBoundary, 'passed');
