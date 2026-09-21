@@ -445,8 +445,8 @@ test('one central webhook accepts a second enrolled repository and dispatches to
   await handleWebhook(request({ body, signature }), output, {
     env: {
       AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
-      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
-      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '1358455028',
+      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/delivery-control-plane',
+      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '888888888',
       AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
       AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
     },
@@ -464,11 +464,11 @@ test('one central webhook accepts a second enrolled repository and dispatches to
   });
   assert.equal(output.statusCode, 202);
   assert.equal(calls[0].url, 'https://api.github.com/repos/' + repository + '/collaborators/sjefsharp/permission');
-  assert.equal(calls[1].url, 'https://api.github.com/repos/agentic-delivery-lab/agentic-delivery/dispatches');
+  assert.equal(calls[1].url, 'https://api.github.com/repos/agentic-delivery-lab/delivery-control-plane/dispatches');
   assert.equal(JSON.parse(calls[1].options.body).client_payload.repository_id, repositoryId);
   assert.deepEqual(tokens[0], { repositoryIds: [repositoryId] });
   assert.deepEqual(tokens[1], {
-    repositoryIds: ['1358455028'],
+    repositoryIds: ['888888888'],
     permissions: { contents: 'write' },
   });
 });
