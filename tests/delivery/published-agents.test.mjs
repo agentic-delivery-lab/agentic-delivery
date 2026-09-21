@@ -28,7 +28,7 @@ async function fixture(t, { secret = false, badTool = false } = {}) {
       targetPath: 'agents/example-reviewer.agent.md',
       sourceRepository: 'agentic-delivery-lab/agentic-delivery-primitives',
       sourceCommit: '0123456789abcdef0123456789abcdef01234567',
-      sourceRef: 'refs/tags/v1.0.0',
+      sourceRef: '0123456789abcdef0123456789abcdef01234567',
       contentSha256: sha256(source),
       governingAdrs: ['urn:agentic-delivery:adr:0018'],
       toolPolicyVersion: '1.0.0',
