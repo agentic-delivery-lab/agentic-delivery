@@ -29,6 +29,16 @@ const ARTIFACT_REPOSITORIES = Object.freeze({
   primitives: 'agentic-delivery-lab/agentic-delivery-primitives',
 });
 
+function semverMajor(version) {
+  const match = typeof version === 'string' ? /^(\d+)\./.exec(version) : null;
+  return match ? Number(match[1]) : null;
+}
+
+function majorCompatibilityIncludes(ranges, version) {
+  const major = semverMajor(version);
+  return major !== null && Array.isArray(ranges) && ranges.includes(`${major}.x`);
+}
+
 function addError(errors, path, message) {
   errors.push(`${path} ${message}`);
 }
@@ -201,8 +211,33 @@ export function validateControllerRelease(release) {
       if (policy.preReleaseException !== 'no-previous-ga-major') addError(errors, 'support.policy.preReleaseException', 'must explain the absence of a previous GA major');
       if (policy.securityRevocation !== 'fail-closed-with-incident') addError(errors, 'support.policy.securityRevocation', 'must fail closed with an incident record');
     }
+    if (contracts && typeof contracts === 'object' && !Array.isArray(contracts)) {
+      if (Array.isArray(support.eventEnvelopeVersions) && !support.eventEnvelopeVersions.includes(contracts.eventEnvelope)) {
+        addError(errors, 'support.eventEnvelopeVersions', 'must include the release contract event-envelope version');
+      }
+      for (const name of ['lifecycle', 'stateMachine', 'evidence']) {
+        if (Array.isArray(support[`${name}Versions`]) && !support[`${name}Versions`].includes(contracts[name])) {
+          addError(errors, `support.${name}Versions`, `must include contracts.${name}`);
+        }
+      }
+    }
   }
   validateDependencies(release.dependencies, 'dependencies', errors);
+  if (release.dependencies && typeof release.dependencies === 'object' && !Array.isArray(release.dependencies)
+    && release.support && typeof release.support === 'object' && !Array.isArray(release.support)) {
+    const architectureVersion = release.dependencies.architecture?.version;
+    const primitiveVersion = release.dependencies.primitives?.version;
+    if (Array.isArray(release.support.architectureCompatibility)
+      && typeof architectureVersion === 'string' && SEMVER.test(architectureVersion)
+      && !majorCompatibilityIncludes(release.support.architectureCompatibility, architectureVersion)) {
+      addError(errors, 'support.architectureCompatibility', 'must include the pinned Architecture major version');
+    }
+    if (Array.isArray(release.support.primitiveCompatibility)
+      && typeof primitiveVersion === 'string' && SEMVER.test(primitiveVersion)
+      && !majorCompatibilityIncludes(release.support.primitiveCompatibility, primitiveVersion)) {
+      addError(errors, 'support.primitiveCompatibility', 'must include the pinned Primitive major version');
+    }
+  }
   if (!release.compatibility || typeof release.compatibility !== 'object' || Array.isArray(release.compatibility)) {
     addError(errors, 'compatibility', 'must be an object');
   } else {
@@ -211,6 +246,10 @@ export function validateControllerRelease(release) {
         if (!Number.isInteger(release.compatibility[name]) || release.compatibility[name] < 1) addError(errors, `compatibility.${name}`, 'must be a positive integer');
       } else if (typeof release.compatibility[name] !== 'string' || !SEMVER.test(release.compatibility[name])) {
         addError(errors, `compatibility.${name}`, 'must use SemVer');
+      }
+      if (contracts && typeof contracts === 'object' && !Array.isArray(contracts)
+        && release.compatibility[name] !== contracts[name]) {
+        addError(errors, `compatibility.${name}`, `must match contracts.${name}`);
       }
     }
     if (!Array.isArray(release.compatibility.controllers) || release.compatibility.controllers.length === 0) {

@@ -74,6 +74,19 @@ test('controller release support policy fails closed for incomplete compatibilit
   assert.ok(result.errors.some((error) => error.includes('support.primitiveCompatibility')));
 });
 
+test('controller release support policy includes current contracts and dependency majors', async () => {
+  const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
+  const invalid = structuredClone(release);
+  invalid.support.lifecycleVersions = ['2.0.0'];
+  invalid.support.architectureCompatibility = ['1.x'];
+  invalid.compatibility.evidence = '2.0.0';
+  const result = validateControllerRelease(invalid);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => error.includes('support.lifecycleVersions must include contracts.lifecycle')));
+  assert.ok(result.errors.some((error) => error.includes('support.architectureCompatibility must include the pinned Architecture major version')));
+  assert.ok(result.errors.some((error) => error.includes('compatibility.evidence must match contracts.evidence')));
+});
+
 test('the current controller release pins immutable Architecture and Primitive content digests', async () => {
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   for (const dependency of [release.dependencies.architecture, release.dependencies.primitives]) {
