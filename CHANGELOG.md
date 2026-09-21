@@ -16,6 +16,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.30` at
+  `069475071cfa6b725446e8179ad1db164dc2d96e`, making the organization
+  event/action catalog explicit and validating the GitHub App contract against
+  that release-bound source; draft29 remains the explicit rollback pin.
+
 - The draft controller release advances to `0.2.0-draft.29` at
   `7061773305054da9eb33b4ef872a7b7c63364d65`, carrying the corrected
   traceability metadata for the release-bound Primitive selection contract;
