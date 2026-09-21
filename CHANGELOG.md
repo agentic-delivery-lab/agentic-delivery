@@ -14,6 +14,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.12` at
+  `3ea621d64507c0ef187181a487e5f8ff190e5aa3`, adding deterministic lifecycle
+  write-back coverage to the two-repository acceptance matrix while retaining
+  draft11 and earlier rollback pins.
+
 - The draft controller release advances to `0.2.0-draft.11` at
   `83f164388096e0e343b1641c27ee399e509bf68b`, retaining draft10, draft9, and
   earlier pins while making the acceptance validator repository-independent.
