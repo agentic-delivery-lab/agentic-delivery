@@ -113,7 +113,7 @@ These checks are evidence for implementation readiness, not evidence that the
 corresponding GitHub repositories, settings, App installation, or publication
 surface exist.
 
-The latest local regression evidence is: Control Plane `306/306` tests,
+The latest local regression evidence is: Control Plane `307/307` tests,
 Architecture `8/8`, Agentic Primitives `6/6`, Distribution `7/7`, and the
 private publication validator with zero projections. The Control Plane release
 chain suite includes the regression fixture that mutates a dependency
