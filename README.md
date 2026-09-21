@@ -42,7 +42,8 @@ pnpm acceptance:check
 `pnpm acceptance:check` is an offline two-repository fixture matrix. It proves
 that one controller preserves origin repository identity, applies the same
 validated lifecycle write-back to each originating issue, isolates equal issue
-numbers, retains an older compatible pin, and keeps App credentials central.
+numbers, carries the identity into API/git/PR/evidence projections, retains an
+older compatible pin, and keeps App credentials central.
 It deliberately reports live GitHub App installation, webhook delivery,
 organization-field, and repository-local CI evidence as external checks; it
 does not imply that those operator surfaces are active.

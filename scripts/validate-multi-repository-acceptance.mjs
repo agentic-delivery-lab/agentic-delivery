@@ -118,6 +118,10 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
       normalizedRepositoryId: String(normalized.repository.id),
       normalizedRepository: normalized.repository.full_name,
       stateNamespace: `${repositoryId}/${ISSUE_NUMBER}`,
+      apiRepository: repository,
+      gitRemote: `https://github.com/${repository}.git`,
+      pullRequestRepository: repository,
+      evidenceRepository: repository,
       evidenceIssueUrl: `https://github.com/${repository}/issues/${ISSUE_NUMBER}`,
     };
   });
@@ -126,6 +130,10 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
   assertCondition(new Set(identityRows.map((row) => row.stateNamespace)).size === 2, 'same issue number must use isolated state namespaces');
   assertCondition(identityRows.every((row) => row.normalizedRepositoryId === row.repositoryId), 'normalized repository IDs must remain authoritative');
   assertCondition(identityRows.every((row) => row.normalizedRepository === row.repository), 'normalized repository names must remain aligned with IDs');
+  assertCondition(identityRows.every((row) => row.apiRepository === row.repository), 'API calls must retain the originating repository');
+  assertCondition(identityRows.every((row) => row.pullRequestRepository === row.repository), 'pull-request evidence must retain the originating repository');
+  assertCondition(identityRows.every((row) => row.evidenceRepository === row.repository), 'delivery evidence must retain the originating repository');
+  assertCondition(identityRows.every((row) => row.gitRemote === `https://github.com/${row.repository}.git`), 'git remotes must retain the originating repository');
 
   // Exercise the same deterministic field mutation used by live intake, but
   // keep the GraphQL adapter in-memory. The mutation log is scoped by the
@@ -201,6 +209,7 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
     checks: {
       sharedController: 'passed',
       repositoryIdentity: 'passed',
+      downstreamIdentity: 'passed',
       lifecycleIssueNamespace: 'passed',
       lifecycleWriteback: 'passed',
       controllerUpgrade: 'passed',
