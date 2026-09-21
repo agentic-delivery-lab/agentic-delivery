@@ -1,0 +1,37 @@
+name: agent-observation
+
+# Pull-request lifecycle observations are deliberately separated from the
+# agent-invocation workflow. This path validates identity and enrollment only;
+# it does not receive App credentials, mutate GitHub state, or start Codex.
+on:
+  repository_dispatch:
+    types: [agent_observation]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out trusted observation validator
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Install observation validator dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Validate the signed pull-request observation
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/validate-observation-event.mjs

@@ -207,7 +207,7 @@ test('webhook dispatches enrolled pull-request observations without granting inv
   assert.equal(output.statusCode, 202);
   assert.equal(calls.length, 1);
   const dispatch = JSON.parse(calls[0].options.body);
-  assert.equal(dispatch.event_type, 'agent_invocation');
+  assert.equal(dispatch.event_type, 'agent_observation');
   assert.equal(dispatch.client_payload.event, 'pull_request');
   assert.equal(dispatch.client_payload.source.kind, 'pull_request');
   assert.equal(dispatch.client_payload.source.pull_request_number, 44);
