@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -85,8 +86,19 @@ async function assertPathAtCommit(repository, commit, relativePath, label, error
 }
 
 async function digestWith(repository, script, pinnedCommit, label, errors) {
+  let temporaryRoot;
   try {
-    const output = (await execFileAsync(process.execPath, [path.join(repository, script), repository, pinnedCommit], {
+    // Execute the digest implementation from the exact dependency commit. A
+    // current worktree copy is not sufficient evidence: it could have
+    // changed after the release was pinned and would then validate the wrong
+    // hashing rules. These digest tools are dependency-free ESM modules, so a
+    // temporary checkout of the pinned source is enough and leaves no
+    // generated repository state behind.
+    const pinnedSource = await git(repository, ['show', `${pinnedCommit}:${script}`]);
+    temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-release-chain-'));
+    const temporaryScript = path.join(temporaryRoot, path.basename(script));
+    await writeFile(temporaryScript, pinnedSource, 'utf8');
+    const output = (await execFileAsync(process.execPath, [temporaryScript, repository, pinnedCommit], {
       encoding: 'utf8',
       windowsHide: true,
       maxBuffer: 32 * 1024 * 1024,
@@ -96,6 +108,8 @@ async function digestWith(repository, script, pinnedCommit, label, errors) {
   } catch (error) {
     errors.push(`${label} digest could not be reproduced: ${error.message}`);
     return null;
+  } finally {
+    if (temporaryRoot) await rm(temporaryRoot, { recursive: true, force: true });
   }
 }
 

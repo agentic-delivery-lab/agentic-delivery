@@ -98,6 +98,10 @@ repository.
 | Distribution/bootstrap | `agentic-delivery-distribution`, draft12 bundle, 7/7 tests | Opt-in fixture and PR projection; no consumer enrollment |
 | Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
 
+The release-chain validator reads both dependency manifests and their digest
+implementations from the exact pinned Architecture and Primitive commits. It
+does not validate a dependency with a mutable sibling worktree tool.
+
 The local checks supporting these slices are `pnpm control-plane:check`,
 `pnpm github-app:check`, `pnpm control-plane:boundary`,
 `pnpm acceptance:check`, `pnpm migration:check`, `pnpm traceability:check`,
@@ -1710,7 +1714,7 @@ remove:
 - reusable workflows;
 - explicit-root release-chain verification for Architecture, Primitives,
   Distribution, and `.github-private`, including digest and publication-ref
-  reproduction;
+  reproduction using the exact pinned dependency source;
 - production scan for hard-coded origin repository;
 - proof that central `GITHUB_TOKEN` cannot mutate origin repositories.
 
