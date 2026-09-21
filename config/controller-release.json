@@ -11,6 +11,21 @@
     "stateMachine": "1.0.0",
     "evidence": "1.0.0"
   },
+  "support": {
+    "eventEnvelopeVersions": [1],
+    "lifecycleVersions": ["1.0.0"],
+    "stateMachineVersions": ["1.0.0"],
+    "evidenceVersions": ["1.0.0"],
+    "primitiveCompatibility": ["0.x"],
+    "architectureCompatibility": ["0.x"],
+    "minimumBootstrapVersion": "0.2.0-draft.23",
+    "policy": {
+      "supportWindowDays": 90,
+      "majorStrategy": "current-and-immediately-previous",
+      "preReleaseException": "no-previous-ga-major",
+      "securityRevocation": "fail-closed-with-incident"
+    }
+  },
   "dependencies": {
     "architecture": {
       "repository": "agentic-delivery-lab/agentic-delivery-architecture",
