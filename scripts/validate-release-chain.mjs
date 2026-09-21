@@ -232,8 +232,6 @@ export async function validateReleaseChain({
     'scripts/prepare-agent-invocation.mjs',
     'scripts/lib/participant-registry.mjs',
     'config/participants.yml',
-    'config/event-catalog.yml',
-    'config/github-app-contract.json',
     'package.json',
     'pnpm-lock.yaml',
   ]) {
@@ -242,6 +240,19 @@ export async function validateReleaseChain({
       controller.bootstrapCommit,
       relativePath,
       'Control Plane bootstrap content',
+      errors,
+    );
+  }
+  for (const relativePath of [
+    'config/event-catalog.yml',
+    'config/github-app-contract.json',
+    'scripts/lib/event-catalog.mjs',
+  ]) {
+    await assertPathAtCommit(
+      controlPlaneRoot,
+      controller.commit,
+      relativePath,
+      'Control Plane release content',
       errors,
     );
   }
