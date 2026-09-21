@@ -111,6 +111,7 @@ jobs:
 
       - name: Install intake dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: trusted-intake
 
       - name: Validate and normalize explicit agent invocation
         id: invocation
@@ -125,6 +126,7 @@ jobs:
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
           RUNNER_TEMP: ${{ runner.temp }}
         run: node scripts/prepare-agent-invocation.mjs
+        working-directory: trusted-intake
 
       - name: Check out the validated controller release
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
