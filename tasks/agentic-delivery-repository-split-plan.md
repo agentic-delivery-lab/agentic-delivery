@@ -108,7 +108,7 @@ has no fallback for either identity. Draft controller `0.2.0-draft.20` at
 draft `0.1.0-draft.4` at `51e94992c5f39c59046f752e0cf6cff2ed3fff32`, including
 canonical content digests. Draft19 and earlier remain explicit rollback pins.
 The Distribution workflow source is pinned to
-`5401a3d8c3ace20661eb749245e80bd2b511cafe`, and the private publication
+`c3bf78d51836be737eb069b4408f7b16f21c0877`, and the private publication
 validator is pinned to that same Control Plane source chain. This is still
 local, draft, and shadow-only; it does not activate a GitHub App or change any
 organization issue.
