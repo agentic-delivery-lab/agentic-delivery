@@ -99,6 +99,7 @@ repository.
 | Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json` plus source maps | Local-prepared; no remote repository or publication claim |
 | Distribution/bootstrap | `agentic-delivery-distribution`, draft18 bundle, 7/7 tests | Opt-in fixture and PR projection; no consumer enrollment |
 | Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
+| GitHub special-surface contract | `migration/special-surfaces.yml`, `scripts/validate-special-surfaces.mjs` | Migration evidence distinguishes GitHub-consumed paths from governance paths and forbids runtime ownership |
 
 The release-chain validator reads both dependency manifests and their digest
 implementations from the exact pinned Architecture and Primitive commits. It
@@ -106,14 +107,15 @@ does not validate a dependency with a mutable sibling worktree tool.
 
 The local checks supporting these slices are `pnpm control-plane:check`,
 `pnpm github-app:check`, `pnpm control-plane:boundary`,
-`pnpm acceptance:check`, `pnpm migration:check`, `pnpm traceability:check`,
+`pnpm acceptance:check`, `pnpm migration:check`,
+`pnpm special-surfaces:check`, `pnpm traceability:check`,
 and the explicit-root `pnpm release-chain:check`. The Distribution checkout
 also runs `pnpm test`, including its repository-local CI isolation fixture.
 These checks are evidence for implementation readiness, not evidence that the
 corresponding GitHub repositories, settings, App installation, or publication
 surface exist.
 
-The latest local regression evidence is: Control Plane `310/310` tests,
+The latest local regression evidence is: Control Plane `312/312` tests,
 Architecture `8/8`, Agentic Primitives `6/6`, Distribution `7/7`, and the
 private publication validator with zero projections. The Control Plane release
 chain suite includes the regression fixture that mutates a dependency
@@ -121,6 +123,12 @@ worktree tool and still requires the exact pinned tool source. All five prepared
 checkouts are clean after their local commits; the separate public `.github`
 checkout retains pre-existing user changes and is intentionally not modified
 by this migration work.
+
+The migration evidence now records `.github` and `.github-private` as
+GitHub-defined special surfaces rather than domain repository targets. Their
+GitHub-consumed paths, governance paths, non-runtime boundary, workflow
+inheritance behavior, and private publication exclusions are validated by
+`pnpm special-surfaces:check` and its positive and negative fixtures.
 
 The controller release also publishes a machine-readable support matrix. It
 pins accepted event-envelope, lifecycle, state-machine, and evidence versions,

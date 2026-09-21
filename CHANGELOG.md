@@ -16,6 +16,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Migration evidence now validates `.github` and `.github-private` as narrow
+  GitHub-defined special surfaces, keeping consumed paths, governance paths,
+  non-inherited workflows, projection provenance, and private-surface
+  exclusions explicit and outside the runtime control plane.
+
 - The draft controller release now publishes and validates an explicit support
   matrix for event envelopes, lifecycle/state-machine/evidence contracts,
   Primitive and Architecture compatibility, minimum bootstrap, upgrade
