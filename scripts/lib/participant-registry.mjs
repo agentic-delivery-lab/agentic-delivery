@@ -146,7 +146,7 @@ export function parseParticipantRegistry(registry, { organization = ORGANIZATION
 }
 
 export async function loadParticipantRegistry(repositoryRoot = process.cwd()) {
-  const file = path.join(path.resolve(repositoryRoot), '.github', 'participants.yml');
+  const file = path.join(path.resolve(repositoryRoot), 'config', 'participants.yml');
   const source = await readFile(file, 'utf8');
   return parseParticipantRegistry(parseRepositoryYaml(source, 'participant registry'));
 }

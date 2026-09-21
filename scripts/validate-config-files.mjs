@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -30,7 +30,7 @@ async function gitFiles(repositoryRoot) {
       .filter((file) => /\.(?:json|ya?ml)$/.test(file))
       .filter((file) => file !== 'pnpm-lock.yaml')
       .filter((file) => !/^tests\/.*\/fixtures\//.test(file));
-    for (const file of ['.github/issue-metadata.yml', '.github/orchestration-policy.yml', '.github/participants.yml']) {
+    for (const file of ['.github/issue-metadata.yml', '.github/orchestration-policy.yml', 'config/agent-actors.json', 'config/participants.yml']) {
       if (!tracked.includes(file)) tracked.push(file);
     }
     // These repository-local files were replaced by organization metadata and
@@ -38,7 +38,18 @@ async function gitFiles(repositoryRoot) {
     // appear in `git ls-files`.
     const obsolete = (file) => file === '.github/issue-lifecycle.yml'
       || file.startsWith('.github/ISSUE_TEMPLATE/');
-    return tracked.filter((file) => !obsolete(file));
+    const candidates = tracked.filter((file) => !obsolete(file));
+    const existing = [];
+    for (const file of candidates) {
+      try {
+        await access(path.join(repositoryRoot, file));
+        existing.push(file);
+      } catch {
+        // A deleted-but-not-yet-staged migration path is not a configuration
+        // file to validate. Explicit file lists still report missing paths.
+      }
+    }
+    return existing;
   } catch {
     throw new ConfigValidationError('Configuration check: repository root is not a Git repository.', 2);
   }
@@ -52,7 +63,7 @@ export async function validateConfigFiles({ repositoryRoot = path.resolve(path.d
     let source;
     try {
       source = await readFile(filePath, 'utf8');
-      if (relativeFile === '.github/participants.yml' || relativeFile.endsWith('/participants.yml') || relativeFile === 'participants.yml') {
+      if (relativeFile === 'config/participants.yml' || relativeFile.endsWith('/participants.yml') || relativeFile === 'participants.yml') {
         const result = parseParticipantRegistry(parseRepositoryYaml(source, relativeFile));
         if (!result.valid) errors.push(relativeFile + ': participant registry: ' + result.errors.join('; '));
       }

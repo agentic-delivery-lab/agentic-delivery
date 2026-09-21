@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import actorCatalog from '../../.github/agent-actors.json' with { type: 'json' };
+import actorCatalog from '../../config/agent-actors.json' with { type: 'json' };
 import {
   AGENT_BOT_LOGIN,
   AGENT_MENTION,
@@ -41,7 +41,7 @@ test('the configured App actor and event catalog are deterministic', async () =>
   assert.equal(AGENT_BOT_LOGIN, 'agentic-delivery-lab-invoker-7f3a[bot]');
   assert.deepEqual(validateActorCatalog(actorCatalog), { valid: true, errors: [] });
   assert.deepEqual(Object.keys(INVOCATION_EVENTS), ['issues', 'issue_comment', 'pull_request_review', 'pull_request_review_comment']);
-  assert.ok((await readFile(path.join(repositoryRoot, '.github/agent-actors.json'), 'utf8')).includes('agentic-delivery-lab-invoker-7f3a[bot]'));
+  assert.ok((await readFile(path.join(repositoryRoot, 'config/agent-actors.json'), 'utf8')).includes('agentic-delivery-lab-invoker-7f3a[bot]'));
 });
 
 test('only an explicit first visible line invokes the orchestrator', () => {

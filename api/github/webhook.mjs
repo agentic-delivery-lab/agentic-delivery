@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 
 // agentic-primitive: {"id":"organization-webhook-ingress","kind":"validator","enforcement":"deterministic","adrs":["ADR-0018","ADR-0017"],"domains":["agentic-delivery-control-plane","agentic-delivery-governance"]}
 
-import actorCatalog from '../../.github/agent-actors.json' with { type: 'json' };
+import actorCatalog from '../../config/agent-actors.json' with { type: 'json' };
 import {
   AGENT_BOT_LOGIN,
   AGENT_MENTION,

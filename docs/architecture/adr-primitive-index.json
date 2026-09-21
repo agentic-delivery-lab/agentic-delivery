@@ -810,8 +810,8 @@
     },
     {
       "id": "participant-registry",
-      "path": ".github/participants.yml",
-      "location": ".github/participants.yml",
+      "path": "config/participants.yml",
+      "location": "config/participants.yml",
       "kind": "state-machine",
       "enforcement": "deterministic",
       "adrs": [

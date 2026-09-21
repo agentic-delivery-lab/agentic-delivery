@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import actorCatalog from '../.github/agent-actors.json' with { type: 'json' };
+import actorCatalog from '../config/agent-actors.json' with { type: 'json' };
 import { invocationEventSupported } from './lib/agent-invocation.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

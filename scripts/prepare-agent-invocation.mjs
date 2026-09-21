@@ -16,7 +16,7 @@ import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
 import { loadParticipantRegistry, participantForRepository } from './lib/participant-registry.mjs';
 import { validateEventEnvelope } from './lib/control-plane-contracts.mjs';
 import { validateReceivedAt } from './lib/replay-protection.mjs';
-import actorCatalog from '../.github/agent-actors.json' with { type: 'json' };
+import actorCatalog from '../config/agent-actors.json' with { type: 'json' };
 
 const API_VERSION = '2026-03-10';
 async function writeOutput(name, value, env = process.env) {
