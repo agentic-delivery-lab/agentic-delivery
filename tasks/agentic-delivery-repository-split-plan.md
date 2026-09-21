@@ -1306,6 +1306,15 @@ The observed arc42-language CLI supports `validate`, `get`, `coverage`,
 tested version. Plain readable Markdown remains canonical. Upgrade only through
 a reviewed PR with fixture comparison.
 
+`docToolchain/diag-agent` remains an experimental, optional adapter rather than
+an architecture dependency. No pinned release, reproducible source-output
+contract, or security review is currently present in the prepared checkout.
+If it is piloted later, the pilot must prove deterministic local rendering,
+preservation of the canonical Structurizr/PlantUML/Mermaid sources, explicit
+PlantUML/Kroki network behavior, sandboxing of any external renderer, and a
+reviewed immutable version before it can affect CI. External Kroki rendering is
+never a required path; generated images remain disposable projections.
+
 Use Structurizr DSL for coherent C4 views in arc42 sections 3, 5, and 7.
 Use PlantUML or Mermaid for runtime views in section 6. Give each view exactly
 one authoritative source format. Render locally with pinned tools; mandatory CI
