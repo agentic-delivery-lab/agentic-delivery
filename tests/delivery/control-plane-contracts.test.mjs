@@ -57,6 +57,10 @@ test('the checked-in controller release pins every enrolled participant', async 
 test('the release catalog retains an older immutable pin for intentional rollback', async () => {
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   assert.ok(release.compatibility.controllers.some((pin) => (
+    pin.version === '0.2.0-draft.6'
+    && pin.commit === '564a35fd798e75800a3bf15223afb8bd87d59581'
+  )));
+  assert.ok(release.compatibility.controllers.some((pin) => (
     pin.version === '0.2.0-draft.2'
     && pin.commit === '50fba4418e394bf2fa57521302241caf474516bd'
   )));

@@ -11,7 +11,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft controller release to `0.2.0-draft.7` at `48bc83b2c52e0d9aeee47905d4877ba75657c354`, the first pin that contains the canonical executable `config/` boundary.
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft controller release to `0.2.0-draft.7` at `48bc83b2c52e0d9aeee47905d4877ba75657c354`, the first pin that contains the canonical executable `config/` boundary, while retaining immutable draft6 and draft2 rollback pins.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) moves the executable issue metadata and orchestration contracts from the repository-local `.github/` bridge into canonical `config/` files; the public organization `.github` repository remains responsible only for GitHub-supported defaults.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft controller release to `0.2.0-draft.6` at `564a35fd798e75800a3bf15223afb8bd87d59581`, including the canonical `config/` enrollment boundary, origin-ID authorization, and default origin-scoped App tokens; existing participants remain shadow-only.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) retains the prior immutable `0.2.0-draft.2` controller pin in the compatibility catalog so participant upgrades and exact-commit rollback remain intentional.
