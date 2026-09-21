@@ -20,6 +20,8 @@ they do not authorize migration, alter that issue's scope, or close it.
   matrix for event envelopes, lifecycle/state-machine/evidence contracts,
   Primitive and Architecture compatibility, minimum bootstrap, upgrade
   support windows, pre-release handling, and fail-closed security revocation.
+  Validation also requires the matrix to include the current contract versions
+  and the pinned dependency majors.
 
 - Control Plane ingress, contract configuration, workflows, runtime libraries,
   and migration manifests now have scoped `AGENTS.md` boundaries so the
