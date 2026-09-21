@@ -74,13 +74,14 @@ router still rechecks authorization before any state mutation.
 
 The follow-up invocation boundary is implemented by the GitHub App named
 `Agentic Delivery Lab Invoker 7F3A` and the production Vercel Function at the configured
-webhook URL. The organization-wide App contract registers `issues` as well as
-the conversation events `issue_comment`, `pull_request_review`, and
-`pull_request_review_comment`; issue events are the lifecycle entry point for
-every active participant, while conversation events still require the explicit
-invocation mention. Install the App with selected-repository access only; App
-access is necessary but does not enroll a repository without the central
-participant registry.
+webhook URL. The organization-wide App contract registers `issues`, the
+pull-request lifecycle observation events, and the conversation events
+`issue_comment`, `pull_request_review`, and `pull_request_review_comment`.
+Issue events are the lifecycle entry point for every active participant;
+pull-request events are signed observations only, while conversation events
+still require the explicit invocation mention. Install the App with
+selected-repository access only; App access is necessary but does not enroll a
+repository without the central participant registry.
 
 The Vercel ingress mints a repository-scoped read token for origin actor and
 source checks, then a separate controller token narrowed to the controller
