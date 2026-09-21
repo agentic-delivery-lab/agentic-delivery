@@ -113,10 +113,12 @@ deployment contract rather than a repository-name fallback.
 
 The offline multi-repository acceptance matrix now exercises two repositories
 with the same issue number through the shared controller contract, confirms
-distinct repository-ID state namespaces, checks retained rollback pins, and
-verifies that private publication validation receives no App credentials. Its
-report is explicitly fixture evidence; live App installation, webhook delivery,
-organization fields, and repository-local CI remain operator/runtime checks.
+distinct repository-ID state namespaces, runs the deterministic lifecycle
+write-back contract once per originating issue, checks retained rollback pins,
+and verifies that private publication validation receives no App credentials.
+Its report is explicitly fixture evidence; live App installation, webhook
+delivery, organization fields, and repository-local CI remain operator/runtime
+checks.
 
 ## Executive summary
 

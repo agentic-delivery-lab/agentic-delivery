@@ -7,6 +7,7 @@ import { parseParticipantRegistry } from './lib/participant-registry.mjs';
 import { invocationEnvelope } from './lib/agent-invocation.mjs';
 import { controllerPinMatchesRelease, validateControllerRelease, validateEventEnvelope } from './lib/control-plane-contracts.mjs';
 import { intakeEvent, normalizeOriginEvent } from './codex-delivery.mjs';
+import { reconcileFields } from './issue-intake.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECOND_REPOSITORY_ID = '900000001';
@@ -83,6 +84,8 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
   assertCondition(fixtureRegistry.valid, `two-repository fixture registry is invalid: ${fixtureRegistry.errors.join('; ')}`);
 
   const participants = [first, fixtureRegistry.participants.get(SECOND_REPOSITORY_ID)];
+  const metadataSource = await readFile(path.join(root, 'config/issue-metadata.yml'), 'utf8');
+  const metadataConfig = parseRepositoryYaml(metadataSource, 'issue metadata configuration');
   const identityRows = participants.map((participant, index) => {
     const repositoryId = participant.repositoryId;
     const repository = participant.expectedFullName;
@@ -123,6 +126,40 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
   assertCondition(new Set(identityRows.map((row) => row.stateNamespace)).size === 2, 'same issue number must use isolated state namespaces');
   assertCondition(identityRows.every((row) => row.normalizedRepositoryId === row.repositoryId), 'normalized repository IDs must remain authoritative');
   assertCondition(identityRows.every((row) => row.normalizedRepository === row.repository), 'normalized repository names must remain aligned with IDs');
+
+  // Exercise the same deterministic field mutation used by live intake, but
+  // keep the GraphQL adapter in-memory. The mutation log is scoped by the
+  // originating repository so an identical issue number cannot write through
+  // the controller repository or collide with another participant.
+  const lifecycleWritebacks = [];
+  for (const participant of participants) {
+    const repository = participant.expectedFullName;
+    const repositoryId = participant.repositoryId;
+    const mutation = await reconcileFields({
+      graphql: async (_query, variables) => {
+        lifecycleWritebacks.push({ repositoryId, repository, variables });
+        return { setIssueFieldValue: { issue: { id: `ISSUE_${repositoryId}` } } };
+      },
+      issue: {
+        id: `ISSUE_${repositoryId}`,
+        number: ISSUE_NUMBER,
+        state: 'open',
+        fields: { 'Lifecycle Stage': 'Intake', 'Delivery Readiness': 'Not ready' },
+      },
+      config: metadataConfig,
+      classification: {
+        workType: 'task',
+        governance: [],
+        targetFields: { lifecycle_stage: 'planning', readiness: 'ready' },
+      },
+    });
+    assertCondition(mutation.changed === true, `${repository} did not authorize its lifecycle write-back`);
+    assertCondition(mutation.fields.values.lifecycle_stage.optionId === 'planning', `${repository} selected the wrong lifecycle option`);
+    assertCondition(mutation.fields.values.readiness.optionId === 'ready', `${repository} selected the wrong delivery-state option`);
+  }
+  assertCondition(lifecycleWritebacks.length === 2, 'each participating repository must receive one lifecycle write-back');
+  assertCondition(new Set(lifecycleWritebacks.map((row) => row.repositoryId)).size === 2, 'lifecycle write-backs must preserve distinct repository identity');
+  assertCondition(lifecycleWritebacks.every((row) => row.variables.input.issueId === `ISSUE_${row.repositoryId}`), 'lifecycle writes must target the originating repository issue node');
 
   const currentPin = {
     controller: { version: release.version, commit: release.commit },
@@ -165,6 +202,7 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
       sharedController: 'passed',
       repositoryIdentity: 'passed',
       lifecycleIssueNamespace: 'passed',
+      lifecycleWriteback: 'passed',
       controllerUpgrade: 'passed',
       controllerRollback: 'passed',
       centralCredentialBoundary: 'passed',

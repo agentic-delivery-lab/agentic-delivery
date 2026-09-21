@@ -18,6 +18,10 @@ they do not authorize migration, alter that issue's scope, or close it.
   `83f164388096e0e343b1641c27ee399e509bf68b`, retaining draft10, draft9, and
   earlier pins while making the acceptance validator repository-independent.
 
+- The offline acceptance matrix now exercises the controller's deterministic
+  lifecycle write-back contract independently for both fixture repositories;
+  it still makes no claim about live GitHub mutation.
+
 - The draft controller release advances to `0.2.0-draft.10` at
   `8c883b754dc03498788615160ee7f6cf2effb6fc`, adding the offline
   multi-repository acceptance matrix while retaining draft9 and earlier
