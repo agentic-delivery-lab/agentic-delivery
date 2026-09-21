@@ -59,3 +59,21 @@
 - CI checks structure, syntax, tests and dependency risk. Agents and human reviewers must still review commit intent, Gitmoji meaning, changelog relevance, affected bounded contexts and documentation in plain English.
 
 See [`$delivery-workflow`](.agents/skills/delivery-workflow/SKILL.md) and its sources for the full contract.
+
+## Control Plane extraction boundary
+
+During the repository split, this repository is the central Agentic Delivery
+Control Plane. Its canonical implementation is the versioned lifecycle,
+routing, authorization, orchestration, GitHub App boundary, runner/session
+handling, reusable workflows, evidence, and controlled write-back described by
+the pinned release and participant contracts.
+
+Architecture Authority owns architecture decisions, principles, terminology,
+models, and conformance. Agentic Primitives owns reusable agents, skills,
+instructions, hooks, validators, and capability contracts. Distribution owns
+Dev Container, bootstrap, and generated consumer projections. `.github` and
+`.github-private` remain GitHub-defined governance and publication adapters.
+Do not add those authorities or their copied implementations here.
+
+Folder-scoped instructions in `api/github/`, `config/`, `.github/workflows/`,
+`scripts/lib/`, and `migration/` refine this boundary for their subdomains.
