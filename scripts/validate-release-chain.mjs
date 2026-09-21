@@ -59,6 +59,15 @@ async function assertCommit(repository, commit, label, errors) {
   }
 }
 
+async function assertPathAtCommit(repository, commit, relativePath, label, errors) {
+  if (!SHA1.test(commit ?? '') || typeof relativePath !== 'string' || relativePath.length === 0) return;
+  try {
+    await git(repository, ['cat-file', '-e', `${commit}:${relativePath}`]);
+  } catch (error) {
+    errors.push(`${label} is missing at ${commit}: ${relativePath}`);
+  }
+}
+
 async function digestWith(repository, script, pinnedCommit, label, errors) {
   try {
     const output = (await execFileAsync(process.execPath, [path.join(repository, script), repository, pinnedCommit], {
@@ -141,6 +150,21 @@ export async function validateReleaseChain({
   await assertCommit(controlPlaneRoot, controller.commit, 'Control Plane release commit', errors);
   await assertCommit(controlPlaneRoot, controller.bootstrapCommit, 'Control Plane bootstrap commit', errors);
   await assertCommit(controlPlaneRoot, bundle.workflowSource?.commit, 'Distribution workflow source commit', errors);
+  for (const relativePath of [
+    'scripts/validate-published-agents.mjs',
+    'package.json',
+    'pnpm-lock.yaml',
+    '.github/workflows/agentic-delivery-quality.yml',
+    '.github/workflows/agentic-delivery-architecture-review.yml',
+  ]) {
+    await assertPathAtCommit(
+      controlPlaneRoot,
+      bundle.workflowSource?.commit,
+      relativePath,
+      'Distribution workflow source content',
+      errors,
+    );
+  }
   const architectureDigest = await digestWith(architectureRoot, 'tools/architecture-content-digest.mjs', architectureDependency.commit, 'Architecture', errors);
   const primitiveDigest = await digestWith(primitivesRoot, 'tools/primitive-content-digest.mjs', primitiveDependency.commit, 'Primitive', errors);
   equal(errors, 'Architecture dependency digest', architectureDigest, architectureDependency.contentSha256);

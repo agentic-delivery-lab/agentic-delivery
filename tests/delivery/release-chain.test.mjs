@@ -42,3 +42,12 @@ test('local release graph reproduces all pinned digests and publication refs', a
   assert.equal(result.architecture.contentSha256, '8a5143f2a09e5324cf8fcb5cc9652a0c62b5562371c29bc869a6536aeab4f6d3');
   assert.equal(result.primitives.contentSha256, '36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0');
 });
+
+test('the pinned workflow source contains the validator and reusable workflow entry points', async (t) => {
+  const available = await Promise.all(Object.values(siblingRoots).map(exists));
+  if (!available.every(Boolean)) {
+    t.skip('split repositories are not checked out in this workspace');
+    return;
+  }
+  await assert.doesNotReject(() => validateReleaseChain({ controlPlaneRoot: repositoryRoot, ...siblingRoots }));
+});
