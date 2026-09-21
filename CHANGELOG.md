@@ -18,7 +18,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 - Release-chain digest verification now executes the pinned Architecture and
   Primitive digest tools from their exact dependency commits, rather than a
-  mutable sibling worktree copy.
+  mutable sibling worktree copy; a regression fixture proves a modified
+  worktree tool cannot satisfy the release gate.
 
 - Release-chain validation now reads Architecture and Primitive release
   manifests from the exact immutable commits pinned by the Control Plane,

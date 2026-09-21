@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
-import { access, readFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { test } from 'node:test';
+import { promisify } from 'node:util';
 
 import { ReleaseChainValidationError, validateReleaseChain } from '../../scripts/validate-release-chain.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
+const execFileAsync = promisify(execFile);
 const siblingRoots = {
   architectureRoot: path.resolve(repositoryRoot, '../agentic-delivery-architecture'),
   primitivesRoot: path.resolve(repositoryRoot, '../agentic-delivery-primitives'),
@@ -62,4 +65,37 @@ test('release-chain validation reads Architecture and Primitive manifests from t
   const controller = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   assert.equal(result.architecture.commit, controller.dependencies.architecture.commit);
   assert.equal(result.primitives.commit, controller.dependencies.primitives.commit);
+});
+
+test('release-chain validation executes digest tools from the pinned dependency commits', async (t) => {
+  const available = await Promise.all(Object.values(siblingRoots).map(exists));
+  if (!available.every(Boolean)) {
+    t.skip('split repositories are not checked out in this workspace');
+    return;
+  }
+
+  const temporaryRoot = await mkdtemp(path.join('/tmp', 'agentic-release-chain-test-'));
+  const temporaryArchitectureRoot = path.join(temporaryRoot, 'architecture');
+  try {
+    await execFileAsync('git', ['clone', '--local', '--no-hardlinks', siblingRoots.architectureRoot, temporaryArchitectureRoot], {
+      encoding: 'utf8',
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    // If the validator used the mutable worktree tool, this deliberately
+    // invalid implementation would make the release digest fail. A passing
+    // result proves that the tool itself is read from the pinned commit.
+    await writeFile(
+      path.join(temporaryArchitectureRoot, 'tools/architecture-content-digest.mjs'),
+      "process.stdout.write(`${'0'.repeat(64)}\\n`);\n",
+      'utf8',
+    );
+    const result = await validateReleaseChain({
+      controlPlaneRoot: repositoryRoot,
+      ...siblingRoots,
+      architectureRoot: temporaryArchitectureRoot,
+    });
+    assert.equal(result.status, 'passed');
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 });
