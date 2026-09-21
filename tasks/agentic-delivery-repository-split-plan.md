@@ -93,11 +93,11 @@ repository.
 | Local slice | Evidence | Status boundary |
 | --- | --- | --- |
 | Generic Control Plane contracts and signed gateway | `config/`, `api/github/`, `scripts/lib/participant-registry.mjs`, `scripts/validate-multi-repository-acceptance.mjs` | Draft and shadow-only; no live App installation or mutation |
-| Pull-request observation path | `.github/workflows/agent-observation.yml`, `scripts/validate-observation-event.mjs`, draft31 release with draft23 bootstrap | Read-only observation; no lifecycle write-back or model execution |
-| Organization event catalog | `config/event-catalog.yml`, `schemas/event-catalog.v1.schema.json`, `scripts/lib/event-catalog.mjs` | Canonical event/action contract; App manifest and participant subscriptions are validated projections |
+| Pull-request observation path | `.github/workflows/agent-observation.yml`, `scripts/validate-observation-event.mjs`, draft32 release with draft23 bootstrap | Read-only observation; no lifecycle write-back or model execution |
+| Organization event catalog | `config/event-catalog.yml`, `schemas/event-catalog.v1.schema.json`, `scripts/lib/event-catalog.mjs`; runtime route maps in `scripts/lib/agent-invocation.mjs` derive from it | Canonical event/action/route contract; App manifest and participant subscriptions are validated projections |
 | Primitive selection contract | `config/primitive-selection.yml`, `schemas/primitive-selection.v1.schema.json`, `scripts/lib/primitive-selection.mjs` | Release-bound profile-to-Primitive mapping; validates against the pinned Primitive catalog and does not duplicate Primitive content |
 | Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json` plus source maps | Local-prepared; no remote repository or publication claim |
-| Distribution/bootstrap | `agentic-delivery-distribution`, draft17 bundle, 7/7 tests | Opt-in fixture and PR projection; no consumer enrollment |
+| Distribution/bootstrap | `agentic-delivery-distribution`, draft18 bundle, 7/7 tests | Opt-in fixture and PR projection; no consumer enrollment |
 | Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
 
 The release-chain validator reads both dependency manifests and their digest
@@ -132,15 +132,15 @@ that a remote repository, branch protection, or organization access exists.
 
 The Control Plane gateway now requires both the App installation ID and the
 central controller repository ID from protected deployment configuration; it
-has no fallback for either identity. Current draft controller `0.2.0-draft.31`
-is pinned to `ba7a161b93f3f35849362139ee3a281318e9183c`; draft30 at
-`069475071cfa6b725446e8179ad1db164dc2d96e` remains the explicit rollback
+has no fallback for either identity. Current draft controller `0.2.0-draft.32`
+is pinned to `00f2daf3a02ea0ca5610d44d8b17aa3b8bb228eb`; draft31 at
+`ba7a161b93f3f35849362139ee3a281318e9183c` remains the explicit rollback
 release, while draft23 at `30197d5c8731ea6e682ae4de5e629b964e278aab` remains
 the trusted bootstrap commit for this release. The release-bound primitive
 selection contract pins Primitive draft `0.1.0-draft.4` at
 `51e94992c5f39c59046f752e0cf6cff2ed3fff32` and its canonical digest, and
 checks every profile against the pinned catalog and orchestration policy.
-The current controller draft `0.2.0-draft.31` pins Architecture draft
+The current controller draft `0.2.0-draft.32` pins Architecture draft
 `0.1.0-draft.6` at `5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b` with digest
 `3bcc5f617de6ecf93f6b1c55bece5f97c03bcd979ccb1aa1c7d2431199383a3c`, and
 Primitive draft `0.1.0-draft.4` at
