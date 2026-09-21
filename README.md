@@ -20,10 +20,11 @@ Features, bootstrap, and thin consumer callers. `.github` and
 than runtime locations.
 
 Executable enrollment and invocation configuration lives under [`config/`](config/);
-the participant registry and actor catalog are not organization-profile or
-community-health files. The lifecycle and orchestration YAML under `.github/`
-remains a read-only compatibility bridge until its planned split into canonical
-`config/` files.
+the participant registry, actor catalog, issue metadata, and orchestration
+policy are not organization-profile or community-health files. The canonical
+runtime contracts are now `config/issue-metadata.yml` and
+`config/orchestration-policy.yml`; `.github/` contains only repository-local
+workflow adapters and governance evidence.
 
 ## Local checks
 
