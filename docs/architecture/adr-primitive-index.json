@@ -278,6 +278,8 @@
         "organization-webhook-ingress",
         "participant-registry",
         "participant-registry-validator",
+        "primitive-selection-contract",
+        "primitive-selection-validator",
         "repository-governance-instructions",
         "semantic-architecture-review"
       ]
@@ -320,6 +322,8 @@
         "organization-webhook-ingress",
         "participant-registry",
         "participant-registry-validator",
+        "primitive-selection-contract",
+        "primitive-selection-validator",
         "repository-governance-instructions",
         "semantic-architecture-review"
       ]
@@ -825,6 +829,32 @@
       "id": "participant-registry-validator",
       "path": "scripts/lib/participant-registry.mjs",
       "location": "scripts/lib/participant-registry.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "primitive-selection-contract",
+      "path": "config/primitive-selection.yml",
+      "location": "config/primitive-selection.yml",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "primitive-selection-validator",
+      "path": "scripts/lib/primitive-selection.mjs",
+      "location": "scripts/lib/primitive-selection.mjs",
       "kind": "validator",
       "enforcement": "deterministic",
       "adrs": [
