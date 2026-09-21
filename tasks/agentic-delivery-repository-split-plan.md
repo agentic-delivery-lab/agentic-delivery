@@ -1126,9 +1126,9 @@ must not depend on an external Kroki service.
 | ubiquitous-language skill | Primitives `skills/ubiquitous-language` | Canonical reusable skill; read pinned terminology release |
 | delivery-workflow skill | Primitives `skills/delivery-workflow` | Canonical reusable skill; temporary local forwarding path |
 | plain-language skill | Primitives `skills/plain-language-communication` | Canonical reusable skill |
-| `.github/agent-actors.json` | Control Plane `config/agent-actors.json` | Organization-wide invocation catalog |
-| `.github/issue-metadata.yml` | Control Plane `config/lifecycle.yml` and `config/issue-fields.yml` | Single executable lifecycle source |
-| `.github/orchestration-policy.yml` | Control Plane `config/orchestration-policy.yml` | Single executable orchestration source |
+| `config/agent-actors.json` (historically `.github/agent-actors.json`) | Control Plane `config/agent-actors.json` | Canonical organization-wide invocation catalog; history-preserving move |
+| `config/issue-metadata.yml` (historically `.github/issue-metadata.yml`) | Control Plane `config/lifecycle.yml` and `config/issue-fields.yml` | Canonical executable contract during the extraction bridge; future split remains versioned and must not duplicate state |
+| `config/orchestration-policy.yml` (historically `.github/orchestration-policy.yml`) | Control Plane `config/orchestration-policy.yml` | Canonical executable orchestration source; history-preserving move |
 | `api/github/webhook.mjs` | Control Plane ingress | Remove fixed repository; retain deployment adapter |
 | `agent-invocation.yml` | Control Plane gateway | Central `repository_dispatch` target only |
 | `issue-intake.yml` | Control Plane controller | Remove repository-local normal event trigger after cutover |
