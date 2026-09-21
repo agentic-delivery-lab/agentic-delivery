@@ -170,6 +170,13 @@ so a consumer cannot silently pass by relying on an implicit sibling checkout.
 This is a release gate, not a runtime import or an authorization to publish
 any repository.
 
+The Distribution repository now also has a deterministic consumer fixture that
+places an independently owned repository CI workflow beside the managed
+bootstrap targets, applies the bundle, and verifies that the local workflow is
+unchanged. This proves the bootstrap boundary does not claim or overwrite
+repository-specific CI; it does not claim that a live consumer workflow has
+run in GitHub.
+
 The read-only `pnpm organization:inventory` command now captures the current
 organization repository, visibility, default-branch, ruleset, workflow, open
 issue/PR, label, cross-reference, and capability evidence without persisting
