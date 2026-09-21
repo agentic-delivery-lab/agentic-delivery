@@ -113,6 +113,12 @@ validator uses that same source chain. This is still local, draft, and
 shadow-only; it does not activate a GitHub App or change any organization
 issue.
 
+Distribution now also validates a schema-backed capabilities lock, includes
+the Primitive source in its source lock, and carries the Architecture content
+digest into the consumer provenance lock. Cross-file checks reject drift
+between the Primitive release, Architecture release, Control Plane release,
+workflow source, and Agent Plugin projection.
+
 The gateway contract test also dispatches an enrolled second repository through
 an explicitly configured controller name and repository ID different from the
 current repository, proving that the central controller identity is a
