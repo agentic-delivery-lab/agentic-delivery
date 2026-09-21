@@ -102,7 +102,7 @@ that a remote repository, branch protection, or organization access exists.
 
 The Control Plane gateway now requires both the App installation ID and the
 central controller repository ID from protected deployment configuration; it
-has no fallback for either identity. Draft controller `0.2.0-draft.12` and its
+has no fallback for either identity. Draft controller `0.2.0-draft.13` and its
 Distribution/private validator projections pin the resulting immutable source
 chain. This is still local, draft, and shadow-only; it does not activate a
 GitHub App or change any organization issue.
