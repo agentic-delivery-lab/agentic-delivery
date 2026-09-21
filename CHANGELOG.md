@@ -16,6 +16,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.27` at
+  `b52464571e1c0d3adfa5986bd54668d3c7da4a13`, making the release-chain digest
+  implementation itself immutable and commit-verifiable; draft26 remains the
+  explicit rollback pin.
+
 - Release-chain digest verification now executes the pinned Architecture and
   Primitive digest tools from their exact dependency commits, rather than a
   mutable sibling worktree copy; a regression fixture proves a modified
