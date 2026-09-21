@@ -13,6 +13,9 @@ and releases use [Semantic Versioning](https://semver.org/).
 - The persisted repository-split plan now has a deterministic safety check that
   preserves the Issue #52 boundary, successor-issue contract, image evidence
   gap, architecture gate, ordered sections, and current release pin.
+- Private agent publication validation can now reproduce each projection from
+  the exact Primitive source commit named by its provenance lock; the release
+  chain checks the same byte-for-byte relationship.
 
 Entries that reference issue #52 use it only as the persisted-plan context;
 they do not authorize migration, alter that issue's scope, or close it.
