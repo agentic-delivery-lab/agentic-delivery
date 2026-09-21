@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
 import { validatePrimitiveSelection } from './lib/primitive-selection.mjs';
+import { validateEventCatalog } from './lib/event-catalog.mjs';
 
 const execFileAsync = promisify(execFile);
 const SHA1 = /^[0-9a-f]{40}$/;
@@ -174,6 +175,12 @@ export async function validateReleaseChain({
       : await readText(path.join(controlPlaneRoot, 'config/orchestration-policy.yml')),
     path.join(controlPlaneRoot, 'config/orchestration-policy.yml'),
   );
+  const eventCatalog = parseRepositoryYaml(
+    controller.commit && SHA1.test(controller.commit)
+      ? await readTextAtCommit(controlPlaneRoot, controller.commit, 'config/event-catalog.yml')
+      : await readText(path.join(controlPlaneRoot, 'config/event-catalog.yml')),
+    path.join(controlPlaneRoot, 'config/event-catalog.yml'),
+  );
   const bundle = await readJson(path.join(distributionRoot, 'manifests/workflow-bundle.json'));
   const sourceLock = await readJson(path.join(distributionRoot, 'manifests/sources.lock.json'));
   const capabilities = await readJson(path.join(distributionRoot, 'manifests/capabilities.lock.json'));
@@ -207,6 +214,9 @@ export async function validateReleaseChain({
   equal(errors, 'Primitive selection commit', primitiveSelection.source?.commit, primitiveDependency.commit);
   equal(errors, 'Primitive selection digest', primitiveSelection.source?.contentSha256, primitiveDependency.contentSha256);
   equal(errors, 'Primitive selection capability policy', primitiveSelection.source?.capabilityPolicyVersion, primitiveRelease.capabilityPolicyVersion);
+  const eventCatalogResult = validateEventCatalog(eventCatalog);
+  if (!eventCatalogResult.valid) errors.push(...eventCatalogResult.errors.map((error) => `Event catalog: ${error}`));
+  equal(errors, 'Event catalog organization', eventCatalog.organization, 'agentic-delivery-lab');
   equal(errors, 'Architecture lock repository', primitiveLock.source?.repository, primitiveDependency.repository);
   equal(errors, 'Architecture lock release version', primitiveLock.source?.releaseVersion, primitiveDependency.version);
   equal(errors, 'Architecture lock source commit', primitiveLock.source?.sourceCommit, primitiveDependency.commit);
@@ -222,6 +232,8 @@ export async function validateReleaseChain({
     'scripts/prepare-agent-invocation.mjs',
     'scripts/lib/participant-registry.mjs',
     'config/participants.yml',
+    'config/event-catalog.yml',
+    'config/github-app-contract.json',
     'package.json',
     'pnpm-lock.yaml',
   ]) {
@@ -304,6 +316,7 @@ export async function validateReleaseChain({
     architecture: { version: architectureDependency.version, commit: architectureDependency.commit, contentSha256: architectureDependency.contentSha256 },
     primitives: { version: primitiveDependency.version, commit: primitiveDependency.commit, contentSha256: primitiveDependency.contentSha256 },
     primitiveSelection: { version: primitiveSelection.source.version, commit: primitiveSelection.source.commit, contentSha256: primitiveSelection.source.contentSha256 },
+    eventCatalog: { version: eventCatalog.version },
     distribution: { bundleVersion: bundle.bundleVersion, workflowCommit: bundle.workflowSource.commit },
     privatePublicationAgents: Array.isArray(privateLock.agents) ? privateLock.agents.length : 0,
   };

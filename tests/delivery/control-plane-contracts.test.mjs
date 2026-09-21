@@ -16,7 +16,7 @@ import { validateControllerRelease as validateReleaseManifest } from '../../scri
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 
 test('contract schemas are present and self-identifying', async () => {
-  for (const file of ['event-envelope.v1.schema.json', 'participant-registry.v1.schema.json', 'controller-release.v1.schema.json', 'primitive-selection.v1.schema.json']) {
+  for (const file of ['event-envelope.v1.schema.json', 'event-catalog.v1.schema.json', 'participant-registry.v1.schema.json', 'controller-release.v1.schema.json', 'primitive-selection.v1.schema.json']) {
     const schema = JSON.parse(await readFile(path.join(repositoryRoot, 'schemas', file), 'utf8'));
     assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
     assert.match(schema.$id, /agentic-delivery-lab\/agentic-delivery\/blob\/main\/schemas\//);

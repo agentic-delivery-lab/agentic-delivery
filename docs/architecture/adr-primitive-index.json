@@ -244,6 +244,8 @@
         "agent-invocation-preflight",
         "agent-invocation-workflow",
         "codex-delivery-workflow-guide",
+        "event-catalog",
+        "event-catalog-validator",
         "issue-event-authorization",
         "orchestration-policy-catalog",
         "orchestration-policy-validator",
@@ -273,6 +275,8 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
+        "event-catalog",
+        "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
         "organization-webhook-ingress",
@@ -317,6 +321,8 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
+        "event-catalog",
+        "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
         "organization-webhook-ingress",
@@ -362,6 +368,8 @@
         "curated-changelog",
         "delivery-state-domain-language",
         "domain-language-validator",
+        "event-catalog",
+        "event-catalog-validator",
         "harness-architecture-review",
         "issue-branch-name-validator",
         "issue-classifier",
@@ -569,6 +577,36 @@
         "ADR-0003"
       ],
       "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "event-catalog",
+      "path": "config/event-catalog.yml",
+      "location": "config/event-catalog.yml",
+      "kind": "workflow",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0017",
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "event-catalog-validator",
+      "path": "scripts/lib/event-catalog.mjs",
+      "location": "scripts/lib/event-catalog.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0017",
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },

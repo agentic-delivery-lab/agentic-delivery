@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import actorCatalog from '../config/agent-actors.json' with { type: 'json' };
 import { invocationEventSupported, observationEventSupported } from './lib/agent-invocation.mjs';
+import { parseRepositoryYaml } from './lib/yaml.mjs';
+import { validateEventCatalog } from './lib/event-catalog.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const requiredEvents = ['issues', 'issue_comment', 'pull_request', 'pull_request_review', 'pull_request_review_comment'];
@@ -25,9 +27,21 @@ async function readContract(root) {
   }
 }
 
-export function validateGithubAppContract(contract, catalog = actorCatalog) {
+async function readEventCatalog(root) {
+  try {
+    return parseRepositoryYaml(await readFile(path.join(root, 'config/event-catalog.yml'), 'utf8'), 'event catalog');
+  } catch (error) {
+    throw new GithubAppContractError(`GitHub event catalog cannot be read: ${error.message}`, 2);
+  }
+}
+
+export function validateGithubAppContract(contract, catalog = actorCatalog, eventCatalog = null) {
   const errors = [];
   if (!contract || typeof contract !== 'object' || Array.isArray(contract)) return { valid: false, errors: ['contract must be an object'] };
+  if (eventCatalog) {
+    const catalogResult = validateEventCatalog(eventCatalog);
+    if (!catalogResult.valid) errors.push(...catalogResult.errors.map((error) => `event catalog: ${error}`));
+  }
   if (contract.schemaVersion !== 1) errors.push('schemaVersion must be 1');
   if (contract.organization?.login !== 'agentic-delivery-lab') errors.push('organization.login must be agentic-delivery-lab');
   if (!numericIdentity.test(String(contract.organization?.id ?? ''))) errors.push('organization.id must be a positive numeric identity');
@@ -47,6 +61,7 @@ export function validateGithubAppContract(contract, catalog = actorCatalog) {
       }
     }
     if (event !== 'pull_request' && JSON.stringify(actions) !== JSON.stringify(catalog?.events?.[event])) errors.push(`events.${event} must match the actor event catalog`);
+    if (eventCatalog && JSON.stringify(actions) !== JSON.stringify(eventCatalog?.events?.[event]?.actions)) errors.push(`events.${event} must match the organization event catalog`);
   }
   const permissions = contract.permissions ?? {};
   if (permissions.metadata !== 'read') errors.push('permissions.metadata must be read');
@@ -65,7 +80,7 @@ export function validateGithubAppContract(contract, catalog = actorCatalog) {
 }
 
 export async function validateGithubAppContractFile({ root = repositoryRoot } = {}) {
-  const result = validateGithubAppContract(await readContract(root));
+  const result = validateGithubAppContract(await readContract(root), actorCatalog, await readEventCatalog(root));
   if (!result.valid) throw new GithubAppContractError(`${result.errors.map((error) => `GitHub App contract: ${error}`).join('\n')}\nGitHub App contract check failed with ${result.errors.length} error(s).`);
   return { valid: true };
 }
