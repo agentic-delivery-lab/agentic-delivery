@@ -45,8 +45,11 @@ export async function validateControllerRelease({ repositoryRoot = path.resolve(
     for (const participant of registry.participants.values()) {
       if (!controllerPinMatchesRelease(release, participant)) errors.push(`registry.${participant.repositoryId} references a controller pin not supported by release ${release.version}`);
     }
-    const commit = await git(repositoryRoot, ['cat-file', '-t', release.commit]);
-    if (commit !== 'commit') errors.push(`release.commit ${release.commit} is not a commit in this repository`);
+    const pins = [release, ...(release.compatibility?.controllers ?? [])];
+    for (const pin of pins) {
+      const commit = await git(repositoryRoot, ['cat-file', '-t', pin.commit]);
+      if (commit !== 'commit') errors.push(`controller pin ${pin.version}@${pin.commit} is not a commit in this repository`);
+    }
   }
   if (errors.length > 0) throw new ControllerReleaseValidationError(`${errors.map((error) => `Controller release check: ${error}`).join('\n')}\nController release check failed with ${errors.length} error(s).`);
   return release;
