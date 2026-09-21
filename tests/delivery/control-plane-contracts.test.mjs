@@ -31,7 +31,7 @@ test('the checked-in controller release pins every enrolled participant', async 
   const validated = await validateReleaseManifest({ repositoryRoot });
   assert.equal(validated.commit, release.commit);
   assert.equal(controllerPinMatchesRelease(release, {
-    controller: { version: '0.2.0', commit: release.commit },
+    controller: { version: release.version, commit: release.commit },
     contracts: release.contracts,
     dependencies: release.dependencies,
   }), true);
