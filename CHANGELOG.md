@@ -16,6 +16,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.24` at
+  `1c33a16b9a5a7e6480410c69bdda32648126eabc`. The trusted intake bootstrap
+  remains explicitly pinned to the supported draft23 commit while participant
+  pins upgrade deliberately.
+
 - The draft controller release advances to `0.2.0-draft.23` at
   `30197d5c8731ea6e682ae4de5e629b964e278aab`. The central pull-request
   observation workflow now validates the participant's immutable controller

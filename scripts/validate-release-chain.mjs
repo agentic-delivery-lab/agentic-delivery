@@ -147,7 +147,6 @@ export async function validateReleaseChain({
   equal(errors, 'Primitive dependency digest', primitiveDigest, primitiveDependency.contentSha256);
 
   equal(errors, 'Distribution Control Plane commit', bundle.controlPlane?.commit, controller.commit);
-  equal(errors, 'Control Plane bootstrap commit', controller.bootstrapCommit, controller.commit);
   equal(errors, 'Distribution Architecture commit', bundle.architecture?.commit, architectureDependency.commit);
   equal(errors, 'Distribution Architecture digest', bundle.architecture?.contentSha256, architectureDependency.contentSha256);
   equal(errors, 'Distribution workflow repository', bundle.workflowSource?.repository, bundle.controlPlane?.repository);
