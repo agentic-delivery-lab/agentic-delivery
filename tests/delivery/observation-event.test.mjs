@@ -32,7 +32,7 @@ test('observation validator accepts an enrolled pull-request event without GitHu
     organizationId: '327861320',
     installationId: '163255060',
     repositoryFullName: 'agentic-delivery-lab/agentic-delivery',
-    controller: { version: '0.2.0-draft.21', commit: '9634a711ded35f54a69e4c361fc3369100d84290' },
+    controller: { version: '0.2.0-draft.22', commit: 'ccbe92fffd41d0e5cdc906a170e74f2a723e7386' },
   }));
   const result = await validateObservationEvent({ eventPath, repositoryRoot });
   assert.equal(result.status, 'passed');
@@ -49,7 +49,7 @@ test('observation validator rejects an invocation event on the observation dispa
     actor: { login: 'sjefsharp', type: 'User' },
     body: '@agentic-delivery-lab-invoker-7f3a continue',
     repositoryFullName: 'agentic-delivery-lab/agentic-delivery',
-    controller: { version: '0.2.0-draft.21', commit: '9634a711ded35f54a69e4c361fc3369100d84290' },
+    controller: { version: '0.2.0-draft.22', commit: 'ccbe92fffd41d0e5cdc906a170e74f2a723e7386' },
   }));
   await assert.rejects(
     validateObservationEvent({ eventPath, repositoryRoot }),
