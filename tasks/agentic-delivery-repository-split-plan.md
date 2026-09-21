@@ -194,6 +194,14 @@ unchanged. This proves the bootstrap boundary does not claim or overwrite
 repository-specific CI; it does not claim that a live consumer workflow has
 run in GitHub.
 
+The Distribution draft10 bundle now emits structurally valid reusable-workflow
+YAML, and its validator rejects malformed job indentation instead of checking
+only source pins. The Control Plane release-chain check also verifies that the
+immutable workflow-source commit contains the publication validator and both
+reusable workflow entry points, and that the bootstrap commit contains the
+trusted enrollment/preflight code and dependency manifests. These are local
+release-integrity checks; they do not publish or activate a consumer.
+
 The read-only `pnpm organization:inventory` command now captures the current
 organization repository, visibility, default-branch, ruleset, workflow, open
 issue/PR, label, cross-reference, and capability evidence without persisting
