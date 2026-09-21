@@ -23,7 +23,7 @@ repositories:
       primitives:
         repository: agentic-delivery-lab/agentic-delivery-primitives
         version: 0.1.0-draft.1
-        commit: 78cceeda1c6d7ceeddd4cf3f392836284a0216f8
+        commit: b43a4e340c377193342153f2760df495c7b346fc
         contentSha256: null
     configurationProfile: standard
     events:
