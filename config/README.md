@@ -22,6 +22,9 @@ Delivery Control Plane.
   reproduces the pinned content digests, workflow source SHA, plugin inputs,
   and private-publication provenance; it does not create runtime imports or
   infer repository paths.
+- `.github/workflows/agent-observation.yml` is the credential-free central
+  dispatch entry point for pull-request observations; it must remain separate
+  from `agent-invocation.yml` so an observation cannot start a model run.
 - Repository-root `schemas/github-inventory.v1.schema.json` and
   `scripts/collect-github-inventory.mjs` define a redacted, read-only
   organization inventory used to separate observed GitHub state from
