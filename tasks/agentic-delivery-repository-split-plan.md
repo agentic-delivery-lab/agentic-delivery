@@ -1420,7 +1420,8 @@ Issue
 - **Bridge:** current repository remains the only active participant; existing
   workflows remain mutating.
 - **Validate:** parameterized repository A/B tests, hard-coded reference scan,
-  token-scope tests, state namespace tests.
+  token-scope tests, state namespace tests, and the offline
+  `pnpm acceptance:check` matrix.
 - **Rollback:** current webhook and workflows remain available.
 - **Complete when:** two repository fixtures can be processed without external
   mutation.
@@ -1435,7 +1436,8 @@ Issue
 - **Bridge:** local route remains the only mutating route; central route reads
   and compares.
 - **Validate:** routing/authorization/transition parity and duplicate-event
-  behavior.
+  behavior; retain the acceptance report as fixture evidence and label live
+  App/webhook evidence separately.
 - **Rollback:** disable central dispatch.
 - **Complete when:** shadow results match without duplicate mutation.
 
