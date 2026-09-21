@@ -25,6 +25,7 @@ test('automation validation rejects unsupported execution settings', async (t) =
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-automation-templates-'));
   t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
   await cp(path.join(repositoryRoot, 'automations'), path.join(temporaryRoot, 'automations'), { recursive: true });
+  await cp(path.join(repositoryRoot, 'config'), path.join(temporaryRoot, 'config'), { recursive: true });
   const file = path.join(temporaryRoot, 'automations/templates/review-delivery-queue.automation.md');
   const source = await readFile(file, 'utf8');
   await writeFile(file, source.replace('schedule:\n  kind: manual', 'schedule:\n  kind: manual\nworkspace: production'), 'utf8');
@@ -35,6 +36,7 @@ test('automation validation rejects a mutating prompt', async (t) => {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-automation-prompt-'));
   t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
   await cp(path.join(repositoryRoot, 'automations'), path.join(temporaryRoot, 'automations'), { recursive: true });
+  await cp(path.join(repositoryRoot, 'config'), path.join(temporaryRoot, 'config'), { recursive: true });
   const file = path.join(temporaryRoot, 'automations/templates/review-delivery-queue.automation.md');
   const source = await readFile(file, 'utf8');
   await writeFile(file, source.replace('Read only.', 'Write freely.'), 'utf8');

@@ -157,6 +157,9 @@ export async function validateReleaseChain({
   if (missing.length > 0) throw new ReleaseChainValidationError(`release-chain check requires: ${missing.join(', ')}`, 2);
 
   const errors = [];
+  const appContract = await readJson(path.join(controlPlaneRoot, 'config/github-app-contract.json'));
+  const controllerRepository = appContract.controller?.repository;
+  const organization = appContract.organization?.login;
   const controller = await readJson(path.join(controlPlaneRoot, 'config/controller-release.json'));
   const architectureDependency = controller.dependencies?.architecture;
   const primitiveDependency = controller.dependencies?.primitives;
@@ -213,8 +216,14 @@ export async function validateReleaseChain({
     throw new ReleaseChainValidationError(`release-chain check failed:\n${errors.join('\n')}`);
   }
 
-  equal(errors, 'Architecture dependency repository', architectureDependency.repository, 'agentic-delivery-lab/agentic-delivery-architecture');
-  equal(errors, 'Primitive dependency repository', primitiveDependency.repository, 'agentic-delivery-lab/agentic-delivery-primitives');
+  if (typeof controllerRepository !== 'string' || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(controllerRepository)) {
+    errors.push('Control Plane repository identity must be an owner/repository name');
+  }
+  if (typeof organization !== 'string' || !/^[A-Za-z0-9_.-]+$/.test(organization)) {
+    errors.push('Control Plane organization identity must be a valid owner name');
+  }
+  equal(errors, 'Architecture dependency repository', architectureDependency.repository, `${organization}/agentic-delivery-architecture`);
+  equal(errors, 'Primitive dependency repository', primitiveDependency.repository, `${organization}/agentic-delivery-primitives`);
   equal(errors, 'Architecture release version', architectureRelease.version, architectureDependency.version);
   equal(errors, 'Architecture release source repository', architectureRelease.sourceRepository, architectureDependency.repository);
   equal(errors, 'Architecture release digest', architectureRelease.contentSha256, architectureDependency.contentSha256);
@@ -234,7 +243,7 @@ export async function validateReleaseChain({
   equal(errors, 'Primitive selection capability policy', primitiveSelection.source?.capabilityPolicyVersion, primitiveRelease.capabilityPolicyVersion);
   const eventCatalogResult = validateEventCatalog(eventCatalog);
   if (!eventCatalogResult.valid) errors.push(...eventCatalogResult.errors.map((error) => `Event catalog: ${error}`));
-  equal(errors, 'Event catalog organization', eventCatalog.organization, 'agentic-delivery-lab');
+  equal(errors, 'Event catalog organization', eventCatalog.organization, organization);
   equal(errors, 'Architecture lock repository', primitiveLock.source?.repository, primitiveDependency.repository);
   equal(errors, 'Architecture lock release version', primitiveLock.source?.releaseVersion, primitiveDependency.version);
   equal(errors, 'Architecture lock source commit', primitiveLock.source?.sourceCommit, primitiveDependency.commit);
@@ -316,7 +325,7 @@ export async function validateReleaseChain({
   equal(errors, 'Agent Plugin Architecture commit', plugin.generatedFrom?.architectureCommit, architectureDependency.commit);
   equal(errors, 'Agent Plugin Architecture digest', plugin.generatedFrom?.architectureContentSha256, architectureDependency.contentSha256);
   equal(errors, 'Agent Plugin Control Plane commit', plugin.generatedFrom?.controlPlaneCommit, controller.commit);
-  equal(errors, 'Automation projection canonical repository', automationLock.canonicalRepository, 'agentic-delivery-lab/agentic-delivery');
+  equal(errors, 'Automation projection canonical repository', automationLock.canonicalRepository, controllerRepository);
   equal(errors, 'Automation projection source commit', automationLock.sourceCommit, controller.commit);
   equal(errors, 'Automation projection repository', automationLock.projectionRepository, 'agentic-delivery-lab/agentic-delivery-distribution');
   equal(errors, 'Agent Plugin automation source commit', plugin.generatedFrom?.automationSourceCommit, automationLock.sourceCommit);

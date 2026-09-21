@@ -25,6 +25,15 @@ function nonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+async function readControllerRepository(root) {
+  try {
+    const contract = JSON.parse(await readFile(path.join(root, 'config/github-app-contract.json'), 'utf8'));
+    return contract.controller?.repository;
+  } catch (error) {
+    throw new AutomationTemplateValidationError(`cannot read controller identity: ${error.message}`);
+  }
+}
+
 function parseTemplate(source, relativePath, errors) {
   const lines = source.split(/\r?\n/);
   if (lines[0] !== '---') {
@@ -74,10 +83,11 @@ export async function validateAutomationTemplates({ repositoryRoot: root = repos
   } catch (error) {
     throw new AutomationTemplateValidationError(`cannot read manifest: ${error.message}`);
   }
+  const controllerRepository = await readControllerRepository(root);
   const errors = [];
   if (manifest.schemaVersion !== 1) addError(errors, 'manifest schemaVersion must be 1');
   if (manifest.status !== 'draft' && manifest.status !== 'released') addError(errors, 'manifest status must be draft or released');
-  if (manifest.canonicalRepository !== 'agentic-delivery-lab/agentic-delivery') addError(errors, 'manifest canonicalRepository is invalid');
+  if (manifest.canonicalRepository !== controllerRepository) addError(errors, 'manifest canonicalRepository is invalid');
   if (!Array.isArray(manifest.templates) || manifest.templates.length === 0) addError(errors, 'manifest templates must be a non-empty array');
   const seenIds = new Set();
   const seenPaths = new Set();
