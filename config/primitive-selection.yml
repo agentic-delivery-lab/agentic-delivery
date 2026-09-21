@@ -1,4 +1,4 @@
-# agentic-primitive: {"id":"primitive-selection-contract","kind":"capability","enforcement":"deterministic","adrs":["ADR-0018"],"domains":["agentic-delivery-control-plane"]}
+# agentic-primitive: {"id":"primitive-selection-contract","kind":"validator","enforcement":"deterministic","adrs":["ADR-0018"],"domains":["agentic-delivery-control-plane"]}
 schemaVersion: 1
 contractVersion: 1.0.0
 
