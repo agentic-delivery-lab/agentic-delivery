@@ -16,6 +16,18 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.29` at
+  `7061773305054da9eb33b4ef872a7b7c63364d65`, carrying the corrected
+  traceability metadata for the release-bound Primitive selection contract;
+  draft28 remains the explicit rollback pin for that contract increment.
+
+- The draft controller release advances to `0.2.0-draft.28` at
+  `0956144e5b9229209ad0fb82299a1d99a366ac66`. The new
+  `primitive-selection.yml` contract binds every orchestration profile to
+  released Primitive identifiers and pins the Primitive release, commit,
+  content digest, and capability-policy version; draft27 remains the explicit
+  rollback pin.
+
 - The draft controller release advances to `0.2.0-draft.27` at
   `b52464571e1c0d3adfa5986bd54668d3c7da4a13`, making the release-chain digest
   implementation itself immutable and commit-verifiable; draft26 remains the
