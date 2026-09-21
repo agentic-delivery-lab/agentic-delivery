@@ -688,10 +688,6 @@ agentic-delivery-architecture/
 |   |-- principles/
 |   |   |-- index.yml
 |   |   `-- AP-<nnn>-<name>.md
-|   |-- decisions/
-|   |   |-- README.md
-|   |   |-- template.md
-|   |   `-- ADA-<nnnn>-<name>.md
 |   |-- domain/
 |   |   |-- bounded-contexts.yml
 |   |   |-- context-map.yml
@@ -719,6 +715,10 @@ agentic-delivery-architecture/
 |       |-- adr-aliases.json
 |       |-- source-provenance.yml
 |       `-- tooling-lock.json
+|-- decisions/                            # history-preserving ADR records
+|   |-- README.md
+|   |-- adr-template.md
+|   `-- <stable-ADR-id>-<name>.md
 |-- tools/
 |-- tests/
 |-- .github/CODEOWNERS
@@ -728,6 +728,14 @@ agentic-delivery-architecture/
 |-- CHANGELOG.md
 `-- package manifests
 ```
+
+Architecture ADRs intentionally live in the top-level `decisions/` directory,
+not in `architecture/decisions/`. The filtered history keeps source ADR paths
+and URLs recognisable; `architecture/references/adr-aliases.json` maps the
+historical `ADR-NNNN` names to canonical Architecture URNs. New records use
+the `ADA-*` namespace in their metadata and filenames where a rename is safe;
+a history-preserving import must not fabricate a new history for an existing
+record.
 
 ### `agentic-delivery` Control Plane
 
