@@ -73,6 +73,9 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
   assertCondition(firstRegistry.valid, `participant registry is invalid: ${firstRegistry.errors.join('; ')}`);
   const first = firstRegistry.participants.values().next().value;
   assertCondition(first, 'the acceptance matrix requires one enrolled source participant');
+  const appContract = await readJson(path.join(root, 'config/github-app-contract.json'));
+  const controllerRepository = appContract.controller?.repository;
+  assertCondition(typeof controllerRepository === 'string' && controllerRepository.length > 0, 'App contract must identify the controller repository');
 
   const fixtureRegistryValue = structuredClone(registryValue);
   fixtureRegistryValue.repositories[SECOND_REPOSITORY_ID] = secondParticipant(registryValue, first);
@@ -91,12 +94,12 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
     const envelopeResult = validateEventEnvelope(envelope);
     assertCondition(envelopeResult.valid, `${repository} envelope is invalid: ${envelopeResult.errors.join('; ')}`);
     const normalized = normalizeOriginEvent({
-      repository: { id: 1358455028, full_name: 'agentic-delivery-lab/agentic-delivery' },
+      repository: { id: Number(first.repositoryId), full_name: controllerRepository },
       client_payload: envelope,
     }, { ORIGIN_REPOSITORY: repository, ORIGIN_REPOSITORY_ID: repositoryId });
     const context = intakeEvent(normalized, {
       SOURCE_ISSUE: String(ISSUE_NUMBER),
-      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      GITHUB_REPOSITORY: controllerRepository,
       ORIGIN_REPOSITORY: repository,
       ORIGIN_REPOSITORY_ID: repositoryId,
       GITHUB_EVENT_NAME: 'issues',
@@ -136,7 +139,6 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
     dependencies: rollbackPin.dependencies,
   }), 'the retained rollback pin must validate as a compatible controller');
 
-  const appContract = await readJson(path.join(root, 'config/github-app-contract.json'));
   assertCondition(appContract.credentials?.privateKey === 'central-deployment-only', 'App private key must remain central');
   assertCondition(appContract.credentials?.webhookSecret === 'central-gateway-only', 'webhook secret must remain central');
   assertCondition(appContract.tokenScopes?.origin?.repositoryIds === 'origin-event-repository', 'origin token must be repository-scoped');
