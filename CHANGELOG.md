@@ -16,6 +16,12 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.26` at
+  `81fa558aad0f998876bc29871080f2380b2c8582`, pinning Architecture draft
+  `0.1.0-draft.6` at `5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b` with its
+  changelog-inclusive integrity digest; draft25 remains the explicit rollback
+  pin.
+
 - The draft controller release advances to `0.2.0-draft.25` at
   `81fa558aad0f998876bc29871080f2380b2c8582`, pinning Architecture draft
   `0.1.0-draft.5` at `2bfe92c8c641a2258d4393a37785c793d8a46c48` with a
