@@ -150,6 +150,17 @@ Its report is explicitly fixture evidence; live App installation, webhook
 delivery, organization fields, and repository-local CI remain operator/runtime
 checks.
 
+The release-coordination check `scripts/validate-release-chain.mjs` now takes
+the four extracted repository roots explicitly and reproduces the Architecture
+and Primitive content digests at the Control Plane's pinned commits. It also
+checks Distribution's workflow/source/capability/plugin locks and the
+`.github-private` validator's immutable workflow ref, credential-free checkout,
+canonical Primitive source, and per-agent provenance. It is exposed as
+`pnpm release-chain:check`; omitting any external root fails with exit code 2,
+so a consumer cannot silently pass by relying on an implicit sibling checkout.
+This is a release gate, not a runtime import or an authorization to publish
+any repository.
+
 The read-only `pnpm organization:inventory` command now captures the current
 organization repository, visibility, default-branch, ruleset, workflow, open
 issue/PR, label, cross-reference, and capability evidence without persisting
@@ -1642,6 +1653,9 @@ remove:
 - Projects projection;
 - evidence contract;
 - reusable workflows;
+- explicit-root release-chain verification for Architecture, Primitives,
+  Distribution, and `.github-private`, including digest and publication-ref
+  reproduction;
 - production scan for hard-coded origin repository;
 - proof that central `GITHUB_TOKEN` cannot mutate origin repositories.
 
@@ -1938,6 +1952,9 @@ following:
 - selected App access and registry enrollment are both required;
 - no production origin path is hard-coded to `agentic-delivery`;
 - participants pin exact controller commits and do not silently follow `main`;
+- the explicit-root release-chain check reproduces the pinned Architecture and
+  Primitive digests and agrees with Distribution, Agent Plugin, and
+  `.github-private` publication provenance;
 - two repositories using the same issue number do not collide;
 - repository identity is preserved through ingress, gateway, state, API, git,
   PR, and evidence;
