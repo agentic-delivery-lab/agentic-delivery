@@ -14,6 +14,12 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.13` at
+  `52e7a2092a1e7807ee091264a3dbbe97b8764593`, extending the offline
+  multi-repository acceptance evidence through API, git, pull-request, and
+  delivery-evidence projections while retaining draft12 and earlier rollback
+  pins.
+
 - The migration boundary manifest now distinguishes locally prepared
   Architecture, Primitives, and Distribution checkouts from remote-ready
   targets; local preparation does not imply publication or activation.
