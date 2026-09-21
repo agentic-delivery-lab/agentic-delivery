@@ -317,7 +317,9 @@ Read-only GitHub inspection found:
 - `agentic-delivery` has secret scanning and push protection enabled;
 - `.github` does not currently have those security features enabled;
 - the full current repository test suite passes;
-- GitHub still lists a removed `adr-approval-signal` workflow registration;
+- GitHub still lists `adr-approval-signal` as an active workflow although the
+  workflow is absent from the inspected snapshot, which is a remote/snapshot
+  drift to resolve before workflow cleanup;
 - legacy `type:*` and `state:*` labels remain as migration evidence;
 - project inspection is blocked by the current token's missing `read:project`
   scope.
