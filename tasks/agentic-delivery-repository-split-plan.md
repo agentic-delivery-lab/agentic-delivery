@@ -111,9 +111,11 @@ These checks are evidence for implementation readiness, not evidence that the
 corresponding GitHub repositories, settings, App installation, or publication
 surface exist.
 
-The latest local regression evidence is: Control Plane `300/300` tests,
+The latest local regression evidence is: Control Plane `301/301` tests,
 Architecture `8/8`, Agentic Primitives `6/6`, Distribution `7/7`, and the
-private publication validator with zero projections. All five prepared target
+private publication validator with zero projections. The Control Plane release
+chain suite includes the regression fixture that mutates a dependency
+worktree tool and still requires the exact pinned tool source. All five prepared target
 checkouts are clean after their local commits; the separate public `.github`
 checkout retains pre-existing user changes and is intentionally not modified
 by this migration work.
