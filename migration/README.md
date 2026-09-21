@@ -19,10 +19,18 @@ GitHub capability is unresolved, and `ready` is reserved for an operator-
 verified target. `local-prepared` never implies that a remote repository,
 branch protection, access, or publication exists.
 
+GitHub-defined `.github` and `.github-private` surfaces are recorded in
+[`special-surfaces.yml`](special-surfaces.yml), separately from domain
+repository targets. The manifest distinguishes paths consumed by GitHub from
+repository governance paths, states that workflow files are not inherited,
+and prevents either special surface from becoming runtime state or a second
+control plane.
+
 Run the deterministic check before preparing a history-filtered import:
 
 ```text
 pnpm migration:check
+pnpm special-surfaces:check
 ```
 
 The filter operation itself remains an operator action. It must use the

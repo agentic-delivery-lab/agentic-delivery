@@ -93,6 +93,9 @@ jobs:
       - name: Validate repository-boundary migration manifest
         run: node scripts/validate-repository-boundaries.mjs "$GITHUB_WORKSPACE"
 
+      - name: Validate GitHub special-surface boundaries
+        run: node scripts/validate-special-surfaces.mjs "$GITHUB_WORKSPACE"
+
       - name: Validate ADR primitive traceability index
         run: node scripts/generate-adr-primitive-index.mjs --check
 
