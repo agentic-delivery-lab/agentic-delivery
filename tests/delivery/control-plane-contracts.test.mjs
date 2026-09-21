@@ -29,6 +29,14 @@ test('the checked-in controller release pins every enrolled participant', async 
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
   assert.equal(release.bootstrapCommit, '30197d5c8731ea6e682ae4de5e629b964e278aab');
+  assert.deepEqual(release.support.eventEnvelopeVersions, [1]);
+  assert.deepEqual(release.support.lifecycleVersions, ['1.0.0']);
+  assert.deepEqual(release.support.stateMachineVersions, ['1.0.0']);
+  assert.deepEqual(release.support.evidenceVersions, ['1.0.0']);
+  assert.deepEqual(release.support.primitiveCompatibility, ['0.x']);
+  assert.deepEqual(release.support.architectureCompatibility, ['0.x']);
+  assert.equal(release.support.minimumBootstrapVersion, '0.2.0-draft.23');
+  assert.equal(release.support.policy.supportWindowDays, 90);
   const validated = await validateReleaseManifest({ repositoryRoot });
   assert.equal(validated.commit, release.commit);
   assert.equal(controllerPinMatchesRelease(release, {
@@ -53,6 +61,17 @@ test('the checked-in controller release pins every enrolled participant', async 
     contracts: release.contracts,
     dependencies: release.dependencies,
   }), true);
+});
+
+test('controller release support policy fails closed for incomplete compatibility metadata', async () => {
+  const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
+  const invalid = structuredClone(release);
+  invalid.support.policy.supportWindowDays = 30;
+  invalid.support.primitiveCompatibility = ['latest'];
+  const result = validateControllerRelease(invalid);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => error.includes('support.policy.supportWindowDays')));
+  assert.ok(result.errors.some((error) => error.includes('support.primitiveCompatibility')));
 });
 
 test('the current controller release pins immutable Architecture and Primitive content digests', async () => {

@@ -173,6 +173,35 @@ export function validateControllerRelease(release) {
       if (typeof contracts[name] !== 'string' || !SEMVER.test(contracts[name])) addError(errors, `contracts.${name}`, 'must use SemVer');
     }
   }
+  const support = release.support;
+  if (!support || typeof support !== 'object' || Array.isArray(support)) {
+    addError(errors, 'support', 'must be an object');
+  } else {
+    if (!Array.isArray(support.eventEnvelopeVersions) || support.eventEnvelopeVersions.length === 0
+      || support.eventEnvelopeVersions.some((version) => !Number.isInteger(version) || version < 1)) {
+      addError(errors, 'support.eventEnvelopeVersions', 'must contain positive integer versions');
+    }
+    for (const name of ['lifecycleVersions', 'stateMachineVersions', 'evidenceVersions']) {
+      if (!Array.isArray(support[name]) || support[name].length === 0 || support[name].some((version) => typeof version !== 'string' || !SEMVER.test(version))) {
+        addError(errors, `support.${name}`, 'must contain SemVer versions');
+      }
+    }
+    for (const name of ['primitiveCompatibility', 'architectureCompatibility']) {
+      if (!Array.isArray(support[name]) || support[name].length === 0 || support[name].some((range) => typeof range !== 'string' || !/^\d+\.x$/.test(range))) {
+        addError(errors, `support.${name}`, 'must contain major compatibility ranges such as 0.x');
+      }
+    }
+    if (typeof support.minimumBootstrapVersion !== 'string' || !SEMVER.test(support.minimumBootstrapVersion)) addError(errors, 'support.minimumBootstrapVersion', 'must use SemVer');
+    const policy = support.policy;
+    if (!policy || typeof policy !== 'object' || Array.isArray(policy)) {
+      addError(errors, 'support.policy', 'must be an object');
+    } else {
+      if (!Number.isInteger(policy.supportWindowDays) || policy.supportWindowDays < 90) addError(errors, 'support.policy.supportWindowDays', 'must be at least 90 days');
+      if (policy.majorStrategy !== 'current-and-immediately-previous') addError(errors, 'support.policy.majorStrategy', 'must support the current and immediately previous major');
+      if (policy.preReleaseException !== 'no-previous-ga-major') addError(errors, 'support.policy.preReleaseException', 'must explain the absence of a previous GA major');
+      if (policy.securityRevocation !== 'fail-closed-with-incident') addError(errors, 'support.policy.securityRevocation', 'must fail closed with an incident record');
+    }
+  }
   validateDependencies(release.dependencies, 'dependencies', errors);
   if (!release.compatibility || typeof release.compatibility !== 'object' || Array.isArray(release.compatibility)) {
     addError(errors, 'compatibility', 'must be an object');

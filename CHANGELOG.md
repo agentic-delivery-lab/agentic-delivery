@@ -16,6 +16,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release now publishes and validates an explicit support
+  matrix for event envelopes, lifecycle/state-machine/evidence contracts,
+  Primitive and Architecture compatibility, minimum bootstrap, upgrade
+  support windows, pre-release handling, and fail-closed security revocation.
+
 - Control Plane ingress, contract configuration, workflows, runtime libraries,
   and migration manifests now have scoped `AGENTS.md` boundaries so the
   repository's generic lifecycle implementation remains distinct from
