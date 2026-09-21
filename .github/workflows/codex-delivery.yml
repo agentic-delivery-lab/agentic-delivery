@@ -26,8 +26,7 @@ on:
         type: string
       controller_commit:
         description: Immutable controller commit resolved from the participant registry
-        required: false
-        default: ''
+        required: true
         type: string
       route:
         description: Authorized orchestration route selected by the intake policy
@@ -96,6 +95,10 @@ on:
         description: Open source issue number to start or resume
         required: true
         type: string
+      controller_commit:
+        description: Immutable controller commit for this manual recovery run
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -116,10 +119,17 @@ jobs:
       contents: read
       issues: write
     steps:
+      - name: Validate the immutable controller commit
+        env:
+          CONTROLLER_COMMIT: ${{ inputs.controller_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+
       - name: Check out trusted controller
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ inputs.controller_commit || 'main' }}
+          ref: ${{ inputs.controller_commit }}
           persist-credentials: false
 
       - name: Set up pnpm and Node.js

@@ -87,6 +87,10 @@ The central pull-request observation dispatch workflow checks out the
 participant's immutable controller commit from the signed event envelope before
 loading its registry and validator. It never follows a moving `main` ref for
 observation validation and it has no App private-key or webhook-secret input.
+The issue-intake bootstrap uses the `bootstrapCommit` in the controller release
+manifest for its trusted authorization and preflight checkout. The delivery
+checkout and manual recovery input both require a 40-character controller SHA;
+neither path falls back to `main`.
 
 The Vercel ingress mints a repository-scoped read token for origin actor and
 source checks, then a separate controller token narrowed to the controller

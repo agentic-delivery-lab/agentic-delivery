@@ -91,7 +91,8 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   );
   const intakeSource = await text('.github/workflows/issue-intake.yml');
   assert.match(intakeSource, /Check out the validated controller release/);
-  assert.match(intakeSource, /ref: main/);
+  assert.match(intakeSource, /ref: 30197d5c8731ea6e682ae4de5e629b964e278aab/);
+  assert.doesNotMatch(intakeSource, /ref: main/);
   assert.ok(intakeSource.indexOf('Validate and normalize explicit agent invocation')
     < intakeSource.indexOf('Check out the validated controller release'));
   assert.equal(intakeWorkflow.jobs.classify.needs, 'authorize');
@@ -114,7 +115,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.issue.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.route.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.participant_mode.required, false);
-  assert.equal(deliveryWorkflow.on.workflow_call.inputs.controller_commit.required, false);
+  assert.equal(deliveryWorkflow.on.workflow_call.inputs.controller_commit.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_APP_PRIVATE_KEY.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_APP_ID.required, true);
   assert.equal(deliveryWorkflow.jobs.deliver.permissions.contents, 'read');

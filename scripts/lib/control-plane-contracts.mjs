@@ -164,6 +164,7 @@ export function validateControllerRelease(release) {
   if (release.controllerId !== 'agentic-delivery') addError(errors, 'controllerId', 'must be agentic-delivery');
   if (typeof release.version !== 'string' || !SEMVER.test(release.version)) addError(errors, 'version', 'must use SemVer');
   if (typeof release.commit !== 'string' || !SHA1.test(release.commit)) addError(errors, 'commit', 'must be a 40-character hexadecimal SHA');
+  if (typeof release.bootstrapCommit !== 'string' || !SHA1.test(release.bootstrapCommit)) addError(errors, 'bootstrapCommit', 'must be a 40-character hexadecimal SHA');
   const contracts = release.contracts;
   if (!contracts || typeof contracts !== 'object' || Array.isArray(contracts)) addError(errors, 'contracts', 'must be an object');
   else {
