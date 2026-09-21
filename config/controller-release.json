@@ -2,8 +2,8 @@
   "$schema": "../schemas/controller-release.v1.schema.json",
   "schemaVersion": 1,
   "controllerId": "agentic-delivery",
-  "version": "0.2.0-draft.3",
-  "commit": "5dc5dbf2231df354cca1afb8ad66acc0bf940bac",
+  "version": "0.2.0-draft.4",
+  "commit": "ff4b2198a04ed695942faeec4e838a628b1b2ed4",
   "contracts": {
     "eventEnvelope": 1,
     "lifecycle": "1.0.0",
@@ -31,8 +31,8 @@
     "evidence": "1.0.0",
     "controllers": [
       {
-        "version": "0.2.0-draft.3",
-        "commit": "5dc5dbf2231df354cca1afb8ad66acc0bf940bac",
+        "version": "0.2.0-draft.4",
+        "commit": "ff4b2198a04ed695942faeec4e838a628b1b2ed4",
         "contracts": {
           "eventEnvelope": 1,
           "lifecycle": "1.0.0",

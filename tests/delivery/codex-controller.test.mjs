@@ -225,6 +225,14 @@ test('publishes one recorded branch and PR with a complete issue audit trail', a
   await f.run(); assert.equal(f.calls.prs.length,1); assert.equal(f.calls.turns.length,2);
 });
 
+test('rejects an origin repository ID that differs from the authenticated event before execution', async (t) => {
+  const f = await fixture(t);
+  f.env.ORIGIN_REPOSITORY_ID = '202';
+  await assert.rejects(f.run(), /Origin repository ID does not match the authenticated event repository/);
+  assert.equal(f.calls.clients, 0);
+  assert.equal(f.calls.prs.length, 0);
+});
+
 test('does not start a model turn when the source issue is not ready for planning', async (t) => {
   const f = await fixture(t);
   f.faults.sourceNativeType = 'Idea';

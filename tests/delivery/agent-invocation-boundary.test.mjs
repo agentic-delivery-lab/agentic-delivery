@@ -255,8 +255,8 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
   assert.equal(dispatch.client_payload.actor.login, 'sjefsharp');
   assert.equal(dispatch.client_payload.body_digest.length, 64);
   assert.deepEqual(dispatch.client_payload.controller, {
-    version: '0.2.0-draft.3',
-    commit: '5dc5dbf2231df354cca1afb8ad66acc0bf940bac',
+    version: '0.2.0-draft.4',
+    commit: 'ff4b2198a04ed695942faeec4e838a628b1b2ed4',
   });
   assert.equal(Object.keys(dispatch.client_payload).length, 15);
   assert.match(dispatch.client_payload.received_at, /^\d{4}-\d{2}-\d{2}T/);
@@ -580,7 +580,7 @@ test('central preflight rejects a controller pin that differs from the participa
       actor: { login: 'sjefsharp', type: 'User' },
       hop: 0,
       body_digest: (await import('../../scripts/lib/agent-invocation.mjs')).bodyDigest(body),
-      controller: { version: '0.2.0-draft.3', commit: '5dc5dbf2231df354cca1afb8ad66acc0bf940bac' },
+      controller: { version: '0.2.0-draft.4', commit: 'ff4b2198a04ed695942faeec4e838a628b1b2ed4' },
     },
   }));
   await assert.rejects(

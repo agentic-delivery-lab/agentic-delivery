@@ -368,6 +368,12 @@ export async function deliver(env = process.env, dependencies = {}) {
   const event = normalizeOriginEvent(rawEvent, env);
   const context = intakeEvent(event, env);
   let { issue, repository, actor, comment } = context;
+  const originRepositoryId = String(env.ORIGIN_REPOSITORY_ID || event.repository?.id || '');
+  if (!/^[1-9][0-9]*$/.test(originRepositoryId)) throw new Error('Origin repository ID is required for delivery execution.');
+  if (env.ORIGIN_REPOSITORY_ID && event.repository?.id !== undefined
+    && String(event.repository.id) !== originRepositoryId) {
+    throw new Error('Origin repository ID does not match the authenticated event repository.');
+  }
   const endpoint = `https://api.github.com/repos/${repository}`;
   const appProvider = env.CODEX_DELIVERY_APP_ID && env.CODEX_DELIVERY_APP_PRIVATE_KEY
     ? new GithubAppTokenProvider({
@@ -381,7 +387,7 @@ export async function deliver(env = process.env, dependencies = {}) {
     })
     : null;
   const originToken = appProvider
-    ? await appProvider.token({ repositoryIds: env.ORIGIN_REPOSITORY_ID ? [env.ORIGIN_REPOSITORY_ID] : [] })
+    ? await appProvider.token({ repositoryIds: [originRepositoryId] })
     : env.PUBLISH_TOKEN || env.GH_TOKEN;
   const api = async (route, method = 'GET', body, token = originToken) => {
     const response = await fetchApi(`${endpoint}${route}`, {

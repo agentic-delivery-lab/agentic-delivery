@@ -11,7 +11,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft controller release to `0.2.0-draft.3` at `5dc5dbf2231df354cca1afb8ad66acc0bf940bac`, making the canonical `config/` enrollment and invocation boundary an explicit, rollbackable pin; existing participants remain shadow-only.
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft controller release to `0.2.0-draft.4` at `ff4b2198a04ed695942faeec4e838a628b1b2ed4`, including the canonical `config/` enrollment boundary and origin-ID authorization; existing participants remain shadow-only.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft Control Plane pin to the locally validated organization-aware controller commit and aligns its Architecture and Primitive dependency pins; the release remains draft and shadow-only pending authorized rollout.
 
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) binds webhook envelopes to the configured organization, App installation, origin repository, and controller repository identities; dispatch tokens are narrowed independently and production replay protection fails closed without a durable claim store.
@@ -56,6 +56,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) requires delivery execution to carry an authenticated numeric origin repository ID and rejects mismatches before model startup or GitHub mutation; App installation tokens are never requested without an origin scope.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) runs the central intake preflight from its checked-out trusted controller path, so dependency installation and explicit invocation normalization do not execute from an empty Actions workspace.
 
 - [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) corrects conversation-comment revalidation to use GitHub's global issue-comment endpoint, allowing a tagged invocation to pass preflight and continue into the delivery controller.
