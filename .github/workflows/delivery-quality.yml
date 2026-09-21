@@ -93,6 +93,9 @@ jobs:
       - name: Validate repository-boundary migration manifest
         run: node scripts/validate-repository-boundaries.mjs "$GITHUB_WORKSPACE"
 
+      - name: Validate persisted migration plan safety gate
+        run: node scripts/validate-migration-plan.mjs "$GITHUB_WORKSPACE"
+
       - name: Validate GitHub special-surface boundaries
         run: node scripts/validate-special-surfaces.mjs "$GITHUB_WORKSPACE"
 

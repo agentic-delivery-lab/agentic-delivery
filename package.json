@@ -27,6 +27,7 @@
     "automation:check": "node scripts/validate-automation-templates.mjs",
     "migration:check": "node scripts/validate-repository-boundaries.mjs",
     "special-surfaces:check": "node scripts/validate-special-surfaces.mjs",
+    "plan:check": "node scripts/validate-migration-plan.mjs",
     "publication:check": "node scripts/validate-published-agents.mjs",
     "metadata:migrate": "node scripts/migrate-issue-metadata.mjs"
   },

@@ -65,6 +65,7 @@ targets:
       - scripts/validate-config-files.mjs
       - scripts/validate-control-plane-boundary.mjs
       - scripts/validate-controller-release.mjs
+      - scripts/validate-migration-plan.mjs
       - scripts/validate-release-chain.mjs
       - scripts/validate-main-history.mjs
       - scripts/validate-toolchain.mjs

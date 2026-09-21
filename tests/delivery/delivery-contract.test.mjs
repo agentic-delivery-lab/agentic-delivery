@@ -17,7 +17,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     'commitlint.config.mjs', 'scripts/start-issue-branch.mjs', 'scripts/validate-branch-name.mjs',
     'scripts/validate-commit-range.mjs', 'scripts/validate-gitmoji.mjs', 'scripts/validate-source-issue.mjs',
     'scripts/validate-changelog.mjs', 'scripts/validate-main-history.mjs', 'scripts/validate-config-files.mjs',
-    'scripts/validate-pull-request-body.mjs',
+    'scripts/validate-pull-request-body.mjs', 'scripts/validate-migration-plan.mjs',
     'scripts/authorize-issue-event.mjs',
     'scripts/lib/toolchain.mjs', 'scripts/lib/yaml.mjs', '.agents/skills/delivery-workflow/SKILL.md',
     '.agents/skills/delivery-workflow/agents/openai.yaml',
@@ -57,7 +57,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     'node scripts/validate-toolchain.mjs', 'pnpm install --frozen-lockfile --ignore-scripts',
     'node scripts/validate-pull-request-branch.mjs', 'node scripts/validate-pull-request-title.mjs',
     'node scripts/validate-commit-range.mjs', 'node scripts/validate-main-history.mjs', 'pnpm test',
-    'node scripts/validate-changelog.mjs', 'node scripts/validate-config-files.mjs', 'pnpm audit --audit-level=high',
+    'node scripts/validate-changelog.mjs', 'node scripts/validate-config-files.mjs', 'node scripts/validate-migration-plan.mjs', 'pnpm audit --audit-level=high',
     'ubuntu-latest', 'macos-latest', 'windows-latest',
   ]) assert.ok(workflow.includes(phrase), `missing delivery workflow contract: ${phrase}`);
   for (const obsolete of ['npm ci', 'run: npm audit', 'npx commitlint', 'ruby -e', 'validate-changelog.rb', 'validate-source-issue.sh']) {

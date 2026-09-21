@@ -10,6 +10,9 @@ and releases use [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) pins the central intake bootstrap and manual recovery paths to the controller release `bootstrapCommit`; normal and recovery execution no longer fall back to a moving `main` ref.
+- The persisted repository-split plan now has a deterministic safety check that
+  preserves the Issue #52 boundary, successor-issue contract, image evidence
+  gap, architecture gate, ordered sections, and current release pin.
 
 Entries that reference issue #52 use it only as the persisted-plan context;
 they do not authorize migration, alter that issue's scope, or close it.

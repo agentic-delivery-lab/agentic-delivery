@@ -110,14 +110,20 @@ The local checks supporting these slices are `pnpm control-plane:check`,
 `pnpm github-app:check`, `pnpm control-plane:boundary`,
 `pnpm acceptance:check`, `pnpm migration:check`,
 `pnpm special-surfaces:check`, `pnpm automation:check`,
-`pnpm traceability:check`,
+`pnpm traceability:check`, and `pnpm plan:check`,
 and the explicit-root `pnpm release-chain:check`. The Distribution checkout
 also runs `pnpm test`, including its repository-local CI isolation fixture.
 These checks are evidence for implementation readiness, not evidence that the
 corresponding GitHub repositories, settings, App installation, or publication
 surface exist.
 
-The latest local regression evidence is: Control Plane `316/316` tests,
+`pnpm plan:check` is a local documentation guard: it verifies the ordered
+twenty-eight-section plan, the Issue #52 persistence boundary, the successor
+issue contract, the inaccessible image evidence marker, the hard architecture
+gate, and the current immutable controller release pin. It does not inspect or
+mutate GitHub.
+
+The latest local regression evidence is: Control Plane `318/318` tests,
 Architecture `8/8`, Agentic Primitives `6/6`, Distribution `8/8`, and the
 private publication validator with zero projections. The Control Plane release
 chain suite includes the regression fixture that mutates a dependency
@@ -196,6 +202,11 @@ Control Plane repository at an immutable SHA and credential-free checkouts.
 It now also proves both halves of the enrollment contract: selected App access
 and a matching participant-registry record; removing either fails closed before
 state mutation.
+
+The acceptance report records `liveGitHubVerification: not-run` and labels the
+two-repository result as offline fixture evidence. It must not be presented as
+proof of a live App installation, webhook delivery, organization-field
+mutation, or repository-local CI run.
 
 The gateway contract test also dispatches an enrolled second repository through
 an explicitly configured controller name and repository ID different from the
