@@ -15,10 +15,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check out trusted observation validator
+      - name: Validate the participant controller pin
+        env:
+          CONTROLLER_COMMIT: ${{ github.event.client_payload.controller.commit }}
+        run: |
+          set -euo pipefail
+          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Check out the pinned observation validator
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: main
+          ref: ${{ github.event.client_payload.controller.commit }}
+          path: controller
           persist-credentials: false
 
       - name: Set up pnpm and Node.js
@@ -28,10 +36,10 @@ jobs:
           install: false
 
       - name: Install observation validator dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: pnpm --dir controller install --frozen-lockfile --ignore-scripts
 
       - name: Validate the signed pull-request observation
         env:
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: node scripts/validate-observation-event.mjs
+        run: node controller/scripts/validate-observation-event.mjs controller
