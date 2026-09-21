@@ -71,6 +71,11 @@ Distribution/private validator projections pin the resulting immutable source
 chain. This is still local, draft, and shadow-only; it does not activate a
 GitHub App or change any organization issue.
 
+The gateway contract test also dispatches an enrolled second repository through
+an explicitly configured controller name and repository ID different from the
+current repository, proving that the central controller identity is a
+deployment contract rather than a repository-name fallback.
+
 ## Executive summary
 
 Split the mixed-responsibility `agentic-delivery` repository into six minimum
