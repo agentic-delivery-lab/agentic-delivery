@@ -176,10 +176,12 @@ Primitive draft `0.1.0-draft.4` at
 `51e94992c5f39c59046f752e0cf6cff2ed3fff32` with its canonical digest. The
 Architecture release now self-validates its ADR/context IDs and conformance
 and tooling-lock digests. The Distribution workflow source and the private
-publication validator remain pinned to the immutable workflow-source commit
-`c3d0d2c7be0a68ca9d6ae83174f8ebae754826f4`; the private workflow does not
-receive central App credentials. This is still local, draft, and shadow-only;
-it does not activate a GitHub App or change any organization issue.
+publication validator remain pinned to the immutable publication-verifier
+commit `021475c8a767bf0ac94f89d45de6c46cf2353eb5`; that source verifies the
+published bytes against the exact canonical Primitive commit. The private
+workflow does not receive central App credentials. This is still local, draft,
+and shadow-only; it does not activate a GitHub App or change any organization
+issue.
 
 Distribution now also validates a schema-backed capabilities lock, includes
 the Primitive source in its source lock, and carries the Architecture content
@@ -246,9 +248,9 @@ The same release-chain check now verifies the preview Automation projection:
 the Distribution lock must pin the current immutable Control Plane source
 commit, each Agent Plugin file must match the source bytes and SHA-256 digest,
 and no client-local settings or `.github-private` path may enter the projection.
-The current draft34 release and Distribution draft20 bundle carry that exact
-source pin; draft33 and Distribution draft19 remain the explicit rollback
-pairs.
+The current draft34 release and Distribution draft21 bundle carry that exact
+source pin; draft33 and Distribution draft20 remain the explicit rollback
+pairs for the immediately preceding distribution bundle.
 This is a release gate, not a runtime import or an authorization to publish
 any repository.
 
