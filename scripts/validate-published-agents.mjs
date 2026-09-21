@@ -50,7 +50,13 @@ async function directoryEntries(root) {
   }
 }
 
-export async function validatePublishedAgents({ publicationRoot, allowedTools = ALLOWED_TOOLS } = {}) {
+async function regularFile(filePath, label) {
+  const details = await stat(filePath);
+  if (!details.isFile()) throw new Error(`${label} is not a regular file`);
+  return readFile(filePath, 'utf8');
+}
+
+export async function validatePublishedAgents({ publicationRoot, allowedTools = ALLOWED_TOOLS, requireSurface = false } = {}) {
   const root = path.resolve(publicationRoot ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.github-private'));
   const errors = [];
   const entries = await directoryEntries(root);
@@ -60,6 +66,17 @@ export async function validatePublishedAgents({ publicationRoot, allowedTools = 
     // publication check.
     if (entry.name === '.git') continue;
     if (!ALLOWED_ROOT_ENTRIES.has(entry.name)) errors.push(`unexpected top-level entry ${entry.name}`);
+  }
+  if (requireSurface) {
+    const requiredFiles = ['profile/README.md', '.github/CODEOWNERS', '.github/workflows/validate-published-agents.yml', 'provenance/surface.yml'];
+    for (const relative of requiredFiles) {
+      try {
+        const source = await regularFile(path.join(root, relative), relative);
+        checkSecrets(source, relative, errors);
+      } catch (error) {
+        errors.push(`${relative} cannot be read: ${error.message}`);
+      }
+    }
   }
   const lockPath = path.join(root, 'provenance', 'agents.lock.json');
   let lock;
@@ -130,7 +147,9 @@ export async function validatePublishedAgents({ publicationRoot, allowedTools = 
 const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMainModule) {
   try {
-    const result = await validatePublishedAgents({ publicationRoot: process.argv[2] ?? undefined });
+    const args = process.argv.slice(2);
+    const publicationRoot = args.find((arg) => !arg.startsWith('--'));
+    const result = await validatePublishedAgents({ publicationRoot, requireSurface: args.includes('--require-surface') });
     process.stdout.write(`Published-agent check passed: ${result.agents} agent projection(s).\n`);
   } catch (error) {
     process.stderr.write(`${error.message}\n`);

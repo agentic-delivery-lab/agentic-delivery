@@ -9,7 +9,7 @@ import { validatePublishedAgents } from '../../scripts/validate-published-agents
 
 function sha256(source) { return createHash('sha256').update(source).digest('hex'); }
 
-async function fixture(t, { secret = false, badTool = false } = {}) {
+async function fixture(t, { secret = false, badTool = false, surface = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-published-agents-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(path.join(root, 'agents'), { recursive: true });
@@ -37,6 +37,14 @@ async function fixture(t, { secret = false, badTool = false } = {}) {
       compatibilityTargets: ['github-copilot'],
     }],
   }, null, 2));
+  if (surface) {
+    await mkdir(path.join(root, 'profile'), { recursive: true });
+    await mkdir(path.join(root, '.github/workflows'), { recursive: true });
+    await writeFile(path.join(root, 'profile/README.md'), '# Members\n');
+    await writeFile(path.join(root, '.github/CODEOWNERS'), '* @maintainers\n');
+    await writeFile(path.join(root, '.github/workflows/validate-published-agents.yml'), 'name: validate\n');
+    await writeFile(path.join(root, 'provenance/surface.yml'), 'status: pending-entitlement\n');
+  }
   return root;
 }
 
@@ -56,4 +64,14 @@ test('rejects an agent file without a provenance record', async (t) => {
   const root = await fixture(t);
   await writeFile(path.join(root, 'agents/unlisted.agent.md'), '---\nname: unlisted\ndescription: Unlisted\ntools: [codebase]\n---\n');
   await assert.rejects(validatePublishedAgents({ publicationRoot: root }), /not declared in provenance/);
+});
+
+test('strict publication mode requires the GitHub-supported private surface', async (t) => {
+  const root = await fixture(t, { surface: true });
+  assert.equal((await validatePublishedAgents({ publicationRoot: root, requireSurface: true })).agents, 1);
+  const incomplete = await fixture(t);
+  await assert.rejects(
+    validatePublishedAgents({ publicationRoot: incomplete, requireSurface: true }),
+    /profile\/README\.md cannot be read/,
+  );
 });
