@@ -102,9 +102,9 @@ that a remote repository, branch protection, or organization access exists.
 
 The Control Plane gateway now requires both the App installation ID and the
 central controller repository ID from protected deployment configuration; it
-has no fallback for either identity. Current draft controller `0.2.0-draft.22`
-is pinned to `ccbe92fffd41d0e5cdc906a170e74f2a723e7386`; draft21 at
-`9634a711ded35f54a69e4c361fc3369100d84290` is the explicit rollback pin.
+has no fallback for either identity. Current draft controller `0.2.0-draft.23`
+is pinned to `30197d5c8731ea6e682ae4de5e629b964e278aab`; draft22 at
+`ccbe92fffd41d0e5cdc906a170e74f2a723e7386` is the explicit rollback pin.
 The current controller pins Architecture draft `0.1.0-draft.4` at
 `61b2285334b5cff4ae2dba7875b132ad2a4a8502` and Primitive draft
 `0.1.0-draft.4` at `51e94992c5f39c59046f752e0cf6cff2ed3fff32`, including
@@ -141,13 +141,14 @@ an explicitly configured controller name and repository ID different from the
 current repository, proving that the central controller identity is a
 deployment contract rather than a repository-name fallback.
 
-Draft controller `0.2.0-draft.22` at
-`ccbe92fffd41d0e5cdc906a170e74f2a723e7386` accepts the planned pull-request
+Draft controller `0.2.0-draft.23` at
+`30197d5c8731ea6e682ae4de5e629b964e278aab` accepts the planned pull-request
 observation actions through the same signed central gateway and dispatches them
 to a dedicated read-only `agent_observation` workflow. That workflow validates
-identity and enrollment, then stops before origin API access, issue routing,
-lifecycle mutation, or model execution. The explicit invocation event catalog
-remains unchanged; draft21 is retained for rollback.
+identity and enrollment using the participant's immutable controller commit,
+then stops before origin API access, issue routing, lifecycle mutation, or
+model execution. The explicit invocation event catalog remains unchanged;
+draft22 is retained for rollback.
 
 The offline multi-repository acceptance matrix now exercises two repositories
 with the same issue number through the shared controller contract, confirms

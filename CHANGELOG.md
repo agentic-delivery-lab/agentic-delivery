@@ -14,6 +14,12 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.23` at
+  `30197d5c8731ea6e682ae4de5e629b964e278aab`. The central pull-request
+  observation workflow now validates the participant's immutable controller
+  release instead of following a moving `main` ref; draft22 remains the
+  explicit rollback pin.
+
 - The draft controller release advances to `0.2.0-draft.22` at
   `ccbe92fffd41d0e5cdc906a170e74f2a723e7386`, moving pull-request
   observations to a dedicated read-only `agent_observation` dispatch workflow;
