@@ -6,8 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { parseRepositoryYaml } from './lib/yaml.mjs';
 
 const AGENT_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const PRIMITIVE_ID = /^urn:agentic-delivery:primitive:[a-z0-9-]+$/;
+const ADR_ID = /^urn:agentic-delivery:adr:[a-z0-9-]+$/;
 const SHA1 = /^[0-9a-f]{40}$/i;
 const SHA256 = /^[0-9a-f]{64}$/i;
+const SEMVER = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const ALLOWED_ROOT_ENTRIES = new Set(['profile', 'agents', 'provenance', '.github', '.gitignore', 'AGENTS.md', 'README.md']);
 const ALLOWED_TOOLS = new Set(['codebase', 'editFiles', 'fetch', 'githubRepo', 'search', 'terminal']);
 const SECRET_PATTERNS = [
@@ -73,6 +76,7 @@ export async function validatePublishedAgents({ publicationRoot, allowedTools = 
     const prefix = `agents[${index}]`;
     if (!record || typeof record !== 'object' || Array.isArray(record)) { errors.push(`${prefix} must be an object`); continue; }
     if (!AGENT_ID.test(record.agentId ?? '')) errors.push(`${prefix}.agentId must use lowercase kebab-case`);
+    if (!PRIMITIVE_ID.test(record.primitiveId ?? '')) errors.push(`${prefix}.primitiveId must be a primitive URI`);
     if (names.has(record.agentId)) errors.push(`${prefix}.agentId is duplicated`);
     names.add(record.agentId);
     if (!/^agents\/[a-z0-9]+(?:-[a-z0-9-]*[a-z0-9])?\.agent\.md$/.test(record.targetPath ?? '')) errors.push(`${prefix}.targetPath is not a safe published-agent path`);
@@ -80,9 +84,13 @@ export async function validatePublishedAgents({ publicationRoot, allowedTools = 
     paths.add(record.targetPath);
     if (record.sourceRepository !== 'agentic-delivery-lab/agentic-delivery-primitives') errors.push(`${prefix}.sourceRepository must be Agentic Primitives`);
     if (!SHA1.test(record.sourceCommit ?? '')) errors.push(`${prefix}.sourceCommit must be an immutable commit SHA`);
+    if (!SHA1.test(record.sourceRef ?? '') || String(record.sourceRef).toLowerCase() !== String(record.sourceCommit).toLowerCase()) errors.push(`${prefix}.sourceRef must repeat the immutable source commit SHA`);
     if (!SHA256.test(record.contentSha256 ?? '')) errors.push(`${prefix}.contentSha256 must be a SHA-256 digest`);
-    if (!Array.isArray(record.governingAdrs) || record.governingAdrs.length === 0) errors.push(`${prefix}.governingAdrs must be non-empty`);
-    if (!Array.isArray(record.compatibilityTargets) || record.compatibilityTargets.length === 0) errors.push(`${prefix}.compatibilityTargets must be non-empty`);
+    if (!Array.isArray(record.governingAdrs) || record.governingAdrs.length === 0 || record.governingAdrs.some((adr) => !ADR_ID.test(adr))) errors.push(`${prefix}.governingAdrs must contain primitive ADR URIs`);
+    if (!SEMVER.test(record.toolPolicyVersion ?? '')) errors.push(`${prefix}.toolPolicyVersion must use SemVer`);
+    if (typeof record.promotionRelease !== 'string' || !record.promotionRelease.trim()) errors.push(`${prefix}.promotionRelease must be non-empty`);
+    if (typeof record.promotedAt !== 'string' || Number.isNaN(Date.parse(record.promotedAt))) errors.push(`${prefix}.promotedAt must be an RFC3339 timestamp`);
+    if (!Array.isArray(record.compatibilityTargets) || record.compatibilityTargets.length === 0 || record.compatibilityTargets.some((target) => typeof target !== 'string' || !target.trim())) errors.push(`${prefix}.compatibilityTargets must be non-empty strings`);
     const target = path.join(root, record.targetPath ?? '');
     if (!target.startsWith(path.join(root, 'agents') + path.sep)) errors.push(`${prefix}.targetPath escapes agents/`);
     else {
