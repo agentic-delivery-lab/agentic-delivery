@@ -9,18 +9,23 @@ organization: agentic-delivery-lab
 events:
   issues:
     role: lifecycle-input
+    routes: [lifecycle, invocation]
     actions: [opened, edited, reopened, typed, untyped, labeled, unlabeled, closed]
   issue_comment:
     role: invocation-input
+    routes: [invocation]
     actions: [created, edited]
   pull_request:
     role: observation-input
+    routes: [observation]
     actions: [opened, edited, synchronize, reopened, ready_for_review, closed]
   pull_request_review:
     role: invocation-input
+    routes: [invocation]
     actions: [submitted, edited]
   pull_request_review_comment:
     role: invocation-input
+    routes: [invocation]
     actions: [created, edited]
 
 rules:

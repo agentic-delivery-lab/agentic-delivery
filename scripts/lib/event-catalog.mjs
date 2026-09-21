@@ -9,6 +9,13 @@ const EXPECTED_ROLES = new Map([
   ['pull_request_review', 'invocation-input'],
   ['pull_request_review_comment', 'invocation-input'],
 ]);
+const EXPECTED_ROUTES = new Map([
+  ['issues', ['lifecycle', 'invocation']],
+  ['issue_comment', ['invocation']],
+  ['pull_request', ['observation']],
+  ['pull_request_review', ['invocation']],
+  ['pull_request_review_comment', ['invocation']],
+]);
 const ID = /^[a-z0-9_]+$/;
 const ACTION = /^[a-z0-9_]+$/;
 
@@ -35,6 +42,12 @@ export function validateEventCatalog(catalog) {
     }
     if (!EVENT_ROLES.has(entry.role)) errors.push(`events.${eventName}.role is unsupported`);
     else if (entry.role !== EXPECTED_ROLES.get(eventName)) errors.push(`events.${eventName}.role must be ${EXPECTED_ROLES.get(eventName)}`);
+    const routes = list(entry.routes);
+    const expectedRoutes = EXPECTED_ROUTES.get(eventName);
+    if (!routes.length) errors.push(`events.${eventName}.routes must be non-empty`);
+    if (new Set(routes).size !== routes.length) errors.push(`events.${eventName}.routes must be unique`);
+    if (routes.some((route) => !['lifecycle', 'invocation', 'observation'].includes(route))) errors.push(`events.${eventName}.routes contains an unsupported route`);
+    if (JSON.stringify(routes) !== JSON.stringify(expectedRoutes)) errors.push(`events.${eventName}.routes must be ${JSON.stringify(expectedRoutes)}`);
     const actions = list(entry.actions);
     if (!actions.length) errors.push(`events.${eventName}.actions must be non-empty`);
     if (new Set(actions).size !== actions.length) errors.push(`events.${eventName}.actions must be unique`);

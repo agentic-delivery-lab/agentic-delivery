@@ -39,9 +39,15 @@
     "event": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["role", "actions"],
+      "required": ["role", "routes", "actions"],
       "properties": {
         "role": { "enum": ["lifecycle-input", "invocation-input", "observation-input"] },
+        "routes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["lifecycle", "invocation", "observation"] }
+        },
         "actions": {
           "type": "array",
           "minItems": 1,

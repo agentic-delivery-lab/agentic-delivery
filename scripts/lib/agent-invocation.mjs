@@ -1,24 +1,45 @@
 // agentic-primitive: {"id":"agent-invocation-boundary","kind":"validator","enforcement":"deterministic","adrs":["ADR-0017","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseDocument } from 'yaml';
 
 export const INVOCATION_VERSION = 1;
 export const AGENT_MENTION = '@agentic-delivery-lab-invoker-7f3a';
 export const AGENT_BOT_LOGIN = 'agentic-delivery-lab-invoker-7f3a[bot]';
-export const INVOCATION_EVENTS = Object.freeze({
-  issues: Object.freeze(['opened', 'edited', 'reopened', 'typed', 'untyped', 'labeled', 'unlabeled', 'closed']),
-  issue_comment: Object.freeze(['created', 'edited']),
-  pull_request_review: Object.freeze(['submitted', 'edited']),
-  pull_request_review_comment: Object.freeze(['created', 'edited']),
-});
 
-// Pull-request lifecycle events enter the same signed organization gateway as
-// issue events, but remain observations until a versioned lifecycle policy
-// assigns them a transition. They are deliberately not part of the explicit
-// agent-invocation catalog: a pull request cannot invoke the orchestrator just
-// by being opened or synchronized.
-export const OBSERVATION_EVENTS = Object.freeze({
-  pull_request: Object.freeze(['opened', 'edited', 'synchronize', 'reopened', 'ready_for_review', 'closed']),
-});
+function loadOrganizationEventCatalog() {
+  const file = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../config/event-catalog.yml');
+  const document = parseDocument(readFileSync(file, 'utf8'), {
+    version: '1.2',
+    schema: 'core',
+    customTags: [],
+    resolveKnownTags: false,
+    merge: false,
+    strict: true,
+    uniqueKeys: true,
+  });
+  const diagnostics = [...document.errors, ...document.warnings];
+  if (diagnostics.length > 0) throw new Error(`Organization event catalog is invalid: ${diagnostics[0].message}`);
+  return document.toJS({ maxAliasCount: 0 });
+}
+
+export const ORGANIZATION_EVENT_CATALOG = Object.freeze(loadOrganizationEventCatalog());
+
+function eventsForRoute(route) {
+  const entries = Object.entries(ORGANIZATION_EVENT_CATALOG.events ?? {})
+    .filter(([, entry]) => Array.isArray(entry?.routes) && entry.routes.includes(route))
+    .map(([eventName, entry]) => [eventName, Object.freeze([...(entry.actions ?? [])])]);
+  return Object.freeze(Object.fromEntries(entries));
+}
+
+// Issue lifecycle events and explicit conversation invocations share the
+// central invocation dispatch. Pull-request lifecycle events are deliberately
+// observation-only until a versioned lifecycle policy assigns a transition.
+export const INVOCATION_EVENTS = eventsForRoute('invocation');
+export const OBSERVATION_EVENTS = eventsForRoute('observation');
+export const LIFECYCLE_EVENTS = eventsForRoute('lifecycle');
 
 export function bodyDigest(body) {
   return createHash('sha256').update(String(body ?? ''), 'utf8').digest('hex');
@@ -73,7 +94,9 @@ export function observationEventSupported(eventName, action) {
 }
 
 export function webhookEventSupported(eventName, action) {
-  return invocationEventSupported(eventName, action) || observationEventSupported(eventName, action);
+  return Object.hasOwn(ORGANIZATION_EVENT_CATALOG.events ?? {}, eventName)
+    && Array.isArray(ORGANIZATION_EVENT_CATALOG.events[eventName]?.actions)
+    && ORGANIZATION_EVENT_CATALOG.events[eventName].actions.includes(action);
 }
 
 export function constantTimeSignatureValid({ secret, rawBody, signature } = {}) {
