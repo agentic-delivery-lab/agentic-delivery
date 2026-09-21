@@ -140,6 +140,13 @@ an explicitly configured controller name and repository ID different from the
 current repository, proving that the central controller identity is a
 deployment contract rather than a repository-name fallback.
 
+Draft controller `0.2.0-draft.21` at
+`9634a711ded35f54a69e4c361fc3369100d84290` now accepts the planned
+pull-request observation actions through the same signed central gateway. The
+preflight records them as observation-only and stops before origin API access,
+issue routing, lifecycle mutation, or model execution. The explicit
+invocation event catalog remains unchanged; draft20 is retained for rollback.
+
 The offline multi-repository acceptance matrix now exercises two repositories
 with the same issue number through the shared controller contract, confirms
 distinct repository-ID state namespaces, runs the deterministic lifecycle

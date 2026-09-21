@@ -14,6 +14,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.21` at
+  `9634a711ded35f54a69e4c361fc3369100d84290`, adding centrally signed
+  pull-request observation events without granting them issue-invocation or
+  lifecycle-transition semantics; draft20 remains the explicit rollback pin.
+
 - Added `release-chain:check` and `scripts/validate-release-chain.mjs`. An
   explicitly supplied set of Architecture Authority, Agentic Primitives,
   Distribution, and `.github-private` checkouts must now reproduce the
