@@ -14,6 +14,11 @@ Delivery Control Plane.
   transitions.
 - `orchestration-policy.yml` defines the versioned routing and execution
   policy.
+- `primitive-selection.yml` binds each approved orchestration profile to the
+  released Primitive identifiers it may compose. It is a release-bound
+  selection contract, not a second Primitive catalog; the Primitive release
+  manifest remains authoritative for content, version, commit, digest, and
+  capability policy.
 - `github-app-contract.json` defines the organization App and credential
   boundary; pull-request lifecycle events are signed observations and are not
   invocation or lifecycle-transition events.
