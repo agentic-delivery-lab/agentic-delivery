@@ -14,6 +14,9 @@ Delivery Control Plane.
   transitions.
 - `orchestration-policy.yml` defines the versioned routing and execution
   policy.
+- `event-catalog.yml` is the canonical organization event/action contract;
+  the GitHub App manifest and participant subscriptions are validated
+  projections of it. An event is input, not an automatic lifecycle transition.
 - `primitive-selection.yml` binds each approved orchestration profile to the
   released Primitive identifiers it may compose. It is a release-bound
   selection contract, not a second Primitive catalog; the Primitive release

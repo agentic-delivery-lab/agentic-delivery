@@ -9,6 +9,7 @@ import { validateIssueMetadataConfig } from './lib/issue-metadata.mjs';
 import { validateOrchestrationPolicy } from './lib/orchestration-policy.mjs';
 import { parseParticipantRegistry } from './lib/participant-registry.mjs';
 import { validatePrimitiveSelection } from './lib/primitive-selection.mjs';
+import { validateEventCatalog } from './lib/event-catalog.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -31,7 +32,7 @@ async function gitFiles(repositoryRoot) {
       .filter((file) => /\.(?:json|ya?ml)$/.test(file))
       .filter((file) => file !== 'pnpm-lock.yaml')
       .filter((file) => !/^tests\/.*\/fixtures\//.test(file));
-    for (const file of ['config/issue-metadata.yml', 'config/orchestration-policy.yml', 'config/primitive-selection.yml', 'config/agent-actors.json', 'config/participants.yml']) {
+    for (const file of ['config/issue-metadata.yml', 'config/orchestration-policy.yml', 'config/event-catalog.yml', 'config/primitive-selection.yml', 'config/agent-actors.json', 'config/participants.yml']) {
       if (!tracked.includes(file)) tracked.push(file);
     }
     // These repository-local files were replaced by organization metadata and
@@ -90,6 +91,10 @@ export async function validateConfigFiles({ repositoryRoot = path.resolve(path.d
         const policyPath = path.join(repositoryRoot, 'config/orchestration-policy.yml');
         const policy = parseRepositoryYaml(await readFile(policyPath, 'utf8'), policyPath);
         const result = validatePrimitiveSelection(parseRepositoryYaml(source, relativeFile), { policy });
+        if (!result.valid) errors.push(`${relativeFile}: ${result.errors.join('; ')}`);
+      }
+      if (relativeFile === 'config/event-catalog.yml') {
+        const result = validateEventCatalog(parseRepositoryYaml(source, relativeFile));
         if (!result.valid) errors.push(`${relativeFile}: ${result.errors.join('; ')}`);
       }
     } catch (error) {
