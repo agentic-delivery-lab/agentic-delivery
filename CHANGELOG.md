@@ -16,6 +16,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.34` at
+  `825d808164ed747187490d50727bfe38061b0932`; repository identity checks now
+  read the deployment contract instead of embedding the current controller
+  repository, and draft33 remains the explicit rollback pin.
+
 - The draft controller release advances to `0.2.0-draft.33` at
   `d8c77d5e68909c441066532a7bae2af994207316`, binding the canonical preview
   Automation templates to an immutable Control Plane source while retaining

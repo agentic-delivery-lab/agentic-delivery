@@ -93,11 +93,11 @@ repository.
 | Local slice | Evidence | Status boundary |
 | --- | --- | --- |
 | Generic Control Plane contracts and signed gateway | `config/`, `api/github/`, `scripts/lib/participant-registry.mjs`, `scripts/validate-multi-repository-acceptance.mjs` | Draft and shadow-only; no live App installation or mutation |
-| Pull-request observation path | `.github/workflows/agent-observation.yml`, `scripts/validate-observation-event.mjs`, draft33 release with draft32 rollback and draft23 bootstrap | Read-only observation; no lifecycle write-back or model execution |
+| Pull-request observation path | `.github/workflows/agent-observation.yml`, `scripts/validate-observation-event.mjs`, draft34 release with draft33 rollback and draft23 bootstrap | Read-only observation; no lifecycle write-back or model execution |
 | Organization event catalog | `config/event-catalog.yml`, `schemas/event-catalog.v1.schema.json`, `scripts/lib/event-catalog.mjs`; runtime route maps in `scripts/lib/agent-invocation.mjs` derive from it | Canonical event/action/route contract; App manifest and participant subscriptions are validated projections |
 | Primitive selection contract | `config/primitive-selection.yml`, `schemas/primitive-selection.v1.schema.json`, `scripts/lib/primitive-selection.mjs` | Release-bound profile-to-Primitive mapping; validates against the pinned Primitive catalog and does not duplicate Primitive content |
 | Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json` plus source maps | Local-prepared; no remote repository or publication claim |
-| Distribution/bootstrap | `agentic-delivery-distribution`, draft19 bundle, 8/8 tests | Opt-in fixture and PR projection; no consumer enrollment |
+| Distribution/bootstrap | `agentic-delivery-distribution`, draft20 bundle, 8/8 tests | Opt-in fixture and PR projection; no consumer enrollment |
 | Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
 | GitHub special-surface contract | `migration/special-surfaces.yml`, `scripts/validate-special-surfaces.mjs` | Migration evidence distinguishes GitHub-consumed paths from governance paths and forbids runtime ownership |
 | Preview Automation templates | `automations/templates/*.automation.md`, manifest and validator; Distribution projection lock | Two manual read-only canonical templates and a hash-pinned Agent Plugin projection; `.github-private` remains excluded |
@@ -155,15 +155,15 @@ that a remote repository, branch protection, or organization access exists.
 
 The Control Plane gateway now requires both the App installation ID and the
 central controller repository ID from protected deployment configuration; it
-has no fallback for either identity. Current draft controller `0.2.0-draft.33`
-is pinned to `d8c77d5e68909c441066532a7bae2af994207316`; draft32 at
-`00f2daf3a02ea0ca5610d44d8b17aa3b8bb228eb` remains the explicit rollback
+has no fallback for either identity. Current draft controller `0.2.0-draft.34`
+is pinned to `825d808164ed747187490d50727bfe38061b0932`; draft33 at
+`d8c77d5e68909c441066532a7bae2af994207316` remains the explicit rollback
 release, while draft23 at `30197d5c8731ea6e682ae4de5e629b964e278aab` remains
 the trusted bootstrap commit for this release. The release-bound primitive
 selection contract pins Primitive draft `0.1.0-draft.4` at
 `51e94992c5f39c59046f752e0cf6cff2ed3fff32` and its canonical digest, and
 checks every profile against the pinned catalog and orchestration policy.
-The current controller draft `0.2.0-draft.33` pins Architecture draft
+The current controller draft `0.2.0-draft.34` pins Architecture draft
 `0.1.0-draft.6` at `5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b` with digest
 `3bcc5f617de6ecf93f6b1c55bece5f97c03bcd979ccb1aa1c7d2431199383a3c`, and
 Primitive draft `0.1.0-draft.4` at
@@ -235,8 +235,8 @@ The same release-chain check now verifies the preview Automation projection:
 the Distribution lock must pin the current immutable Control Plane source
 commit, each Agent Plugin file must match the source bytes and SHA-256 digest,
 and no client-local settings or `.github-private` path may enter the projection.
-The current draft33 release and Distribution draft19 bundle carry that exact
-source pin; draft32 and Distribution draft18 remain the explicit rollback
+The current draft34 release and Distribution draft20 bundle carry that exact
+source pin; draft33 and Distribution draft19 remain the explicit rollback
 pairs.
 This is a release gate, not a runtime import or an authorization to publish
 any repository.
