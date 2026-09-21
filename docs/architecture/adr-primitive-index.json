@@ -663,8 +663,8 @@
     },
     {
       "id": "issue-metadata-contract",
-      "path": ".github/issue-metadata.yml",
-      "location": ".github/issue-metadata.yml",
+      "path": "config/issue-metadata.yml",
+      "location": "config/issue-metadata.yml",
       "kind": "state-machine",
       "enforcement": "deterministic",
       "adrs": [
@@ -747,8 +747,8 @@
     },
     {
       "id": "orchestration-policy-catalog",
-      "path": ".github/orchestration-policy.yml",
-      "location": ".github/orchestration-policy.yml",
+      "path": "config/orchestration-policy.yml",
+      "location": "config/orchestration-policy.yml",
       "kind": "state-machine",
       "enforcement": "deterministic",
       "adrs": [

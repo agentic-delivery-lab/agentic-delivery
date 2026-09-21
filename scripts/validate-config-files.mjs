@@ -30,7 +30,7 @@ async function gitFiles(repositoryRoot) {
       .filter((file) => /\.(?:json|ya?ml)$/.test(file))
       .filter((file) => file !== 'pnpm-lock.yaml')
       .filter((file) => !/^tests\/.*\/fixtures\//.test(file));
-    for (const file of ['.github/issue-metadata.yml', '.github/orchestration-policy.yml', 'config/agent-actors.json', 'config/participants.yml']) {
+    for (const file of ['config/issue-metadata.yml', 'config/orchestration-policy.yml', 'config/agent-actors.json', 'config/participants.yml']) {
       if (!tracked.includes(file)) tracked.push(file);
     }
     // These repository-local files were replaced by organization metadata and
@@ -77,11 +77,11 @@ export async function validateConfigFiles({ repositoryRoot = path.resolve(path.d
       } else {
         parseRepositoryYaml(source, relativeFile);
       }
-      if (relativeFile === '.github/issue-metadata.yml') {
+      if (relativeFile === 'config/issue-metadata.yml') {
         const result = validateIssueMetadataConfig(parseRepositoryYaml(source, relativeFile));
         if (!result.valid) errors.push(`${relativeFile}: ${result.errors.join('; ')}`);
       }
-      if (relativeFile === '.github/orchestration-policy.yml') {
+      if (relativeFile === 'config/orchestration-policy.yml') {
         const result = validateOrchestrationPolicy(parseRepositoryYaml(source, relativeFile));
         if (!result.valid) errors.push(`${relativeFile}: ${result.errors.join('; ')}`);
       }

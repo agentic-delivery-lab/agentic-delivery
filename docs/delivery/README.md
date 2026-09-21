@@ -20,7 +20,7 @@ repository has no local issue-form override. A read-only routing model
 interprets each eligible issue or human comment in context and proposes an
 issue type, lifecycle stage, readiness value, governance metadata, and
 orchestration pattern. Deterministic code validates the proposal against
-`.github/issue-metadata.yml`, `.github/orchestration-policy.yml`, and the
+`config/issue-metadata.yml`, `config/orchestration-policy.yml`, and the
 transition rules before applying it. It does not assign intent from title
 words, form headings, keywords, or regular expressions.
 

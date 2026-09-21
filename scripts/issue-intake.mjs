@@ -16,11 +16,11 @@ import { validateOrchestrationPolicy } from './lib/orchestration-policy.mjs';
 const repositoryRoot = path.resolve(import.meta.dirname, '..');
 
 export async function loadLifecycleConfig(root = repositoryRoot) {
-  const source = await readFile(path.join(root, '.github', 'issue-metadata.yml'), 'utf8');
+  const source = await readFile(path.join(root, 'config', 'issue-metadata.yml'), 'utf8');
   const config = parseRepositoryYaml(source, 'issue metadata configuration');
   const metadataValidation = validateIssueMetadataConfig(config);
   if (!metadataValidation.valid) throw new Error(`Issue metadata configuration is invalid: ${metadataValidation.errors.join('; ')}`);
-  const policySource = await readFile(path.join(root, '.github', 'orchestration-policy.yml'), 'utf8');
+  const policySource = await readFile(path.join(root, 'config', 'orchestration-policy.yml'), 'utf8');
   config.orchestration = parseRepositoryYaml(policySource, 'orchestration policy');
   const policy = validateOrchestrationPolicy(config.orchestration, {
     issueTypes: config.issue_types.map((type) => type.id),

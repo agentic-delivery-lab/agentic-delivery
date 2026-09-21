@@ -47,6 +47,16 @@ The source snapshots match the current default branches at these commits:
 - `agentic-delivery`: `8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`;
 - `.github`: `58316e9bbfa48a9288e9d022266d3c8a3b52cc96`.
 
+### Local implementation progress
+
+The implementation branch has begun Phase 2 without activating any external
+GitHub surface: enrollment, release, and App contracts live under the Control
+Plane `config/` boundary, and the executable issue metadata and orchestration
+contracts now live at `config/issue-metadata.yml` and
+`config/orchestration-policy.yml`. This progress note records local state only;
+it does not change Issue #52's scope, lifecycle, or completion criteria, and it
+does not make the Control Plane active for any repository.
+
 ## Executive summary
 
 Split the mixed-responsibility `agentic-delivery` repository into six minimum

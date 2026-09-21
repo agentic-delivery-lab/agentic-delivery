@@ -17,7 +17,7 @@ async function text(relativePath) {
 }
 
 test('issue intake configuration keeps issue type, lifecycle stage, readiness, and governance separate', async () => {
-  const config = parseRepositoryYaml(await text('.github/issue-metadata.yml'), 'issue metadata configuration');
+  const config = parseRepositoryYaml(await text('config/issue-metadata.yml'), 'issue metadata configuration');
   assert.deepEqual(config.issue_types.map((type) => type.name), [
     'Idea', 'Research', 'Feature / Outcome', 'Bug', 'Task', 'Requirements',
     'Architecture Decision', 'Implementation', 'Validation',

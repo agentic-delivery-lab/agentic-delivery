@@ -69,8 +69,8 @@ targets:
       - migration/**
       - automations/**
       - config/agent-actors.json
-      - .github/issue-metadata.yml
-      - .github/orchestration-policy.yml
+      - config/issue-metadata.yml
+      - config/orchestration-policy.yml
       - config/participants.yml
       - .github/workflows/**
       - docs/delivery/**

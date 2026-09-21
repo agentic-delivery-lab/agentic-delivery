@@ -113,5 +113,5 @@ Deterministic evidence for the migration must show:
 
 - Refines [ADR-0012: Use GitHub as the lifecycle control plane](0012-use-github-as-the-lifecycle-control-plane.md).
 - Extends [ADR-0018: Organization-wide Agentic Delivery control-plane distribution and versioning](0018-organization-wide-agentic-delivery-control-plane-distribution-and-versioning.md), which explicitly leaves this rename to a separate decision.
-- The current live logical contract remains in [`.github/issue-metadata.yml`](../../.github/issue-metadata.yml) until the migration described here is authorized.
+- The current live logical contract remains in [`config/issue-metadata.yml`](../../config/issue-metadata.yml) until the migration described here is authorized.
 - This record is provisional until its review pull request is merged into `main`.

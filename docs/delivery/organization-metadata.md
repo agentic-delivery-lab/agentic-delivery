@@ -9,7 +9,7 @@ pretending that the organization configuration has already been provisioned.
 
 ## Organization contract
 
-Use [`.github/issue-metadata.yml`](../../.github/issue-metadata.yml) as the
+Use [`config/issue-metadata.yml`](../../config/issue-metadata.yml) as the
 reviewed source for this organization-wide contract:
 
 - Native Issue Types: Idea, Research, Feature / Outcome, Bug, Task,
@@ -206,7 +206,7 @@ repository and issue number and is not discarded by metadata migration.
 ## Orchestration capability inventory
 
 The approved profile and capability catalog is
-[`.github/orchestration-policy.yml`](../../.github/orchestration-policy.yml).
+[`config/orchestration-policy.yml`](../../config/orchestration-policy.yml).
 The runner must explicitly report available optional MCP servers. The current
 catalog names Firecrawl for `web-research`, Chrome DevTools for
 `browser-automation`, and Context7 for `documentation-research`; their names

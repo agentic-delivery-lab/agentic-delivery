@@ -77,8 +77,8 @@ reason, and recoverability without changing the authoritative work state.
 
 For every eligible issue or human comment, a read-only semantic router receives
 the current issue, its conversation, the triggering event, and the approved
-catalogs from `.github/issue-metadata.yml` and
-`.github/orchestration-policy.yml`. It returns one structured routing proposal
+catalogs from `config/issue-metadata.yml` and
+`config/orchestration-policy.yml`. It returns one structured routing proposal
 containing a route, issue type, lifecycle stage, readiness value, complete
 governance-label set, and orchestration pattern. No title prefix, form heading,
 keyword, phrase, or regular expression assigns intent.
@@ -185,8 +185,8 @@ operator bindings are installed.
   `main`.
 - Amendment source: [issue #32](https://github.com/agentic-delivery-lab/agentic-delivery/issues/32)
   and [issue #35](https://github.com/agentic-delivery-lab/agentic-delivery/issues/35).
-- The active metadata contract is `.github/issue-metadata.yml`; the active
-  orchestration contract is `.github/orchestration-policy.yml`. The former
+- The active metadata contract is `config/issue-metadata.yml`; the active
+  orchestration contract is `config/orchestration-policy.yml`. The former
   repository-local lifecycle file is migration history and is not loaded.
 - Conversation-driven activation is refined by
   [ADR-0017](0017-use-an-explicit-agent-invocation-boundary.md); the mention is
