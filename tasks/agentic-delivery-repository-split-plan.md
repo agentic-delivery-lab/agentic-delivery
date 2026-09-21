@@ -188,9 +188,10 @@ delivery, organization fields, and repository-local CI remain operator/runtime
 checks.
 
 The release-coordination check `scripts/validate-release-chain.mjs` now takes
-the four extracted repository roots explicitly and reproduces the Architecture
-and Primitive content digests at the Control Plane's pinned commits. It also
-checks Distribution's workflow/source/capability/plugin locks and the
+the four extracted repository roots explicitly, reads the Architecture and
+Primitive release manifests from the exact Control Plane-pinned commits, and
+reproduces their content digests there. It also checks Distribution's
+workflow/source/capability/plugin locks and the
 `.github-private` validator's immutable workflow ref, credential-free checkout,
 canonical Primitive source, and per-agent provenance. It is exposed as
 `pnpm release-chain:check`; omitting any external root fails with exit code 2,
