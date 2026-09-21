@@ -1,5 +1,5 @@
 // agentic-primitive: {"id":"control-plane-contract-validator","kind":"validator","enforcement":"deterministic","adrs":["ADR-0018"],"domains":["agentic-delivery-control-plane"]}
-import { invocationEventSupported } from './agent-invocation.mjs';
+import { webhookEventSupported } from './agent-invocation.mjs';
 import { validateReceivedAt } from './replay-protection.mjs';
 
 export const EVENT_ENVELOPE_VERSION = 1;
@@ -18,6 +18,7 @@ const SHA1 = /^[0-9a-f]{40}$/i;
 const SEMVER = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const SOURCE_KINDS = new Set([
   'issue',
+  'pull_request',
   'issue_comment',
   'pull_request_comment',
   'pull_request_review',
@@ -72,12 +73,14 @@ function validateSource(source, event, errors) {
 
   const expectedKinds = {
     issues: new Set(['issue']),
+    pull_request: new Set(['pull_request']),
     issue_comment: new Set(['issue_comment', 'pull_request_comment']),
     pull_request_review: new Set(['pull_request_review']),
     pull_request_review_comment: new Set(['pull_request_review_comment']),
   }[event];
   if (expectedKinds && !expectedKinds.has(source.kind)) addError(errors, 'source.kind', `does not match event ${event}`);
   if (event === 'issues' && !validIssueNumber(source.issue_number)) addError(errors, 'source.issue_number', 'is required for issue events');
+  if (event === 'pull_request' && !validIssueNumber(source.pull_request_number)) addError(errors, 'source.pull_request_number', 'is required for pull-request events');
   if (event === 'issue_comment' && !validIssueNumber(source.issue_number)) addError(errors, 'source.issue_number', 'is required for issue comments');
   if (['pull_request_review', 'pull_request_review_comment'].includes(event)
     && !validIssueNumber(source.pull_request_number)) addError(errors, 'source.pull_request_number', 'is required for pull-request review events');
@@ -99,8 +102,8 @@ export function validateEventEnvelope(envelope) {
     addError(errors, 'delivery_id', 'must be a GitHub delivery identifier');
   }
   if (typeof envelope.event !== 'string' || typeof envelope.action !== 'string'
-    || !invocationEventSupported(envelope.event, envelope.action)) {
-    addError(errors, 'event/action', 'must be a supported invocation event and action');
+    || !webhookEventSupported(envelope.event, envelope.action)) {
+    addError(errors, 'event/action', 'must be a supported webhook event and action');
   }
   if (typeof envelope.repository_id !== 'string' || !REPOSITORY_ID.test(envelope.repository_id)) {
     addError(errors, 'repository_id', 'must be a positive numeric repository ID');

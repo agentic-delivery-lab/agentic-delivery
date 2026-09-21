@@ -10,9 +10,12 @@ import {
   AGENT_BOT_LOGIN,
   AGENT_MENTION,
   INVOCATION_EVENTS,
+  OBSERVATION_EVENTS,
   constantTimeSignatureValid,
   hasInvocationMention,
   invocationEventSupported,
+  observationEventSupported,
+  webhookEventSupported,
   validateActorCatalog,
 } from '../../scripts/lib/agent-invocation.mjs';
 import { handleWebhook } from '../../api/github/webhook.mjs';
@@ -41,6 +44,7 @@ test('the configured App actor and event catalog are deterministic', async () =>
   assert.equal(AGENT_BOT_LOGIN, 'agentic-delivery-lab-invoker-7f3a[bot]');
   assert.deepEqual(validateActorCatalog(actorCatalog), { valid: true, errors: [] });
   assert.deepEqual(Object.keys(INVOCATION_EVENTS), ['issues', 'issue_comment', 'pull_request_review', 'pull_request_review_comment']);
+  assert.deepEqual(Object.keys(OBSERVATION_EVENTS), ['pull_request']);
   assert.ok((await readFile(path.join(repositoryRoot, 'config/agent-actors.json'), 'utf8')).includes('agentic-delivery-lab-invoker-7f3a[bot]'));
 });
 
@@ -63,6 +67,9 @@ test('webhook signatures and event actions require the supported contract', () =
   assert.equal(invocationEventSupported('issue_comment', 'created'), true);
   assert.equal(invocationEventSupported('issues', 'opened'), true);
   assert.equal(invocationEventSupported('pull_request_review_comment', 'edited'), true);
+  assert.equal(observationEventSupported('pull_request', 'synchronize'), true);
+  assert.equal(webhookEventSupported('pull_request', 'closed'), true);
+  assert.equal(invocationEventSupported('pull_request', 'opened'), false);
   assert.equal(invocationEventSupported('repository_dispatch', 'created'), false);
 });
 
@@ -177,6 +184,33 @@ test('webhook filters untagged comments before creating a repository dispatch', 
   });
   assert.equal(output.statusCode, 204);
   assert.equal(calls, 0);
+});
+
+test('webhook dispatches enrolled pull-request observations without granting invocation semantics', async () => {
+  const body = JSON.stringify(githubPayload({
+    action: 'synchronize',
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    pull_request: { number: 44, body: 'A pull-request change.' },
+    sender: { login: 'external-contributor', type: 'User' },
+  }));
+  const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
+  const output = result();
+  const calls = [];
+  await handleWebhook(request({ body, event: 'pull_request', signature }), output, {
+    env: webhookEnv(),
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return response(204);
+    },
+    tokenProvider: { token: async () => 'installation-token' },
+  });
+  assert.equal(output.statusCode, 202);
+  assert.equal(calls.length, 1);
+  const dispatch = JSON.parse(calls[0].options.body);
+  assert.equal(dispatch.event_type, 'agent_invocation');
+  assert.equal(dispatch.client_payload.event, 'pull_request');
+  assert.equal(dispatch.client_payload.source.kind, 'pull_request');
+  assert.equal(dispatch.client_payload.source.pull_request_number, 44);
 });
 
 test('webhook fails closed when the central controller repository is not configured', async () => {
@@ -710,4 +744,59 @@ test('central preflight accepts issue lifecycle envelopes without a comment', as
   assert.equal(normalizedEvent.issue.number, 12);
   assert.equal(normalizedEvent.comment, undefined);
   assert.equal(normalizedEvent.sender.login, 'sjefsharp');
+});
+
+test('central preflight records pull-request events as observation-only', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-pr-observation-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const eventPath = path.join(root, 'event.json');
+  const outputPath = path.join(root, 'output');
+  const originRepository = 'agentic-delivery-lab/service-a';
+  const originRepositoryId = '777777777';
+  const registry = parseParticipantRegistry({
+    version: 1,
+    organization: 'agentic-delivery-lab',
+    repositories: {
+      [originRepositoryId]: {
+        expectedFullName: originRepository,
+        mode: 'active',
+        controller: { version: '0.1.0', commit: '0123456789abcdef0123456789abcdef01234567' },
+        contracts: { eventEnvelope: 1, lifecycle: '1.0.0', stateMachine: '1.0.0', evidence: '1.0.0' },
+        dependencies: testDependencies,
+        configurationProfile: 'standard',
+        events: ['pull_request'],
+        localIntegration: { workflowBundle: 'none', managedByApp: false },
+      },
+    },
+  });
+  await writeFile(eventPath, JSON.stringify({
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    client_payload: {
+      version: 1,
+      delivery_id: '52345678-1234-4234-8234-123456789012',
+      event: 'pull_request',
+      action: 'synchronize',
+      repository_id: originRepositoryId,
+      source: { kind: 'pull_request', issue_number: null, pull_request_number: 19, comment_id: null, review_id: null },
+      actor: { login: 'external-contributor', type: 'User' },
+      hop: 0,
+      body_digest: (await import('../../scripts/lib/agent-invocation.mjs')).bodyDigest('A pull-request change.'),
+      controller: { version: '0.1.0', commit: '0123456789abcdef0123456789abcdef01234567' },
+    },
+  }));
+  const output = await prepareAgentInvocation({
+    env: {
+      GH_TOKEN: 'token',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      GITHUB_OUTPUT: outputPath,
+      RUNNER_TEMP: root,
+    },
+    fetchImpl: async () => { throw new Error('observation-only preflight must not call the origin API'); },
+    participantRegistry: registry,
+  });
+  assert.equal(output.accepted, false);
+  assert.equal(output.observation, true);
+  assert.equal(output.originRepository, originRepository);
+  assert.match(await readFile(outputPath, 'utf8'), /observation_only<<AGENT_INVOCATION_EOF\ntrue/);
 });

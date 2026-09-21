@@ -11,6 +11,15 @@ export const INVOCATION_EVENTS = Object.freeze({
   pull_request_review_comment: Object.freeze(['created', 'edited']),
 });
 
+// Pull-request lifecycle events enter the same signed organization gateway as
+// issue events, but remain observations until a versioned lifecycle policy
+// assigns them a transition. They are deliberately not part of the explicit
+// agent-invocation catalog: a pull request cannot invoke the orchestrator just
+// by being opened or synchronized.
+export const OBSERVATION_EVENTS = Object.freeze({
+  pull_request: Object.freeze(['opened', 'edited', 'synchronize', 'reopened', 'ready_for_review', 'closed']),
+});
+
 export function bodyDigest(body) {
   return createHash('sha256').update(String(body ?? ''), 'utf8').digest('hex');
 }
@@ -56,6 +65,15 @@ export function hasInvocationMention(body, mention = AGENT_MENTION) {
 export function invocationEventSupported(eventName, action) {
   return Object.hasOwn(INVOCATION_EVENTS, eventName)
     && INVOCATION_EVENTS[eventName].includes(action);
+}
+
+export function observationEventSupported(eventName, action) {
+  return Object.hasOwn(OBSERVATION_EVENTS, eventName)
+    && OBSERVATION_EVENTS[eventName].includes(action);
+}
+
+export function webhookEventSupported(eventName, action) {
+  return invocationEventSupported(eventName, action) || observationEventSupported(eventName, action);
 }
 
 export function constantTimeSignatureValid({ secret, rawBody, signature } = {}) {
@@ -109,6 +127,13 @@ export function sourceFromWebhook(eventName, payload) {
     review_id: null,
     kind: 'issue',
   };
+  if (eventName === 'pull_request') return {
+    issue_number: null,
+    pull_request_number: pullRequest?.number ?? null,
+    comment_id: null,
+    review_id: null,
+    kind: 'pull_request',
+  };
   return {
     issue_number: issue?.number ?? null,
     pull_request_number: pullRequest?.number ?? null,
@@ -122,6 +147,7 @@ export function sourceFromWebhook(eventName, payload) {
 
 export function invocationBody(eventName, payload) {
   if (eventName === 'issues') return payload?.issue?.body ?? '';
+  if (eventName === 'pull_request') return payload?.pull_request?.body ?? '';
   if (eventName === 'pull_request_review') return payload?.review?.body ?? '';
   return payload?.comment?.body ?? '';
 }

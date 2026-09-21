@@ -124,6 +124,19 @@ test('pull-request review envelopes use the pull-request identity until source i
   assert.deepEqual(result, { valid: true, errors: [] });
 });
 
+test('pull-request lifecycle envelopes are valid observations with no issue transition', () => {
+  const result = validateEventEnvelope(invocationEnvelope({
+    deliveryId: '42345678-1234-4234-8234-123456789012',
+    eventName: 'pull_request',
+    action: 'synchronize',
+    repositoryId: '1358455028',
+    source: { kind: 'pull_request', issue_number: null, pull_request_number: 19, comment_id: null, review_id: null },
+    actor: { login: 'external-contributor', type: 'User' },
+    body: 'A pull-request change.',
+  }));
+  assert.deepEqual(result, { valid: true, errors: [] });
+});
+
 test('malformed identity or source data fails closed', () => {
   const result = validateEventEnvelope({
     version: 1,

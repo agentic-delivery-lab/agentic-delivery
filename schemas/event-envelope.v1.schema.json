@@ -20,7 +20,7 @@
     "version": { "const": 1 },
     "delivery_id": { "type": "string", "pattern": "^[0-9a-f-]{20,}$" },
     "event": {
-      "enum": ["issues", "issue_comment", "pull_request_review", "pull_request_review_comment"]
+      "enum": ["issues", "issue_comment", "pull_request", "pull_request_review", "pull_request_review_comment"]
     },
     "action": { "type": "string", "minLength": 1 },
     "repository_id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
@@ -30,7 +30,7 @@
       "required": ["kind", "issue_number", "pull_request_number", "comment_id", "review_id"],
       "properties": {
         "kind": {
-          "enum": ["issue", "issue_comment", "pull_request_comment", "pull_request_review", "pull_request_review_comment"]
+          "enum": ["issue", "pull_request", "issue_comment", "pull_request_comment", "pull_request_review", "pull_request_review_comment"]
         },
         "issue_number": { "type": ["integer", "null"], "minimum": 1 },
         "pull_request_number": { "type": ["integer", "null"], "minimum": 1 },

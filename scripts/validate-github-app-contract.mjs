@@ -3,10 +3,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import actorCatalog from '../config/agent-actors.json' with { type: 'json' };
-import { invocationEventSupported } from './lib/agent-invocation.mjs';
+import { invocationEventSupported, observationEventSupported } from './lib/agent-invocation.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const requiredEvents = ['issues', 'issue_comment', 'pull_request_review', 'pull_request_review_comment'];
+const requiredEvents = ['issues', 'issue_comment', 'pull_request', 'pull_request_review', 'pull_request_review_comment'];
 const numericIdentity = /^[1-9][0-9]*$/;
 
 export class GithubAppContractError extends Error {
@@ -39,9 +39,14 @@ export function validateGithubAppContract(contract, catalog = actorCatalog) {
     const actions = contract.events?.[event];
     if (!Array.isArray(actions) || actions.length === 0) errors.push(`events.${event} must contain at least one action`);
     else {
-      for (const action of actions) if (!invocationEventSupported(event, action)) errors.push(`events.${event} contains unsupported action ${action}`);
+      for (const action of actions) {
+        const supported = event === 'pull_request'
+          ? observationEventSupported(event, action)
+          : invocationEventSupported(event, action);
+        if (!supported) errors.push(`events.${event} contains unsupported action ${action}`);
+      }
     }
-    if (JSON.stringify(actions) !== JSON.stringify(catalog?.events?.[event])) errors.push(`events.${event} must match the actor event catalog`);
+    if (event !== 'pull_request' && JSON.stringify(actions) !== JSON.stringify(catalog?.events?.[event])) errors.push(`events.${event} must match the actor event catalog`);
   }
   const permissions = contract.permissions ?? {};
   if (permissions.metadata !== 'read') errors.push('permissions.metadata must be read');

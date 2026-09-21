@@ -8,8 +8,7 @@ import {
   actorEntry,
   bodyDigest,
   hasInvocationMention,
-  invocationEventSupported,
-  sourceFromWebhook,
+  observationEventSupported,
   validateActorCatalog,
 } from './lib/agent-invocation.mjs';
 import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
@@ -152,6 +151,23 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
   if (envelope.installation_id !== undefined && appConfig.installationId !== undefined
     && String(envelope.installation_id) !== String(appConfig.installationId)) {
     throw new Error('The dispatch installation identity does not match the controller configuration.');
+  }
+  if (observationEventSupported(envelope.event, envelope.action)) {
+    if (!participant.events.includes(envelope.event)) throw new Error('The observation event is not enrolled for this participant.');
+    await writeOutput('accepted', 'false', env);
+    await writeOutput('observation_only', 'true', env);
+    await writeOutput('origin_repository', originRepository, env);
+    await writeOutput('origin_repository_id', envelope.repository_id, env);
+    await writeOutput('participant_mode', participant.mode, env);
+    await writeOutput('controller_version', participant.controller.version, env);
+    await writeOutput('controller_commit', participant.controller.commit, env);
+    await writeOutput('invocation_event_name', envelope.event, env);
+    return {
+      accepted: false,
+      observation: true,
+      originRepository,
+      participantMode: participant.mode,
+    };
   }
   const appProvider = appConfig.appId && appConfig.privateKey
     ? new GithubAppTokenProvider({
