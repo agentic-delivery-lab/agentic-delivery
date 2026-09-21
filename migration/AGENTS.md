@@ -16,6 +16,9 @@ not a second participant registry or runtime state store.
   protection, entitlement, or activation.
 - Keep `.github-private` projections non-canonical and record their Primitive
   source commit and content digest.
+- Keep `.github` and `.github-private` special-surface evidence separate from
+  domain repository targets; validate consumed paths, governance paths, and
+  non-runtime exclusions with `pnpm special-surfaces:check`.
 - Remove a compatibility bridge only after its target release, parity evidence,
   rollback, and operator authorization exist.
 
