@@ -97,7 +97,7 @@ repository.
 | Organization event catalog | `config/event-catalog.yml`, `schemas/event-catalog.v1.schema.json`, `scripts/lib/event-catalog.mjs`; runtime route maps in `scripts/lib/agent-invocation.mjs` derive from it | Canonical event/action/route contract; App manifest and participant subscriptions are validated projections |
 | Primitive selection contract | `config/primitive-selection.yml`, `schemas/primitive-selection.v1.schema.json`, `scripts/lib/primitive-selection.mjs` | Release-bound profile-to-Primitive mapping; validates against the pinned Primitive catalog and does not duplicate Primitive content |
 | Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json` plus source maps | Local-prepared; no remote repository or publication claim |
-| Distribution/bootstrap | `agentic-delivery-distribution`, draft18 bundle, 7/7 tests | Opt-in fixture and PR projection; no consumer enrollment |
+| Distribution/bootstrap | `agentic-delivery-distribution`, draft19 bundle, 8/8 tests | Opt-in fixture and PR projection; no consumer enrollment |
 | Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
 | GitHub special-surface contract | `migration/special-surfaces.yml`, `scripts/validate-special-surfaces.mjs` | Migration evidence distinguishes GitHub-consumed paths from governance paths and forbids runtime ownership |
 | Preview Automation templates | `automations/templates/*.automation.md`, manifest and validator; Distribution projection lock | Two manual read-only canonical templates and a hash-pinned Agent Plugin projection; `.github-private` remains excluded |
