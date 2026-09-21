@@ -32,13 +32,13 @@ output.
 
 The gateway also binds every supported event to the configured organization
 login, numeric organization ID, and App installation ID before it mints an
-origin-scoped token. The deployment defaults are the current
-`agentic-delivery-lab` organization (`327861320`) and installation
-(`163255060`); operators must verify these values against the live App
-installation and override them with `AGENTIC_DELIVERY_ORGANIZATION`,
-`AGENTIC_DELIVERY_ORGANIZATION_ID`, and `AGENTIC_DELIVERY_APP_INSTALLATION_ID`
-when rotating or promoting the deployment. A mismatched organization or
-installation is rejected before actor authorization or dispatch.
+origin-scoped token. The organization defaults identify
+`agentic-delivery-lab` (`327861320`), but the App installation ID has no
+runtime default and must be supplied by the protected deployment environment
+through `AGENTIC_DELIVERY_APP_INSTALLATION_ID`. Operators must verify the
+organization values and installation ID against the live App installation
+before promotion. A missing or mismatched installation is rejected before
+actor authorization or dispatch.
 
 The dispatch token is independently narrowed to the configured numeric
 Control-Plane repository ID (`AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID`).

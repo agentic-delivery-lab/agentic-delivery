@@ -29,7 +29,6 @@ const API_VERSION = '2026-03-10';
 const DEFAULT_ORGANIZATION = 'agentic-delivery-lab';
 const DEFAULT_ORGANIZATION_ID = '327861320';
 const DEFAULT_CONTROLLER_REPOSITORY_ID = '1358455028';
-const DEFAULT_INSTALLATION_ID = '163255060';
 function header(req, name) {
   const value = req.headers?.[name] ?? req.headers?.[name.toLowerCase()];
   return Array.isArray(value) ? value[0] : value;
@@ -61,7 +60,7 @@ function environment(env = process.env) {
     organizationId: env.AGENTIC_DELIVERY_ORGANIZATION_ID || DEFAULT_ORGANIZATION_ID,
     appId: env.AGENTIC_DELIVERY_APP_ID || env.CODEX_DELIVERY_APP_ID,
     privateKey: env.AGENTIC_DELIVERY_APP_PRIVATE_KEY || env.CODEX_DELIVERY_APP_PRIVATE_KEY,
-    installationId: env.AGENTIC_DELIVERY_APP_INSTALLATION_ID || env.CODEX_DELIVERY_APP_INSTALLATION_ID || DEFAULT_INSTALLATION_ID,
+    installationId: env.AGENTIC_DELIVERY_APP_INSTALLATION_ID || env.CODEX_DELIVERY_APP_INSTALLATION_ID,
     webhookSecret: env.AGENTIC_DELIVERY_WEBHOOK_SECRET,
     replayStateDirectory: env.AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY,
     replayWindowMs: Number(env.AGENTIC_DELIVERY_REPLAY_WINDOW_MS || 300_000),
@@ -147,6 +146,9 @@ export async function handleWebhook(req, res, {
   }
   if (!/^[1-9][0-9]*$/.test(String(config.controllerRepositoryId ?? ''))) {
     return reply(res, 500, { error: 'The central controller repository ID is not configured.' });
+  }
+  if (!/^[1-9][0-9]*$/.test(String(config.installationId ?? ''))) {
+    return reply(res, 500, { error: 'The GitHub App installation ID is not configured.' });
   }
   const raw = await rawBody(req);
   const signature = header(req, 'x-hub-signature-256');

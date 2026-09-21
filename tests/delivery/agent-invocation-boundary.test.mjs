@@ -92,6 +92,28 @@ test('webhook rejects events from another organization or installation', async (
   }
 });
 
+test('webhook fails closed when the App installation ID is not configured', async () => {
+  const payload = githubPayload({
+    action: 'created',
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    issue: { number: 44 },
+    comment: { id: 17, body: '@agentic-delivery-lab-invoker-7f3a continue', user: { login: 'sjefsharp', type: 'User' } },
+    sender: { login: 'sjefsharp', type: 'User' },
+  });
+  const body = JSON.stringify(payload);
+  const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
+  const env = webhookEnv();
+  delete env.AGENTIC_DELIVERY_APP_INSTALLATION_ID;
+  const output = result();
+  await handleWebhook(request({ body, signature }), output, {
+    env,
+    fetchImpl: async () => { throw new Error('missing installation identity must fail before GitHub API access'); },
+    tokenProvider: { token: async () => 'installation-token' },
+  });
+  assert.equal(output.statusCode, 500);
+  assert.match(output.body, /installation ID is not configured/);
+});
+
 function response(status, value = {}) {
   return { ok: status >= 200 && status < 300, status, json: async () => value };
 }
@@ -120,6 +142,7 @@ function webhookEnv(overrides = {}) {
   return {
     AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
     AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+    AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
     AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
     ...overrides,
   };
@@ -178,6 +201,7 @@ test('webhook fails closed when the central controller repository ID is invalid'
     env: {
       AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
       AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
       AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '0',
     },
     fetchImpl: async () => { throw new Error('invalid controller identity must fail before API access'); },
@@ -200,6 +224,7 @@ test('webhook requires a durable replay store unless ephemeral mode is explicit'
     env: {
       AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
       AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
     },
     fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : response(204)),
     tokenProvider: { token: async () => 'installation-token' },
@@ -279,6 +304,7 @@ test('webhook claims a delivery once and releases the claim when dispatch fails'
   const env = {
     AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
     AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+    AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
     AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
   };
   const requestFor = () => request({ body, signature, delivery: '98765432-1234-4234-8234-123456789012' });
@@ -395,6 +421,7 @@ test('one central webhook accepts a second enrolled repository and dispatches to
     env: {
       AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
       AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
       AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
     },
     participantRegistry: registry,
