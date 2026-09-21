@@ -14,7 +14,8 @@ Delivery Control Plane.
 - `orchestration-policy.yml` defines the versioned routing and execution
   policy.
 - `github-app-contract.json` defines the organization App and credential
-  boundary.
+  boundary; pull-request lifecycle events are signed observations and are not
+  invocation or lifecycle-transition events.
 - `controller-release.json` is checked against the explicitly supplied
   Architecture, Primitives, Distribution, and `.github-private` checkouts by
   `scripts/validate-release-chain.mjs`. That release-coordination check
