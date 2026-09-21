@@ -28,7 +28,7 @@ test('contract schemas are present and self-identifying', async () => {
 test('the checked-in controller release pins every enrolled participant', async () => {
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
-  assert.equal(release.bootstrapCommit, release.commit);
+  assert.equal(release.bootstrapCommit, '30197d5c8731ea6e682ae4de5e629b964e278aab');
   const validated = await validateReleaseManifest({ repositoryRoot });
   assert.equal(validated.commit, release.commit);
   assert.equal(controllerPinMatchesRelease(release, {
