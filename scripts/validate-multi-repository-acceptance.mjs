@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
-import { parseParticipantRegistry } from './lib/participant-registry.mjs';
+import { authorizeParticipation, parseParticipantRegistry } from './lib/participant-registry.mjs';
 import { invocationEnvelope } from './lib/agent-invocation.mjs';
 import { controllerPinMatchesRelease, validateControllerRelease, validateEventEnvelope } from './lib/control-plane-contracts.mjs';
 import { intakeEvent, normalizeOriginEvent } from './codex-delivery.mjs';
@@ -137,6 +137,37 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
   assertCondition(identityRows.every((row) => row.evidenceRepository === row.repository), 'delivery evidence must retain the originating repository');
   assertCondition(identityRows.every((row) => row.gitRemote === `https://github.com/${row.repository}.git`), 'git remotes must retain the originating repository');
 
+  // Enrollment is deliberately two-part: App repository access and a matching
+  // central registry record. Removing either condition must fail closed before
+  // any lifecycle or repository mutation is attempted.
+  const appRepositoryIds = new Set([first.repositoryId, SECOND_REPOSITORY_ID]);
+  assertCondition(authorizeParticipation({
+    registry: firstRegistry,
+    repositoryId: first.repositoryId,
+    repositoryFullName: first.expectedFullName,
+    appRepositoryIds,
+  }).allowed === true, 'the first participant requires both App access and registry enrollment');
+  assertCondition(authorizeParticipation({
+    registry: fixtureRegistry,
+    repositoryId: SECOND_REPOSITORY_ID,
+    repositoryFullName: SECOND_REPOSITORY,
+    appRepositoryIds,
+  }).allowed === true, 'the second participant requires both App access and registry enrollment');
+  const appAccessRemoved = authorizeParticipation({
+    registry: firstRegistry,
+    repositoryId: first.repositoryId,
+    repositoryFullName: first.expectedFullName,
+    appRepositoryIds: [],
+  });
+  assertCondition(appAccessRemoved.allowed === false && /App installation access/.test(appAccessRemoved.reason), 'removing App access must fail closed');
+  const registryRemoved = authorizeParticipation({
+    registry: firstRegistry,
+    repositoryId: '900000003',
+    repositoryFullName: 'agentic-delivery-lab/unregistered-service',
+    appRepositoryIds: ['900000003'],
+  });
+  assertCondition(registryRemoved.allowed === false && /participant registry/.test(registryRemoved.reason), 'removing registry enrollment must fail closed');
+
   // Exercise the same deterministic field mutation used by live intake, but
   // keep the GraphQL adapter in-memory. The mutation log is scoped by the
   // originating repository so an identical issue number cannot write through
@@ -242,6 +273,7 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
       repositoryIdentity: 'passed',
       downstreamIdentity: 'passed',
       lifecycleIssueNamespace: 'passed',
+      participationContract: 'passed',
       lifecycleWriteback: 'passed',
       controllerUpgrade: 'passed',
       controllerRollback: 'passed',

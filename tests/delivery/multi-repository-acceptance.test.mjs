@@ -15,6 +15,7 @@ test('offline organization acceptance matrix keeps two repositories on one contr
   assert.equal(report.checks.repositoryIdentity, 'passed');
   assert.equal(report.checks.downstreamIdentity, 'passed');
   assert.equal(report.checks.lifecycleWriteback, 'passed');
+  assert.equal(report.checks.participationContract, 'passed');
   assert.equal(report.checks.controllerUpgrade, 'passed');
   assert.equal(report.checks.controllerRollback, 'passed');
   assert.equal(report.checks.centralCredentialBoundary, 'passed');
