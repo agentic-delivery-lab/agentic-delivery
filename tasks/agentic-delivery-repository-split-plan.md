@@ -107,6 +107,13 @@ These checks are evidence for implementation readiness, not evidence that the
 corresponding GitHub repositories, settings, App installation, or publication
 surface exist.
 
+The latest local regression evidence is: Control Plane `300/300` tests,
+Architecture `8/8`, Agentic Primitives `6/6`, Distribution `7/7`, and the
+private publication validator with zero projections. All five prepared target
+checkouts are clean after their local commits; the separate public `.github`
+checkout retains pre-existing user changes and is intentionally not modified
+by this migration work.
+
 The locally prepared Architecture Authority and Agentic Primitives extractions
 now also carry `migration/manifest.json`, a pinned `git-filter-repo` tool
 identity, and a complete `migration/source-commit-map.csv`. Their repository
