@@ -169,11 +169,12 @@ export async function validateReleaseChain({
   equal(errors, 'Private surface repository name', privateSurface.repositoryName, '.github-private');
   equal(errors, 'Private surface visibility', privateSurface.requiredVisibility, 'private');
   equal(errors, 'Private publication canonical repository', privateLock.canonicalRepository, primitiveDependency.repository);
+  if (!Array.isArray(privateLock.agents)) errors.push('private publication lock agents must be an array');
   if (!privateWorkflow.includes(`repository: ${bundle.workflowSource?.repository}`)) errors.push('private validator must check out the declared workflow source repository');
   if (!privateWorkflow.includes(`ref: ${bundle.workflowSource?.commit}`)) errors.push('private validator must pin the declared workflow source commit');
   if (!/^\s*persist-credentials:\s*false\s*$/m.test(privateWorkflow)) errors.push('private validator checkouts must disable persisted credentials');
   if (/^\s*secrets\s*:/m.test(privateWorkflow)) errors.push('private publication workflow must not receive central secrets');
-  for (const [index, agent] of (privateLock.agents ?? []).entries()) {
+  for (const [index, agent] of (Array.isArray(privateLock.agents) ? privateLock.agents : []).entries()) {
     const prefix = `private publication agent ${index}`;
     equal(errors, `${prefix} source repository`, agent.sourceRepository, primitiveDependency.repository);
     equal(errors, `${prefix} source commit`, agent.sourceCommit, primitiveDependency.commit);
@@ -189,7 +190,7 @@ export async function validateReleaseChain({
     architecture: { version: architectureDependency.version, commit: architectureDependency.commit, contentSha256: architectureDependency.contentSha256 },
     primitives: { version: primitiveDependency.version, commit: primitiveDependency.commit, contentSha256: primitiveDependency.contentSha256 },
     distribution: { bundleVersion: bundle.bundleVersion, workflowCommit: bundle.workflowSource.commit },
-    privatePublicationAgents: (privateLock.agents ?? []).length,
+    privatePublicationAgents: Array.isArray(privateLock.agents) ? privateLock.agents.length : 0,
   };
 }
 
