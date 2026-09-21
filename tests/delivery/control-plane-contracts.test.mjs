@@ -54,6 +54,14 @@ test('the checked-in controller release pins every enrolled participant', async 
   }), true);
 });
 
+test('the release catalog retains an older immutable pin for intentional rollback', async () => {
+  const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
+  assert.ok(release.compatibility.controllers.some((pin) => (
+    pin.version === '0.2.0-draft.2'
+    && pin.commit === '50fba4418e394bf2fa57521302241caf474516bd'
+  )));
+});
+
 test('valid event envelopes are accepted before central execution', () => {
   const envelope = invocationEnvelope({
     deliveryId: '12345678-1234-4234-8234-123456789012',

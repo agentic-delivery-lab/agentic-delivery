@@ -11,7 +11,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft controller release to `0.2.0-draft.4` at `ff4b2198a04ed695942faeec4e838a628b1b2ed4`, including the canonical `config/` enrollment boundary and origin-ID authorization; existing participants remain shadow-only.
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft controller release to `0.2.0-draft.5` at `4a52effdf11c38dace441b5ec7222bae4fdb92b4`, including the canonical `config/` enrollment boundary and origin-ID authorization; existing participants remain shadow-only.
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) retains the prior immutable `0.2.0-draft.2` controller pin in the compatibility catalog so participant upgrades and exact-commit rollback remain intentional.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) advances the draft Control Plane pin to the locally validated organization-aware controller commit and aligns its Architecture and Primitive dependency pins; the release remains draft and shadow-only pending authorized rollout.
 
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) binds webhook envelopes to the configured organization, App installation, origin repository, and controller repository identities; dispatch tokens are narrowed independently and production replay protection fails closed without a durable claim store.
