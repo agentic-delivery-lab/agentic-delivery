@@ -123,7 +123,8 @@ The offline acceptance matrix additionally exercises `.github-private` as an
 origin-event participant with an isolated issue namespace and no central App
 credentials in its publication workflow. Its repository ID remains a fixture
 until the private repository and App access are verified by an authorized
-operator.
+operator. The matrix also requires the private validator to use the central
+Control Plane repository at an immutable SHA and credential-free checkouts.
 
 The gateway contract test also dispatches an enrolled second repository through
 an explicitly configured controller name and repository ID different from the
