@@ -119,6 +119,12 @@ digest into the consumer provenance lock. Cross-file checks reject drift
 between the Primitive release, Architecture release, Control Plane release,
 workflow source, and Agent Plugin projection.
 
+The offline acceptance matrix additionally exercises `.github-private` as an
+origin-event participant with an isolated issue namespace and no central App
+credentials in its publication workflow. Its repository ID remains a fixture
+until the private repository and App access are verified by an authorized
+operator.
+
 The gateway contract test also dispatches an enrolled second repository through
 an explicitly configured controller name and repository ID different from the
 current repository, proving that the central controller identity is a
