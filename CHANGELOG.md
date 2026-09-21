@@ -16,6 +16,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The read-only organization inventory now probes `.github` and
+  `.github-private` as GitHub special surfaces and records a private-surface
+  404 as `not-found-unverified`, preserving the distinction between an absent
+  repository and inaccessible private metadata.
+
 - Migration evidence now validates `.github` and `.github-private` as narrow
   GitHub-defined special surfaces, keeping consumed paths, governance paths,
   non-inherited workflows, projection provenance, and private-surface

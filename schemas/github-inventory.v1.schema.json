@@ -3,7 +3,7 @@
   "$id": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/schemas/github-inventory.v1.schema.json",
   "title": "Agentic Delivery read-only GitHub inventory v1",
   "type": "object",
-  "required": ["schemaVersion", "organization", "collectedAt", "evidenceClass", "readOnly", "repositories", "capabilities"],
+  "required": ["schemaVersion", "organization", "collectedAt", "evidenceClass", "readOnly", "repositories", "specialSurfaces", "capabilities"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "organization": {
@@ -56,6 +56,10 @@
         "additionalProperties": false
       }
     },
+    "specialSurfaces": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/specialSurface" }
+    },
     "capabilities": {
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/endpoint" }
@@ -63,6 +67,27 @@
     "warnings": { "type": "array", "items": { "type": "string" } }
   },
   "$defs": {
+    "specialSurface": {
+      "type": "object",
+      "required": ["repository", "status", "identity", "visibility", "defaultBranch", "evidence"],
+      "properties": {
+        "repository": { "type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$" },
+        "status": { "enum": ["observed", "not-found-unverified", "unavailable"] },
+        "identity": {
+          "type": ["object", "null"],
+          "required": ["id", "name"],
+          "properties": {
+            "id": { "type": ["string", "null"] },
+            "name": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "visibility": { "type": ["string", "null"] },
+        "defaultBranch": { "type": ["string", "null"] },
+        "evidence": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
     "endpoint": {
       "type": "object",
       "required": ["status"],

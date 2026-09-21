@@ -115,7 +115,7 @@ These checks are evidence for implementation readiness, not evidence that the
 corresponding GitHub repositories, settings, App installation, or publication
 surface exist.
 
-The latest local regression evidence is: Control Plane `312/312` tests,
+The latest local regression evidence is: Control Plane `313/313` tests,
 Architecture `8/8`, Agentic Primitives `6/6`, Distribution `7/7`, and the
 private publication validator with zero projections. The Control Plane release
 chain suite includes the regression fixture that mutates a dependency
@@ -251,7 +251,13 @@ organization repository, visibility, default-branch, ruleset, workflow, open
 issue/PR, label, cross-reference, and capability evidence without persisting
 issue bodies or mutating GitHub. An unavailable endpoint is recorded as an
 evidence gap rather than interpreted as absence. Live reports are temporary
-operator evidence and are not committed as authoritative configuration.
+operator evidence and are not committed as authoritative configuration. The
+inventory also probes both GitHub special surfaces directly. The 2026-09-22
+run observed public `.github` on `main` and received a 404 for
+`.github-private`; that result is recorded as `not-found-unverified`, because
+the current identity cannot distinguish an absent repository from inaccessible
+private metadata. It therefore does not authorize creation, activation, or a
+claim that the private surface is absent.
 
 ## Executive summary
 
