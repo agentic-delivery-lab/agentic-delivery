@@ -16,6 +16,10 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Release-chain validation now reads Architecture and Primitive release
+  manifests from the exact immutable commits pinned by the Control Plane,
+  preventing a drifted sibling worktree from satisfying the release gate.
+
 - The draft controller release advances to `0.2.0-draft.26` at
   `81fa558aad0f998876bc29871080f2380b2c8582`, pinning Architecture draft
   `0.1.0-draft.6` at `5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b` with its
