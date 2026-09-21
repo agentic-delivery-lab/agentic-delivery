@@ -15,6 +15,10 @@ Delivery Control Plane.
   policy.
 - `github-app-contract.json` defines the organization App and credential
   boundary.
+- Repository-root `schemas/github-inventory.v1.schema.json` and
+  `scripts/collect-github-inventory.mjs` define a redacted, read-only
+  organization inventory used to separate observed GitHub state from
+  permission and entitlement gaps.
 
 These files are Control Plane configuration, not GitHub organization-default
 files. The separate public `.github` repository owns community-health

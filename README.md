@@ -37,6 +37,7 @@ pnpm migration:check
 pnpm traceability:check
 pnpm control-plane:check
 pnpm acceptance:check
+pnpm organization:inventory
 ```
 
 `pnpm acceptance:check` is an offline two-repository fixture matrix. It proves
@@ -47,6 +48,14 @@ older compatible pin, and keeps App credentials central.
 It deliberately reports live GitHub App installation, webhook delivery,
 organization-field, and repository-local CI evidence as external checks; it
 does not imply that those operator surfaces are active.
+
+`pnpm organization:inventory` is read-only. It reports the repositories and
+GitHub capabilities visible to the authenticated identity and marks
+permission or entitlement gaps as unavailable evidence; it never treats an
+inaccessible endpoint as proof that a feature or repository is absent. Use
+`pnpm run organization:inventory -- --output <path>` when a local JSON report
+is needed. Do not commit live reports containing organization metadata unless a
+separate evidence decision requires it.
 
 The organization App private key and webhook secrets belong only in the
 central deployment boundary. Participant onboarding, upgrades, rollback,

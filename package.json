@@ -22,6 +22,7 @@
     "github-app:check": "node scripts/validate-github-app-contract.mjs",
     "control-plane:boundary": "node scripts/validate-control-plane-boundary.mjs",
     "acceptance:check": "node scripts/validate-multi-repository-acceptance.mjs",
+    "organization:inventory": "node scripts/collect-github-inventory.mjs",
     "migration:check": "node scripts/validate-repository-boundaries.mjs",
     "publication:check": "node scripts/validate-published-agents.mjs",
     "metadata:migrate": "node scripts/migrate-issue-metadata.mjs"

@@ -64,6 +64,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Added
 
+- Added a redacted, read-only GitHub organization inventory command and v1
+  evidence schema. It records repository boundaries, rulesets, workflows,
+  open work, labels, cross-repository references, and capability gaps without
+  inferring absence from an inaccessible endpoint or mutating GitHub state.
+
 - Added an offline two-repository acceptance matrix that proves shared
   controller identity, isolated issue namespaces, compatibility rollback, and
   the central App credential boundary without claiming live GitHub activation.

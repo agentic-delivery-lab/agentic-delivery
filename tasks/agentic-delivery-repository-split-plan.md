@@ -122,6 +122,13 @@ Its report is explicitly fixture evidence; live App installation, webhook
 delivery, organization fields, and repository-local CI remain operator/runtime
 checks.
 
+The read-only `pnpm organization:inventory` command now captures the current
+organization repository, visibility, default-branch, ruleset, workflow, open
+issue/PR, label, cross-reference, and capability evidence without persisting
+issue bodies or mutating GitHub. An unavailable endpoint is recorded as an
+evidence gap rather than interpreted as absence. Live reports are temporary
+operator evidence and are not committed as authoritative configuration.
+
 ## Executive summary
 
 Split the mixed-responsibility `agentic-delivery` repository into six minimum
@@ -208,6 +215,18 @@ Read-only GitHub inspection found:
 - legacy `type:*` and `state:*` labels remain as migration evidence;
 - project inspection is blocked by the current token's missing `read:project`
   scope.
+
+The repeatable read-only inventory was also run on 2026-09-21 (UTC). It
+observed exactly the two public repositories `agentic-delivery` and `.github`,
+both on `main`, with active pull-request-body rulesets. It observed the nine
+organization Issue Types and a GitHub Free organization plan. The Copilot
+billing endpoint reported a Business Copilot configuration, but that does not
+by itself prove custom-agent availability, seat assignment, preview access, or
+the existence of a private `.github-private` repository. The current identity
+could not read the App installation, organization Actions policy/secrets, or
+Projects v2; each is recorded as an evidence gap rather than absence. The
+inventory report is temporary live evidence and is not authoritative
+configuration.
 
 ### Actual repository coupling
 
