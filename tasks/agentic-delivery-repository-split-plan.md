@@ -127,7 +127,8 @@ pins accepted event-envelope, lifecycle, state-machine, and evidence versions,
 declares Primitive and Architecture major compatibility, sets the minimum
 bootstrap version, and requires a ninety-day support window with explicit
 pre-release and security-revocation rules. Contract validation fails closed
-when that metadata is incomplete or uses a mutable compatibility range.
+when that metadata is incomplete, uses a mutable compatibility range, omits a
+current contract version, or omits a pinned Architecture/Primitive major.
 
 The Control Plane now also carries scoped `AGENTS.md` instructions for App
 ingress, contract configuration, central workflows, runtime libraries, and
