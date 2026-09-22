@@ -6,6 +6,7 @@ import { parseRepositoryYaml } from './lib/yaml.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const SHA1 = /^[0-9a-f]{40}$/;
 const REQUIRED_SURFACES = new Map([
   ['public-organization-governance', { repository: '.github', visibility: 'public', role: 'public-organization-governance' }],
   ['private-member-copilot-publication', { repository: '.github-private', visibility: 'private', role: 'private-member-and-copilot-publication' }],
@@ -72,6 +73,15 @@ export async function validateSpecialSurfaces({ repositoryRoot: root = repositor
     pathList(surface.githubConsumedPaths, `surface ${surface.id}.githubConsumedPaths`, errors);
     pathList(surface.governancePaths, `surface ${surface.id}.governancePaths`, errors);
     if (!nonEmptyString(surface.bridge)) addError(errors, `surface ${surface.id}.bridge must describe its compatibility boundary`);
+    if (surface.localEvidence !== undefined) {
+      if (!surface.localEvidence || typeof surface.localEvidence !== 'object' || Array.isArray(surface.localEvidence)) {
+        addError(errors, `surface ${surface.id}.localEvidence must be an object`);
+      } else {
+        if (!nonEmptyString(surface.localEvidence.branch)) addError(errors, `surface ${surface.id}.localEvidence.branch must be non-empty`);
+        if (!SHA1.test(String(surface.localEvidence.commit ?? ''))) addError(errors, `surface ${surface.id}.localEvidence.commit must be an immutable SHA`);
+        if (!nonEmptyString(surface.localEvidence.check)) addError(errors, `surface ${surface.id}.localEvidence.check must be non-empty`);
+      }
+    }
 
     if (surface.id === 'public-organization-governance') {
       if (surface.status !== 'observed') addError(errors, 'public-organization-governance.status must be observed until the public surface is revalidated');

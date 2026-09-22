@@ -44,6 +44,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.equal(packageJson.scripts['lint:branch'], 'node scripts/validate-branch-name.mjs');
   assert.equal(packageJson.scripts['lint:commits'], 'node scripts/validate-commit-range.mjs');
   assert.equal(packageJson.scripts['github-app:check'], 'node scripts/validate-github-app-contract.mjs');
+  assert.equal(packageJson.scripts['public-governance:check'], 'node scripts/validate-public-governance.mjs');
   assert.match(packageJson.scripts.test, /^node --test/);
   for (const dependency of ['@commitlint/cli', '@commitlint/config-conventional', 'gitmojis', 'yaml']) {
     assert.ok(packageJson.devDependencies[dependency]);

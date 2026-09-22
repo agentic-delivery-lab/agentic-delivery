@@ -23,6 +23,10 @@ surfaces:
       - README.md
     nonRuntime: true
     workflowInheritance: false
+    localEvidence:
+      branch: work/issue-52-public-governance
+      commit: 0d981a3e6984d5ebdad37cecf8fd52cb0ba905d2
+      check: public-governance:check
     bridge: public community-health inheritance remains here; workflow files are starters or governance only
 
   - id: private-member-copilot-publication
