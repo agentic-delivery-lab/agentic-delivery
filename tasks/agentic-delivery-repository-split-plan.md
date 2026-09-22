@@ -97,7 +97,7 @@ repository.
 | Organization event catalog | `config/event-catalog.yml`, `schemas/event-catalog.v1.schema.json`, `scripts/lib/event-catalog.mjs`; runtime route maps in `scripts/lib/agent-invocation.mjs` derive from it | Canonical event/action/route contract; App manifest and participant subscriptions are validated projections |
 | Primitive selection contract | `config/primitive-selection.yml`, `schemas/primitive-selection.v1.schema.json`, `scripts/lib/primitive-selection.mjs` | Release-bound profile-to-Primitive mapping; validates against the pinned Primitive catalog and does not duplicate Primitive content |
 | Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json` plus source maps | Local-prepared; no remote repository or publication claim |
-| Distribution/bootstrap | `agentic-delivery-distribution`, draft22 bundle, 8/8 tests | Opt-in fixture and PR projection; no consumer enrollment; workflow and publication checks use the immutable Control Plane source `6843c8e6a5ef3d7ec31400a9d7af282d07c5a37b` |
+| Distribution/bootstrap | `agentic-delivery-distribution`, draft22 bundle, 9/9 tests | Opt-in fixture and PR projection; no consumer enrollment; workflow and publication checks use the immutable Control Plane source `6843c8e6a5ef3d7ec31400a9d7af282d07c5a37b`; the Dev Container base image is digest-pinned |
 | Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
 | GitHub special-surface contract | `migration/special-surfaces.yml`, `scripts/validate-special-surfaces.mjs` | Migration evidence distinguishes GitHub-consumed paths from governance paths and forbids runtime ownership |
 | Preview Automation templates | `automations/templates/*.automation.md`, manifest and validator; Distribution projection lock | Two manual read-only canonical templates and a hash-pinned Agent Plugin projection; `.github-private` remains excluded |
@@ -129,11 +129,16 @@ issue contract, the inaccessible image evidence marker, the hard architecture
 gate, and the current immutable controller release pin. It does not inspect or
 mutate GitHub.
 
-The latest local regression evidence is: Control Plane `319/319` tests,
-Architecture `8/8`, Agentic Primitives `6/6`, Distribution `8/8`, and the
+The latest local regression evidence is: Control Plane `325/325` tests,
+Architecture `8/8`, Agentic Primitives `6/6`, Distribution `9/9`, and the
 private publication validator with zero projections. The Control Plane release
 chain suite includes the regression fixture that mutates a dependency
-worktree tool and still requires the exact pinned tool source. All five prepared target
+worktree tool and still requires the exact pinned tool source. The cross-repository
+publication and release gates were run with explicit roots (`.github-private` and
+`agentic-delivery-primitives`, then Architecture, Primitives, Distribution, and
+`.github-private` for the release chain); the default root-only invocation is
+intentionally insufficient and fails closed rather than guessing sibling paths.
+All five prepared target
 checkouts are clean after their local commits; the separate public `.github`
 checkout retains pre-existing user changes and is intentionally not modified
 by this migration work.
