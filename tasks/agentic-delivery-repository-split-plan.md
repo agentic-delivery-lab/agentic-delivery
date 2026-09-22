@@ -159,6 +159,34 @@ any write or cleanup operation.
   custom-agent entitlement is still unverified. These are evidence gaps or
   activation gates, not inferred absence.
 
+### App-installation authorization refresh (2026-09-23)
+
+The GitHub CLI token was refreshed with the full `user` scope. The effective
+scopes now include `gist`, `read:org`, `read:project`, `repo`, `user`, and
+`workflow`. The selected-repository endpoints were retried read-only:
+
+- `GET /user/installations` returned HTTP 403 stating that the token must be
+  authorized to a GitHub App to list installations;
+- `GET /user/installations/163255060/repositories` returned HTTP 403 stating
+  that a GitHub App, personal access token, or basic-auth credential is needed;
+- `GET /installation/repositories` returned HTTP 403 because an installation
+  access token is required.
+
+The [official App-installation endpoint contract](https://docs.github.com/en/rest/apps/installations)
+distinguishes a user access token that has explicit permission for the
+installation from an installation access token.
+The refreshed GitHub CLI OAuth token has the required OAuth scope but still is
+not an authorized token for these App-installation resources. This is therefore
+an authentication/authorization evidence gap, not evidence that the App has no
+selected repositories. The exact selected-repository list remains unverified.
+
+An authorized operator must obtain the list through the App installation UI or
+an installation access token and attach the redacted repository-ID/full-name
+result to the activation evidence. Do not broaden the App, infer access from
+the organization repository list, or activate a participant based on this
+failed read-only endpoint. No repository, App, workflow, field, Project,
+publication, issue, or cleanup state was changed by this retry.
+
 ### Post-merge verification and remaining cutover gates (2026-09-22)
 
 The central Control Plane extraction PR [#54](https://github.com/agentic-delivery-lab/agentic-delivery/pull/54)
@@ -2227,8 +2255,10 @@ Failure behavior:
 
 Only genuine evidence gaps remain:
 
-1. **App repository selection:** obtain `read:user` and record the exact current
-   selected repositories.
+1. **App repository selection:** obtain an authorized App-installation view or
+   installation token and record the exact current selected repositories; the
+   GitHub CLI OAuth token now has `user` but GitHub still rejects the App
+   installation endpoints.
 2. **Projects:** obtain `read:project` and inventory actual Projects, fields,
    and views.
 3. **Delivery State ADR:** confirm the recommended in-place rename or stop the
