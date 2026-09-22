@@ -113,6 +113,42 @@ official GitHub artifact, an authorized maintainer must publish or rebase the
 plan through a review branch based on the actual remote `main`; the issue must
 pin the resulting reachable commit, not this local-only lineage.
 
+### Post-merge verification and remaining cutover gates (2026-09-22)
+
+The central Control Plane extraction PR [#54](https://github.com/agentic-delivery-lab/agentic-delivery/pull/54)
+merged into `agentic-delivery/main` at
+`d2bdbe4740394c9868f49b56d95f9ac8fc5af61d`. Its hosted portability matrix,
+self-hosted quality checks, ADR-quality check, and pinned deterministic and
+semantic Architecture Review all passed before the merge. The commit-range
+validator now batches Conventional Commit validation for non-zero PR ranges
+while retaining per-commit Gitmoji checks and the all-zero bootstrap fallback.
+
+Architecture PR #1, Primitives PR #1, Distribution PR #1, and public `.github`
+PR #9 are merged and independently verified. The three public target
+repositories have active `main` rulesets requiring their `validate` check.
+Public `.github` `main` is pinned at
+`af52c92e49616e78f8d6647cf5cf538a7e571d78`; its workflow template keeps
+separate immutable pins for the reusable workflow source and current controller
+release.
+
+Private `.github-private` remains Private with a profile-only PR #1 open. Its
+default `main` intentionally has no `profile/README.md` or agent projection
+until activation is independently reviewed. The GitHub Free API still rejects
+private branch-protection/ruleset inspection with the documented upgrade
+response, and Copilot Business billing is not configured with seats or a
+verified custom-agent entitlement. These are unresolved activation gates, not
+evidence of absence. No App installation, live two-repository mutation,
+lifecycle-field migration, Project automation activation, or organization-level
+agent publication has been claimed.
+
+The explicit-root release-chain check passes against the merged target
+checkouts: Control Plane `0.2.0-draft.37` at
+`7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b`, Architecture `0.1.0-draft.8`,
+Primitives `0.1.0-draft.4`, and zero private publication agents. Issue #52,
+the migration plan, audit evidence, compatibility bridges, and feature
+branches remain retained until the complete cutover definition is met; the
+merge of PR #54 does not authorize cleanup.
+
 The pre-existing `work/issue-52-plan-local-main2af` branch does have the
 remote-`main` ancestry, but it contains an earlier 1,847-line plan and does
 not include the current control-plane amendment, image evidence boundary, or
@@ -133,9 +169,9 @@ Issue #52 or authorize cleanup before the final cutover gate.
 | Pull-request observation path | `.github/workflows/agent-observation.yml`, `scripts/validate-observation-event.mjs`, draft37 release with draft36 rollback and draft23 bootstrap | Read-only observation; no lifecycle write-back or model execution |
 | Organization event catalog | `config/event-catalog.yml`, `schemas/event-catalog.v1.schema.json`, `scripts/lib/event-catalog.mjs`; runtime route maps in `scripts/lib/agent-invocation.mjs` derive from it | Canonical event/action/route contract; App manifest and participant subscriptions are validated projections |
 | Primitive selection contract | `config/primitive-selection.yml`, `schemas/primitive-selection.v1.schema.json`, `scripts/lib/primitive-selection.mjs` | Release-bound profile-to-Primitive mapping; validates against the pinned Primitive catalog and does not duplicate Primitive content |
-| Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json`, source maps, and snapshot-gated migration READMEs | Public target repositories now exist with protected `main` rules and review PRs; filtered histories and maps reproduce the supplied `main` snapshot; publication remains provisional until the PRs and release pins are merged |
-| Distribution/bootstrap | `agentic-delivery-distribution`, draft25 bundle, 9/9 tests | Public target repository and review PR exist; no consumer enrollment; workflow and publication checks use immutable Control Plane source `204cd775705ea77737daafb95954019e528752eb`; the Dev Container base image is digest-pinned |
-| Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
+| Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json`, source maps, and snapshot-gated migration READMEs | Public target repositories and review PRs are merged; active `main` rulesets require `validate`; filtered histories and maps reproduce the supplied `main` snapshot; live enrollment remains provisional |
+| Distribution/bootstrap | `agentic-delivery-distribution`, draft25 bundle, 9/9 tests | Public target repository is merged and protected; no consumer enrollment; workflow and publication checks use immutable Control Plane source `204cd775705ea77737daafb95954019e528752eb`; the Dev Container base image is digest-pinned |
+| Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | Private baseline exists without profile or agents on default `main`; profile-only PR #1 is separately reversible and remains unmerged pending private protection/entitlement verification |
 | GitHub special-surface contract | `migration/special-surfaces.yml`, `scripts/validate-special-surfaces.mjs` | Migration evidence distinguishes GitHub-consumed paths from governance paths and forbids runtime ownership |
 | Preview Automation templates | `automations/templates/*.automation.md`, manifest and validator; Distribution projection lock | Two manual read-only canonical templates and a hash-pinned Agent Plugin projection; `.github-private` remains excluded |
 
