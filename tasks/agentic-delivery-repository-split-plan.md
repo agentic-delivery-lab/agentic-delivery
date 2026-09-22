@@ -170,7 +170,7 @@ checkout contains unrelated uncommitted user work and was based on a stale
 remote-tracking tip, the review candidate is a separate clean worktree based
 on the supplied current `.github` snapshot: branch
 `work/issue-52-public-governance-snapshot` at
-`ceca85ffc17082f3c82b6a86faf81a8f7359f7aa`. The original dirty checkout is
+`ad9489fa860e7214084da6a5d834078084f4908f`. The original dirty checkout is
 preserved and is not used as release evidence.
 
 The controller release also publishes a machine-readable support matrix. It
