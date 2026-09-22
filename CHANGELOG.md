@@ -53,6 +53,11 @@ they do not authorize migration, alter that issue's scope, or close it.
   remains confined to the gateway/controller boundary; preflight rejects
   tampering, stale timestamps, and missing production configuration.
 
+- The draft controller release advances to `0.2.0-draft.37`, pinning
+  Architecture Authority draft `0.1.0-draft.8` and its dispatch-auth ADR at
+  immutable commit `9d4872c39e9c52075a7a299ad4584ac3eb704a1b`; draft36 remains
+  the explicit rollback pin.
+
 - The draft controller release advances to `0.2.0-draft.36` at
   `0ae64cb2b1560e7a9e73435e954e3be8bc3b2b88`; draft35 remains the explicit
   rollback pin after the central dispatch-envelope HMAC hardening.

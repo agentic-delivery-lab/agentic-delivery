@@ -7,7 +7,7 @@ repositories:
     expectedFullName: agentic-delivery-lab/agentic-delivery
     mode: shadow
     controller:
-      version: 0.2.0-draft.36
+      version: 0.2.0-draft.37
       commit: 0ae64cb2b1560e7a9e73435e954e3be8bc3b2b88
     contracts:
       eventEnvelope: 1
@@ -17,9 +17,9 @@ repositories:
     dependencies:
       architecture:
         repository: agentic-delivery-lab/agentic-delivery-architecture
-        version: 0.1.0-draft.7
-        commit: c6e7afcda69c06dc5f709e3bc7b8b74669e100f3
-        contentSha256: 49ac105a3fc7384c3be7459c3ba0569934f8b036a10cb0ee89a7f2b8edb50a5b
+        version: 0.1.0-draft.8
+        commit: 9d4872c39e9c52075a7a299ad4584ac3eb704a1b
+        contentSha256: ac4430f7aa86c016c51ea8f9458627d4412d36256960c1bf54b63e851dc2350c
       primitives:
         repository: agentic-delivery-lab/agentic-delivery-primitives
         version: 0.1.0-draft.4
@@ -43,7 +43,7 @@ repositories:
     expectedFullName: agentic-delivery-lab/.github
     mode: shadow
     controller:
-      version: 0.2.0-draft.36
+      version: 0.2.0-draft.37
       commit: 0ae64cb2b1560e7a9e73435e954e3be8bc3b2b88
     contracts:
       eventEnvelope: 1
@@ -53,9 +53,9 @@ repositories:
     dependencies:
       architecture:
         repository: agentic-delivery-lab/agentic-delivery-architecture
-        version: 0.1.0-draft.7
-        commit: c6e7afcda69c06dc5f709e3bc7b8b74669e100f3
-        contentSha256: 49ac105a3fc7384c3be7459c3ba0569934f8b036a10cb0ee89a7f2b8edb50a5b
+        version: 0.1.0-draft.8
+        commit: 9d4872c39e9c52075a7a299ad4584ac3eb704a1b
+        contentSha256: ac4430f7aa86c016c51ea8f9458627d4412d36256960c1bf54b63e851dc2350c
       primitives:
         repository: agentic-delivery-lab/agentic-delivery-primitives
         version: 0.1.0-draft.4

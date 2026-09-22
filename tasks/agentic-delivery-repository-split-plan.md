@@ -201,15 +201,15 @@ separate, local-only rerun using the pinned `git-filter-repo` tag produced
 candidate branches named `work/migration-main-snapshot` in both target
 checkouts, which are the active local review candidates. The Architecture
 candidate is
-`c6e7afcda69c06dc5f709e3bc7b8b74669e100f3` (Architecture draft 0.1.0-draft.7,
+`9d4872c39e9c52075a7a299ad4584ac3eb704a1b` (Architecture draft 0.1.0-draft.8,
 content digest
-`49ac105a3fc7384c3be7459c3ba0569934f8b036a10cb0ee89a7f2b8edb50a5b`); the
+`ac4430f7aa86c016c51ea8f9458627d4412d36256960c1bf54b63e851dc2350c`); the
 Primitives candidate is `01dc8df9eae5ee8394d05246dbf9ccdcddaa7c9e` (Primitive
 draft 0.1.0-draft.4). Both carry 143 generated source mappings and pass the
 read-only `migration:source:check` against `main`. These branches are local
 review candidates only: they are not remote repositories or organization
-activation. The local release chain has now been advanced to draft36 so that
-the candidate dependencies are exercised end to end; draft35 remains the
+activation. The local release chain has now been advanced to draft37 so that
+the candidate dependencies are exercised end to end; draft36 remains the
 explicit rollback pin until a separately reviewed upgrade PR adopts the
 candidate commits. No filtered history is fabricated by changing the manifest alone.
 The candidate source maps are generated artifacts from the pinned filter run,
@@ -217,7 +217,7 @@ not a replacement for that run.
 
 The Control Plane gateway now requires both the App installation ID and the
 central controller repository ID from protected deployment configuration; it
-has no fallback for either identity. Current draft controller `0.2.0-draft.36`
+has no fallback for either identity. Current draft controller `0.2.0-draft.37`
 is pinned to `0ae64cb2b1560e7a9e73435e954e3be8bc3b2b88`; draft35 at
 `02c29af7572ea0fc5a593786dc9583cb1d275f3f` and draft34 at
 `825d808164ed747187490d50727bfe38061b0932` remains the explicit rollback
@@ -226,9 +226,9 @@ the trusted bootstrap commit for this release. The release-bound primitive
 selection contract pins Primitive draft `0.1.0-draft.4` at
 `01dc8df9eae5ee8394d05246dbf9ccdcddaa7c9e` and its canonical digest, and
 checks every profile against the pinned catalog and orchestration policy.
-The current controller draft `0.2.0-draft.36` pins Architecture draft
-`0.1.0-draft.7` at `c6e7afcda69c06dc5f709e3bc7b8b74669e100f3` with digest
-`49ac105a3fc7384c3be7459c3ba0569934f8b036a10cb0ee89a7f2b8edb50a5b`, and
+The current controller draft `0.2.0-draft.37` pins Architecture draft
+`0.1.0-draft.8` at `9d4872c39e9c52075a7a299ad4584ac3eb704a1b` with digest
+`ac4430f7aa86c016c51ea8f9458627d4412d36256960c1bf54b63e851dc2350c`, and
 Primitive draft `0.1.0-draft.4` at
 `01dc8df9eae5ee8394d05246dbf9ccdcddaa7c9e` with its canonical digest. The
 Architecture release now self-validates its ADR/context IDs and conformance
@@ -309,8 +309,8 @@ The same release-chain check now verifies the preview Automation projection:
 the Distribution lock must pin the current immutable Control Plane source
 commit, each Agent Plugin file must match the source bytes and SHA-256 digest,
 and no client-local settings or `.github-private` path may enter the projection.
-The current draft36 release and Distribution draft24 bundle carry that exact
-source pin; draft35 and Distribution draft23 remain the explicit rollback
+The current draft37 release and Distribution draft25 bundle carry that exact
+source pin; draft36 and Distribution draft24 remain the explicit rollback
 pairs for the immediately preceding release/bundle combination.
 This is a release gate, not a runtime import or an authorization to publish
 any repository.
