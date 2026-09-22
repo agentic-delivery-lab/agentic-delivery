@@ -54,6 +54,7 @@ targets:
       - scripts/codex-preflight.mjs
       - scripts/codex-sandbox-check.mjs
       - scripts/harness-architecture-review.mjs
+      - scripts/validate-architecture-pin.mjs
       - scripts/issue-intake.mjs
       - scripts/lib/**
       - scripts/migrate-issue-metadata.mjs
