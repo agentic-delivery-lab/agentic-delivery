@@ -408,6 +408,13 @@ Projects v2; each is recorded as an evidence gap rather than absence. The
 inventory report is temporary live evidence and is not authoritative
 configuration.
 
+The local `.github` checkout was initially behind that remote snapshot at
+`387f4d3`; its remote-tracking `origin/main` was refreshed read-only to
+`58316e9bbfa48a9288e9d022266d3c8a3b52cc96` for inspection. Its working tree
+contains pre-existing user changes and was not checked out, reset, merged, or
+modified by this migration work. Snapshot analysis therefore uses the
+immutable remote-tracking commit, not the dirty local tree.
+
 ### Actual repository coupling
 
 The current implementation is not an organization-wide Control Plane. It is a
