@@ -53,6 +53,10 @@ they do not authorize migration, alter that issue's scope, or close it.
   remains confined to the gateway/controller boundary; preflight rejects
   tampering, stale timestamps, and missing production configuration.
 
+- The draft controller release advances to `0.2.0-draft.36` at
+  `0ae64cb2b1560e7a9e73435e954e3be8bc3b2b88`; draft35 remains the explicit
+  rollback pin after the central dispatch-envelope HMAC hardening.
+
 - The draft controller release advances to `0.2.0-draft.35` at
   `02c29af7572ea0fc5a593786dc9583cb1d275f3f`, adopting the filtered
   Architecture draft7 candidate and the main-snapshot Primitive candidate;

@@ -28,8 +28,8 @@ test('contract schemas are present and self-identifying', async () => {
 test('the checked-in controller release pins every enrolled participant', async () => {
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
-  assert.equal(release.version, '0.2.0-draft.35');
-  assert.equal(release.commit, '02c29af7572ea0fc5a593786dc9583cb1d275f3f');
+  assert.equal(release.version, '0.2.0-draft.36');
+  assert.equal(release.commit, '0ae64cb2b1560e7a9e73435e954e3be8bc3b2b88');
   assert.equal(release.bootstrapCommit, '30197d5c8731ea6e682ae4de5e629b964e278aab');
   assert.deepEqual(release.support.eventEnvelopeVersions, [1]);
   assert.deepEqual(release.support.lifecycleVersions, ['1.0.0']);

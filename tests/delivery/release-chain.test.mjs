@@ -40,11 +40,11 @@ test('local release graph reproduces all pinned digests and publication refs', a
   }
   const result = await validateReleaseChain({ controlPlaneRoot: repositoryRoot, ...siblingRoots });
   assert.equal(result.status, 'passed');
-  assert.equal(result.controller.version, '0.2.0-draft.35');
+  assert.equal(result.controller.version, '0.2.0-draft.36');
   assert.equal(result.controller.bootstrapCommit, '30197d5c8731ea6e682ae4de5e629b964e278aab');
   assert.equal(result.architecture.contentSha256, '49ac105a3fc7384c3be7459c3ba0569934f8b036a10cb0ee89a7f2b8edb50a5b');
   assert.equal(result.primitives.contentSha256, '36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0');
-  assert.equal(result.distribution.automationProjectionRelease, 'urn:agentic-delivery:distribution:0.1.0-draft.23');
+  assert.equal(result.distribution.automationProjectionRelease, 'urn:agentic-delivery:distribution:0.1.0-draft.24');
 });
 
 test('the pinned workflow source contains the validator and reusable workflow entry points', async (t) => {

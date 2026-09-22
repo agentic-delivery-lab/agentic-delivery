@@ -13,7 +13,7 @@ test('migration plan preserves the issue-safety gate and current release pin', a
   assert.deepEqual(result, {
     plan: 'tasks/agentic-delivery-repository-split-plan.md',
     sections: 28,
-    controllerRelease: '0.2.0-draft.35',
+    controllerRelease: '0.2.0-draft.36',
     status: 'passed',
   });
 });
