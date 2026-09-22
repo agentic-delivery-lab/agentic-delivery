@@ -296,7 +296,11 @@ export async function validateMultiRepositoryAcceptance({ root = repositoryRoot 
       controllerRollback: 'passed',
       centralCredentialBoundary: 'passed',
       privatePublicationBoundary: privateSurface.status,
-      privateIssueParticipation: privateSurface.status === 'passed' ? 'passed' : 'not-run',
+      // The private surface's issue-event identity path is exercised entirely
+      // by the offline envelope fixture above. Its checkout workflow is a
+      // separate publication-boundary check and may be unavailable in a
+      // standalone Control Plane clone.
+      privateIssueParticipation: 'passed',
       repositoryLocalCi: 'not-run-by-this-check',
     },
     participants: identityRows,
