@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
@@ -15,6 +16,14 @@ async function controllerRelease() {
   return JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
 }
 
+async function pinnedArchitectureCheckout(t, commit) {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-architecture-pin-test-'));
+  t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+  await execFileAsync('git', ['clone', '--quiet', '--no-local', architectureRoot, temporaryRoot], { encoding: 'utf8' });
+  await execFileAsync('git', ['-C', temporaryRoot, 'checkout', '--quiet', '--detach', commit], { encoding: 'utf8' });
+  return temporaryRoot;
+}
+
 test('Architecture review pins the exact release, digest, policy, and model sources', async (t) => {
   try {
     await readFile(path.join(architectureRoot, 'architecture/generated/architecture-release.json'));
@@ -23,8 +32,9 @@ test('Architecture review pins the exact release, digest, policy, and model sour
     return;
   }
   const release = await controllerRelease();
+  const pinnedRoot = await pinnedArchitectureCheckout(t, release.dependencies.architecture.commit);
   const result = await validateArchitecturePin({
-    architectureRoot,
+    architectureRoot: pinnedRoot,
     architectureCommit: release.dependencies.architecture.commit,
     architectureDigest: release.dependencies.architecture.contentSha256,
     architectureVersion: release.dependencies.architecture.version,
@@ -43,9 +53,10 @@ test('Architecture review fails closed on a mismatched release digest', async (t
     return;
   }
   const release = await controllerRelease();
+  const pinnedRoot = await pinnedArchitectureCheckout(t, release.dependencies.architecture.commit);
   await assert.rejects(
     validateArchitecturePin({
-      architectureRoot,
+      architectureRoot: pinnedRoot,
       architectureCommit: release.dependencies.architecture.commit,
       architectureDigest: '0'.repeat(64),
       architectureVersion: release.dependencies.architecture.version,
@@ -73,11 +84,12 @@ test('Architecture pin CLI accepts the pnpm option separator', async (t) => {
     return;
   }
   const release = await controllerRelease();
+  const pinnedRoot = await pinnedArchitectureCheckout(t, release.dependencies.architecture.commit);
   const script = path.join(repositoryRoot, 'scripts/validate-architecture-pin.mjs');
   const { stdout } = await execFileAsync(process.execPath, [
     script,
     '--',
-    '--architecture-root', architectureRoot,
+    '--architecture-root', pinnedRoot,
     '--architecture-commit', release.dependencies.architecture.commit,
     '--architecture-digest', release.dependencies.architecture.contentSha256,
     '--architecture-version', release.dependencies.architecture.version,

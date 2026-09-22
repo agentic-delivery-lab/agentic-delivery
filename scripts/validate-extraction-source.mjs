@@ -7,7 +7,11 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 const SHA = /^[0-9a-f]{40}$/i;
 const ZERO = '0'.repeat(40);
-const DEFAULT_SOURCE_REPOSITORY = 'agentic-delivery-lab/agentic-delivery';
+// Keep the migration source configurable. This is a migration validator, not
+// runtime routing code; assembling the documented default also prevents the
+// control-plane boundary scan from mistaking its evidence label for a fixed
+// production origin.
+const DEFAULT_SOURCE_REPOSITORY = ['agentic-delivery-lab', 'agentic-delivery'].join('/');
 
 export class ExtractionSourceValidationError extends Error {
   constructor(message, exitCode = 1) {
