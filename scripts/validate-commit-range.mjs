@@ -84,8 +84,9 @@ export async function validateCommitRange({
     }
   };
 
+  const allZeroBase = /^0{40}$/.test(base);
   let commitList;
-  if (/^0{40}$/.test(base)) {
+  if (allZeroBase) {
     if (!(await resolveCommit(head))) {
       throw new CommitRangeValidationError(`Commit range check: invalid head commit: ${head}`, 2);
     }
@@ -102,19 +103,54 @@ export async function validateCommitRange({
     ({ stdout: commitList } = await git(repositoryRoot, ['rev-list', '--reverse', '--no-merges', `${base}..${head}`]));
   }
 
-  for (const commit of commitList.trim().split(/\r?\n/).filter(Boolean)) {
-    const { stdout: message } = await git(repositoryRoot, ['show', '--quiet', '--format=%B', commit]);
+  const commits = commitList.trim().split(/\r?\n/).filter(Boolean);
+
+  // A pull request range can contain hundreds of commits. Run commitlint once
+  // against the same non-merge range that produced `commits`; invoking pnpm and
+  // Node separately for every commit makes the hosted quality gate needlessly
+  // slow while providing no additional validation coverage. The all-zero
+  // bootstrap case has no lower Git revision, so it retains the per-message
+  // fallback below.
+  if (!allZeroBase && commits.length > 0) {
     const commitlint = await runInputImpl(
       pnpmCommand,
-      ['exec', 'commitlint', '--config', configPath],
-      message,
-      { cwd: toolingRoot, env: process.env },
+      [
+        'exec',
+        'commitlint',
+        '--config',
+        configPath,
+        '--from',
+        base,
+        '--to',
+        head,
+        '--git-log-args=--no-merges',
+      ],
+      '',
+      { cwd: repositoryRoot, env: process.env },
     );
     if (commitlint.error?.code === 'ENOENT') {
       throw new CommitRangeValidationError('Commit range check: required tooling is not installed or configured', 2);
     }
     if (commitlint.status !== 0) {
-      throw new CommitRangeValidationError(`Commit range check: Conventional Commit validation failed for ${commit}`, 1);
+      throw new CommitRangeValidationError(`Conventional Commit validation failed for ${base}..${head}`, 1);
+    }
+  }
+
+  for (const commit of commits) {
+    const { stdout: message } = await git(repositoryRoot, ['show', '--quiet', '--format=%B', commit]);
+    if (allZeroBase) {
+      const commitlint = await runInputImpl(
+        pnpmCommand,
+        ['exec', 'commitlint', '--config', configPath],
+        message,
+        { cwd: toolingRoot, env: process.env },
+      );
+      if (commitlint.error?.code === 'ENOENT') {
+        throw new CommitRangeValidationError('Commit range check: required tooling is not installed or configured', 2);
+      }
+      if (commitlint.status !== 0) {
+        throw new CommitRangeValidationError(`Conventional Commit validation failed for ${commit}`, 1);
+      }
     }
 
     const gitmoji = await runInputImpl(
