@@ -19,6 +19,12 @@ following staged surfaces now exist for review: public
 and private `.github-private`. The central Control Plane remains the only
 authoritative lifecycle implementation in `agentic-delivery`.
 
+The immutable controller compatibility commits used by the release catalog are
+also published under `controller/<version>` tags in the Control Plane remote.
+This keeps rollback pins retrievable in a fresh hosted checkout after the
+local commit-message normalization, without rewriting or fabricating their
+history.
+
 Issue #52 remains the plan-persistence source issue and is not closed by this
 status update. Plan, migration, audit and compatibility evidence remains
 intentionally retained until the complete cutover definition in section 19 is
