@@ -179,6 +179,10 @@ function parseArguments(argv) {
   const values = {};
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
+    // pnpm forwards the conventional option separator when a caller invokes
+    // `pnpm architecture:pin:check -- --architecture-root ...`. Treat it as
+    // a transport delimiter, not as a validator argument.
+    if (argument === '--') continue;
     if (argument === '--json') {
       values.json = true;
       continue;

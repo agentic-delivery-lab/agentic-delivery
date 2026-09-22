@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
+import { promisify } from 'node:util';
 
 import { ArchitecturePinValidationError, validateArchitecturePin } from '../../scripts/validate-architecture-pin.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const architectureRoot = path.resolve(repositoryRoot, '../agentic-delivery-architecture');
+const execFileAsync = promisify(execFile);
 
 async function controllerRelease() {
   return JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
@@ -60,4 +63,24 @@ test('Architecture review rejects mutable or implicit source selection', async (
     validateArchitecturePin({ architectureRoot }),
     (error) => error instanceof ArchitecturePinValidationError && error.exitCode === 2,
   );
+});
+
+test('Architecture pin CLI accepts the pnpm option separator', async (t) => {
+  try {
+    await readFile(path.join(architectureRoot, 'architecture/generated/architecture-release.json'));
+  } catch {
+    t.skip('Architecture Authority checkout is not available in this workspace');
+    return;
+  }
+  const release = await controllerRelease();
+  const script = path.join(repositoryRoot, 'scripts/validate-architecture-pin.mjs');
+  const { stdout } = await execFileAsync(process.execPath, [
+    script,
+    '--',
+    '--architecture-root', architectureRoot,
+    '--architecture-commit', release.dependencies.architecture.commit,
+    '--architecture-digest', release.dependencies.architecture.contentSha256,
+    '--architecture-version', release.dependencies.architecture.version,
+  ], { encoding: 'utf8' });
+  assert.match(stdout, /Architecture pin passed:/);
 });
