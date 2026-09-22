@@ -83,6 +83,30 @@ test('release-chain validation requires canonical Primitive reproduction in the 
   }
 });
 
+test('release-chain validation requires protected private publication desired state', async (t) => {
+  const available = await Promise.all(Object.values(siblingRoots).map(exists));
+  if (!available.every(Boolean)) {
+    t.skip('split repositories are not checked out in this workspace');
+    return;
+  }
+
+  const temporaryRoot = await mkdtemp(path.join('/tmp', 'agentic-release-private-ruleset-test-'));
+  const temporaryPrivateRoot = path.join(temporaryRoot, 'private');
+  try {
+    await cp(siblingRoots.privateRoot, temporaryPrivateRoot, { recursive: true });
+    const rulesetPath = path.join(temporaryPrivateRoot, '.github/rulesets/require-publication-review.json');
+    const ruleset = JSON.parse(await readFile(rulesetPath, 'utf8'));
+    ruleset.bypass_actors = [{ actor_id: 1, actor_type: 'User', bypass_mode: 'always' }];
+    await writeFile(rulesetPath, `${JSON.stringify(ruleset, null, 2)}\n`, 'utf8');
+    await assert.rejects(
+      validateReleaseChain({ controlPlaneRoot: repositoryRoot, ...siblingRoots, privateRoot: temporaryPrivateRoot }),
+      (error) => error instanceof ReleaseChainValidationError && /must not declare bypass actors/.test(error.message),
+    );
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
 test('release-chain validation reads Architecture and Primitive manifests from their pinned commits', async (t) => {
   const available = await Promise.all(Object.values(siblingRoots).map(exists));
   if (!available.every(Boolean)) {

@@ -1788,6 +1788,10 @@ remove:
 - provenance completeness and drift;
 - member-profile lint;
 - compatibility tests against actually used Copilot surfaces.
+- the release-chain gate also validates the versioned private-publication
+  ruleset desired state: default-branch targeting, required publication
+  checks, code-owner review, non-fast-forward protection, and no bypass actors;
+  live enforcement still requires operator verification.
 
 ### Architecture
 

@@ -220,6 +220,7 @@ export async function validateReleaseChain({
   const plugin = await readJson(path.join(distributionRoot, 'packages/agent-plugin/plugin.json'));
   const privateLock = await readJson(path.join(privateRoot, 'provenance/agents.lock.json'));
   const privateSurface = parseRepositoryYaml(await readText(path.join(privateRoot, 'provenance/surface.yml')), path.join(privateRoot, 'provenance/surface.yml'));
+  const privateRuleset = await readJson(path.join(privateRoot, '.github/rulesets/require-publication-review.json'));
   const privateWorkflow = await readText(path.join(privateRoot, '.github/workflows/validate-published-agents.yml'));
   const issueIntakeWorkflow = await readText(path.join(controlPlaneRoot, '.github/workflows/issue-intake.yml'));
   const codexDeliveryWorkflow = await readText(path.join(controlPlaneRoot, '.github/workflows/codex-delivery.yml'));
@@ -371,6 +372,19 @@ export async function validateReleaseChain({
 
   equal(errors, 'Private surface repository name', privateSurface.repositoryName, '.github-private');
   equal(errors, 'Private surface visibility', privateSurface.requiredVisibility, 'private');
+  if (privateRuleset.name !== 'Require private publication review') errors.push('private publication ruleset must have the approved name');
+  if (privateRuleset.target !== 'branch') errors.push('private publication ruleset must target branches');
+  if (privateRuleset.enforcement !== 'active') errors.push('private publication ruleset desired state must be active');
+  if (!Array.isArray(privateRuleset.bypass_actors) || privateRuleset.bypass_actors.length !== 0) errors.push('private publication ruleset must not declare bypass actors');
+  if (!privateRuleset.conditions?.ref_name?.include?.includes('~DEFAULT_BRANCH')) errors.push('private publication ruleset must target the default branch');
+  const rules = Array.isArray(privateRuleset.rules) ? privateRuleset.rules : [];
+  const requiredChecksRule = rules.find((rule) => rule?.type === 'required_status_checks');
+  const requiredChecks = requiredChecksRule?.parameters?.required_status_checks ?? [];
+  if (!requiredChecks.some((check) => check?.context === 'validate-published-agents / validate')) errors.push('private publication ruleset must require the published-agent validator');
+  const pullRequestRule = rules.find((rule) => rule?.type === 'pull_request');
+  if (pullRequestRule?.parameters?.require_code_owner_review !== true) errors.push('private publication ruleset must require a code-owner review');
+  if (!(Number.isInteger(pullRequestRule?.parameters?.required_approving_review_count) && pullRequestRule.parameters.required_approving_review_count >= 1)) errors.push('private publication ruleset must require at least one approval');
+  if (!rules.some((rule) => rule?.type === 'non_fast_forward')) errors.push('private publication ruleset must reject non-fast-forward updates');
   equal(errors, 'Private publication canonical repository', privateLock.canonicalRepository, primitiveDependency.repository);
   if (!Array.isArray(privateLock.agents)) errors.push('private publication lock agents must be an array');
   if (!privateWorkflow.includes(`repository: ${bundle.workflowSource?.repository}`)) errors.push('private validator must check out the declared workflow source repository');

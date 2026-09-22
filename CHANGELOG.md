@@ -22,6 +22,10 @@ and releases use [Semantic Versioning](https://semver.org/).
 - Distribution draft22 and the private publication validator now pin the
   Architecture-aware workflow source at
   `6843c8e6a5ef3d7ec31400a9d7af282d07c5a37b`.
+- The cross-repository release-chain check now requires the versioned
+  `.github-private` publication ruleset desired state, including code-owner
+  review, the publication validator check, and no bypass actors; this remains
+  operator-applied desired state rather than proof of live GitHub protection.
 
 Entries that reference issue #52 use it only as the persisted-plan context;
 they do not authorize migration, alter that issue's scope, or close it.
