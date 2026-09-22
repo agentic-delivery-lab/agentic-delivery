@@ -719,6 +719,8 @@ architecture review, Automations, or generated publications.
 |   `-- agents.lock.json                  # generated publication lock
 |-- .github/
 |   |-- CODEOWNERS
+|   |-- rulesets/
+|   |   `-- require-publication-review.json # versioned desired state; operator-applied
 |   `-- workflows/
 |       `-- validate-published-agents.yml # thin pinned caller
 |-- AGENTS.md

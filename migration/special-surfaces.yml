@@ -37,6 +37,7 @@ surfaces:
       - agents/*.agent.md
     governancePaths:
       - .github/CODEOWNERS
+      - .github/rulesets/**
       - .github/workflows/validate-published-agents.yml
       - provenance/agents.lock.json
       - AGENTS.md
