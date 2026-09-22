@@ -137,7 +137,7 @@ issue contract, the inaccessible image evidence marker, the hard architecture
 gate, and the current immutable controller release pin. It does not inspect or
 mutate GitHub.
 
-The latest local regression evidence is: Control Plane `331/331` tests,
+The latest local regression evidence is: Control Plane `335/335` tests,
 Architecture `8/8`, Agentic Primitives `6/6`, Distribution `9/9`, and the
 private publication validator with zero projections. The Control Plane release
 chain suite includes the regression fixture that mutates a dependency
