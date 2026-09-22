@@ -40,6 +40,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The draft controller release advances to `0.2.0-draft.35` at
+  `55439a80e59efe35e410f178a73e01004ab9436f`, adopting the filtered
+  Architecture draft7 candidate and the main-snapshot Primitive candidate;
+  draft34 remains the explicit rollback pin.
+
 - The draft controller release advances to `0.2.0-draft.34` at
   `825d808164ed747187490d50727bfe38061b0932`; repository identity checks now
   read the deployment contract instead of embedding the current controller

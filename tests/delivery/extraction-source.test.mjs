@@ -29,11 +29,11 @@ async function targetAvailable(root) {
   }
 }
 
-async function candidateManifestRoot(repositoryRoot) {
+async function branchManifestRoot(repositoryRoot, branchRef, prefix = 'agentic-extraction-branch-') {
   try {
-    const { stdout } = await execFileAsync('git', ['-C', repositoryRoot, 'rev-parse', '--verify', candidateRef], { encoding: 'utf8' });
+    const { stdout } = await execFileAsync('git', ['-C', repositoryRoot, 'rev-parse', '--verify', branchRef], { encoding: 'utf8' });
     const ref = stdout.trim();
-    const root = await mkdtemp(path.join(tmpdir(), 'agentic-extraction-candidate-'));
+    const root = await mkdtemp(path.join(tmpdir(), prefix));
     await mkdir(path.join(root, 'migration'), { recursive: true });
     for (const relativePath of ['migration/manifest.json', 'migration/source-commit-map.csv']) {
       const { stdout: contents } = await execFileAsync('git', ['-C', repositoryRoot, 'show', `${ref}:${relativePath}`], { encoding: 'buffer' });
@@ -45,16 +45,30 @@ async function candidateManifestRoot(repositoryRoot) {
   }
 }
 
+async function candidateManifestRoot(repositoryRoot) {
+  return branchManifestRoot(repositoryRoot, candidateRef, 'agentic-extraction-candidate-');
+}
+
 test('extraction source validation accepts the prepared Architecture draft source', async (t) => {
   if (!(await targetAvailable(architectureRoot))) {
     t.skip('Architecture Authority checkout is not available in this workspace');
     return;
   }
+  const planningArchitecture = await branchManifestRoot(
+    architectureRoot,
+    'refs/heads/docs/issue-52-architecture-adr-0018-extraction',
+    'agentic-extraction-planning-architecture-',
+  );
+  if (!planningArchitecture) {
+    t.skip('planning Architecture branch is not available in this workspace');
+    return;
+  }
+  t.after(() => rm(planningArchitecture, { recursive: true, force: true }));
   const result = await validateExtractionSource({
     sourceRoot: repositoryRoot,
     sourceCommit: planningCommit,
     sourceRef: planningRef,
-    targetRoots: [architectureRoot],
+    targetRoots: [planningArchitecture],
   });
   assert.equal(result.status, 'passed');
   assert.equal(result.targets.length, 1);
@@ -93,12 +107,22 @@ test('extraction source validation rejects a draft that is not based on the supp
     t.skip('Architecture Authority checkout is not available in this workspace');
     return;
   }
+  const planningArchitecture = await branchManifestRoot(
+    architectureRoot,
+    'refs/heads/docs/issue-52-architecture-adr-0018-extraction',
+    'agentic-extraction-planning-architecture-',
+  );
+  if (!planningArchitecture) {
+    t.skip('planning Architecture branch is not available in this workspace');
+    return;
+  }
+  t.after(() => rm(planningArchitecture, { recursive: true, force: true }));
   await assert.rejects(
     validateExtractionSource({
       sourceRoot: repositoryRoot,
       sourceCommit: mainCommit,
       sourceRef: 'refs/heads/main',
-      targetRoots: [architectureRoot],
+      targetRoots: [planningArchitecture],
     }),
     (error) => error instanceof ExtractionSourceValidationError
       && /source\.commit must equal|source\.ref must equal/.test(error.message),
@@ -110,12 +134,22 @@ test('extraction source validation catches a source map commit outside its decla
     t.skip('Agentic Primitives checkout is not available in this workspace');
     return;
   }
+  const planningPrimitives = await branchManifestRoot(
+    primitivesRoot,
+    'refs/heads/work/migration-manifest',
+    'agentic-extraction-planning-primitives-',
+  );
+  if (!planningPrimitives) {
+    t.skip('planning Primitives branch is not available in this workspace');
+    return;
+  }
+  t.after(() => rm(planningPrimitives, { recursive: true, force: true }));
   await assert.rejects(
     validateExtractionSource({
       sourceRoot: repositoryRoot,
       sourceCommit: planningCommit,
       sourceRef: planningRef,
-      targetRoots: [primitivesRoot],
+      targetRoots: [planningPrimitives],
     }),
     (error) => error instanceof ExtractionSourceValidationError
       && /not an ancestor of source snapshot/.test(error.message),

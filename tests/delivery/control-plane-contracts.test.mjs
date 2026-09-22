@@ -28,8 +28,8 @@ test('contract schemas are present and self-identifying', async () => {
 test('the checked-in controller release pins every enrolled participant', async () => {
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
-  assert.equal(release.version, '0.2.0-draft.34');
-  assert.equal(release.commit, '825d808164ed747187490d50727bfe38061b0932');
+  assert.equal(release.version, '0.2.0-draft.35');
+  assert.equal(release.commit, '55439a80e59efe35e410f178a73e01004ab9436f');
   assert.equal(release.bootstrapCommit, '30197d5c8731ea6e682ae4de5e629b964e278aab');
   assert.deepEqual(release.support.eventEnvelopeVersions, [1]);
   assert.deepEqual(release.support.lifecycleVersions, ['1.0.0']);
@@ -95,7 +95,7 @@ test('the current controller release pins immutable Architecture and Primitive c
     assert.match(dependency.commit, /^[0-9a-f]{40}$/);
     assert.match(dependency.contentSha256, /^[0-9a-f]{64}$/);
   }
-  assert.equal(release.dependencies.architecture.version, '0.1.0-draft.6');
+  assert.equal(release.dependencies.architecture.version, '0.1.0-draft.7');
   assert.equal(release.dependencies.primitives.version, '0.1.0-draft.4');
 });
 
