@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -58,6 +58,29 @@ test('the pinned workflow source contains the validator and reusable workflow en
   assert.match(workflow, /agentic-delivery-primitives/);
   assert.match(workflow, /steps\.provenance\.outputs\.source_commit/);
   assert.match(workflow, /--primitive-root primitives/);
+});
+
+test('release-chain validation requires canonical Primitive reproduction in the private workflow', async (t) => {
+  const available = await Promise.all(Object.values(siblingRoots).map(exists));
+  if (!available.every(Boolean)) {
+    t.skip('split repositories are not checked out in this workspace');
+    return;
+  }
+
+  const temporaryRoot = await mkdtemp(path.join('/tmp', 'agentic-release-private-test-'));
+  const temporaryPrivateRoot = path.join(temporaryRoot, 'private');
+  try {
+    await cp(siblingRoots.privateRoot, temporaryPrivateRoot, { recursive: true });
+    const workflowPath = path.join(temporaryPrivateRoot, '.github/workflows/validate-published-agents.yml');
+    const workflow = await readFile(workflowPath, 'utf8');
+    await writeFile(workflowPath, workflow.replace('--primitive-root primitives', '--primitive-root untrusted'), 'utf8');
+    await assert.rejects(
+      validateReleaseChain({ controlPlaneRoot: repositoryRoot, ...siblingRoots, privateRoot: temporaryPrivateRoot }),
+      (error) => error instanceof ReleaseChainValidationError && /reproduce projections from the checked-out Primitive source/.test(error.message),
+    );
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 });
 
 test('release-chain validation reads Architecture and Primitive manifests from their pinned commits', async (t) => {

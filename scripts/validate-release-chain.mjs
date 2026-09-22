@@ -375,6 +375,9 @@ export async function validateReleaseChain({
   if (!Array.isArray(privateLock.agents)) errors.push('private publication lock agents must be an array');
   if (!privateWorkflow.includes(`repository: ${bundle.workflowSource?.repository}`)) errors.push('private validator must check out the declared workflow source repository');
   if (!privateWorkflow.includes(`ref: ${bundle.workflowSource?.commit}`)) errors.push('private validator must pin the declared workflow source commit');
+  if (!privateWorkflow.includes(`repository: ${primitiveDependency.repository}`)) errors.push('private validator must check out the canonical Primitive repository');
+  if (!privateWorkflow.includes('steps.provenance.outputs.source_commit')) errors.push('private validator must derive the Primitive source from publication provenance');
+  if (!privateWorkflow.includes('--primitive-root primitives')) errors.push('private validator must reproduce projections from the checked-out Primitive source');
   if (!/^\s*persist-credentials:\s*false\s*$/m.test(privateWorkflow)) errors.push('private validator checkouts must disable persisted credentials');
   if (/^\s*secrets\s*:/m.test(privateWorkflow)) errors.push('private publication workflow must not receive central secrets');
   for (const [index, agent] of (Array.isArray(privateLock.agents) ? privateLock.agents : []).entries()) {
