@@ -243,6 +243,10 @@ workflow/source/capability/plugin locks and the
 canonical Primitive source, and per-agent provenance. It is exposed as
 `pnpm release-chain:check`; omitting any external root fails with exit code 2,
 so a consumer cannot silently pass by relying on an implicit sibling checkout.
+The same gate now requires the private workflow to check out the declared
+Primitive repository from the provenance-derived immutable commit and to run
+the validator with `--primitive-root primitives`; removing that reproduction
+step fails the release chain before publication.
 
 The same release-chain check now verifies the preview Automation projection:
 the Distribution lock must pin the current immutable Control Plane source
