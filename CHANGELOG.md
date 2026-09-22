@@ -40,6 +40,14 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The public `.github` governance candidate is now based on the supplied
+  current snapshot in a clean worktree and is validated by its immutable
+  evidence pin; the original dirty user checkout is not release evidence.
+- The observed public `.github` repository is enrolled in the central
+  participant registry as `shadow` only. Shadow intake requests read-only
+  origin App permissions and cannot mutate issue state until explicit
+  activation.
+
 - The draft controller release advances to `0.2.0-draft.35` at
   `02c29af7572ea0fc5a593786dc9583cb1d275f3f`, adopting the filtered
   Architecture draft7 candidate and the main-snapshot Primitive candidate;
