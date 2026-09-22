@@ -113,6 +113,52 @@ official GitHub artifact, an authorized maintainer must publish or rebase the
 plan through a review branch based on the actual remote `main`; the issue must
 pin the resulting reachable commit, not this local-only lineage.
 
+### Live verification refresh after read-scope grant (2026-09-22)
+
+The read-only inventory was repeated after `read:user` and `read:project` were
+added to the GitHub CLI token. This refresh supersedes the initial plan-freeze
+statements about repository visibility and Project access; it does not authorize
+any write or cleanup operation.
+
+- The organization is still on GitHub Free. The live repository set is six
+  repositories on `main`: public `agentic-delivery`, `.github`,
+  `agentic-delivery-architecture`, `agentic-delivery-primitives`, and
+  `agentic-delivery-distribution`, plus private `.github-private`.
+- Public `.github`, Control Plane, Architecture, Primitives, and Distribution
+  repositories expose active rulesets. GitHub returns the documented upgrade
+  response when private `.github-private` rulesets are inspected on this plan;
+  this is an entitlement gap, not evidence that the private repository is
+  unprotected by another mechanism.
+- `.github-private` is observed as Private with default branch `main`. Its main
+  branch contains the inactive publication baseline with no profile or agents;
+  profile-only PR #1 remains open and separately reversible.
+- The GitHub App remains installation `163255060` for App `5011055`, with
+  selected-repository access, subscriptions limited to `issue_comment`,
+  `pull_request_review`, and `pull_request_review_comment`, and live
+  `workflows: write` permission. The desired contract still requires issue
+  lifecycle events and least-privilege `workflows: none`; changing App settings
+  is a separate operator action. The selected-repository list remains
+  unverified because the user-installation endpoint requires the full `user`
+  scope or an installation token; selected access must not be inferred.
+- Projects v2 is readable. The only observed organization Project is closed,
+  empty Project #1 (`@sjefsharp's untitled project`) with default fields and no
+  delivery items. There is no active operational Project projection.
+- GraphQL observes exactly nine enabled native Issue Types and exactly one
+  `Lifecycle Stage` single-select plus one `Delivery Readiness` single-select.
+  The live field and option IDs match the existing `ISSUE_FIELD_BINDINGS_JSON`
+  repository variable. No separate `Delivery State` field exists. The live
+  values therefore confirm ADR-0019's interpretation: `Delivery Readiness` is
+  the legacy display name of the single orthogonal Delivery State concept.
+- A read-only metadata dry-run for Issue #52 resolves its native `Task` type and
+  proposes only `Lifecycle Stage=Intake` and `Delivery Readiness=Not ready`;
+  those values were not applied because #52 is the plan source issue and must
+  not be changed as a side effect of evidence collection.
+- Organization Actions settings, organization Actions variables/secrets, and
+  the App installation repository list remain unavailable to this token. The
+  Copilot billing endpoint reports Business with unconfigured seat management;
+  custom-agent entitlement is still unverified. These are evidence gaps or
+  activation gates, not inferred absence.
+
 ### Post-merge verification and remaining cutover gates (2026-09-22)
 
 The central Control Plane extraction PR [#54](https://github.com/agentic-delivery-lab/agentic-delivery/pull/54)
