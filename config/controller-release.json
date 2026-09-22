@@ -3,8 +3,8 @@
   "schemaVersion": 1,
   "controllerId": "agentic-delivery",
   "version": "0.2.0-draft.37",
-  "commit": "0ae64cb2b1560e7a9e73435e954e3be8bc3b2b88",
-  "bootstrapCommit": "30197d5c8731ea6e682ae4de5e629b964e278aab",
+  "commit": "7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b",
+  "bootstrapCommit": "03dc4071f29d3914479e9a0bd174759e79180f8c",
   "contracts": {
     "eventEnvelope": 1,
     "lifecycle": "1.0.0",
@@ -60,7 +60,7 @@
     "controllers": [
       {
         "version": "0.2.0-draft.37",
-        "commit": "0ae64cb2b1560e7a9e73435e954e3be8bc3b2b88",
+        "commit": "7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b",
         "contracts": {
           "eventEnvelope": 1,
           "lifecycle": "1.0.0",
@@ -84,7 +84,7 @@
       },
       {
         "version": "0.2.0-draft.34",
-        "commit": "825d808164ed747187490d50727bfe38061b0932",
+        "commit": "de7c8889ecf8bd7a0dfcd0017be845999061c1fd",
         "contracts": {
           "eventEnvelope": 1,
           "lifecycle": "1.0.0",
@@ -348,7 +348,7 @@
       },
       {
         "version": "0.2.0-draft.23",
-        "commit": "30197d5c8731ea6e682ae4de5e629b964e278aab",
+        "commit": "03dc4071f29d3914479e9a0bd174759e79180f8c",
         "contracts": {
           "eventEnvelope": 1,
           "lifecycle": "1.0.0",
