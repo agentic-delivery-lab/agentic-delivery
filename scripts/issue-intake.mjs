@@ -243,7 +243,10 @@ export async function classifyAndRoute({
     ? new GithubAppTokenProvider({
       repository: env.GITHUB_REPOSITORY,
       ...appConfig,
-      permissions: { contents: 'read', issues: 'write', pull_requests: 'read', metadata: 'read' },
+      // Shadow execution evaluates the exact same route but must not request
+      // mutation capability. Active delivery gets issue write only when the
+      // participant mode has already passed the deterministic enrollment gate.
+      permissions: { contents: 'read', issues: shadowMode ? 'read' : 'write', pull_requests: 'read', metadata: 'read' },
       fetchImpl,
     })
     : null;

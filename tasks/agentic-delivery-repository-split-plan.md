@@ -161,6 +161,8 @@ The observed public `.github` repository ID (`1368850419`) is recorded as a
 shadow participant with the same immutable controller and dependency pins;
 runtime admission still requires independently verified App repository access,
 so this local registry entry cannot activate it by itself.
+Shadow intake now requests only read permissions from the origin-scoped App
+token; active delivery is the only path that requests issue write capability.
 The local public `.github` candidate additionally has a dependency-free
 `scripts/validate-governance.mjs` check, a public profile, scoped instructions,
 and a SHA-pinned workflow-template caller. Because the original `.github`

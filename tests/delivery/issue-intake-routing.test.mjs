@@ -211,6 +211,44 @@ test('shadow participant intake evaluates routing without mutating origin issue 
   assert.equal(fixture.calls.some((call) => call.method === 'POST'), false);
 });
 
+test('shadow participant intake requests read-only origin App permissions', async () => {
+  const origin = 'agentic-delivery-lab/service-a';
+  const fixture = apiFixture({
+    state: 'open', title: 'Task: shadow permissions', body: 'Evaluate this route.',
+    labels: [{ name: 'type:task' }, { name: 'state:requirements' }],
+  }, 'write', [], origin);
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const tokenRequests = [];
+  const fetchImpl = async (url, options) => {
+    if (url.endsWith('/access_tokens')) {
+      tokenRequests.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({ token: 'shadow-origin-token', expires_at: '2099-01-01T00:00:00Z' }), { status: 201 });
+    }
+    return fixture.fetchImpl(url, options);
+  };
+  await classifyAndRoute({
+    env: {
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      ORIGIN_REPOSITORY: origin,
+      ORIGIN_REPOSITORY_ID: '777777777',
+      CODEX_DELIVERY_APP_ID: '5011055',
+      CODEX_DELIVERY_APP_PRIVATE_KEY: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+      CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060',
+      SOURCE_ISSUE: '17',
+      GH_TOKEN: 'controller-token',
+      GITHUB_ACTOR: 'maintainer',
+      CONTROL_PLANE_MODE: 'shadow',
+    },
+    event: { action: 'edited', issue: {}, repository: { full_name: origin } },
+    fetchImpl,
+    config,
+    reasonRoute: modelRoute('plan', 'task', 'ready-for-plan'),
+  });
+  assert.deepEqual(tokenRequests[0].repository_ids, ['777777777']);
+  assert.equal(tokenRequests[0].permissions.issues, 'read');
+  assert.equal(tokenRequests[0].permissions.contents, 'read');
+});
+
 test('classifies and hands off a ready issue only after metadata reconciliation and actor authorization', async () => {
   const fixture = apiFixture({
     state: 'open', title: 'Task: implement routing', body: 'Deliver the routing harness.',
