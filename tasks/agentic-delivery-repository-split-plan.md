@@ -115,6 +115,7 @@ Architecture `main` is not accepted as review context.
 The local checks supporting these slices are `pnpm control-plane:check`,
 `pnpm github-app:check`, `pnpm control-plane:boundary`,
 `pnpm acceptance:check`, `pnpm migration:check`,
+the explicit-root `pnpm migration:source:check`,
 `pnpm special-surfaces:check`, `pnpm automation:check`,
 `pnpm traceability:check`, and `pnpm plan:check`,
 and the explicit-root `pnpm release-chain:check`. The Distribution checkout
@@ -122,6 +123,12 @@ also runs `pnpm test`, including its repository-local CI isolation fixture.
 These checks are evidence for implementation readiness, not evidence that the
 corresponding GitHub repositories, settings, App installation, or publication
 surface exist.
+
+The extraction-source gate is run with the supplied `agentic-delivery` main
+commit (`8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`) and explicit Architecture
+and Primitives target roots. It currently fails closed because both draft
+manifests still identify the planning branch; that failure is the intended
+publication block until a real filtered-history run regenerates the maps.
 
 `pnpm plan:check` is a local documentation guard: it verifies the ordered
 twenty-eight-section plan, the Issue #52 persistence boundary, the successor
@@ -1856,6 +1863,8 @@ remove:
 - runner/session continuation and versioned state;
 - Projects projection;
 - evidence contract;
+- explicit extraction-source validation: each history map must point to the
+  declared source snapshot and every old commit must be an ancestor of it;
 - reusable workflows;
 - explicit-root release-chain verification for Architecture, Primitives,
   Distribution, and `.github-private`, including digest and publication-ref

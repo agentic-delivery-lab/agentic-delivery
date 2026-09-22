@@ -27,6 +27,7 @@
     "organization:inventory": "node scripts/collect-github-inventory.mjs",
     "automation:check": "node scripts/validate-automation-templates.mjs",
     "migration:check": "node scripts/validate-repository-boundaries.mjs",
+    "migration:source:check": "node scripts/validate-extraction-source.mjs",
     "special-surfaces:check": "node scripts/validate-special-surfaces.mjs",
     "plan:check": "node scripts/validate-migration-plan.mjs",
     "publication:check": "node scripts/validate-published-agents.mjs",

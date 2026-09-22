@@ -34,6 +34,7 @@ pnpm github-app:check
 pnpm control-plane:boundary
 pnpm metadata:check
 pnpm migration:check
+pnpm migration:source:check -- --source-root <path> --source-commit <sha> --source-ref refs/heads/main --target-root <architecture-path> --target-root <primitives-path>
 pnpm plan:check
 pnpm traceability:check
 pnpm control-plane:check
@@ -67,6 +68,11 @@ release pins. They intentionally do not guess sibling paths or follow a
 moving branch. The publication check accepts a zero-agent private surface
 while the Copilot entitlement is pending; a non-empty projection must also
 reproduce every published file from the pinned Primitive checkout.
+
+`pnpm migration:source:check` is read-only. It verifies that each filtered
+history source map is based on the declared source snapshot and fails closed
+when a draft was generated from another branch. It does not run a history
+filter or change either repository.
 
 The organization App private key and webhook secrets belong only in the
 central deployment boundary. Participant onboarding, upgrades, rollback,
