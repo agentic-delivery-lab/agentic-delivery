@@ -90,6 +90,12 @@ official GitHub artifact, an authorized maintainer must publish or rebase the
 plan through a review branch based on the actual remote `main`; the issue must
 pin the resulting reachable commit, not this local-only lineage.
 
+The pre-existing `work/issue-52-plan-local-main2af` branch does have the
+remote-`main` ancestry, but it contains an earlier 1,847-line plan and does
+not include the current control-plane amendment, image evidence boundary, or
+draft37 release evidence. It is not a valid substitute for the current plan
+until a maintainer deliberately refreshes it and reviews the resulting diff.
+
 ### Local implementation progress
 
 The implementation branch has progressed through the local portions of Phases
