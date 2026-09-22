@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import { validateSpecialSurfaces } from '../../scripts/validate-special-surfaces.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
+const normalized = (source) => source.replace(/\r\n/g, '\n');
 
 test('special repository surfaces keep GitHub governance and publication boundaries explicit', async () => {
   const result = await validateSpecialSurfaces();
@@ -17,7 +18,7 @@ test('special surface validation rejects a canonical private runtime surface', a
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-special-surfaces-'));
   try {
     await mkdir(path.join(temporaryRoot, 'migration'), { recursive: true });
-    const source = await readFile(path.join(repositoryRoot, 'migration/special-surfaces.yml'), 'utf8');
+    const source = normalized(await readFile(path.join(repositoryRoot, 'migration/special-surfaces.yml'), 'utf8'));
     await writeFile(path.join(temporaryRoot, 'migration/special-surfaces.yml'), source.replace('    canonical: false\n', '    canonical: true\n'), 'utf8');
     await assert.rejects(
       validateSpecialSurfaces({ repositoryRoot: temporaryRoot }),
