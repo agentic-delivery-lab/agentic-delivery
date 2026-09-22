@@ -8,6 +8,24 @@ It is planning input, not an official architecture decision and not an active
 control-plane contract. Architecture decisions become official only after their
 own review pull requests are merged into `main`.
 
+### Execution authorization and current status (2026-09-22)
+
+The hard architecture gate is now being executed under the separately
+authorized successor issue [#53](https://github.com/agentic-delivery-lab/agentic-delivery/issues/53)
+and the user's explicit authorization in the controlling conversation. The
+following staged surfaces now exist for review: public
+`agentic-delivery-architecture`, public `agentic-delivery-primitives`, public
+`agentic-delivery-distribution`, the public `.github` governance candidate,
+and private `.github-private`. The central Control Plane remains the only
+authoritative lifecycle implementation in `agentic-delivery`.
+
+Issue #52 remains the plan-persistence source issue and is not closed by this
+status update. Plan, migration, audit and compatibility evidence remains
+intentionally retained until the complete cutover definition in section 19 is
+met. Only then may the explicitly approved cleanup option close #52 and remove
+temporary plan/audit artifacts; production repositories, architecture
+decisions, contracts and provenance are not temporary artifacts.
+
 Issue boundary: Issue #52 is the plan-persistence source issue. It must not be
 used as authorization to create repositories, change GitHub settings, activate
 the control plane, or execute the migration. Any implementation work must use
@@ -74,13 +92,12 @@ validated until an authorized reviewer confirms the image contents or supplies
 an accessible export. This is an evidence boundary, not permission to broaden
 the issue or to block the already persisted plan.
 
-The current open issue remains #52, whose only requested outcome is plan
-persistence and cleanup of superseded task documents. The local implementation
-work recorded below is not authorization to alter #52, create repositories,
-activate the App, change organization fields, or open a migration pull
-request. The first successor issue must explicitly state whether it consumes
-the image-reference confirmation or leaves that confirmation as a separate
-precondition.
+At plan freeze, the open issue remained #52 and the local implementation work
+was intentionally non-authoritative. That pre-authorization boundary has now
+been superseded for the current execution by the separately authorized #53
+successor issue and the explicit user authorization recorded there. The image
+reference remains an evidence gap unless an authorized reviewer supplies an
+accessible export; it is not silently treated as verified.
 
 The local implementation branch is an offline snapshot lineage: the current
 workspace `main` and `work/control-plane-migration-local` have no Git merge
@@ -98,11 +115,11 @@ until a maintainer deliberately refreshes it and reviews the resulting diff.
 
 ### Local implementation progress
 
-The implementation branch has progressed through the local portions of Phases
-2, 3, 5, and 6 without activating any external GitHub surface. This progress
-note records local state only; it does not change Issue #52's scope, lifecycle,
-or completion criteria, and it does not make the Control Plane active for any
-repository.
+The following progress table was captured at the plan-freeze boundary. It
+distinguishes locally prepared contracts from activation and remains useful as
+the migration baseline; current remote PRs and entitlement limits are recorded
+in the execution update above and in the successor issue. It does not close
+Issue #52 or authorize cleanup before the final cutover gate.
 
 | Local slice | Evidence | Status boundary |
 | --- | --- | --- |
@@ -110,8 +127,8 @@ repository.
 | Pull-request observation path | `.github/workflows/agent-observation.yml`, `scripts/validate-observation-event.mjs`, draft37 release with draft36 rollback and draft23 bootstrap | Read-only observation; no lifecycle write-back or model execution |
 | Organization event catalog | `config/event-catalog.yml`, `schemas/event-catalog.v1.schema.json`, `scripts/lib/event-catalog.mjs`; runtime route maps in `scripts/lib/agent-invocation.mjs` derive from it | Canonical event/action/route contract; App manifest and participant subscriptions are validated projections |
 | Primitive selection contract | `config/primitive-selection.yml`, `schemas/primitive-selection.v1.schema.json`, `scripts/lib/primitive-selection.mjs` | Release-bound profile-to-Primitive mapping; validates against the pinned Primitive catalog and does not duplicate Primitive content |
-| Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json`, source maps, and snapshot-gated migration READMEs | Local review candidates only; their filtered histories and maps reproduce the supplied `main` snapshot, but no remote repository, branch protection, or publication activation exists |
-| Distribution/bootstrap | `agentic-delivery-distribution`, draft25 bundle, 9/9 tests | Opt-in fixture and PR projection; no consumer enrollment; workflow and publication checks use the immutable Control Plane source `204cd775705ea77737daafb95954019e528752eb`; the Dev Container base image is digest-pinned |
+| Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json`, source maps, and snapshot-gated migration READMEs | Public target repositories now exist with protected `main` rules and review PRs; filtered histories and maps reproduce the supplied `main` snapshot; publication remains provisional until the PRs and release pins are merged |
+| Distribution/bootstrap | `agentic-delivery-distribution`, draft25 bundle, 9/9 tests | Public target repository and review PR exist; no consumer enrollment; workflow and publication checks use immutable Control Plane source `204cd775705ea77737daafb95954019e528752eb`; the Dev Container base image is digest-pinned |
 | Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
 | GitHub special-surface contract | `migration/special-surfaces.yml`, `scripts/validate-special-surfaces.mjs` | Migration evidence distinguishes GitHub-consumed paths from governance paths and forbids runtime ownership |
 | Preview Automation templates | `automations/templates/*.automation.md`, manifest and validator; Distribution projection lock | Two manual read-only canonical templates and a hash-pinned Agent Plugin projection; `.github-private` remains excluded |
