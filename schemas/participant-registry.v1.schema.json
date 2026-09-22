@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/schemas/participant-registry.v1.schema.json",
+  "title": "Agentic Delivery participant registry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "organization", "repositories"],
+  "properties": {
+    "version": { "const": 1 },
+    "organization": { "const": "agentic-delivery-lab" },
+    "repositories": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^[1-9][0-9]*$": { "$ref": "#/$defs/participant" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "participant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expectedFullName", "mode", "controller", "contracts", "dependencies", "configurationProfile", "events", "localIntegration"],
+      "properties": {
+        "expectedFullName": { "type": "string", "pattern": "^agentic-delivery-lab/[A-Za-z0-9_.-]+$" },
+        "mode": { "enum": ["disabled", "shadow", "active"] },
+        "controller": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["version", "commit"],
+          "properties": {
+            "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+            "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+          }
+        },
+        "contracts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["eventEnvelope", "lifecycle", "stateMachine", "evidence"],
+          "properties": {
+            "eventEnvelope": { "type": "integer", "minimum": 1 },
+            "lifecycle": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+            "stateMachine": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+            "evidence": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" }
+          }
+        },
+        "dependencies": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["architecture", "primitives"],
+          "properties": {
+            "architecture": { "$ref": "#/$defs/artifactPin" },
+            "primitives": { "$ref": "#/$defs/artifactPin" }
+          }
+        },
+        "configurationProfile": { "type": "string", "minLength": 1 },
+        "events": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["issues", "issue_comment", "pull_request", "pull_request_review", "pull_request_review_comment"] }
+        },
+        "localIntegration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["workflowBundle", "managedByApp"],
+          "properties": {
+            "workflowBundle": { "type": "string", "minLength": 1 },
+            "managedByApp": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "artifactPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "version", "commit", "contentSha256"],
+      "properties": {
+        "repository": { "type": "string", "pattern": "^agentic-delivery-lab/[A-Za-z0-9_.-]+$" },
+        "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "contentSha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}

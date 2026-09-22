@@ -8,6 +8,7 @@ import {
   EXPECTED_ORGANIZATION_ISSUE_FORMS,
   loadOrganizationIssueForms,
 } from '../helpers/organization-issue-forms.mjs';
+import { validateIssueMetadataConfig } from '../../scripts/lib/issue-metadata.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -16,7 +17,7 @@ async function text(relativePath) {
 }
 
 test('issue intake configuration keeps issue type, lifecycle stage, readiness, and governance separate', async () => {
-  const config = parseRepositoryYaml(await text('.github/issue-metadata.yml'), 'issue metadata configuration');
+  const config = parseRepositoryYaml(await text('config/issue-metadata.yml'), 'issue metadata configuration');
   assert.deepEqual(config.issue_types.map((type) => type.name), [
     'Idea', 'Research', 'Feature / Outcome', 'Bug', 'Task', 'Requirements',
     'Architecture Decision', 'Implementation', 'Validation',
@@ -37,7 +38,20 @@ test('issue intake configuration keeps issue type, lifecycle stage, readiness, a
   assert.deepEqual(config.readiness.blocking_governance, ['adr:needed', 'adr:proposed', 'adr:removal']);
   assert.equal(config.authority.issue_type, 'organization-native');
   assert.equal(config.authority.lifecycle, 'organization-issue-field');
+  assert.equal(config.authority.delivery_state, 'organization-issue-field');
   assert.equal(config.authority.execution_state, 'runner-local');
+  assert.deepEqual(config.field_compatibility, {
+    canonical_key: 'delivery_state',
+    canonical_name: 'Delivery State',
+    legacy_key: 'readiness',
+    legacy_id: 'delivery-readiness',
+    legacy_name: 'Delivery Readiness',
+    mode: 'legacy-authoritative',
+    migration_adr: 'ADR-0019',
+    duplicate_field_forbidden: true,
+    option_identity: 'preserve',
+  });
+  assert.deepEqual(validateIssueMetadataConfig(config), { valid: true, errors: [] });
 });
 
 test('structured issue forms and generic fallback are present', async () => {
@@ -68,6 +82,19 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.ok(intakeWorkflow.jobs.classify.outputs.lifecycle_stage);
   assert.ok(intakeWorkflow.jobs.classify.outputs.readiness);
   assert.ok(intakeWorkflow.jobs.classify.outputs.invocation_accepted);
+  assert.ok(intakeWorkflow.jobs.classify.outputs.participant_mode);
+  assert.ok(intakeWorkflow.jobs.classify.outputs.controller_version);
+  assert.ok(intakeWorkflow.jobs.classify.outputs.controller_commit);
+  assert.match(
+    await text('.github/workflows/issue-intake.yml'),
+    /steps\.invocation\.outputs\.controller_commit \|\| github\.event\.client_payload\.controller\.commit/,
+  );
+  const intakeSource = await text('.github/workflows/issue-intake.yml');
+  assert.match(intakeSource, /Check out the validated controller release/);
+  assert.match(intakeSource, /ref: 03dc4071f29d3914479e9a0bd174759e79180f8c/);
+  assert.doesNotMatch(intakeSource, /ref: main/);
+  assert.ok(intakeSource.indexOf('Validate and normalize explicit agent invocation')
+    < intakeSource.indexOf('Check out the validated controller release'));
   assert.equal(intakeWorkflow.jobs.classify.needs, 'authorize');
   assert.ok(intakeWorkflow.jobs.authorize);
   assert.equal(intakeWorkflow.jobs.authorize['runs-on'], 'ubuntu-latest');
@@ -75,6 +102,11 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.match(await text('.github/workflows/issue-intake.yml'), /authorize-issue-event\.mjs/);
   assert.match(await text('.github/workflows/issue-intake.yml'), /steps\.invocation\.outputs\.accepted == 'true'/);
   assert.doesNotMatch(await text('.github/workflows/issue-intake.yml'), /\n\s*issue_comment:\s*\n/);
+  const intakeSteps = intakeWorkflow.jobs.classify.steps;
+  const install = intakeSteps.find((step) => step.name === 'Install intake dependencies');
+  const invocation = intakeSteps.find((step) => step.name === 'Validate and normalize explicit agent invocation');
+  assert.equal(install['working-directory'], 'trusted-intake');
+  assert.equal(invocation['working-directory'], 'trusted-intake');
   assert.equal(intakeWorkflow.jobs.deliver.permissions.contents, 'read');
   assert.equal(intakeWorkflow.jobs.deliver.permissions.issues, 'write');
   assert.equal(intakeWorkflow.jobs.deliver.permissions['pull-requests'], undefined);
@@ -82,6 +114,8 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(intakeWorkflow.jobs.deliver.secrets.CODEX_DELIVERY_APP_PRIVATE_KEY, '${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}');
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.issue.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.route.required, true);
+  assert.equal(deliveryWorkflow.on.workflow_call.inputs.participant_mode.required, false);
+  assert.equal(deliveryWorkflow.on.workflow_call.inputs.controller_commit.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_APP_PRIVATE_KEY.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_APP_ID.required, true);
   assert.equal(deliveryWorkflow.jobs.deliver.permissions.contents, 'read');

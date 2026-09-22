@@ -13,7 +13,7 @@ import {
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const policy = parseRepositoryYaml(
-  await readFile(path.join(repositoryRoot, '.github/orchestration-policy.yml'), 'utf8'),
+  await readFile(path.join(repositoryRoot, 'config/orchestration-policy.yml'), 'utf8'),
   'orchestration policy',
 );
 

@@ -1,0 +1,807 @@
+{
+  "$schema": "../schemas/controller-release.v1.schema.json",
+  "schemaVersion": 1,
+  "controllerId": "agentic-delivery",
+  "version": "0.2.0-draft.37",
+  "commit": "7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b",
+  "bootstrapCommit": "03dc4071f29d3914479e9a0bd174759e79180f8c",
+  "contracts": {
+    "eventEnvelope": 1,
+    "lifecycle": "1.0.0",
+    "stateMachine": "1.0.0",
+    "evidence": "1.0.0"
+  },
+  "support": {
+    "eventEnvelopeVersions": [
+      1
+    ],
+    "lifecycleVersions": [
+      "1.0.0"
+    ],
+    "stateMachineVersions": [
+      "1.0.0"
+    ],
+    "evidenceVersions": [
+      "1.0.0"
+    ],
+    "primitiveCompatibility": [
+      "0.x"
+    ],
+    "architectureCompatibility": [
+      "0.x"
+    ],
+    "minimumBootstrapVersion": "0.2.0-draft.23",
+    "policy": {
+      "supportWindowDays": 90,
+      "majorStrategy": "current-and-immediately-previous",
+      "preReleaseException": "no-previous-ga-major",
+      "securityRevocation": "fail-closed-with-incident"
+    }
+  },
+  "dependencies": {
+    "architecture": {
+      "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+      "version": "0.1.0-draft.8",
+      "commit": "9d4872c39e9c52075a7a299ad4584ac3eb704a1b",
+      "contentSha256": "ac4430f7aa86c016c51ea8f9458627d4412d36256960c1bf54b63e851dc2350c"
+    },
+    "primitives": {
+      "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+      "version": "0.1.0-draft.4",
+      "commit": "01dc8df9eae5ee8394d05246dbf9ccdcddaa7c9e",
+      "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+    }
+  },
+  "compatibility": {
+    "eventEnvelope": 1,
+    "lifecycle": "1.0.0",
+    "stateMachine": "1.0.0",
+    "evidence": "1.0.0",
+    "controllers": [
+      {
+        "version": "0.2.0-draft.37",
+        "commit": "7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.8",
+            "commit": "9d4872c39e9c52075a7a299ad4584ac3eb704a1b",
+            "contentSha256": "ac4430f7aa86c016c51ea8f9458627d4412d36256960c1bf54b63e851dc2350c"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "01dc8df9eae5ee8394d05246dbf9ccdcddaa7c9e",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.34",
+        "commit": "de7c8889ecf8bd7a0dfcd0017be845999061c1fd",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.6",
+            "commit": "5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b",
+            "contentSha256": "3bcc5f617de6ecf93f6b1c55bece5f97c03bcd979ccb1aa1c7d2431199383a3c"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.33",
+        "commit": "d8c77d5e68909c441066532a7bae2af994207316",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.6",
+            "commit": "5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b",
+            "contentSha256": "3bcc5f617de6ecf93f6b1c55bece5f97c03bcd979ccb1aa1c7d2431199383a3c"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.32",
+        "commit": "00f2daf3a02ea0ca5610d44d8b17aa3b8bb228eb",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.6",
+            "commit": "5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b",
+            "contentSha256": "3bcc5f617de6ecf93f6b1c55bece5f97c03bcd979ccb1aa1c7d2431199383a3c"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.31",
+        "commit": "ba7a161b93f3f35849362139ee3a281318e9183c",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.6",
+            "commit": "5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b",
+            "contentSha256": "3bcc5f617de6ecf93f6b1c55bece5f97c03bcd979ccb1aa1c7d2431199383a3c"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.30",
+        "commit": "069475071cfa6b725446e8179ad1db164dc2d96e",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.6",
+            "commit": "5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b",
+            "contentSha256": "3bcc5f617de6ecf93f6b1c55bece5f97c03bcd979ccb1aa1c7d2431199383a3c"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.29",
+        "commit": "7061773305054da9eb33b4ef872a7b7c63364d65",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.6",
+            "commit": "5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b",
+            "contentSha256": "3bcc5f617de6ecf93f6b1c55bece5f97c03bcd979ccb1aa1c7d2431199383a3c"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.28",
+        "commit": "0956144e5b9229209ad0fb82299a1d99a366ac66",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.6",
+            "commit": "5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b",
+            "contentSha256": "3bcc5f617de6ecf93f6b1c55bece5f97c03bcd979ccb1aa1c7d2431199383a3c"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.27",
+        "commit": "b52464571e1c0d3adfa5986bd54668d3c7da4a13",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.6",
+            "commit": "5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b",
+            "contentSha256": "3bcc5f617de6ecf93f6b1c55bece5f97c03bcd979ccb1aa1c7d2431199383a3c"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.26",
+        "commit": "81fa558aad0f998876bc29871080f2380b2c8582",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.6",
+            "commit": "5655c0fda81e9ebcc6e3f7e9805e966ce15ed96b",
+            "contentSha256": "3bcc5f617de6ecf93f6b1c55bece5f97c03bcd979ccb1aa1c7d2431199383a3c"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.25",
+        "commit": "81fa558aad0f998876bc29871080f2380b2c8582",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.5",
+            "commit": "2bfe92c8c641a2258d4393a37785c793d8a46c48",
+            "contentSha256": "341bc5e446446af71893135eedb52b520c37162929f3ac6af2e74a494e6014ea"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.24",
+        "commit": "1c33a16b9a5a7e6480410c69bdda32648126eabc",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.4",
+            "commit": "61b2285334b5cff4ae2dba7875b132ad2a4a8502",
+            "contentSha256": "8a5143f2a09e5324cf8fcb5cc9652a0c62b5562371c29bc869a6536aeab4f6d3"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.23",
+        "commit": "03dc4071f29d3914479e9a0bd174759e79180f8c",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.4",
+            "commit": "61b2285334b5cff4ae2dba7875b132ad2a4a8502",
+            "contentSha256": "8a5143f2a09e5324cf8fcb5cc9652a0c62b5562371c29bc869a6536aeab4f6d3"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.22",
+        "commit": "ccbe92fffd41d0e5cdc906a170e74f2a723e7386",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.4",
+            "commit": "61b2285334b5cff4ae2dba7875b132ad2a4a8502",
+            "contentSha256": "8a5143f2a09e5324cf8fcb5cc9652a0c62b5562371c29bc869a6536aeab4f6d3"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.21",
+        "commit": "9634a711ded35f54a69e4c361fc3369100d84290",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.4",
+            "commit": "61b2285334b5cff4ae2dba7875b132ad2a4a8502",
+            "contentSha256": "8a5143f2a09e5324cf8fcb5cc9652a0c62b5562371c29bc869a6536aeab4f6d3"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.20",
+        "commit": "213036f87776dcf75e349355ff7983ded476c42e",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.4",
+            "commit": "61b2285334b5cff4ae2dba7875b132ad2a4a8502",
+            "contentSha256": "8a5143f2a09e5324cf8fcb5cc9652a0c62b5562371c29bc869a6536aeab4f6d3"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.19",
+        "commit": "02b742c86f77700e8c787ae17f31959d22bbdf2e",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.4",
+            "commit": "61b2285334b5cff4ae2dba7875b132ad2a4a8502",
+            "contentSha256": "8a5143f2a09e5324cf8fcb5cc9652a0c62b5562371c29bc869a6536aeab4f6d3"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.18",
+        "commit": "d34d37170c8bfaf944ee0a2bb7b52aac145febf4",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.4",
+            "commit": "61b2285334b5cff4ae2dba7875b132ad2a4a8502",
+            "contentSha256": "8a5143f2a09e5324cf8fcb5cc9652a0c62b5562371c29bc869a6536aeab4f6d3"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "13acf15d7d2c5ed12b9158d57ff45fcce93d1a06",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.17",
+        "commit": "a788cd2eec8e92e9cad05530ed624fec80770f41",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.4",
+            "commit": "61b2285334b5cff4ae2dba7875b132ad2a4a8502",
+            "contentSha256": "8a5143f2a09e5324cf8fcb5cc9652a0c62b5562371c29bc869a6536aeab4f6d3"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.4",
+            "commit": "51e94992c5f39c59046f752e0cf6cff2ed3fff32",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.16",
+        "commit": "9e4ca88eb69a4df69067162d0fbc7100bd6cf691",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.3",
+            "commit": "d4714c9489fb14824ef0967903d34a73c3e437fb",
+            "contentSha256": "0afe23f5dcf6a250940112d979e013fdc052a6372c41518aa757402d69099484"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.3",
+            "commit": "8d99a4a7a7240a02090ab2ac81cdb7676b8a42ad",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.15",
+        "commit": "ce6a0144edeefbb8125962c06f70b9c9c91cde78",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.1",
+            "commit": "112a4163f7f8cb9142005568fb6270eef6df85cb",
+            "contentSha256": "3288a200cd57af34f7b602f188b8a3b40031a4e9bc1e1e8fdd2e07cc001929fa"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.2",
+            "commit": "cfd86652d9f3a830c28d3dd40f6e762588c0af75",
+            "contentSha256": "36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0"
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.14",
+        "commit": "707a4a74c8d331f2400fffa2714f04b8a7d59b9b",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.1",
+            "commit": "112a4163f7f8cb9142005568fb6270eef6df85cb",
+            "contentSha256": "3288a200cd57af34f7b602f188b8a3b40031a4e9bc1e1e8fdd2e07cc001929fa"
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.1",
+            "commit": "b43a4e340c377193342153f2760df495c7b346fc",
+            "contentSha256": null
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.13",
+        "commit": "52e7a2092a1e7807ee091264a3dbbe97b8764593",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.1",
+            "commit": "3690baa97cf0b9b1b188b7adf289e063c3f92004",
+            "contentSha256": null
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.1",
+            "commit": "b43a4e340c377193342153f2760df495c7b346fc",
+            "contentSha256": null
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.12",
+        "commit": "3ea621d64507c0ef187181a487e5f8ff190e5aa3",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.1",
+            "commit": "3690baa97cf0b9b1b188b7adf289e063c3f92004",
+            "contentSha256": null
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.1",
+            "commit": "b43a4e340c377193342153f2760df495c7b346fc",
+            "contentSha256": null
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.11",
+        "commit": "83f164388096e0e343b1641c27ee399e509bf68b",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.1",
+            "commit": "3690baa97cf0b9b1b188b7adf289e063c3f92004",
+            "contentSha256": null
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.1",
+            "commit": "b43a4e340c377193342153f2760df495c7b346fc",
+            "contentSha256": null
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.10",
+        "commit": "8c883b754dc03498788615160ee7f6cf2effb6fc",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.1",
+            "commit": "3690baa97cf0b9b1b188b7adf289e063c3f92004",
+            "contentSha256": null
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.1",
+            "commit": "b43a4e340c377193342153f2760df495c7b346fc",
+            "contentSha256": null
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.9",
+        "commit": "379fd73526054037e1f4dcf7ef728dcf01baaa6c",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.1",
+            "commit": "3690baa97cf0b9b1b188b7adf289e063c3f92004",
+            "contentSha256": null
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.1",
+            "commit": "b43a4e340c377193342153f2760df495c7b346fc",
+            "contentSha256": null
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.8",
+        "commit": "eeef545c40d5b9e9a590e335c5ab193deaaac928",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.1",
+            "commit": "3690baa97cf0b9b1b188b7adf289e063c3f92004",
+            "contentSha256": null
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.1",
+            "commit": "b43a4e340c377193342153f2760df495c7b346fc",
+            "contentSha256": null
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.7",
+        "commit": "48bc83b2c52e0d9aeee47905d4877ba75657c354",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.1",
+            "commit": "3690baa97cf0b9b1b188b7adf289e063c3f92004",
+            "contentSha256": null
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.1",
+            "commit": "b43a4e340c377193342153f2760df495c7b346fc",
+            "contentSha256": null
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.6",
+        "commit": "564a35fd798e75800a3bf15223afb8bd87d59581",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.1",
+            "commit": "3690baa97cf0b9b1b188b7adf289e063c3f92004",
+            "contentSha256": null
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.1",
+            "commit": "b43a4e340c377193342153f2760df495c7b346fc",
+            "contentSha256": null
+          }
+        }
+      },
+      {
+        "version": "0.2.0-draft.2",
+        "commit": "50fba4418e394bf2fa57521302241caf474516bd",
+        "contracts": {
+          "eventEnvelope": 1,
+          "lifecycle": "1.0.0",
+          "stateMachine": "1.0.0",
+          "evidence": "1.0.0"
+        },
+        "dependencies": {
+          "architecture": {
+            "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+            "version": "0.1.0-draft.1",
+            "commit": "3690baa97cf0b9b1b188b7adf289e063c3f92004",
+            "contentSha256": null
+          },
+          "primitives": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "version": "0.1.0-draft.1",
+            "commit": "b43a4e340c377193342153f2760df495c7b346fc",
+            "contentSha256": null
+          }
+        }
+      }
+    ]
+  }
+}

@@ -8,7 +8,7 @@ import { applyIssueMetadataMigration, organizationMetadataManifest, planIssueMet
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
-const config = parseRepositoryYaml(await readFile(path.join(root, '.github/issue-metadata.yml'), 'utf8'), 'issue metadata');
+const config = parseRepositoryYaml(await readFile(path.join(root, 'config/issue-metadata.yml'), 'utf8'), 'issue metadata');
 
 function liveCatalog() {
   return ['lifecycle_stage', 'readiness'].map((key) => ({

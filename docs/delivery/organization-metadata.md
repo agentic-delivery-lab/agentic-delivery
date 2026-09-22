@@ -1,4 +1,4 @@
-<!-- agentic-primitive: {"id":"organization-metadata-runbook","kind":"instruction","enforcement":"instructional","adrs":["ADR-0012","ADR-0013","ADR-0015","ADR-0016","ADR-0017"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"organization-metadata-runbook","kind":"instruction","enforcement":"instructional","adrs":["ADR-0012","ADR-0013","ADR-0015","ADR-0016","ADR-0017","ADR-0019"],"domains":["agentic-delivery-governance"]} -->
 
 # Organization GitHub metadata runbook
 
@@ -9,7 +9,7 @@ pretending that the organization configuration has already been provisioned.
 
 ## Organization contract
 
-Use [`.github/issue-metadata.yml`](../../.github/issue-metadata.yml) as the
+Use [`config/issue-metadata.yml`](../../config/issue-metadata.yml) as the
 reviewed source for this organization-wide contract:
 
 - Native Issue Types: Idea, Research, Feature / Outcome, Bug, Task,
@@ -27,6 +27,12 @@ workflow state machine. Readiness is an orthogonal gate; it does not add
 temporary conditions to the lifecycle vocabulary. The runner stores its
 resumable session and operation state under the protected per-issue state
 directory.
+
+The target architecture calls this orthogonal field `Delivery State`. The
+current `Delivery Readiness` name and logical `readiness` key remain the
+authoritative compatibility contract until ADR-0019's separately authorized
+field migration is complete; do not create a second field or rename it from a
+content pull request.
 
 Run the dry-run manifest before changing organization settings:
 
@@ -200,7 +206,7 @@ repository and issue number and is not discarded by metadata migration.
 ## Orchestration capability inventory
 
 The approved profile and capability catalog is
-[`.github/orchestration-policy.yml`](../../.github/orchestration-policy.yml).
+[`config/orchestration-policy.yml`](../../config/orchestration-policy.yml).
 The runner must explicitly report available optional MCP servers. The current
 catalog names Firecrawl for `web-research`, Chrome DevTools for
 `browser-automation`, and Context7 for `documentation-research`; their names

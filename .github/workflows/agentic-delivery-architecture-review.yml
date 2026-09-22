@@ -1,0 +1,104 @@
+name: agentic-delivery-architecture-review
+
+# Reusable, read-only architecture contract entry point. The caller chooses an
+# immutable Architecture Authority commit; this workflow never follows a
+# moving main branch and never receives App credentials.
+on:
+  workflow_call:
+    inputs:
+      architecture_commit:
+        description: Immutable Architecture Authority commit to validate
+        required: true
+        type: string
+      affected_identifiers:
+        description: JSON array of architecture identifiers affected by this change
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  architecture-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the participating repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Validate the immutable Architecture pin
+        env:
+          ARCHITECTURE_COMMIT: ${{ inputs.architecture_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$ARCHITECTURE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Check out the pinned Architecture Authority
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-architecture
+          ref: ${{ inputs.architecture_commit }}
+          path: architecture
+          persist-credentials: false
+
+      - name: Confirm the checkout matches the requested pin
+        env:
+          ARCHITECTURE_COMMIT: ${{ inputs.architecture_commit }}
+        run: |
+          set -euo pipefail
+          test "$(git -C architecture rev-parse HEAD)" = "$ARCHITECTURE_COMMIT"
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Validate the pinned Architecture release
+        run: node architecture/tools/validate-architecture-release.mjs architecture "$ARCHITECTURE_COMMIT"
+        env:
+          ARCHITECTURE_COMMIT: ${{ inputs.architecture_commit }}
+
+      - name: Install and validate Architecture Authority
+        run: |
+          pnpm --dir architecture install --frozen-lockfile --ignore-scripts
+          pnpm --dir architecture architecture:check
+
+      - name: Compute the immutable Architecture content digest
+        id: architecture-digest
+        env:
+          ARCHITECTURE_COMMIT: ${{ inputs.architecture_commit }}
+        run: |
+          set -euo pipefail
+          digest="$(node architecture/tools/architecture-content-digest.mjs architecture "$ARCHITECTURE_COMMIT")"
+          [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+          printf 'value=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Create the immutable conformance request
+        env:
+          ARCHITECTURE_COMMIT: ${{ inputs.architecture_commit }}
+          ARCHITECTURE_DIGEST: ${{ steps.architecture-digest.outputs.value }}
+          AFFECTED_IDENTIFIERS: ${{ inputs.affected_identifiers }}
+          IMPLEMENTATION_COMMIT: ${{ github.sha }}
+          REQUEST_PATH: ${{ runner.temp }}/architecture-conformance-request.json
+        run: |
+          set -euo pipefail
+          REQUEST_PATH="$REQUEST_PATH" ARCHITECTURE_COMMIT="$ARCHITECTURE_COMMIT" AFFECTED_IDENTIFIERS="$AFFECTED_IDENTIFIERS" IMPLEMENTATION_COMMIT="$IMPLEMENTATION_COMMIT" node --input-type=module -e '
+            import { writeFileSync } from "node:fs";
+            const identifiers = JSON.parse(process.env.AFFECTED_IDENTIFIERS);
+            writeFileSync(process.env.REQUEST_PATH, JSON.stringify({
+              schemaVersion: 1,
+              architectureCommit: process.env.ARCHITECTURE_COMMIT,
+              architectureDigest: process.env.ARCHITECTURE_DIGEST,
+              implementationCommit: process.env.IMPLEMENTATION_COMMIT,
+              affectedIdentifiers: identifiers,
+            }) + "\\n");
+          '
+
+      - name: Validate the conformance request against the pinned Architecture
+        env:
+          ARCHITECTURE_COMMIT: ${{ inputs.architecture_commit }}
+          ARCHITECTURE_DIGEST: ${{ steps.architecture-digest.outputs.value }}
+        run: node architecture/tools/validate-conformance-request.mjs "$RUNNER_TEMP/architecture-conformance-request.json" "$ARCHITECTURE_COMMIT" "$ARCHITECTURE_DIGEST"

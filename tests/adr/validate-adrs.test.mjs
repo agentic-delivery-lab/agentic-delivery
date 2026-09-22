@@ -19,14 +19,14 @@ async function newFixture(t) {
 }
 
 test('accepts the repository ADR set', async () => {
-  assert.equal(await validateAdrs(repositoryRoot), 16);
+  assert.equal(await validateAdrs(repositoryRoot), 17);
 });
 
 test('accepts historical ADR number gaps after a record is removed', async (t) => {
   const fixture = await newFixture(t);
   await unlink(path.join(fixture, 'docs/decisions/0008-use-pnpm-with-delayed-dependency-adoption.md'));
 
-  assert.equal(await validateAdrs(fixture), 15);
+  assert.equal(await validateAdrs(fixture), 16);
 });
 
 test('rejects ADRs that define status in frontmatter', async (t) => {

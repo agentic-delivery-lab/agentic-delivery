@@ -150,7 +150,7 @@ repairs are bounded to three attempts per invocation.
 Issue communication, authorization checks, labels, and ordinary reads use the
 job's short-lived `GITHUB_TOKEN`. Child-issue creation, Git publication, and
 review pull-request publication use the repository-scoped GitHub App described
-by ADR-0014. The controller mints installation tokens just in time, redacts
+by ADR-0018. The controller mints installation tokens just in time, redacts
 them, and does not expose them to model tools. This split preserves the
 workflow token's least-privilege role while allowing App-generated events to
 start required downstream checks.

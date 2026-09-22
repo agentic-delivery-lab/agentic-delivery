@@ -1,0 +1,52 @@
+name: agentic-delivery-quality
+
+# Thin consumer entry point. This workflow validates a pinned Control Plane
+# release; it does not receive issue events, mutate work state, or carry App
+# credentials into a consumer repository.
+on:
+  workflow_call:
+    inputs:
+      controller_commit:
+        description: Immutable Control Plane commit to validate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  control-plane-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate the immutable controller pin
+        env:
+          CONTROLLER_COMMIT: ${{ inputs.controller_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Check out the pinned Control Plane
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery
+          ref: ${{ inputs.controller_commit }}
+          path: control-plane
+          persist-credentials: false
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Install pinned controller dependencies
+        run: pnpm --dir control-plane install --frozen-lockfile --ignore-scripts
+
+      - name: Validate the pinned Control Plane contract
+        run: |
+          node control-plane/scripts/validate-controller-release.mjs control-plane
+          node control-plane/scripts/validate-github-app-contract.mjs control-plane
+          node control-plane/scripts/validate-control-plane-boundary.mjs control-plane
+          node control-plane/scripts/validate-multi-repository-acceptance.mjs control-plane
+          node control-plane/scripts/validate-repository-boundaries.mjs control-plane

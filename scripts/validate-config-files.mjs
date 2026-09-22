@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -7,6 +7,9 @@ import { promisify } from 'node:util';
 import { parseRepositoryYaml, YamlParseError } from './lib/yaml.mjs';
 import { validateIssueMetadataConfig } from './lib/issue-metadata.mjs';
 import { validateOrchestrationPolicy } from './lib/orchestration-policy.mjs';
+import { parseParticipantRegistry } from './lib/participant-registry.mjs';
+import { validatePrimitiveSelection } from './lib/primitive-selection.mjs';
+import { validateEventCatalog } from './lib/event-catalog.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -29,7 +32,7 @@ async function gitFiles(repositoryRoot) {
       .filter((file) => /\.(?:json|ya?ml)$/.test(file))
       .filter((file) => file !== 'pnpm-lock.yaml')
       .filter((file) => !/^tests\/.*\/fixtures\//.test(file));
-    for (const file of ['.github/issue-metadata.yml', '.github/orchestration-policy.yml']) {
+    for (const file of ['config/issue-metadata.yml', 'config/orchestration-policy.yml', 'config/event-catalog.yml', 'config/primitive-selection.yml', 'config/agent-actors.json', 'config/participants.yml']) {
       if (!tracked.includes(file)) tracked.push(file);
     }
     // These repository-local files were replaced by organization metadata and
@@ -37,7 +40,18 @@ async function gitFiles(repositoryRoot) {
     // appear in `git ls-files`.
     const obsolete = (file) => file === '.github/issue-lifecycle.yml'
       || file.startsWith('.github/ISSUE_TEMPLATE/');
-    return tracked.filter((file) => !obsolete(file));
+    const candidates = tracked.filter((file) => !obsolete(file));
+    const existing = [];
+    for (const file of candidates) {
+      try {
+        await access(path.join(repositoryRoot, file));
+        existing.push(file);
+      } catch {
+        // A deleted-but-not-yet-staged migration path is not a configuration
+        // file to validate. Explicit file lists still report missing paths.
+      }
+    }
+    return existing;
   } catch {
     throw new ConfigValidationError('Configuration check: repository root is not a Git repository.', 2);
   }
@@ -51,6 +65,10 @@ export async function validateConfigFiles({ repositoryRoot = path.resolve(path.d
     let source;
     try {
       source = await readFile(filePath, 'utf8');
+      if (relativeFile === 'config/participants.yml' || relativeFile.endsWith('/participants.yml') || relativeFile === 'participants.yml') {
+        const result = parseParticipantRegistry(parseRepositoryYaml(source, relativeFile));
+        if (!result.valid) errors.push(relativeFile + ': participant registry: ' + result.errors.join('; '));
+      }
     } catch (error) {
       errors.push(`${relativeFile}: cannot read configuration: ${error.message}`);
       continue;
@@ -61,12 +79,22 @@ export async function validateConfigFiles({ repositoryRoot = path.resolve(path.d
       } else {
         parseRepositoryYaml(source, relativeFile);
       }
-      if (relativeFile === '.github/issue-metadata.yml') {
+      if (relativeFile === 'config/issue-metadata.yml') {
         const result = validateIssueMetadataConfig(parseRepositoryYaml(source, relativeFile));
         if (!result.valid) errors.push(`${relativeFile}: ${result.errors.join('; ')}`);
       }
-      if (relativeFile === '.github/orchestration-policy.yml') {
+      if (relativeFile === 'config/orchestration-policy.yml') {
         const result = validateOrchestrationPolicy(parseRepositoryYaml(source, relativeFile));
+        if (!result.valid) errors.push(`${relativeFile}: ${result.errors.join('; ')}`);
+      }
+      if (relativeFile === 'config/primitive-selection.yml') {
+        const policyPath = path.join(repositoryRoot, 'config/orchestration-policy.yml');
+        const policy = parseRepositoryYaml(await readFile(policyPath, 'utf8'), policyPath);
+        const result = validatePrimitiveSelection(parseRepositoryYaml(source, relativeFile), { policy });
+        if (!result.valid) errors.push(`${relativeFile}: ${result.errors.join('; ')}`);
+      }
+      if (relativeFile === 'config/event-catalog.yml') {
+        const result = validateEventCatalog(parseRepositoryYaml(source, relativeFile));
         if (!result.valid) errors.push(`${relativeFile}: ${result.errors.join('; ')}`);
       }
     } catch (error) {

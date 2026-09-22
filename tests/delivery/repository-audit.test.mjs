@@ -91,3 +91,17 @@ test('pull request body workflow always reports a trusted read-only check', asyn
   assert.ok(!source.includes('secrets.'));
   assert.ok(!source.includes('github.event.pull_request.head'));
 });
+
+test('control-plane subdomains have explicit scoped instructions', async () => {
+  const required = {
+    'api/github/AGENTS.md': ['GitHub App ingress boundary', 'participant enrollment', 'Do not implement lifecycle transitions'],
+    'config/AGENTS.md': ['Control Plane contract configuration', 'participants.yml', 'immutable commits and schema versions'],
+    '.github/workflows/AGENTS.md': ['Central workflow boundary', 'controller checkout and originating-repository checkout separate', 'secrets: inherit'],
+    'scripts/lib/AGENTS.md': ['Delivery controller runtime libraries', 'origin repository', 'GitHub Issues and organization fields'],
+    'migration/AGENTS.md': ['Migration boundary', 'history-preserving extraction', 'local-prepared'],
+  };
+  for (const [file, phrases] of Object.entries(required)) {
+    const source = await text(file);
+    for (const phrase of phrases) assert.ok(source.includes(phrase), `${file} is missing scoped boundary guidance: ${phrase}`);
+  }
+});

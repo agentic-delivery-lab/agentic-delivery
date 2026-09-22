@@ -22,9 +22,38 @@ test('GitHub App provider mints scoped installation tokens and refreshes near ex
     repository: 'owner/repo', appId: '123', privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }), installationId: '456',
     permissions: { contents: 'write', issues: 'write' }, fetchImpl, now: () => now,
   });
-  assert.equal(await provider.token(), 'installation-1');
-  assert.equal(await provider.token(), 'installation-1');
+  assert.equal(await provider.token({ allowInstallationWide: true }), 'installation-1');
+  assert.equal(await provider.token({ allowInstallationWide: true }), 'installation-1');
   now += 3_550_000;
-  assert.equal(await provider.token(), 'installation-2');
+  assert.equal(await provider.token({ allowInstallationWide: true }), 'installation-2');
   assert.equal(requests, 2);
+});
+
+test('GitHub App provider rejects an unscoped token unless a test opts in explicitly', async () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const provider = new GithubAppTokenProvider({
+    repository: 'owner/repo', appId: '123', privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+    installationId: '456', fetchImpl: async () => { throw new Error('unscoped token must fail before API access'); },
+  });
+  await assert.rejects(provider.token(), /repository-scoped installation token/);
+});
+
+test('GitHub App provider can narrow an installation token to repository IDs', async () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  let requestBody;
+  const provider = new GithubAppTokenProvider({
+    repository: 'agentic-delivery-lab/agentic-delivery',
+    appId: '123',
+    privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+    installationId: '456',
+    permissions: { metadata: 'read' },
+    fetchImpl: async (url, options) => {
+      requestBody = JSON.parse(options.body);
+      return new Response(JSON.stringify({ token: 'scoped', expires_at: '2026-09-10T13:00:00Z' }), { status: 201 });
+    },
+    now: () => Date.parse('2026-09-10T12:00:00Z'),
+  });
+
+  assert.equal(await provider.token({ repositoryIds: ['777777777'] }), 'scoped');
+  assert.deepEqual(requestBody.repository_ids, ['777777777']);
 });

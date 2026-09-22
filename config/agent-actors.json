@@ -4,6 +4,7 @@
   "bot_login": "agentic-delivery-lab-invoker-7f3a[bot]",
   "human_permissions": ["write", "maintain", "admin"],
   "events": {
+    "issues": ["opened", "edited", "reopened", "typed", "untyped", "labeled", "unlabeled", "closed"],
     "issue_comment": ["created", "edited"],
     "pull_request_review": ["submitted", "edited"],
     "pull_request_review_comment": ["created", "edited"]

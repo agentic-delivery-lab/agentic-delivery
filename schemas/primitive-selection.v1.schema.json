@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/schemas/primitive-selection.v1.schema.json",
+  "title": "Agentic Delivery Primitive selection contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "contractVersion", "source", "profiles"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "contractVersion": { "type": "string", "pattern": "^1\\.0\\.0$" },
+    "source": { "$ref": "#/$defs/source" },
+    "profiles": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/profile" }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "releaseId", "version", "commit", "contentSha256", "capabilityPolicyVersion"],
+      "properties": {
+        "repository": { "const": "agentic-delivery-lab/agentic-delivery-primitives" },
+        "releaseId": { "pattern": "^urn:agentic-delivery:primitive-release:" },
+        "version": { "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$" },
+        "commit": { "pattern": "^[0-9a-f]{40}$" },
+        "contentSha256": { "pattern": "^[0-9a-f]{64}$" },
+        "capabilityPolicyVersion": { "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primitiveIds", "capabilities", "model", "reasoning", "tools", "mcp", "fallback"],
+      "properties": {
+        "primitiveIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" } },
+        "capabilities": { "type": "array", "uniqueItems": true, "items": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" } },
+        "model": { "type": "string", "minLength": 1 },
+        "reasoning": { "type": "string", "minLength": 1 },
+        "tools": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "mcp": { "type": "array", "uniqueItems": true, "items": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" } },
+        "fallback": { "enum": ["hold", "fail-closed"] }
+      }
+    }
+  }
+}

@@ -10,6 +10,11 @@ on:
         required: false
         default: false
         type: boolean
+      controller_commit:
+        description: Immutable controller commit used when the event has no participant envelope
+        required: false
+        default: '03dc4071f29d3914479e9a0bd174759e79180f8c'
+        type: string
     secrets:
       CODEX_DELIVERY_APP_PRIVATE_KEY:
         required: true
@@ -17,6 +22,8 @@ on:
         required: true
       CODEX_DELIVERY_APP_INSTALLATION_ID:
         required: false
+      CODEX_DELIVERY_DISPATCH_SECRET:
+        required: true
   workflow_dispatch:
     inputs:
       issue:
@@ -28,6 +35,11 @@ on:
         required: false
         default: false
         type: boolean
+      controller_commit:
+        description: Immutable controller commit for this manual run
+        required: false
+        default: '03dc4071f29d3914479e9a0bd174759e79180f8c'
+        type: string
 
 permissions:
   contents: read
@@ -50,7 +62,8 @@ jobs:
       - name: Check out trusted authorization
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: main
+          # Bootstrap pin: config/controller-release.json bootstrapCommit.
+          ref: 03dc4071f29d3914479e9a0bd174759e79180f8c
           path: trusted-intake
           persist-credentials: false
 
@@ -81,6 +94,11 @@ jobs:
       orchestration_pattern: ${{ steps.intake.outputs.orchestration_pattern }}
       invocation_accepted: ${{ steps.invocation.outputs.accepted || 'true' }}
       source_issue: ${{ steps.invocation.outputs.source_issue || steps.intake.outputs.issue }}
+      origin_repository: ${{ steps.invocation.outputs.origin_repository || github.repository }}
+      origin_repository_id: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
+      participant_mode: ${{ steps.invocation.outputs.participant_mode }}
+      controller_version: ${{ steps.invocation.outputs.controller_version || github.event.client_payload.controller.version }}
+      controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '03dc4071f29d3914479e9a0bd174759e79180f8c' }}
       invocation_event_name: ${{ steps.invocation.outputs.invocation_event_name }}
       invocation_source_kind: ${{ steps.invocation.outputs.invocation_source_kind }}
       invocation_comment_id: ${{ steps.invocation.outputs.invocation_comment_id }}
@@ -95,7 +113,8 @@ jobs:
       - name: Check out trusted intake
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: main
+          # Bootstrap pin: config/controller-release.json bootstrapCommit.
+          ref: 03dc4071f29d3914479e9a0bd174759e79180f8c
           persist-credentials: false
 
       - name: Set up pnpm and Node.js
@@ -106,17 +125,38 @@ jobs:
 
       - name: Install intake dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: trusted-intake
 
       - name: Validate and normalize explicit agent invocation
         id: invocation
         if: ${{ inputs.agent_invocation }}
         env:
           GH_TOKEN: ${{ github.token }}
+          CODEX_DELIVERY_APP_ID: ${{ secrets.CODEX_DELIVERY_APP_ID }}
+          CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
+          CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ secrets.CODEX_DELIVERY_APP_INSTALLATION_ID }}
+          CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
           RUNNER_TEMP: ${{ runner.temp }}
         run: node scripts/prepare-agent-invocation.mjs
+        working-directory: trusted-intake
+
+      - name: Validate the selected controller commit
+        if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
+        env:
+          CONTROLLER_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '03dc4071f29d3914479e9a0bd174759e79180f8c' }}
+        run: |
+          set -euo pipefail
+          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Check out the validated controller release
+        if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '03dc4071f29d3914479e9a0bd174759e79180f8c' }}
+          persist-credentials: false
 
       - name: Set up pinned Codex CLI
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.force }}
@@ -127,6 +167,9 @@ jobs:
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
+          CODEX_DELIVERY_APP_ID: ${{ secrets.CODEX_DELIVERY_APP_ID }}
+          CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
+          CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ secrets.CODEX_DELIVERY_APP_INSTALLATION_ID }}
           GITHUB_GRAPHQL: 'true'
           ISSUE_FIELD_BINDINGS_JSON: ${{ vars.ISSUE_FIELD_BINDINGS_JSON }}
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
@@ -136,8 +179,13 @@ jobs:
           INVOCATION_EVENT: ${{ inputs.agent_invocation && 'true' || 'false' }}
           INVOCATION_ACTOR_KIND: ${{ steps.invocation.outputs.invocation_actor_kind }}
           INVOCATION_AUTHORIZED: ${{ steps.invocation.outputs.invocation_authorized }}
-          GITHUB_EVENT_NAME: ${{ inputs.agent_invocation && 'issue_comment' || github.event_name }}
+          GITHUB_EVENT_NAME: ${{ inputs.agent_invocation && (steps.invocation.outputs.invocation_event_name == 'issues' && 'issues' || 'issue_comment') || github.event_name }}
           GITHUB_EVENT_PATH: ${{ steps.invocation.outputs.event_path || github.event_path }}
+          GITHUB_TRIGGERING_ACTOR: ${{ steps.invocation.outputs.invocation_actor || github.triggering_actor || github.actor }}
+          ORIGIN_REPOSITORY: ${{ steps.invocation.outputs.origin_repository || github.repository }}
+          ORIGIN_REPOSITORY_ID: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
+          CONTROL_PLANE_MODE: ${{ steps.invocation.outputs.participant_mode }}
+          CONTROL_PLANE_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b' }}
         run: node scripts/issue-intake.mjs
 
   deliver:
@@ -153,7 +201,8 @@ jobs:
        needs.classify.outputs.route == 'requirements' ||
        needs.classify.outputs.route == 'architecture' ||
        needs.classify.outputs.route == 'validate' ||
-       needs.classify.outputs.route == 'coordinate')
+       needs.classify.outputs.route == 'coordinate') &&
+      needs.classify.outputs.participant_mode != 'shadow'
     permissions:
       contents: read
       issues: write
@@ -161,6 +210,10 @@ jobs:
     with:
       issue: ${{ needs.classify.outputs.issue }}
       route: ${{ needs.classify.outputs.route }}
+      origin_repository: ${{ needs.classify.outputs.origin_repository }}
+      origin_repository_id: ${{ needs.classify.outputs.origin_repository_id }}
+      participant_mode: ${{ needs.classify.outputs.participant_mode }}
+      controller_commit: ${{ needs.classify.outputs.controller_commit }}
       invocation_event_name: ${{ needs.classify.outputs.invocation_event_name }}
       invocation_source_kind: ${{ needs.classify.outputs.invocation_source_kind }}
       invocation_comment_id: ${{ needs.classify.outputs.invocation_comment_id }}

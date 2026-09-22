@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
+import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
 import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType, validateOrganizationIssueFields } from './lib/issue-field-api.mjs';
 import {
   classifyIssue,
@@ -15,11 +16,11 @@ import { validateOrchestrationPolicy } from './lib/orchestration-policy.mjs';
 const repositoryRoot = path.resolve(import.meta.dirname, '..');
 
 export async function loadLifecycleConfig(root = repositoryRoot) {
-  const source = await readFile(path.join(root, '.github', 'issue-metadata.yml'), 'utf8');
+  const source = await readFile(path.join(root, 'config', 'issue-metadata.yml'), 'utf8');
   const config = parseRepositoryYaml(source, 'issue metadata configuration');
   const metadataValidation = validateIssueMetadataConfig(config);
   if (!metadataValidation.valid) throw new Error(`Issue metadata configuration is invalid: ${metadataValidation.errors.join('; ')}`);
-  const policySource = await readFile(path.join(root, '.github', 'orchestration-policy.yml'), 'utf8');
+  const policySource = await readFile(path.join(root, 'config', 'orchestration-policy.yml'), 'utf8');
   config.orchestration = parseRepositoryYaml(policySource, 'orchestration policy');
   const policy = validateOrchestrationPolicy(config.orchestration, {
     issueTypes: config.issue_types.map((type) => type.id),
@@ -231,11 +232,28 @@ export async function classifyAndRoute({
   graphqlImpl,
   controlPlaneReader = readIssueControlPlane,
 } = {}) {
-  const repository = env.GITHUB_REPOSITORY;
+  const repository = env.ORIGIN_REPOSITORY || env.GITHUB_REPOSITORY;
+  const shadowMode = env.CONTROL_PLANE_MODE === 'shadow';
   const issueNumber = String(env.SOURCE_ISSUE ?? event?.issue?.number ?? '');
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !/^[1-9][0-9]*$/.test(issueNumber)) throw new Error('Invalid source repository or issue number.');
+  if (event?.repository?.full_name && event.repository.full_name !== repository) throw new Error('Event repository does not match the originating repository.');
   if (event?.issue?.pull_request) throw new Error('A pull request cannot enter issue intake.');
-  const api = githubApi({ repository, token: env.GH_TOKEN, fetchImpl });
+  const appConfig = appConfiguration(env);
+  const appProvider = appConfig.appId && appConfig.privateKey && env.ORIGIN_REPOSITORY_ID
+    ? new GithubAppTokenProvider({
+      repository: env.GITHUB_REPOSITORY,
+      ...appConfig,
+      // Shadow execution evaluates the exact same route but must not request
+      // mutation capability. Active delivery gets issue write only when the
+      // participant mode has already passed the deterministic enrollment gate.
+      permissions: { contents: 'read', issues: shadowMode ? 'read' : 'write', pull_requests: 'read', metadata: 'read' },
+      fetchImpl,
+    })
+    : null;
+  const originToken = appProvider
+    ? await appProvider.token({ repositoryIds: [env.ORIGIN_REPOSITORY_ID] })
+    : env.PUBLISH_TOKEN || env.GH_TOKEN;
+  const api = githubApi({ repository, token: originToken, fetchImpl });
   const routingEventKind = env.INVOCATION_EVENT === 'true' ? 'agent-invocation' : env.GITHUB_EVENT_NAME;
   const effectiveConfig = bindIssueMetadataConfig(config, env.ISSUE_FIELD_BINDINGS_JSON || {});
   const available = runnerAvailability(env, effectiveConfig);
@@ -243,7 +261,7 @@ export async function classifyAndRoute({
   if (issue.pull_request) throw new Error('A pull request cannot enter issue intake.');
   let graphql = graphqlImpl;
   const useGraphql = Boolean(graphqlImpl || env.GITHUB_GRAPHQL === 'true' || env.GITHUB_ACTIONS === 'true');
-  if (useGraphql && !graphql) graphql = githubGraphqlApi({ token: env.GH_TOKEN, fetchImpl });
+  if (useGraphql && !graphql) graphql = githubGraphqlApi({ token: originToken, fetchImpl });
   const readTrustedControlPlane = async (controlIssueNumber) => {
     const enriched = await controlPlaneReader({ graphql, repository, issueNumber: controlIssueNumber, organization: repository.split('/')[0] });
     const fieldContract = validateOrganizationIssueFields({ config: effectiveConfig, organizationIssueFields: enriched.organizationIssueFields });
@@ -364,7 +382,7 @@ export async function classifyAndRoute({
     } catch (error) {
       const detail = String(error?.message ?? '').replace(/\s+/g, ' ').trim().slice(0, 500);
       const message = `Routing could not be decided. No issue fields changed. Next: rerun issue intake after Codex is available.${detail ? `\n\nReason: ${detail}` : ''}`;
-      await api(`/issues/${issueNumber}/comments`, 'POST', { body: message });
+      if (!shadowMode) await api(`/issues/${issueNumber}/comments`, 'POST', { body: message });
       metadata.route = 'hold';
       metadata.reasons = [...metadata.reasons, message];
       const result = resultFor(issue, metadata);
@@ -386,7 +404,7 @@ export async function classifyAndRoute({
       return result;
     }
     try {
-      await setIssueType({ graphql, issueId: issue.id, issueTypeId: nativeType.id });
+      if (!shadowMode) await setIssueType({ graphql, issueId: issue.id, issueTypeId: nativeType.id });
     } catch (error) {
       metadata.route = 'hold';
       metadata.reasons = [...metadata.reasons, `Native issue type assignment was rejected; no lifecycle field mutation is authorized. ${String(error.message ?? error).slice(0, 400)}`];
@@ -399,7 +417,9 @@ export async function classifyAndRoute({
   let fieldResult = null;
   if (graphql && issue.id && metadata.targetFields) {
     try {
-      fieldResult = await reconcileFields({ graphql, issue, config: effectiveConfig, classification: metadata });
+      fieldResult = shadowMode
+        ? { changed: false, fields: metadata.targetFields, shadow: true }
+        : await reconcileFields({ graphql, issue, config: effectiveConfig, classification: metadata });
     } catch (error) {
       metadata.route = 'hold';
       metadata.reasons = [...metadata.reasons, `Issue-field mutation was rejected; no delivery route is authorized. ${String(error.message ?? error).slice(0, 400)}`];
@@ -410,7 +430,8 @@ export async function classifyAndRoute({
   } else {
     fieldResult = { changed: false, fields: metadata.targetFields, migrationRequired: true };
   }
-  if (metadata.message) await api(`/issues/${issueNumber}/comments`, 'POST', { body: metadata.message });
+  if (metadata.message && !shadowMode) await api(`/issues/${issueNumber}/comments`, 'POST', { body: metadata.message });
+  if (shadowMode) metadata = { ...metadata, shadow: true };
   const result = resultFor(issue, metadata, fieldResult);
   await writeOutputs(result, env);
   return result;

@@ -1,4 +1,4 @@
-# agentic-primitive: {"id":"issue-metadata-contract","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012","ADR-0013"],"domains":["agentic-delivery-governance"]}
+# agentic-primitive: {"id":"issue-metadata-contract","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012","ADR-0013","ADR-0019"],"domains":["agentic-delivery-governance"]}
 version: 1
 
 organization: agentic-delivery-lab
@@ -6,8 +6,23 @@ organization: agentic-delivery-lab
 authority:
   issue_type: organization-native
   lifecycle: organization-issue-field
+  delivery_state: organization-issue-field
   governance: labels
   execution_state: runner-local
+
+# ADR-0019 makes the target vocabulary explicit without changing the live
+# organization field. `readiness` remains the only serialized field key until
+# an operator-authorized, option-ID-preserving migration is completed.
+field_compatibility:
+  canonical_key: delivery_state
+  canonical_name: Delivery State
+  legacy_key: readiness
+  legacy_id: delivery-readiness
+  legacy_name: Delivery Readiness
+  mode: legacy-authoritative
+  migration_adr: ADR-0019
+  duplicate_field_forbidden: true
+  option_identity: preserve
 
 issue_types:
   - id: idea

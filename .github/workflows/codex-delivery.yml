@@ -1,12 +1,31 @@
 name: codex-delivery
 
-# agentic-primitive: {"id":"github-app-publication-boundary","kind":"workflow","enforcement":"deterministic","adrs":["ADR-0014"],"domains":["agentic-delivery-governance"]}
+# agentic-primitive: {"id":"github-app-publication-boundary","kind":"workflow","enforcement":"deterministic","adrs":["ADR-0018"],"domains":["agentic-delivery-control-plane"]}
 
 on:
   workflow_call:
     inputs:
       issue:
         description: Open source issue number to plan or implement
+        required: true
+        type: string
+      origin_repository:
+        description: Fully qualified repository that owns the source issue
+        required: false
+        default: ''
+        type: string
+      origin_repository_id:
+        description: Numeric repository identity that owns the source issue
+        required: false
+        default: ''
+        type: string
+      participant_mode:
+        description: Central participant mode resolved during intake
+        required: false
+        default: ''
+        type: string
+      controller_commit:
+        description: Immutable controller commit resolved from the participant registry
         required: true
         type: string
       route:
@@ -76,6 +95,10 @@ on:
         description: Open source issue number to start or resume
         required: true
         type: string
+      controller_commit:
+        description: Immutable controller commit for this manual recovery run
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -86,14 +109,27 @@ jobs:
     timeout-minutes: 350
     env:
       CODEX_AUTH_HOME: /var/lib/github-runner/.codex
+      ORIGIN_REPOSITORY: ${{ inputs.origin_repository }}
+      ORIGIN_REPOSITORY_ID: ${{ inputs.origin_repository_id }}
+      CONTROL_PLANE_MODE: ${{ inputs.participant_mode }}
+      CONTROL_PLANE_COMMIT: ${{ inputs.controller_commit }}
+      GITHUB_EVENT_NAME: ${{ inputs.invocation_event_name == 'issues' && 'issues' || (inputs.invocation_event_name != '' && 'issue_comment' || github.event_name) }}
+      GITHUB_TRIGGERING_ACTOR: ${{ inputs.invocation_actor || github.triggering_actor || github.actor }}
     permissions:
       contents: read
       issues: write
     steps:
+      - name: Validate the immutable controller commit
+        env:
+          CONTROLLER_COMMIT: ${{ inputs.controller_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+
       - name: Check out trusted controller
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: main
+          ref: ${{ inputs.controller_commit }}
           persist-credentials: false
 
       - name: Set up pnpm and Node.js

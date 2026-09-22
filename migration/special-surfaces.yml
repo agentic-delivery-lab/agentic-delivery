@@ -1,0 +1,63 @@
+# GitHub-defined organization surfaces are recorded separately from domain
+# repository targets. This is migration evidence, not runtime configuration.
+schemaVersion: 1
+organization: agentic-delivery-lab
+
+surfaces:
+  - id: public-organization-governance
+    repository: .github
+    fullName: agentic-delivery-lab/.github
+    visibility: public
+    status: observed
+    role: public-organization-governance
+    canonical: true
+    githubConsumedPaths:
+      - profile/README.md
+      - .github/ISSUE_TEMPLATE/**
+      - .github/pull_request_template.md
+    governancePaths:
+      - .github/rulesets/**
+      - .github/workflows/**
+      - workflow-templates/**
+      - AGENTS.md
+      - README.md
+    nonRuntime: true
+    workflowInheritance: false
+    localEvidence:
+      branch: main
+      commit: af52c92e49616e78f8d6647cf5cf538a7e571d78
+      check: public-governance:check
+    bridge: public community-health inheritance remains here; workflow files are starters or governance only
+
+  - id: private-member-copilot-publication
+    repository: .github-private
+    fullName: agentic-delivery-lab/.github-private
+    visibility: private
+    status: pending-entitlement
+    role: private-member-and-copilot-publication
+    canonical: false
+    githubConsumedPaths:
+      - profile/README.md
+      - agents/*.agent.md
+    governancePaths:
+      - .github/CODEOWNERS
+      - .github/rulesets/**
+      - .github/workflows/validate-published-agents.yml
+      - provenance/agents.lock.json
+      - AGENTS.md
+      - README.md
+    projection:
+      canonicalRepository: agentic-delivery-primitives
+      provenancePath: provenance/agents.lock.json
+      editableProjection: false
+    nonRuntime: true
+    workflowInheritance: false
+    exclusions:
+      - secrets
+      - runtime-state
+      - lifecycle-state
+      - architecture-authority
+      - control-plane-implementation
+      - organization-custom-instructions
+      - enterprise-managed-settings
+    bridge: create only as a protected Private repository after entitlement and access verification

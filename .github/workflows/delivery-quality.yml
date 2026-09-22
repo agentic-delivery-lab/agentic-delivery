@@ -81,6 +81,27 @@ jobs:
       - name: Validate configuration files
         run: node scripts/validate-config-files.mjs "$GITHUB_WORKSPACE"
 
+      - name: Validate controller release and participant pins
+        run: node scripts/validate-controller-release.mjs "$GITHUB_WORKSPACE"
+
+      - name: Validate organization GitHub App contract
+        run: node scripts/validate-github-app-contract.mjs "$GITHUB_WORKSPACE"
+
+      - name: Validate repository-independent control-plane boundary
+        run: node scripts/validate-control-plane-boundary.mjs "$GITHUB_WORKSPACE"
+
+      - name: Validate repository-boundary migration manifest
+        run: node scripts/validate-repository-boundaries.mjs "$GITHUB_WORKSPACE"
+
+      - name: Validate persisted migration plan safety gate
+        run: node scripts/validate-migration-plan.mjs "$GITHUB_WORKSPACE"
+
+      - name: Validate GitHub special-surface boundaries
+        run: node scripts/validate-special-surfaces.mjs "$GITHUB_WORKSPACE"
+
+      - name: Validate preview automation templates
+        run: node scripts/validate-automation-templates.mjs "$GITHUB_WORKSPACE"
+
       - name: Validate ADR primitive traceability index
         run: node scripts/generate-adr-primitive-index.mjs --check
 
@@ -104,6 +125,7 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up pnpm and Node.js

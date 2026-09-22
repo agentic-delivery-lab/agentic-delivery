@@ -8,6 +8,9 @@ bounded-contexts:
   - id: agentic-delivery-governance
     register: docs/domain/ubiquitous-language.yml
     paths: [AGENTS.md, .agents/**, .github/**, docs/**, scripts/**, tests/**, package.json, pnpm-workspace.yaml]
+  - id: agentic-delivery-control-plane
+    register: docs/domain/ubiquitous-language.yml
+    paths: [api/github/**, config/participants.yml, .github/workflows/agent-invocation.yml, .github/workflows/issue-intake.yml, .github/workflows/codex-delivery.yml, scripts/codex-delivery.mjs, scripts/issue-intake.mjs, scripts/prepare-agent-invocation.mjs, scripts/lib/github-app.mjs, scripts/lib/participant-registry.mjs]
 
 runtime-surfaces:
   - id: intake-and-routing
@@ -20,5 +23,5 @@ runtime-surfaces:
     paths: [.github/workflows/harness-architecture-review.yml, scripts/harness-architecture-review.mjs, scripts/lib/architecture-review.mjs]
     evidence: [base-revision, head-revision, affected-adrs, affected-contexts, deterministic-result, semantic-result]
   - id: agent-invocation
-    paths: [.github/agent-actors.json, .github/orchestration-policy.yml, .github/workflows/agent-invocation.yml, .github/workflows/issue-intake.yml, api/github/**, scripts/lib/agent-invocation.mjs, scripts/prepare-agent-invocation.mjs, scripts/authorize-issue-event.mjs]
+    paths: [config/agent-actors.json, config/issue-metadata.yml, config/orchestration-policy.yml, .github/workflows/agent-invocation.yml, .github/workflows/issue-intake.yml, api/github/**, scripts/lib/agent-invocation.mjs, scripts/prepare-agent-invocation.mjs, scripts/authorize-issue-event.mjs]
     evidence: [conversation-event, invocation-boundary, actor-catalog, actor-authorization, delivery-dispatch, idempotency, hop-limit, actions-run]

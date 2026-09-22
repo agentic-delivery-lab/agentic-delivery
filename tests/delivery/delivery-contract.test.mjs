@@ -17,15 +17,25 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     'commitlint.config.mjs', 'scripts/start-issue-branch.mjs', 'scripts/validate-branch-name.mjs',
     'scripts/validate-commit-range.mjs', 'scripts/validate-gitmoji.mjs', 'scripts/validate-source-issue.mjs',
     'scripts/validate-changelog.mjs', 'scripts/validate-main-history.mjs', 'scripts/validate-config-files.mjs',
-    'scripts/validate-pull-request-body.mjs',
+    'scripts/validate-pull-request-body.mjs', 'scripts/validate-migration-plan.mjs',
     'scripts/authorize-issue-event.mjs',
     'scripts/lib/toolchain.mjs', 'scripts/lib/yaml.mjs', '.agents/skills/delivery-workflow/SKILL.md',
     '.agents/skills/delivery-workflow/agents/openai.yaml',
     '.github/workflows/delivery-quality.yml', '.github/workflows/issue-intake.yml',
     '.github/workflows/pull-request-body.yml', '.github/rulesets/require-pull-request-body.json',
-    '.github/workflows/codex-delivery.yml', '.github/workflows/agent-invocation.yml', '.github/agent-actors.json', '.github/issue-metadata.yml', '.github/orchestration-policy.yml',
+    '.github/workflows/codex-delivery.yml', '.github/workflows/agent-invocation.yml', 'config/agent-actors.json', 'config/participants.yml', 'config/issue-metadata.yml', 'config/orchestration-policy.yml',
+    '.github/workflows/agent-observation.yml',
     'api/github/webhook.mjs', 'scripts/issue-intake.mjs', 'scripts/lib/agent-invocation.mjs', 'scripts/prepare-agent-invocation.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
-    'scripts/lib/orchestration-policy.mjs', 'tests/helpers/organization-issue-forms.mjs',
+    'scripts/lib/orchestration-policy.mjs', 'scripts/lib/primitive-selection.mjs', 'scripts/validate-automation-templates.mjs', 'automations/AGENTS.md', 'automations/templates/manifest.json', 'automations/templates/manifest.v1.schema.json', 'automations/templates/review-delivery-queue.automation.md', 'automations/templates/prepare-validation-evidence.automation.md', 'tests/helpers/organization-issue-forms.mjs',
+    'config/github-app-contract.json', 'config/event-catalog.yml', 'config/primitive-selection.yml', 'schemas/event-catalog.v1.schema.json', 'schemas/github-app-contract.v1.schema.json', 'schemas/primitive-selection.v1.schema.json', 'schemas/github-inventory.v1.schema.json', 'scripts/lib/event-catalog.mjs', 'scripts/validate-github-app-contract.mjs',
+    '.github/workflows/agentic-delivery-quality.yml',
+    '.github/workflows/agentic-delivery-architecture-review.yml',
+    'docs/delivery/operations/onboarding.md',
+    'docs/delivery/operations/upgrades.md',
+    'docs/delivery/operations/rollback.md',
+    'docs/delivery/operations/credential-rotation.md',
+    'docs/delivery/operations/incident-recovery.md',
+    'README.md',
   ]) await access(path.join(repositoryRoot, relativePath));
 
   const packageJson = JSON.parse(await text('package.json'));
@@ -33,6 +43,8 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.equal(packageJson.scripts['branch:start'], 'node scripts/start-issue-branch.mjs');
   assert.equal(packageJson.scripts['lint:branch'], 'node scripts/validate-branch-name.mjs');
   assert.equal(packageJson.scripts['lint:commits'], 'node scripts/validate-commit-range.mjs');
+  assert.equal(packageJson.scripts['github-app:check'], 'node scripts/validate-github-app-contract.mjs');
+  assert.equal(packageJson.scripts['public-governance:check'], 'node scripts/validate-public-governance.mjs');
   assert.match(packageJson.scripts.test, /^node --test/);
   for (const dependency of ['@commitlint/cli', '@commitlint/config-conventional', 'gitmojis', 'yaml']) {
     assert.ok(packageJson.devDependencies[dependency]);
@@ -46,7 +58,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     'node scripts/validate-toolchain.mjs', 'pnpm install --frozen-lockfile --ignore-scripts',
     'node scripts/validate-pull-request-branch.mjs', 'node scripts/validate-pull-request-title.mjs',
     'node scripts/validate-commit-range.mjs', 'node scripts/validate-main-history.mjs', 'pnpm test',
-    'node scripts/validate-changelog.mjs', 'node scripts/validate-config-files.mjs', 'pnpm audit --audit-level=high',
+    'node scripts/validate-changelog.mjs', 'node scripts/validate-config-files.mjs', 'node scripts/validate-migration-plan.mjs', 'pnpm audit --audit-level=high',
     'ubuntu-latest', 'macos-latest', 'windows-latest',
   ]) assert.ok(workflow.includes(phrase), `missing delivery workflow contract: ${phrase}`);
   for (const obsolete of ['npm ci', 'run: npm audit', 'npx commitlint', 'ruby -e', 'validate-changelog.rb', 'validate-source-issue.sh']) {
@@ -60,11 +72,54 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.ok(intake.includes('readiness'));
   const delivery = await text('.github/workflows/codex-delivery.yml');
   assert.ok(delivery.includes('workflow_call:'));
+  assert.ok(delivery.includes('ref: ${{ inputs.controller_commit }}'));
+  assert.ok(delivery.includes('required: true'));
+  assert.ok(intake.includes("controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '03dc4071f29d3914479e9a0bd174759e79180f8c' }}"));
+  assert.equal((intake.match(/ref: main/g) ?? []).length, 0);
+  assert.ok(intake.includes('ref: 03dc4071f29d3914479e9a0bd174759e79180f8c'));
+  assert.ok(intake.includes("ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '03dc4071f29d3914479e9a0bd174759e79180f8c' }}"));
+  assert.ok(intake.includes('Validate the selected controller commit'));
+  const release = JSON.parse(await text('config/controller-release.json'));
+  assert.equal(release.version, '0.2.0-draft.37');
+  assert.equal(release.commit, '7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b');
+  assert.equal(release.bootstrapCommit, '03dc4071f29d3914479e9a0bd174759e79180f8c');
   assert.ok(!delivery.includes('types: [opened]'));
+  const consumerContract = parseRepositoryYaml(await text('.github/workflows/agentic-delivery-quality.yml'), 'consumer contract workflow');
+  assert.ok(consumerContract.on.workflow_call);
+  assert.equal(consumerContract.on.workflow_call.inputs.controller_commit.required, true);
+  assert.equal(consumerContract.jobs['control-plane-contract'].permissions, undefined);
+  const consumerContractText = await text('.github/workflows/agentic-delivery-quality.yml');
+  assert.ok(consumerContractText.includes('repository: agentic-delivery-lab/agentic-delivery'));
+  assert.ok(consumerContractText.includes('validate-github-app-contract.mjs'));
+  assert.ok(consumerContractText.includes('[[ "$CONTROLLER_COMMIT" =~'));
+  assert.ok(!consumerContractText.includes('secrets: inherit'));
+  const architectureReview = await text('.github/workflows/agentic-delivery-architecture-review.yml');
+  assert.ok(architectureReview.includes('workflow_call:'));
+  assert.ok(architectureReview.includes('architecture_commit:'));
+  assert.ok(architectureReview.includes('affected_identifiers:'));
+  assert.ok(architectureReview.includes('architecture-content-digest.mjs'));
+  assert.ok(architectureReview.includes('ARCHITECTURE_DIGEST'));
+  assert.ok(architectureReview.includes('agentic-delivery-lab/agentic-delivery-architecture'));
+  assert.ok(architectureReview.includes('validate-architecture-release.mjs'));
+  assert.ok(architectureReview.includes('validate-conformance-request.mjs'));
+  assert.ok(architectureReview.includes('pnpm --dir architecture architecture:check'));
+  assert.ok(!architectureReview.includes('secrets: inherit'));
   const invocation = parseRepositoryYaml(await text('.github/workflows/agent-invocation.yml'), 'agent invocation workflow');
   assert.deepEqual(invocation.on.repository_dispatch.types, ['agent_invocation']);
   assert.equal(invocation.jobs.intake.uses, './.github/workflows/issue-intake.yml');
   assert.equal(invocation.jobs.intake.with.agent_invocation, true);
+  const observation = parseRepositoryYaml(await text('.github/workflows/agent-observation.yml'), 'agent observation workflow');
+  assert.deepEqual(observation.on.repository_dispatch.types, ['agent_observation']);
+  assert.equal(observation.jobs.validate.permissions, undefined);
+  const observationText = await text('.github/workflows/agent-observation.yml');
+  assert.ok(observationText.includes('CONTROLLER_COMMIT: ${{ github.event.client_payload.controller.commit }}'));
+  assert.ok(observationText.includes('ref: ${{ github.event.client_payload.controller.commit }}'));
+  assert.ok(observationText.includes('path: controller'));
+  assert.ok(observationText.includes('node controller/scripts/validate-observation-event.mjs controller'));
+  assert.ok(!observationText.includes('ref: main'));
+  assert.ok(!observationText.includes('CODEX_DELIVERY_APP_PRIVATE_KEY'));
+  assert.ok(!observationText.includes('AGENTIC_DELIVERY_WEBHOOK_SECRET'));
+  assert.ok(observationText.includes('CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}'));
 
   const docs = await text('docs/delivery/README.md');
   assert.ok(docs.includes('pnpm branch:start'));
@@ -106,7 +161,7 @@ test('repository uses the organization pull request template and required-check 
     { context: 'Validate pull request body' },
   ]);
 
-  const actors = JSON.parse(await text('.github/agent-actors.json'));
+  const actors = JSON.parse(await text('config/agent-actors.json'));
   assert.equal(actors.mention, '@agentic-delivery-lab-invoker-7f3a');
   assert.deepEqual(actors.human_permissions, ['write', 'maintain', 'admin']);
   assert.deepEqual(actors.events.issue_comment, ['created', 'edited']);

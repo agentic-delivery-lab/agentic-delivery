@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { deterministicReview, formatReviewMarkdown } from './lib/architecture-review.mjs';
 
 function usage() {
-  return 'Usage: node scripts/harness-architecture-review.mjs --base <sha> --head <sha> [--event <path>] [--output <path>] [--summary <path>] [--semantic]';
+  return 'Usage: node scripts/harness-architecture-review.mjs --base <sha> --head <sha> [--event <path>] [--output <path>] [--summary <path>] [--architecture-root <path> --architecture-commit <sha> --architecture-digest <sha256> --architecture-version <version>] [--semantic]';
 }
 
 function usageError(message) {
@@ -19,10 +19,11 @@ function parseArgs(args) {
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--semantic') value.semantic = true;
-    else if (['--base', '--head', '--event', '--output', '--summary'].includes(argument)) {
+    else if (['--base', '--head', '--event', '--output', '--summary', '--architecture-root', '--architecture-commit', '--architecture-digest', '--architecture-version'].includes(argument)) {
       const next = args[++index];
       if (!next || next.startsWith('--')) throw usageError(`${argument} requires a value`);
-      value[argument.slice(2)] = next;
+      const key = argument.slice(2).replace(/-([a-z])/g, (_match, letter) => letter.toUpperCase());
+      value[key] = next;
     } else throw usageError(`Unknown argument: ${argument}`);
   }
   if (!value.base || !value.head) throw usageError('Both --base and --head are required');
@@ -35,6 +36,10 @@ export async function runArchitectureReview(options) {
     base: options.base,
     head: options.head,
     eventPath: options.event,
+    architectureRoot: options.architectureRoot,
+    architectureCommit: options.architectureCommit,
+    architectureDigest: options.architectureDigest,
+    architectureVersion: options.architectureVersion,
   });
 
   if (options.semantic) {

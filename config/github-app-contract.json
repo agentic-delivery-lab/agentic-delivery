@@ -1,0 +1,46 @@
+{
+  "$schema": "../schemas/github-app-contract.v1.schema.json",
+  "schemaVersion": 1,
+  "organization": {
+    "login": "agentic-delivery-lab",
+    "id": "327861320"
+  },
+  "installation": {
+    "access": "selected-repositories",
+    "idEnv": "AGENTIC_DELIVERY_APP_INSTALLATION_ID"
+  },
+  "controller": {
+    "repository": "agentic-delivery-lab/agentic-delivery",
+    "idEnv": "AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID"
+  },
+  "events": {
+    "issues": ["opened", "edited", "reopened", "typed", "untyped", "labeled", "unlabeled", "closed"],
+    "issue_comment": ["created", "edited"],
+    "pull_request": ["opened", "edited", "synchronize", "reopened", "ready_for_review", "closed"],
+    "pull_request_review": ["submitted", "edited"],
+    "pull_request_review_comment": ["created", "edited"]
+  },
+  "permissions": {
+    "metadata": "read",
+    "contents": "write",
+    "issues": "write",
+    "pull_requests": "write",
+    "workflows": "none"
+  },
+  "credentials": {
+    "privateKey": "central-deployment-only",
+    "webhookSecret": "central-gateway-only",
+    "dispatchSecret": "central-gateway-and-controller-only",
+    "storage": "central-secret-store"
+  },
+  "tokenScopes": {
+    "origin": {
+      "repositoryIds": "origin-event-repository",
+      "permissions": "read-minimum"
+    },
+    "controller": {
+      "repositoryIds": "controller-repository",
+      "permissions": "contents-write-dispatch-only"
+    }
+  }
+}

@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { generateKeyPairSync } from 'node:crypto';
 
 import { classifyAndRoute, loadLifecycleConfig, reconcileLabels } from '../../scripts/issue-intake.mjs';
 
@@ -106,10 +107,10 @@ test('stale lifecycle and fallback type labels remain untouched until explicit m
   assert.equal(result.migrationOnly, true);
 });
 
-function apiFixture(issue, permission = 'write', comments = []) {
+function apiFixture(issue, permission = 'write', comments = [], repository = 'owner/repo') {
   const calls = [];
   const fetchImpl = async (url, options) => {
-    const route = url.replace('https://api.github.com/repos/owner/repo', '');
+    const route = url.replace('https://api.github.com/repos/' + repository, '');
     const body = options.body ? JSON.parse(options.body) : undefined;
     calls.push({ route, method: options.method, body });
     if (route === '/issues/17') return new Response(JSON.stringify(issue), { status: 200 });
@@ -122,6 +123,131 @@ function apiFixture(issue, permission = 'write', comments = []) {
   };
   return { calls, fetchImpl };
 }
+
+test('central intake addresses the originating repository instead of the controller repository', async () => {
+  const origin = 'agentic-delivery-lab/service-a';
+  const fixture = apiFixture({
+    state: 'open', title: 'Task: implement routing', body: 'Deliver the routing harness.',
+    labels: [{ name: 'type:task' }, { name: 'state:requirements' }, { name: 'team:delivery' }],
+  }, 'write', [], origin);
+  const result = await classifyAndRoute({
+    env: {
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      ORIGIN_REPOSITORY: origin,
+      SOURCE_ISSUE: '17',
+      GH_TOKEN: 'token',
+      GITHUB_ACTOR: 'maintainer',
+    },
+    event: { action: 'edited', issue: {}, repository: { full_name: origin } },
+    fetchImpl: fixture.fetchImpl,
+    config,
+    reasonRoute: modelRoute('plan', 'task', 'ready-for-plan'),
+  });
+  assert.equal(result.route, 'plan');
+  assert.ok(fixture.calls.length > 0);
+});
+
+test('central intake mints an origin-scoped App token instead of using the controller token', async () => {
+  const origin = 'agentic-delivery-lab/service-a';
+  const fixture = apiFixture({
+    state: 'open', title: 'Task: implement routing', body: 'Deliver the routing harness.',
+    labels: [{ name: 'type:task' }, { name: 'state:requirements' }, { name: 'team:delivery' }],
+  }, 'write', [], origin);
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const tokenRequests = [];
+  const apiCalls = [];
+  const fetchImpl = async (url, options) => {
+    if (url.endsWith('/access_tokens')) {
+      tokenRequests.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({ token: 'origin-scoped-token', expires_at: '2099-01-01T00:00:00Z' }), { status: 201 });
+    }
+    apiCalls.push(options.headers.Authorization);
+    return fixture.fetchImpl(url, options);
+  };
+  const result = await classifyAndRoute({
+    env: {
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      ORIGIN_REPOSITORY: origin,
+      ORIGIN_REPOSITORY_ID: '777777777',
+      CODEX_DELIVERY_APP_ID: '5011055',
+      CODEX_DELIVERY_APP_PRIVATE_KEY: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+      CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060',
+      SOURCE_ISSUE: '17',
+      GH_TOKEN: 'controller-token',
+      GITHUB_ACTOR: 'maintainer',
+    },
+    event: { action: 'edited', issue: {}, repository: { full_name: origin } },
+    fetchImpl,
+    config,
+    reasonRoute: modelRoute('plan', 'task', 'ready-for-plan'),
+  });
+  assert.equal(result.route, 'plan');
+  assert.deepEqual(tokenRequests[0].repository_ids, ['777777777']);
+  assert.ok(apiCalls.length > 0 && apiCalls.every((authorization) => authorization === 'Bearer origin-scoped-token'));
+});
+
+test('shadow participant intake evaluates routing without mutating origin issue state', async () => {
+  const origin = 'agentic-delivery-lab/service-a';
+  const fixture = apiFixture({
+    state: 'open', title: 'Task: shadow routing', body: 'Evaluate this route.',
+    labels: [{ name: 'type:task' }, { name: 'state:requirements' }],
+  }, 'write', [], origin);
+  const result = await classifyAndRoute({
+    env: {
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      ORIGIN_REPOSITORY: origin,
+      SOURCE_ISSUE: '17',
+      GH_TOKEN: 'token',
+      GITHUB_ACTOR: 'maintainer',
+      CONTROL_PLANE_MODE: 'shadow',
+    },
+    event: { action: 'edited', issue: {}, repository: { full_name: origin } },
+    fetchImpl: fixture.fetchImpl,
+    config,
+    reasonRoute: modelRoute('plan', 'task', 'ready-for-plan'),
+  });
+  assert.equal(result.route, 'plan');
+  assert.equal(result.metadata.shadow, true);
+  assert.equal(fixture.calls.some((call) => call.method === 'POST'), false);
+});
+
+test('shadow participant intake requests read-only origin App permissions', async () => {
+  const origin = 'agentic-delivery-lab/service-a';
+  const fixture = apiFixture({
+    state: 'open', title: 'Task: shadow permissions', body: 'Evaluate this route.',
+    labels: [{ name: 'type:task' }, { name: 'state:requirements' }],
+  }, 'write', [], origin);
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const tokenRequests = [];
+  const fetchImpl = async (url, options) => {
+    if (url.endsWith('/access_tokens')) {
+      tokenRequests.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({ token: 'shadow-origin-token', expires_at: '2099-01-01T00:00:00Z' }), { status: 201 });
+    }
+    return fixture.fetchImpl(url, options);
+  };
+  await classifyAndRoute({
+    env: {
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      ORIGIN_REPOSITORY: origin,
+      ORIGIN_REPOSITORY_ID: '777777777',
+      CODEX_DELIVERY_APP_ID: '5011055',
+      CODEX_DELIVERY_APP_PRIVATE_KEY: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+      CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060',
+      SOURCE_ISSUE: '17',
+      GH_TOKEN: 'controller-token',
+      GITHUB_ACTOR: 'maintainer',
+      CONTROL_PLANE_MODE: 'shadow',
+    },
+    event: { action: 'edited', issue: {}, repository: { full_name: origin } },
+    fetchImpl,
+    config,
+    reasonRoute: modelRoute('plan', 'task', 'ready-for-plan'),
+  });
+  assert.deepEqual(tokenRequests[0].repository_ids, ['777777777']);
+  assert.equal(tokenRequests[0].permissions.issues, 'read');
+  assert.equal(tokenRequests[0].permissions.contents, 'read');
+});
 
 test('classifies and hands off a ready issue only after metadata reconciliation and actor authorization', async () => {
   const fixture = apiFixture({

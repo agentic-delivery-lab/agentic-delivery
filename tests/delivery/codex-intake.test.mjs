@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
-import { intakeEvent, redact, checkPublicationText, deliveryExitCode } from '../../scripts/codex-delivery.mjs';
+import { intakeEvent, normalizeOriginEvent, redact, checkPublicationText, deliveryExitCode } from '../../scripts/codex-delivery.mjs';
+import { invocationEnvelope } from '../../scripts/lib/agent-invocation.mjs';
+import { validateEventEnvelope } from '../../scripts/lib/control-plane-contracts.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -20,6 +22,57 @@ const env = {SOURCE_ISSUE:'15',GITHUB_REPOSITORY:'owner/repo',GITHUB_EVENT_NAME:
 test('starts free-form source issues without a label or form requirement', () => {
   for (const body of ['An idea', 'Requirements', 'A decision']) {
     assert.equal(intakeEvent({action:'opened',issue:{number:15,body}},env).issue,'15');
+  }
+});
+test('central delivery uses the explicit originating repository identity', () => {
+  const origin = 'agentic-delivery-lab/service-a';
+  const context = { ...env, ORIGIN_REPOSITORY: origin };
+  const event = { action: 'opened', repository: { full_name: origin }, issue: { number: 15 } };
+  assert.equal(intakeEvent(event, context).repository, origin);
+});
+test('central delivery normalizes the controller event to the authenticated origin identity', () => {
+  const normalized = normalizeOriginEvent({
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    client_payload: { event: 'issues', action: 'opened', source: { kind: 'issue', issue_number: 12 } },
+  }, {
+    ORIGIN_REPOSITORY: 'agentic-delivery-lab/service-a', ORIGIN_REPOSITORY_ID: '777777777',
+  });
+  assert.equal(normalized.repository.full_name, 'agentic-delivery-lab/service-a');
+  assert.equal(normalized.repository.id, 777777777);
+  assert.equal(normalized.action, 'opened');
+  assert.equal(normalized.issue.number, 12);
+});
+test('two enrolled repositories retain independent identity for the same issue number', () => {
+  const participants = [
+    ['777777777', 'agentic-delivery-lab/service-a'],
+    ['888888888', 'agentic-delivery-lab/service-b'],
+  ];
+  for (const [repositoryId, repository] of participants) {
+    const envelope = invocationEnvelope({
+      deliveryId: `${repositoryId}-1234-4234-8234-123456789012`,
+      eventName: 'issues',
+      action: 'opened',
+      repositoryId,
+      source: { kind: 'issue', issue_number: 15, pull_request_number: null, comment_id: null, review_id: null },
+      actor: { login: 'owner', type: 'User' },
+      body: 'A repository-local issue.',
+    });
+    assert.deepEqual(validateEventEnvelope(envelope), { valid: true, errors: [] });
+    const normalized = normalizeOriginEvent({
+      repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+      client_payload: envelope,
+    }, { ORIGIN_REPOSITORY: repository, ORIGIN_REPOSITORY_ID: repositoryId });
+    const context = intakeEvent(normalized, {
+      SOURCE_ISSUE: '15',
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      ORIGIN_REPOSITORY: repository,
+      GITHUB_EVENT_NAME: 'issues',
+      GITHUB_ACTOR: 'owner',
+    });
+    assert.equal(normalized.repository.full_name, repository);
+    assert.equal(normalized.repository.id, Number(repositoryId));
+    assert.equal(context.repository, repository);
+    assert.equal(context.issue, '15');
   }
 });
 test('trusted owner comments carry their payload identity, including plain continuation text', () => {

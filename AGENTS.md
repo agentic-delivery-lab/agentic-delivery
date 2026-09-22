@@ -1,6 +1,6 @@
 # Repository instructions
 
-<!-- agentic-primitive: {"id":"repository-governance-instructions","kind":"instruction","enforcement":"instructional","adrs":["ADR-0001","ADR-0002","ADR-0003","ADR-0004","ADR-0007","ADR-0012","ADR-0013","ADR-0014","ADR-0015","ADR-0016","ADR-0017"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"repository-governance-instructions","kind":"instruction","enforcement":"instructional","adrs":["ADR-0001","ADR-0002","ADR-0003","ADR-0004","ADR-0007","ADR-0012","ADR-0013","ADR-0015","ADR-0016","ADR-0017","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]} -->
 
 ## Architectural decisions
 
@@ -40,7 +40,7 @@
   refined goal may create only the validated child work items it needs, while
   the parent remains the lineage root.
 - Issue intake applies only a validated routing proposal before the Codex delivery primitive. People do not set lifecycle fields during normal work; manual intake dispatch using current approved fields is a rare break-glass recovery when semantic routing is unavailable. A new Plan run requires an open issue with a supported native type, valid Lifecycle Stage and Delivery Readiness fields, and cleared deterministic gates. Research, requirements, architecture, validation, and coordination routes do not implicitly invoke implementation. Historical `type:*` and `state:*` labels are migration evidence only; governance labels such as `adr:needed` remain orthogonal controls, and GitHub's `not planned` close reason remains the final disposition for rejected or abandoned work.
-- Conversation-driven agent runs require the explicit invocation boundary in [`.github/agent-actors.json`](.github/agent-actors.json): `@agentic-delivery-lab-invoker-7f3a` must begin the first actionable line of a supported issue or pull-request comment/review event. The tag activates processing but does not select a route or bypass issue fields, readiness, plan validity, actor authorization, or orchestration policy. Untagged comments, quoted/code examples, native `@copilot` requests, and the orchestrator's own output remain outside this delivery invocation boundary.
+- Conversation-driven agent runs require the explicit invocation boundary in [`config/agent-actors.json`](config/agent-actors.json): `@agentic-delivery-lab-invoker-7f3a` must begin the first actionable line of a supported issue or pull-request comment/review event. The tag activates processing but does not select a route or bypass issue fields, readiness, plan validity, actor authorization, or orchestration policy. Untagged comments, quoted/code examples, native `@copilot` requests, and the orchestrator's own output remain outside this delivery invocation boundary.
 
 - For automated source issue execution, read [`.agents/codex-delivery.md`](.agents/codex-delivery.md) and [`docs/delivery/codex-workflow.md`](docs/delivery/codex-workflow.md). Preserve mandatory issue communication, clarification pauses, exact model settings, and the budget boundary.
 - Review pull requests through the read-only Harness Architecture Review when its workflow is available. Treat its deterministic violations as structural failures, and treat semantic findings or unavailable runtime evidence as cited review input rather than proof.
@@ -59,3 +59,21 @@
 - CI checks structure, syntax, tests and dependency risk. Agents and human reviewers must still review commit intent, Gitmoji meaning, changelog relevance, affected bounded contexts and documentation in plain English.
 
 See [`$delivery-workflow`](.agents/skills/delivery-workflow/SKILL.md) and its sources for the full contract.
+
+## Control Plane extraction boundary
+
+During the repository split, this repository is the central Agentic Delivery
+Control Plane. Its canonical implementation is the versioned lifecycle,
+routing, authorization, orchestration, GitHub App boundary, runner/session
+handling, reusable workflows, evidence, and controlled write-back described by
+the pinned release and participant contracts.
+
+Architecture Authority owns architecture decisions, principles, terminology,
+models, and conformance. Agentic Primitives owns reusable agents, skills,
+instructions, hooks, validators, and capability contracts. Distribution owns
+Dev Container, bootstrap, and generated consumer projections. `.github` and
+`.github-private` remain GitHub-defined governance and publication adapters.
+Do not add those authorities or their copied implementations here.
+
+Folder-scoped instructions in `api/github/`, `config/`, `.github/workflows/`,
+`scripts/lib/`, and `migration/` refine this boundary for their subdomains.

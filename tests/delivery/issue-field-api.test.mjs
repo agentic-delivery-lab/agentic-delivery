@@ -16,7 +16,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '../..');
-const config = parseRepositoryYaml(await readFile(path.join(root, '.github/issue-metadata.yml'), 'utf8'), 'issue metadata');
+const config = parseRepositoryYaml(await readFile(path.join(root, 'config/issue-metadata.yml'), 'utf8'), 'issue metadata');
 
 function catalogFromConfig() {
   return ['lifecycle_stage', 'readiness'].map((key) => ({

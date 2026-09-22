@@ -1,17 +1,78 @@
-// agentic-primitive: {"id":"agent-invocation-boundary","kind":"validator","enforcement":"deterministic","adrs":["ADR-0017"],"domains":["agentic-delivery-governance"]}
+// agentic-primitive: {"id":"agent-invocation-boundary","kind":"validator","enforcement":"deterministic","adrs":["ADR-0017","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseDocument } from 'yaml';
 
 export const INVOCATION_VERSION = 1;
 export const AGENT_MENTION = '@agentic-delivery-lab-invoker-7f3a';
 export const AGENT_BOT_LOGIN = 'agentic-delivery-lab-invoker-7f3a[bot]';
-export const INVOCATION_EVENTS = Object.freeze({
-  issue_comment: Object.freeze(['created', 'edited']),
-  pull_request_review: Object.freeze(['submitted', 'edited']),
-  pull_request_review_comment: Object.freeze(['created', 'edited']),
-});
+
+function loadOrganizationEventCatalog() {
+  const file = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../config/event-catalog.yml');
+  const document = parseDocument(readFileSync(file, 'utf8'), {
+    version: '1.2',
+    schema: 'core',
+    customTags: [],
+    resolveKnownTags: false,
+    merge: false,
+    strict: true,
+    uniqueKeys: true,
+  });
+  const diagnostics = [...document.errors, ...document.warnings];
+  if (diagnostics.length > 0) throw new Error(`Organization event catalog is invalid: ${diagnostics[0].message}`);
+  return document.toJS({ maxAliasCount: 0 });
+}
+
+export const ORGANIZATION_EVENT_CATALOG = Object.freeze(loadOrganizationEventCatalog());
+
+function eventsForRoute(route) {
+  const entries = Object.entries(ORGANIZATION_EVENT_CATALOG.events ?? {})
+    .filter(([, entry]) => Array.isArray(entry?.routes) && entry.routes.includes(route))
+    .map(([eventName, entry]) => [eventName, Object.freeze([...(entry.actions ?? [])])]);
+  return Object.freeze(Object.fromEntries(entries));
+}
+
+// Issue lifecycle events and explicit conversation invocations share the
+// central invocation dispatch. Pull-request lifecycle events are deliberately
+// observation-only until a versioned lifecycle policy assigns a transition.
+export const INVOCATION_EVENTS = eventsForRoute('invocation');
+export const OBSERVATION_EVENTS = eventsForRoute('observation');
+export const LIFECYCLE_EVENTS = eventsForRoute('lifecycle');
 
 export function bodyDigest(body) {
   return createHash('sha256').update(String(body ?? ''), 'utf8').digest('hex');
+}
+
+function unsignedDispatchEnvelope(envelope) {
+  if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) return envelope;
+  const { dispatch_signature: _signature, ...unsigned } = envelope;
+  return unsigned;
+}
+
+export function dispatchEnvelopePayload(envelope) {
+  return JSON.stringify(unsignedDispatchEnvelope(envelope));
+}
+
+export function dispatchEnvelopeSignature({ secret, envelope } = {}) {
+  if (!secret) throw new Error('A dispatch signing secret is required.');
+  return `sha256=${createHmac('sha256', String(secret)).update(dispatchEnvelopePayload(envelope), 'utf8').digest('hex')}`;
+}
+
+export function validateDispatchEnvelopeSignature({ secret, envelope, now = Date.now(), maxAgeMs = 300_000, maxFutureSkewMs = 30_000 } = {}) {
+  if (!secret) return { valid: false, reason: 'The dispatch signing secret is not configured.' };
+  const timestamp = Number(envelope?.dispatch_timestamp);
+  if (!Number.isSafeInteger(timestamp) || timestamp <= 0) return { valid: false, reason: 'The dispatch timestamp is invalid.' };
+  if (!Number.isFinite(now) || timestamp < now - maxAgeMs) return { valid: false, reason: 'The dispatch envelope is older than the replay window.' };
+  if (timestamp > now + maxFutureSkewMs) return { valid: false, reason: 'The dispatch envelope timestamp is too far in the future.' };
+  const actual = String(envelope?.dispatch_signature ?? '');
+  if (!/^sha256=[0-9a-f]{64}$/i.test(actual)) return { valid: false, reason: 'The dispatch signature is invalid.' };
+  const expected = dispatchEnvelopeSignature({ secret, envelope });
+  if (expected.length !== actual.length || !timingSafeEqual(Buffer.from(expected), Buffer.from(actual))) {
+    return { valid: false, reason: 'The dispatch signature does not match the envelope.' };
+  }
+  return { valid: true, timestamp };
 }
 
 function visibleLines(body) {
@@ -55,6 +116,17 @@ export function hasInvocationMention(body, mention = AGENT_MENTION) {
 export function invocationEventSupported(eventName, action) {
   return Object.hasOwn(INVOCATION_EVENTS, eventName)
     && INVOCATION_EVENTS[eventName].includes(action);
+}
+
+export function observationEventSupported(eventName, action) {
+  return Object.hasOwn(OBSERVATION_EVENTS, eventName)
+    && OBSERVATION_EVENTS[eventName].includes(action);
+}
+
+export function webhookEventSupported(eventName, action) {
+  return Object.hasOwn(ORGANIZATION_EVENT_CATALOG.events ?? {}, eventName)
+    && Array.isArray(ORGANIZATION_EVENT_CATALOG.events[eventName]?.actions)
+    && ORGANIZATION_EVENT_CATALOG.events[eventName].actions.includes(action);
 }
 
 export function constantTimeSignatureValid({ secret, rawBody, signature } = {}) {
@@ -101,6 +173,20 @@ export function validateActorCatalog(catalog) {
 export function sourceFromWebhook(eventName, payload) {
   const issue = payload?.issue;
   const pullRequest = payload?.pull_request ?? (issue?.pull_request ? issue : null);
+  if (eventName === 'issues') return {
+    issue_number: issue?.number ?? null,
+    pull_request_number: null,
+    comment_id: null,
+    review_id: null,
+    kind: 'issue',
+  };
+  if (eventName === 'pull_request') return {
+    issue_number: null,
+    pull_request_number: pullRequest?.number ?? null,
+    comment_id: null,
+    review_id: null,
+    kind: 'pull_request',
+  };
   return {
     issue_number: issue?.number ?? null,
     pull_request_number: pullRequest?.number ?? null,
@@ -113,12 +199,14 @@ export function sourceFromWebhook(eventName, payload) {
 }
 
 export function invocationBody(eventName, payload) {
+  if (eventName === 'issues') return payload?.issue?.body ?? '';
+  if (eventName === 'pull_request') return payload?.pull_request?.body ?? '';
   if (eventName === 'pull_request_review') return payload?.review?.body ?? '';
   return payload?.comment?.body ?? '';
 }
 
-export function invocationEnvelope({ deliveryId, eventName, action, repositoryId, source, actor, body, hop = 0, parentDeliveryId = null } = {}) {
-  return {
+export function invocationEnvelope({ deliveryId, eventName, action, repositoryId, source, actor, body, hop = 0, parentDeliveryId = null, controller, receivedAt, organizationId, installationId, repositoryFullName, dispatchSecret, dispatchTimestamp } = {}) {
+  const envelope = {
     version: INVOCATION_VERSION,
     delivery_id: String(deliveryId ?? ''),
     event: eventName,
@@ -129,5 +217,15 @@ export function invocationEnvelope({ deliveryId, eventName, action, repositoryId
     hop,
     parent_delivery_id: parentDeliveryId,
     body_digest: bodyDigest(body),
+    ...(receivedAt ? { received_at: String(receivedAt) } : {}),
+    ...(organizationId ? { organization_id: String(organizationId) } : {}),
+    ...(installationId ? { installation_id: String(installationId) } : {}),
+    ...(repositoryFullName ? { repository_full_name: String(repositoryFullName) } : {}),
+    ...(controller ? { controller: { version: controller.version, commit: controller.commit } } : {}),
   };
+  if (dispatchSecret) {
+    envelope.dispatch_timestamp = String(dispatchTimestamp ?? Date.now());
+    envelope.dispatch_signature = dispatchEnvelopeSignature({ secret: dispatchSecret, envelope });
+  }
+  return envelope;
 }

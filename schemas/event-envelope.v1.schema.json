@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/schemas/event-envelope.v1.schema.json",
+  "title": "Agentic Delivery event envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "delivery_id",
+    "event",
+    "action",
+    "repository_id",
+    "source",
+    "actor",
+    "hop",
+    "parent_delivery_id",
+    "body_digest"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "delivery_id": { "type": "string", "pattern": "^[0-9a-f-]{20,}$" },
+    "event": {
+      "enum": ["issues", "issue_comment", "pull_request", "pull_request_review", "pull_request_review_comment"]
+    },
+    "action": { "type": "string", "minLength": 1 },
+    "repository_id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "issue_number", "pull_request_number", "comment_id", "review_id"],
+      "properties": {
+        "kind": {
+          "enum": ["issue", "pull_request", "issue_comment", "pull_request_comment", "pull_request_review", "pull_request_review_comment"]
+        },
+        "issue_number": { "type": ["integer", "null"], "minimum": 1 },
+        "pull_request_number": { "type": ["integer", "null"], "minimum": 1 },
+        "comment_id": { "type": ["integer", "null"], "minimum": 1 },
+        "review_id": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["login", "type"],
+      "properties": {
+        "login": { "type": "string", "pattern": "^[A-Za-z0-9_.\\[\\]-]+$" },
+        "type": { "type": "string", "minLength": 1 }
+      }
+    },
+    "hop": { "type": "integer", "enum": [0, 1] },
+    "parent_delivery_id": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f-]{20,}$"
+    },
+    "body_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "received_at": { "type": "string", "format": "date-time" },
+    "organization_id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "installation_id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "repository_full_name": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+    "dispatch_timestamp": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "dispatch_signature": { "type": "string", "pattern": "^sha256=[0-9a-f]{64}$" },
+    "controller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "commit"],
+      "properties": {
+        "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    }
+  }
+}

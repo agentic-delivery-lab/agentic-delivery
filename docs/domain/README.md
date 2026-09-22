@@ -1,3 +1,5 @@
+<!-- agentic-primitive: {"id":"delivery-state-domain-language","kind":"customization","enforcement":"semantic","adrs":["ADR-0019"],"domains":["agentic-delivery-governance"]} -->
+
 # Domain language
 
 ## Domain vision
@@ -7,7 +9,8 @@ This repository defines a reliable way for people and coding agents to deliver c
 The canonical model vocabulary is stored in [`ubiquitous-language.yml`](ubiquitous-language.yml). Use the registered term and definition when discussing a modeled concept in documentation, agent instructions, issue or pull-request communication, and domain-bearing code.
 
 The control plane is GitHub: Issues, native issue types, pinned Lifecycle Stage
-and Delivery Readiness fields, governance metadata, pull requests, and
+and Delivery State fields (currently exposed as the legacy Delivery Readiness
+field), governance metadata, pull requests, and
 deterministic Actions own work state. The execution plane is Codex and the
 self-hosted runner: it performs bounded operations and records execution state
 but cannot decide or apply lifecycle transitions.
@@ -20,14 +23,19 @@ it does not choose a semantic route or bypass the lifecycle and readiness
 gates.
 
 Issue type answers what the issue represents. Lifecycle Stage answers where it
-is in its lifecycle. Delivery Readiness records an orthogonal temporary gate,
-while governance metadata records cross-cutting controls. The runner's
+is in its lifecycle. Delivery State records the orthogonal authorization or
+hold gate (currently exposed as Delivery Readiness), while governance metadata
+records cross-cutting controls. The runner's
 execution state records resumable operations and is not a replacement for any
 of those GitHub values.
 
 ## Repository boundary
 
-The initial bounded context is `agentic-delivery-governance`. It covers the repository's rules and agentic primitives for proposing, reviewing, validating and recording delivery work. The repository currently has no runtime application model.
+The repository currently hosts two transitional bounded contexts. `agentic-delivery-governance` covers repository rules and reusable delivery primitives for proposing, reviewing, validating and recording work. `agentic-delivery-control-plane` covers the organization-aware executable controller, its signed event boundary, participant enrollment, lifecycle contracts, orchestration policy and controlled GitHub write-back. The latter is intentionally being extracted into the permanent Control Plane boundary; it must not absorb Architecture Authority or canonical Primitive implementation.
+
+The existing `control plane` term names GitHub's authoritative work-state
+surfaces. The executable implementation is called the `delivery controller` so
+that the two meanings are not silently conflated across the extraction.
 
 Do not assume that a registered meaning applies outside its bounded context. Add another bounded context only when a model has a distinct purpose or a term needs a meaning that would conflict with the existing context. Describe translations at the boundary when two contexts must interact.
 
@@ -66,7 +74,8 @@ presence does not load complete ADRs into a model context.
 - [ADR-0006: Curate a human-readable changelog](../decisions/0006-curate-a-changelog.md).
 - [ADR-0012: Use GitHub as the lifecycle control plane](../decisions/0012-use-github-as-the-lifecycle-control-plane.md).
 - [ADR-0013: Derive ADR traceability from agentic primitives](../decisions/0013-derive-adr-traceability-from-agentic-primitives.md).
-- [ADR-0014: Use a repository-scoped GitHub App](../decisions/0014-use-a-repository-scoped-github-app.md).
 - [ADR-0015: Isolate resumable runner execution](../decisions/0015-isolate-resumable-runner-execution.md).
 - [ADR-0016: Require structured pull request descriptions](../decisions/0016-require-structured-pull-request-descriptions.md).
 - [ADR-0017: Use an explicit agent-invocation boundary for conversation-driven delivery](../decisions/0017-use-an-explicit-agent-invocation-boundary.md).
+- [ADR-0018: Organization-wide Agentic Delivery control-plane distribution and versioning](../decisions/0018-organization-wide-agentic-delivery-control-plane-distribution-and-versioning.md).
+- [ADR-0019: Canonicalize the orthogonal delivery-state field](../decisions/0019-canonicalize-delivery-state-field.md).

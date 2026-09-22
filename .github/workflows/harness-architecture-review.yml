@@ -35,6 +35,33 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Resolve the immutable Architecture Authority pin
+        id: architecture-pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import { readFileSync } from 'node:fs';
+          const release = JSON.parse(readFileSync('config/controller-release.json', 'utf8'));
+          const architecture = release.dependencies?.architecture;
+          if (!architecture || !/^[0-9a-f]{40}$/.test(architecture.commit)
+            || !/^[0-9a-f]{64}$/.test(architecture.contentSha256)
+            || typeof architecture.version !== 'string') {
+            throw new Error('controller release has no complete immutable Architecture dependency');
+          }
+          process.stdout.write(`commit=${architecture.commit}\n`);
+          process.stdout.write(`digest=${architecture.contentSha256}\n`);
+          process.stdout.write(`version=${architecture.version}\n`);
+          NODE
+
+      - name: Check out the pinned Architecture Authority
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-architecture
+          ref: ${{ steps.architecture-pin.outputs.commit }}
+          path: architecture-authority
+          persist-credentials: false
+
       - name: Set up pnpm and Node.js
         uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
@@ -56,6 +83,10 @@ jobs:
           --base "$BASE_SHA"
           --head "$HEAD_SHA"
           --event "$GITHUB_EVENT_PATH"
+          --architecture-root architecture-authority
+          --architecture-commit "${{ steps.architecture-pin.outputs.commit }}"
+          --architecture-digest "${{ steps.architecture-pin.outputs.digest }}"
+          --architecture-version "${{ steps.architecture-pin.outputs.version }}"
           --output "$RUNNER_TEMP/harness-architecture-review.json"
           --summary "$GITHUB_STEP_SUMMARY"
           --semantic

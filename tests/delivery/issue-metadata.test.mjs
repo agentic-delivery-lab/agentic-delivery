@@ -13,7 +13,7 @@ import {
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const config = parseRepositoryYaml(
-  await readFile(path.join(repositoryRoot, '.github/issue-metadata.yml'), 'utf8'),
+  await readFile(path.join(repositoryRoot, 'config/issue-metadata.yml'), 'utf8'),
   'issue metadata configuration',
 );
 

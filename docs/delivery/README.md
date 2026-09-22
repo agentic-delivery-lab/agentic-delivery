@@ -20,7 +20,7 @@ repository has no local issue-form override. A read-only routing model
 interprets each eligible issue or human comment in context and proposes an
 issue type, lifecycle stage, readiness value, governance metadata, and
 orchestration pattern. Deterministic code validates the proposal against
-`.github/issue-metadata.yml`, `.github/orchestration-policy.yml`, and the
+`config/issue-metadata.yml`, `config/orchestration-policy.yml`, and the
 transition rules before applying it. It does not assign intent from title
 words, form headings, keywords, or regular expressions.
 
@@ -99,8 +99,10 @@ Conversation-driven continuation uses the separate
 issue comments, PR conversation comments, formal reviews, and inline review
 comments; only a tag on the first visible line can dispatch the deterministic
 preflight and `repository_dispatch` workflow. The actor catalog, digest,
-delivery-ID deduplication, and one-hop bot rule are versioned in this
-repository. This does not change native `@copilot` behavior.
+delivery-ID replay protection, timestamp freshness, and one-hop bot rule are
+versioned in this repository. See [webhook replay protection](replay-protection.md)
+for the gateway claim and retry contract. This does not change native
+`@copilot` behavior.
 
 ## Package manager and local preflight
 

@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/schemas/github-inventory.v1.schema.json",
+  "title": "Agentic Delivery read-only GitHub inventory v1",
+  "type": "object",
+  "required": ["schemaVersion", "organization", "collectedAt", "evidenceClass", "readOnly", "repositories", "specialSurfaces", "capabilities"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "organization": {
+      "type": "object",
+      "required": ["login"],
+      "properties": {
+        "login": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+        "id": { "type": ["string", "null"] },
+        "plan": {
+          "type": ["object", "null"],
+          "properties": {
+            "name": { "type": ["string", "null"] },
+            "privateRepositories": { "type": ["integer", "null"], "minimum": 0 },
+            "collaborators": { "type": ["integer", "null"], "minimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "collectedAt": { "type": "string", "format": "date-time" },
+    "evidenceClass": { "const": "live-read-only" },
+    "readOnly": { "const": true },
+    "repositories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fullName", "status", "identity", "visibility", "defaultBranch", "rulesets", "workflows", "openIssues", "openPullRequests", "labels"],
+        "properties": {
+          "fullName": { "type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$" },
+          "status": { "enum": ["observed", "partial", "unavailable"] },
+          "identity": {
+            "type": "object",
+            "required": ["id", "name"],
+            "properties": {
+              "id": { "type": ["string", "null"] },
+              "name": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "visibility": { "type": ["string", "null"] },
+          "defaultBranch": { "type": ["string", "null"] },
+          "rulesets": { "$ref": "#/$defs/endpoint" },
+          "workflows": { "$ref": "#/$defs/endpoint" },
+          "openIssues": { "$ref": "#/$defs/endpoint" },
+          "openPullRequests": { "$ref": "#/$defs/endpoint" },
+          "labels": { "$ref": "#/$defs/endpoint" },
+          "crossRepositoryReferences": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "specialSurfaces": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/specialSurface" }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/endpoint" }
+    },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "specialSurface": {
+      "type": "object",
+      "required": ["repository", "status", "identity", "visibility", "defaultBranch", "evidence"],
+      "properties": {
+        "repository": { "type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$" },
+        "status": { "enum": ["observed", "not-found-unverified", "unavailable"] },
+        "identity": {
+          "type": ["object", "null"],
+          "required": ["id", "name"],
+          "properties": {
+            "id": { "type": ["string", "null"] },
+            "name": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "visibility": { "type": ["string", "null"] },
+        "defaultBranch": { "type": ["string", "null"] },
+        "evidence": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "endpoint": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["observed", "empty", "unavailable"] },
+        "count": { "type": "integer", "minimum": 0 },
+        "items": { "type": "array" },
+        "reason": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

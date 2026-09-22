@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"semantic-architecture-review","kind":"customization","enforcement":"semantic","adrs":["ADR-0011"],"domains":["agentic-delivery-governance"]}
+// agentic-primitive: {"id":"semantic-architecture-review","kind":"customization","enforcement":"semantic","adrs":["ADR-0011","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';

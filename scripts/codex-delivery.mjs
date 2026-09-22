@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"codex-delivery-controller","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0009","ADR-0012","ADR-0015"],"domains":["agentic-delivery-governance"]}
+// agentic-primitive: {"id":"codex-delivery-controller","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0009","ADR-0012","ADR-0015","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import { execFile } from 'node:child_process';
 import { appendFile, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -122,7 +122,7 @@ function trustedOwnerComment(event, repository) {
 
 export function intakeEvent(event, env) {
   const issue = String(env.SOURCE_ISSUE ?? event.issue?.number ?? '');
-  const repository = env.GITHUB_REPOSITORY;
+  const repository = env.ORIGIN_REPOSITORY || env.GITHUB_REPOSITORY;
   if (!/^[1-9][0-9]*$/.test(issue) || !/^[\w.-]+\/[\w.-]+$/.test(repository ?? '')) throw new Error('Invalid source issue or repository.');
   if (event.repository?.full_name && event.repository.full_name !== repository) throw new Error('Event repository does not match the configured repository.');
   if (event.issue?.pull_request) throw new Error('A pull request cannot be a source issue.');
@@ -138,6 +138,40 @@ export function intakeEvent(event, env) {
   const actor = comment ? event.comment.user.login : (env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR);
   if (!/^[\w[\]-]+$/.test(actor ?? '')) throw new Error('Missing triggering actor.');
   return { issue, repository, actor, comment };
+}
+
+/**
+ * A repository_dispatch workflow runs in the controller repository, while the
+ * issue remains owned by the originating participant. Normalize only the
+ * immutable repository identity carried by the validated workflow inputs; the
+ * preflight stage has already authenticated the event and source comment.
+ */
+export function normalizeOriginEvent(event, env) {
+  if (!env.ORIGIN_REPOSITORY) return event;
+  if (!/^[\w.-]+\/[\w.-]+$/.test(env.ORIGIN_REPOSITORY)
+    || !/^[1-9][0-9]*$/.test(String(env.ORIGIN_REPOSITORY_ID ?? ''))) {
+    throw new Error('Origin repository identity is incomplete.');
+  }
+  const payload = event.client_payload;
+  const source = payload?.source ?? {};
+  const normalized = {
+    ...event,
+    action: payload ? (payload.event === 'issues' ? payload.action : 'created') : event.action,
+    repository: { ...event.repository, id: Number(env.ORIGIN_REPOSITORY_ID), full_name: env.ORIGIN_REPOSITORY },
+  };
+  if (source.issue_number != null) normalized.issue = { ...event.issue, number: Number(source.issue_number) };
+  if (source.kind === 'issue_comment' || source.kind === 'pull_request_comment' || source.kind === 'pull_request_review' || source.kind === 'pull_request_review_comment') {
+    normalized.comment = {
+      ...event.comment,
+      id: Number(source.comment_id ?? source.review_id),
+      body: event.comment?.body ?? '',
+      user: payload.actor,
+    };
+  }
+  if (event.repository?.full_name === env.ORIGIN_REPOSITORY) return normalized;
+  return {
+    ...normalized,
+  };
 }
 
 export function redact(text, env = process.env) {
@@ -328,12 +362,34 @@ export async function deliver(env = process.env, dependencies = {}) {
   const performTurn = dependencies.runTurn ?? runTurn;
   const validateCommits = dependencies.validateCommits ?? validateCommitRange;
   if (!env.GH_TOKEN || !env.GITHUB_EVENT_PATH || !env.RUNNER_WORKSPACE) throw new Error('Run this controller through GitHub Actions.');
-  if (!env.PUBLISH_TOKEN && !(env.CODEX_DELIVERY_APP_ID && env.CODEX_DELIVERY_APP_PRIVATE_KEY)) throw new Error('Publication credential is missing. Configure the repository-scoped GitHub App credentials.');
-  const event = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'));
+  if (env.CONTROL_PLANE_MODE === 'shadow') throw new Error('Shadow participants are read-only and cannot start delivery execution.');
+  if (!env.PUBLISH_TOKEN && !(env.CODEX_DELIVERY_APP_ID && env.CODEX_DELIVERY_APP_PRIVATE_KEY)) throw new Error('Publication credential is missing. Configure the organization-installed GitHub App credentials or an approved publication token.');
+  const rawEvent = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'));
+  const event = normalizeOriginEvent(rawEvent, env);
   const context = intakeEvent(event, env);
   let { issue, repository, actor, comment } = context;
+  const originRepositoryId = String(env.ORIGIN_REPOSITORY_ID || event.repository?.id || '');
+  if (!/^[1-9][0-9]*$/.test(originRepositoryId)) throw new Error('Origin repository ID is required for delivery execution.');
+  if (env.ORIGIN_REPOSITORY_ID && event.repository?.id !== undefined
+    && String(event.repository.id) !== originRepositoryId) {
+    throw new Error('Origin repository ID does not match the authenticated event repository.');
+  }
   const endpoint = `https://api.github.com/repos/${repository}`;
-  const api = async (route, method = 'GET', body, token = env.GH_TOKEN) => {
+  const appProvider = env.CODEX_DELIVERY_APP_ID && env.CODEX_DELIVERY_APP_PRIVATE_KEY
+    ? new GithubAppTokenProvider({
+      repository: env.GITHUB_REPOSITORY,
+      ...appConfiguration(env),
+      // Workflow files are never mutated by the delivery runtime. Keep the
+      // installation token aligned with config/github-app-contract.json and
+      // the least-privilege App contract: workflow distribution is a separate
+      // reviewed projection owned by the Distribution boundary.
+      permissions: { contents: 'write', issues: 'write', pull_requests: 'write' },
+    })
+    : null;
+  const originToken = appProvider
+    ? await appProvider.token({ repositoryIds: [originRepositoryId] })
+    : env.PUBLISH_TOKEN || env.GH_TOKEN;
+  const api = async (route, method = 'GET', body, token = originToken) => {
     const response = await fetchApi(`${endpoint}${route}`, {
       method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10', 'Content-Type': 'application/json' },
       ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(30_000),
@@ -341,12 +397,9 @@ export async function deliver(env = process.env, dependencies = {}) {
     if (!response.ok) throw new Error(`GitHub ${method} ${route} failed (${response.status}).`);
     return response.status === 204 ? null : response.json();
   };
-  const appProvider = env.CODEX_DELIVERY_APP_ID && env.CODEX_DELIVERY_APP_PRIVATE_KEY
-    ? new GithubAppTokenProvider({ repository, ...appConfiguration(env), permissions: { contents: 'write', issues: 'write', pull_requests: 'write', workflows: 'write' } })
-    : null;
-  const publicationToken = async () => appProvider ? appProvider.token() : env.PUBLISH_TOKEN;
+  const publicationToken = async () => originToken;
   const publishApi = async (route, method = 'GET', body) => api(route, method, body, await publicationToken());
-  if (env.INVOCATION_EVENT === 'true') {
+  if (env.INVOCATION_EVENT === 'true' && env.INVOCATION_EVENT_NAME !== 'issues') {
     const sourceKind = String(env.INVOCATION_SOURCE_KIND ?? '');
     const sourceId = commentId(env.INVOCATION_COMMENT_ID || env.INVOCATION_REVIEW_ID);
     const route = invocationSourceRoute({
@@ -385,7 +438,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   const sourceRest = await api(`/issues/${issue}`);
   let graphql = dependencies.graphql;
   const useGraphql = Boolean(graphql || env.GITHUB_GRAPHQL === 'true' || env.GITHUB_ACTIONS === 'true');
-  if (useGraphql && !graphql) graphql = githubGraphqlApi({ token: env.GH_TOKEN, fetchImpl: fetchApi });
+  if (useGraphql && !graphql) graphql = githubGraphqlApi({ token: originToken, fetchImpl: fetchApi });
   const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
   const readTrustedControlPlane = async ({ issueNumber = issue } = {}) => {
     const value = await readControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
@@ -540,7 +593,7 @@ export async function deliver(env = process.env, dependencies = {}) {
     };
   };
   const git = async (args, options = {}) => {
-    const token = options.publish ? await publicationToken() : env.GH_TOKEN;
+    const token = options.publish ? await publicationToken() : originToken;
     return (await execute('git', ['-C', workspace, ...args], { env: gitEnv(token), timeout: 120_000, maxBuffer: 8_000_000 })).stdout.trim();
   };
   try {
@@ -801,7 +854,7 @@ export async function deliver(env = process.env, dependencies = {}) {
       state.budget = await client.capabilities();
       if (state.budget.stop && state.phase !== 'verify') throw new Error(state.budget.reason);
       if (!(await exists(workspace))) {
-        await execute('git', ['clone', '--branch', 'main', `https://github.com/${repository}.git`, workspace], { env: gitEnv(env.GH_TOKEN), timeout: 120_000 });
+        await execute('git', ['clone', '--branch', 'main', `https://github.com/${repository}.git`, workspace], { env: gitEnv(originToken), timeout: 120_000 });
         state.base = await git(['rev-parse', 'HEAD']);
         await save();
       }
@@ -1084,7 +1137,8 @@ legacy owner-only rule in the base instruction file.`;
         const currentBranch = await git(['branch', '--show-current']);
         if (currentBranch !== state.branch) {
           await startIssueBranch({branchType:state.plan.changeType, issueNumber:issue, summary:'codex-delivery', repositoryRoot:workspace,
-            env, execFileImpl:(command, args, options) => execute(command, args, {...options, env:gitEnv(env.GH_TOKEN), timeout:60_000}),
+            env: { ...env, GH_TOKEN: originToken },
+            execFileImpl:(command, args, options) => execute(command, args, {...options, env:gitEnv(originToken), timeout:60_000}),
             sourceIssueValidator:async () => {
               if ((await api(`/issues/${issue}`)).state !== 'open') throw new Error('Source issue is no longer open.');
             },

@@ -1,0 +1,36 @@
+# agentic-primitive: {"id":"event-catalog","kind":"workflow","enforcement":"deterministic","adrs":["ADR-0017","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
+schemaVersion: 1
+version: 1.0.0
+organization: agentic-delivery-lab
+
+# This is the organization event contract. The GitHub App manifest and the
+# participant registry are validated projections of this catalog; neither is
+# allowed to introduce an unreviewed event or action.
+events:
+  issues:
+    role: lifecycle-input
+    routes: [lifecycle, invocation]
+    actions: [opened, edited, reopened, typed, untyped, labeled, unlabeled, closed]
+  issue_comment:
+    role: invocation-input
+    routes: [invocation]
+    actions: [created, edited]
+  pull_request:
+    role: observation-input
+    routes: [observation]
+    actions: [opened, edited, synchronize, reopened, ready_for_review, closed]
+  pull_request_review:
+    role: invocation-input
+    routes: [invocation]
+    actions: [submitted, edited]
+  pull_request_review_comment:
+    role: invocation-input
+    routes: [invocation]
+    actions: [created, edited]
+
+rules:
+  issueLifecycleEventsMayRouteWithoutMention: true
+  conversationEventsRequireExplicitInvocation: true
+  pullRequestEventsAreObservationOnlyByDefault: true
+  unsupportedEventsAreAcknowledgedWithoutRoute: true
+  installationRepositoryEvents: not-enabled
