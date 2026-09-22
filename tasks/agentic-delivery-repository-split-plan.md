@@ -385,7 +385,7 @@ Read-only GitHub inspection found:
 - project inspection is blocked by the current token's missing `read:project`
   scope.
 
-The repeatable read-only inventory was also run on 2026-09-21 (UTC). It
+The repeatable read-only inventory was also run on 2026-09-22 (UTC). It
 observed exactly the two public repositories `agentic-delivery` and `.github`,
 both on `main`, with active pull-request-body rulesets. It observed the nine
 organization Issue Types and a GitHub Free organization plan. The Copilot
