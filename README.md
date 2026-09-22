@@ -38,7 +38,9 @@ pnpm plan:check
 pnpm traceability:check
 pnpm control-plane:check
 pnpm acceptance:check
+pnpm architecture:pin:check -- --architecture-root <path> --architecture-commit <sha> --architecture-digest <sha256> --architecture-version <version>
 pnpm release-chain:check -- --architecture-root <path> --primitives-root <path> --distribution-root <path> --private-root <path>
+pnpm publication:check -- <private-root> --require-surface --primitive-root <primitives-root>
 pnpm organization:inventory
 pnpm special-surfaces:check
 ```
@@ -59,6 +61,12 @@ inaccessible endpoint as proof that a feature or repository is absent. Use
 `pnpm run organization:inventory -- --output <path>` when a local JSON report
 is needed. Do not commit live reports containing organization metadata unless a
 separate evidence decision requires it.
+
+Cross-repository validators require explicit checkout roots and immutable
+release pins. They intentionally do not guess sibling paths or follow a
+moving branch. The publication check accepts a zero-agent private surface
+while the Copilot entitlement is pending; a non-empty projection must also
+reproduce every published file from the pinned Primitive checkout.
 
 The organization App private key and webhook secrets belong only in the
 central deployment boundary. Participant onboarding, upgrades, rollback,
