@@ -20,6 +20,7 @@
     "metadata:check": "node scripts/validate-config-files.mjs",
     "control-plane:check": "node scripts/validate-controller-release.mjs",
     "release-chain:check": "node scripts/validate-release-chain.mjs",
+    "architecture:pin:check": "node scripts/validate-architecture-pin.mjs",
     "github-app:check": "node scripts/validate-github-app-contract.mjs",
     "control-plane:boundary": "node scripts/validate-control-plane-boundary.mjs",
     "acceptance:check": "node scripts/validate-multi-repository-acceptance.mjs",

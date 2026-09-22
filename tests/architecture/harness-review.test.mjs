@@ -188,9 +188,9 @@ test('the baseline report contains one required matrix row for every official AD
   assert.match(report, /agentic-delivery-governance/);
 });
 
-test('architecture-review workflow is read-only and does not publish comments', async () => {
+test('architecture-review workflow is pinned, read-only, and does not publish comments', async () => {
   const workflow = await readFile(path.join(repositoryRoot, '.github/workflows/harness-architecture-review.yml'), 'utf8');
-  for (const phrase of ['pull_request:', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', '--semantic']) {
+  for (const phrase of ['pull_request:', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
     assert.ok(workflow.includes(phrase), `missing workflow control: ${phrase}`);
   }
   assert.doesNotMatch(workflow, /issues:\s*write|pull-requests:\s*write|contents:\s*write/);

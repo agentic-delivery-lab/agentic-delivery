@@ -16,6 +16,9 @@ and releases use [Semantic Versioning](https://semver.org/).
 - Private agent publication validation can now reproduce each projection from
   the exact Primitive source commit named by its provenance lock; the release
   chain checks the same byte-for-byte relationship.
+- Architecture review now requires an immutable Architecture Authority
+  checkout, release digest reproduction, conformance policy, and tooling-lock
+  validation before deterministic review evidence is trusted.
 
 Entries that reference issue #52 use it only as the persisted-plan context;
 they do not authorize migration, alter that issue's scope, or close it.

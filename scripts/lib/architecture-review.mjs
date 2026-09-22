@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 import { parseRepositoryYaml } from './yaml.mjs';
 import { buildTraceability, collectAdrsFromSources, collectPrimitivesFromSources, PRIMITIVE_MARKER } from './adr-traceability.mjs';
+import { validateArchitecturePin } from '../validate-architecture-pin.mjs';
 
 const execFileAsync = promisify(execFile);
 const ADR_FILE = /^docs\/decisions\/(\d{4})-[a-z0-9-]+\.md$/;
@@ -182,7 +183,16 @@ function validateEvidence(value, { repository, issueNumber, head }) {
   return { status: 'pass', message: 'Codex delivery evidence marker is complete and correlated to this revision.', evidence: ['pull-request body:codex-delivery-evidence:v1'] };
 }
 
-export async function deterministicReview({ repositoryRoot, base, head, eventPath } = {}) {
+export async function deterministicReview({
+  repositoryRoot,
+  base,
+  head,
+  eventPath,
+  architectureRoot,
+  architectureCommit,
+  architectureDigest,
+  architectureVersion,
+} = {}) {
   if (!repositoryRoot || !base || !head) throw new Error('repositoryRoot, base, and head are required');
   const event = await eventData(eventPath);
   const repository = event.repository?.full_name ?? process.env.GITHUB_REPOSITORY ?? 'unknown/unknown';
@@ -205,6 +215,39 @@ export async function deterministicReview({ repositoryRoot, base, head, eventPat
   const officialAdrs = adrIds(baseFiles.filter((file) => ADR_FILE.test(file)));
   const currentIds = adrIds(headFiles.filter((file) => ADR_FILE.test(file)));
   const checks = [];
+
+  let architecturePin = { status: 'not-run' };
+  if (architectureRoot || architectureCommit || architectureDigest || architectureVersion) {
+    try {
+      architecturePin = await validateArchitecturePin({
+        architectureRoot,
+        architectureCommit,
+        architectureDigest,
+        architectureVersion,
+      });
+      checks.push(check(
+        'architecture-source-pin',
+        'pass',
+        `The review uses Architecture Authority ${architecturePin.version}@${architecturePin.commit} with a reproduced content digest.`,
+        ['architecture/generated/architecture-release.json', 'architecture/policies/conformance.yml'],
+      ));
+    } catch (error) {
+      architecturePin = { status: 'failed', error: error.message };
+      checks.push(check(
+        'architecture-source-pin',
+        'fail',
+        'The exact Architecture Authority release could not be verified; review context is not trusted.',
+        ['architecture/generated/architecture-release.json', 'architecture/policies/conformance.yml'],
+      ));
+    }
+  } else {
+    checks.push(check(
+      'architecture-source-pin',
+      'not-applicable',
+      'No external Architecture Authority checkout was supplied; legacy local review context remains provisional.',
+      ['config/controller-release.json'],
+    ));
+  }
 
   let derivedTraceability = null;
   try {
@@ -363,6 +406,7 @@ export async function deterministicReview({ repositoryRoot, base, head, eventPat
     affectedRuntime,
     checks,
     semantic: { status: 'not-run', findings: [], sessionId: null },
+    architecturePin,
   };
 }
 

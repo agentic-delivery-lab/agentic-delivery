@@ -106,6 +106,12 @@ The release-chain validator reads both dependency manifests and their digest
 implementations from the exact pinned Architecture and Primitive commits. It
 does not validate a dependency with a mutable sibling worktree tool.
 
+The architecture-review path now resolves the release-bound Architecture
+dependency, checks out that exact commit, reproduces its content digest, and
+fails closed when the conformance policy or tooling lock disagrees. The review
+workflow passes the pin explicitly to `harness-architecture-review`; a moving
+Architecture `main` is not accepted as review context.
+
 The local checks supporting these slices are `pnpm control-plane:check`,
 `pnpm github-app:check`, `pnpm control-plane:boundary`,
 `pnpm acceptance:check`, `pnpm migration:check`,
