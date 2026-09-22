@@ -19,6 +19,9 @@ and releases use [Semantic Versioning](https://semver.org/).
 - Architecture review now requires an immutable Architecture Authority
   checkout, release digest reproduction, conformance policy, and tooling-lock
   validation before deterministic review evidence is trusted.
+- Distribution draft22 and the private publication validator now pin the
+  Architecture-aware workflow source at
+  `6843c8e6a5ef3d7ec31400a9d7af282d07c5a37b`.
 
 Entries that reference issue #52 use it only as the persisted-plan context;
 they do not authorize migration, alter that issue's scope, or close it.

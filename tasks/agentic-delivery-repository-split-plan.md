@@ -97,7 +97,7 @@ repository.
 | Organization event catalog | `config/event-catalog.yml`, `schemas/event-catalog.v1.schema.json`, `scripts/lib/event-catalog.mjs`; runtime route maps in `scripts/lib/agent-invocation.mjs` derive from it | Canonical event/action/route contract; App manifest and participant subscriptions are validated projections |
 | Primitive selection contract | `config/primitive-selection.yml`, `schemas/primitive-selection.v1.schema.json`, `scripts/lib/primitive-selection.mjs` | Release-bound profile-to-Primitive mapping; validates against the pinned Primitive catalog and does not duplicate Primitive content |
 | Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json` plus source maps | Local-prepared; no remote repository or publication claim |
-| Distribution/bootstrap | `agentic-delivery-distribution`, draft21 bundle, 8/8 tests | Opt-in fixture and PR projection; no consumer enrollment; workflow and publication checks use the immutable Control Plane source `021475c8a767bf0ac94f89d45de6c46cf2353eb5` |
+| Distribution/bootstrap | `agentic-delivery-distribution`, draft22 bundle, 8/8 tests | Opt-in fixture and PR projection; no consumer enrollment; workflow and publication checks use the immutable Control Plane source `6843c8e6a5ef3d7ec31400a9d7af282d07c5a37b` |
 | Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | No agent projection or member-visible activation |
 | GitHub special-surface contract | `migration/special-surfaces.yml`, `scripts/validate-special-surfaces.mjs` | Migration evidence distinguishes GitHub-consumed paths from governance paths and forbids runtime ownership |
 | Preview Automation templates | `automations/templates/*.automation.md`, manifest and validator; Distribution projection lock | Two manual read-only canonical templates and a hash-pinned Agent Plugin projection; `.github-private` remains excluded |
@@ -182,8 +182,8 @@ Primitive draft `0.1.0-draft.4` at
 `51e94992c5f39c59046f752e0cf6cff2ed3fff32` with its canonical digest. The
 Architecture release now self-validates its ADR/context IDs and conformance
 and tooling-lock digests. The Distribution workflow source and the private
-publication validator remain pinned to the immutable publication-verifier
-commit `021475c8a767bf0ac94f89d45de6c46cf2353eb5`; that source verifies the
+publication validator remain pinned to the immutable Architecture-review
+commit `6843c8e6a5ef3d7ec31400a9d7af282d07c5a37b`; that source verifies the
 published bytes against the exact canonical Primitive commit. The private
 workflow does not receive central App credentials. This is still local, draft,
 and shadow-only; it does not activate a GitHub App or change any organization
@@ -258,7 +258,7 @@ The same release-chain check now verifies the preview Automation projection:
 the Distribution lock must pin the current immutable Control Plane source
 commit, each Agent Plugin file must match the source bytes and SHA-256 digest,
 and no client-local settings or `.github-private` path may enter the projection.
-The current draft34 release and Distribution draft21 bundle carry that exact
+The current draft34 release and Distribution draft22 bundle carry that exact
 source pin; draft33 and Distribution draft20 remain the explicit rollback
 pairs for the immediately preceding distribution bundle.
 This is a release gate, not a runtime import or an authorization to publish
