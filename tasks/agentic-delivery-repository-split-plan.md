@@ -415,6 +415,12 @@ contains pre-existing user changes and was not checked out, reset, merged, or
 modified by this migration work. Snapshot analysis therefore uses the
 immutable remote-tracking commit, not the dirty local tree.
 
+The `agentic-delivery` checkout likewise refreshed its remote-tracking
+`origin/main` read-only; it resolves to the supplied source snapshot
+`8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`. The implementation branch is
+therefore compared against a reachable immutable baseline without changing
+the protected local `main` branch.
+
 ### Actual repository coupling
 
 The current implementation is not an organization-wide Control Plane. It is a
