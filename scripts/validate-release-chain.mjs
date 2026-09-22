@@ -372,6 +372,9 @@ export async function validateReleaseChain({
 
   equal(errors, 'Private surface repository name', privateSurface.repositoryName, '.github-private');
   equal(errors, 'Private surface visibility', privateSurface.requiredVisibility, 'private');
+  if (!privateSurface.consumedPaths?.includes('profile/README.md')) errors.push('private surface must declare profile/README.md as a GitHub-consumed path');
+  if (!privateSurface.consumedPaths?.includes('agents/*.agent.md')) errors.push('private surface must declare agents/*.agent.md as a GitHub-consumed path');
+  if (!privateSurface.governancePaths?.includes('.github/rulesets/require-publication-review.json')) errors.push('private surface must declare its publication ruleset as a governance path');
   if (privateRuleset.name !== 'Require private publication review') errors.push('private publication ruleset must have the approved name');
   if (privateRuleset.target !== 'branch') errors.push('private publication ruleset must target branches');
   if (privateRuleset.enforcement !== 'active') errors.push('private publication ruleset desired state must be active');
