@@ -8,7 +8,7 @@ repositories:
     mode: shadow
     controller:
       version: 0.2.0-draft.35
-      commit: 55439a80e59efe35e410f178a73e01004ab9436f
+      commit: 02c29af7572ea0fc5a593786dc9583cb1d275f3f
     contracts:
       eventEnvelope: 1
       lifecycle: 1.0.0

@@ -202,7 +202,7 @@ not a replacement for that run.
 The Control Plane gateway now requires both the App installation ID and the
 central controller repository ID from protected deployment configuration; it
 has no fallback for either identity. Current draft controller `0.2.0-draft.35`
-is pinned to `55439a80e59efe35e410f178a73e01004ab9436f`; draft34 at
+is pinned to `02c29af7572ea0fc5a593786dc9583cb1d275f3f`; draft34 at
 `825d808164ed747187490d50727bfe38061b0932` remains the explicit rollback
 release, while draft23 at `30197d5c8731ea6e682ae4de5e629b964e278aab` remains
 the trusted bootstrap commit for this release. The release-bound primitive
