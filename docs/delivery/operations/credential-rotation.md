@@ -18,4 +18,3 @@ agent profile.
 
 Consumer workflows use their normal `GITHUB_TOKEN` only for local read-only
 work. They do not receive the App private key or central dispatch secret.
-

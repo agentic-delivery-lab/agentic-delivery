@@ -16,4 +16,3 @@ If the local workflow was the temporary migration fallback, re-enable it only
 through the documented emergency recovery path and remove it after the next
 successful release cycle. Never restore credentials or mutable `main` refs as
 a rollback shortcut.
-

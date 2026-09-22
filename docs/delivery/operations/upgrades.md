@@ -20,4 +20,3 @@ participant upgrade.
 
 Incompatible changes use expand/migrate/contract. A security withdrawal may
 fail closed, but the incident and replacement commit must be recorded.
-

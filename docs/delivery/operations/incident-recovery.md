@@ -19,4 +19,3 @@ remain the durable audit record; runner state and Projects are projections.
 Do not use `.github-private` as an incident database or copy runtime/session
 state into it. After recovery, add a source issue, evidence links, and an ADR
 only when the incident changes a durable architectural choice.
-

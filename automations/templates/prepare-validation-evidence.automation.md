@@ -7,6 +7,8 @@ schedule:
   kind: manual
 ---
 
+# Prepare validation evidence
+
 Prepare a read-only validation-evidence summary for the current change.
 
 Do not edit files or mutate GitHub Issues, fields, Projects, branches, commits,

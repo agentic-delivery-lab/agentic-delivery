@@ -7,6 +7,8 @@ schedule:
   kind: manual
 ---
 
+# Review delivery queue
+
 Review the current delivery queue for this workspace and its configured
 organization context.
 
