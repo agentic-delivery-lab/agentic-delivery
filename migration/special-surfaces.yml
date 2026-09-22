@@ -24,8 +24,8 @@ surfaces:
     nonRuntime: true
     workflowInheritance: false
     localEvidence:
-      branch: work/issue-52-public-governance-snapshot
-      commit: ad9489fa860e7214084da6a5d834078084f4908f
+      branch: main
+      commit: af52c92e49616e78f8d6647cf5cf538a7e571d78
       check: public-governance:check
     bridge: public community-health inheritance remains here; workflow files are starters or governance only
 

@@ -71,14 +71,20 @@ export async function validatePublicGovernance({
 
   const workflow = await read(path.join(root, 'workflow-templates/agentic-delivery-quality.yml'));
   const pin = controller.commit;
-  if (!workflow.includes(`.github/workflows/agentic-delivery-quality.yml@${pin}`)) {
-    throw new PublicGovernanceValidationError('public workflow template must pin the current Control Plane workflow source');
+  const workflowSource = workflow.match(/\.github\/workflows\/agentic-delivery-quality\.yml@([0-9a-f]{40})/);
+  if (!workflowSource) {
+    throw new PublicGovernanceValidationError('public workflow template must pin an immutable Control Plane workflow source');
   }
   if (!workflow.includes(`controller_commit: ${pin}`)) {
     throw new PublicGovernanceValidationError('public workflow template must pass the current Control Plane release pin');
   }
   if (workflow.includes('secrets: inherit')) throw new PublicGovernanceValidationError('public workflow template must not inherit secrets');
-  return { status: 'passed', surfaceCommit: actualCommit, controller: { version: controller.version, commit: pin } };
+  return {
+    status: 'passed',
+    surfaceCommit: actualCommit,
+    controller: { version: controller.version, commit: pin },
+    workflowSourceCommit: workflowSource[1],
+  };
 }
 
 function parseArguments(argv) {
