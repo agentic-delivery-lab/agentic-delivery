@@ -158,10 +158,13 @@ inheritance behavior, and private publication exclusions are validated by
 `pnpm special-surfaces:check` and its positive and negative fixtures.
 The local public `.github` candidate additionally has a dependency-free
 `scripts/validate-governance.mjs` check, a public profile, scoped instructions,
-and a SHA-pinned workflow-template caller. Its review branch is
-`work/issue-52-public-governance` at
-`0d981a3e6984d5ebdad37cecf8fd52cb0ba905d2`; existing uncommitted community
-health edits in that checkout remain outside this migration commit.
+and a SHA-pinned workflow-template caller. Because the original `.github`
+checkout contains unrelated uncommitted user work and was based on a stale
+remote-tracking tip, the review candidate is a separate clean worktree based
+on the supplied current `.github` snapshot: branch
+`work/issue-52-public-governance-snapshot` at
+`ceca85ffc17082f3c82b6a86faf81a8f7359f7aa`. The original dirty checkout is
+preserved and is not used as release evidence.
 
 The controller release also publishes a machine-readable support matrix. It
 pins accepted event-envelope, lifecycle, state-machine, and evidence versions,

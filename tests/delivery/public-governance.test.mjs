@@ -6,9 +6,20 @@ import { test } from 'node:test';
 import { validatePublicGovernance } from '../../scripts/validate-public-governance.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
-const surfaceRoot = path.resolve(repositoryRoot, '../.github');
+const candidateSurfaceRoot = path.resolve(repositoryRoot, '../.github-public-candidate');
+const defaultSurfaceRoot = path.resolve(repositoryRoot, '../.github');
+
+async function availableSurfaceRoot() {
+  try {
+    await access(candidateSurfaceRoot);
+    return candidateSurfaceRoot;
+  } catch {
+    return defaultSurfaceRoot;
+  }
+}
 
 test('public organization governance is a separate, pinned special surface', async (t) => {
+  const surfaceRoot = await availableSurfaceRoot();
   try {
     await access(surfaceRoot);
   } catch {
