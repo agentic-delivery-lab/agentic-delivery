@@ -415,6 +415,12 @@ contains pre-existing user changes and was not checked out, reset, merged, or
 modified by this migration work. Snapshot analysis therefore uses the
 immutable remote-tracking commit, not the dirty local tree.
 
+That remote `.github` snapshot contains the ten issue forms, pull-request
+template, pull-request-body workflow, ruleset definition, validator, and its
+tests. The local untracked community files (`CODE_OF_CONDUCT.md`,
+`CONTRIBUTING.md`, `SECURITY.md`, and `SUPPORT.md`) are user work and are not
+treated as part of the inspected snapshot or this migration change.
+
 The `agentic-delivery` checkout likewise refreshed its remote-tracking
 `origin/main` read-only; it resolves to the supplied source snapshot
 `8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`. The implementation branch is
