@@ -76,6 +76,16 @@ test('strict publication mode requires the GitHub-supported private surface', as
   );
 });
 
+test('rejects unsupported skills, instructions, hooks, plugins, and MCP paths', async (t) => {
+  const root = await fixture(t);
+  await mkdir(path.join(root, '.github/skills'), { recursive: true });
+  await writeFile(path.join(root, '.github/skills/README.md'), 'not an organization surface\n');
+  await assert.rejects(
+    validatePublishedAgents({ publicationRoot: root }),
+    /unsupported organization-wide distribution path \.github\/skills/,
+  );
+});
+
 test('optionally reproduces a publication from the pinned Primitive source', async (t) => {
   const publication = await fixture(t);
   const primitiveRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-primitive-source-'));

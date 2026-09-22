@@ -12,6 +12,10 @@ const SHA1 = /^[0-9a-f]{40}$/i;
 const SHA256 = /^[0-9a-f]{64}$/i;
 const SEMVER = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const ALLOWED_ROOT_ENTRIES = new Set(['profile', 'agents', 'provenance', '.github', '.gitignore', 'AGENTS.md', 'README.md']);
+const UNSUPPORTED_DISTRIBUTION_PATHS = [
+  '.agents', '.claude', 'skills', 'instructions', 'hooks', 'plugins', 'mcp',
+  '.github/skills', '.github/instructions', '.github/hooks', '.github/plugins', '.github/mcp',
+];
 const ALLOWED_TOOLS = new Set(['codebase', 'editFiles', 'fetch', 'githubRepo', 'search', 'terminal']);
 const SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]+ PRIVATE KEY-----/i,
@@ -111,6 +115,14 @@ export async function validatePublishedAgents({ publicationRoot, primitiveRoot, 
     // publication check.
     if (entry.name === '.git') continue;
     if (!ALLOWED_ROOT_ENTRIES.has(entry.name)) errors.push(`unexpected top-level entry ${entry.name}`);
+  }
+  for (const relative of UNSUPPORTED_DISTRIBUTION_PATHS) {
+    try {
+      await stat(path.join(root, relative));
+      errors.push(`unsupported organization-wide distribution path ${relative}; use Agentic Primitives or Distribution instead`);
+    } catch (error) {
+      if (error.code !== 'ENOENT') errors.push(`cannot inspect unsupported distribution path ${relative}: ${error.message}`);
+    }
   }
   if (requireSurface) {
     const requiredFiles = ['profile/README.md', '.github/CODEOWNERS', '.github/workflows/validate-published-agents.yml', 'provenance/surface.yml'];

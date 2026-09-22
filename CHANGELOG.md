@@ -30,6 +30,10 @@ and releases use [Semantic Versioning](https://semver.org/).
   Architecture and Primitive manifests still need a real history-filter run
   from the supplied `agentic-delivery` `main` snapshot before publication;
   changing provenance metadata alone is explicitly rejected.
+- Private publication validation now rejects repository-local skill,
+  instruction, hook, plugin, MCP, and alternate-agent directories so
+  `.github-private` cannot become an implicit organization-wide capability
+  distribution surface.
 
 Entries that reference issue #52 use it only as the persisted-plan context;
 they do not authorize migration, alter that issue's scope, or close it.

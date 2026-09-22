@@ -1794,6 +1794,9 @@ remove:
 - provenance completeness and drift;
 - member-profile lint;
 - compatibility tests against actually used Copilot surfaces.
+- unsupported organization-wide skill, instruction, hook, plugin, MCP, and
+  alternate-agent directories are rejected from the private publication tree;
+  those capabilities remain owned by Primitives or Distribution.
 - the release-chain gate also validates the versioned private-publication
   ruleset desired state: default-branch targeting, required publication
   checks, code-owner review, non-fast-forward protection, and no bypass actors;
