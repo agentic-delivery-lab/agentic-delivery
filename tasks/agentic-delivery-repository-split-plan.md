@@ -147,15 +147,20 @@ publication and release gates were run with explicit roots (`.github-private` an
 `.github-private` for the release chain); the default root-only invocation is
 intentionally insufficient and fails closed rather than guessing sibling paths.
 All five prepared target
-checkouts are clean after their local commits; the separate public `.github`
-checkout retains pre-existing user changes and is intentionally not modified
-by this migration work.
+checkouts are clean after their local commits; the clean public `.github`
+candidate is based on the supplied current snapshot in a separate worktree.
+The original public `.github` checkout retains pre-existing user changes and
+is intentionally not modified by this migration work.
 
 The migration evidence now records `.github` and `.github-private` as
 GitHub-defined special surfaces rather than domain repository targets. Their
 GitHub-consumed paths, governance paths, non-runtime boundary, workflow
 inheritance behavior, and private publication exclusions are validated by
 `pnpm special-surfaces:check` and its positive and negative fixtures.
+The observed public `.github` repository ID (`1368850419`) is recorded as a
+shadow participant with the same immutable controller and dependency pins;
+runtime admission still requires independently verified App repository access,
+so this local registry entry cannot activate it by itself.
 The local public `.github` candidate additionally has a dependency-free
 `scripts/validate-governance.mjs` check, a public profile, scoped instructions,
 and a SHA-pinned workflow-template caller. Because the original `.github`

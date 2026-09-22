@@ -35,3 +35,39 @@ repositories:
     localIntegration:
       workflowBundle: none
       managedByApp: false
+
+  # The public organization surface may participate in issue/PR routing, but
+  # remains shadow-only until an operator verifies App repository access and
+  # records the activation evidence. It contains no local Control Plane code.
+  "1368850419":
+    expectedFullName: agentic-delivery-lab/.github
+    mode: shadow
+    controller:
+      version: 0.2.0-draft.35
+      commit: 02c29af7572ea0fc5a593786dc9583cb1d275f3f
+    contracts:
+      eventEnvelope: 1
+      lifecycle: 1.0.0
+      stateMachine: 1.0.0
+      evidence: 1.0.0
+    dependencies:
+      architecture:
+        repository: agentic-delivery-lab/agentic-delivery-architecture
+        version: 0.1.0-draft.7
+        commit: c6e7afcda69c06dc5f709e3bc7b8b74669e100f3
+        contentSha256: 49ac105a3fc7384c3be7459c3ba0569934f8b036a10cb0ee89a7f2b8edb50a5b
+      primitives:
+        repository: agentic-delivery-lab/agentic-delivery-primitives
+        version: 0.1.0-draft.4
+        commit: 01dc8df9eae5ee8394d05246dbf9ccdcddaa7c9e
+        contentSha256: 36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0
+    configurationProfile: standard
+    events:
+      - issues
+      - issue_comment
+      - pull_request
+      - pull_request_review
+      - pull_request_review_comment
+    localIntegration:
+      workflowBundle: none
+      managedByApp: false
