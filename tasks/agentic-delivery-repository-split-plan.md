@@ -164,6 +164,12 @@ CI and tests validate that evidence before either target is considered for
 operator publication. The central boundary manifest records Architecture,
 Primitives, and Distribution as `local-prepared`; that status does not claim
 that a remote repository, branch protection, or organization access exists.
+The current local extraction manifests deliberately still identify the
+planning-branch source commit `67d328b46d84ae599ebfe65ef550d156f689e112`.
+That is not the supplied `main` snapshot
+(`8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`), so publication is blocked until
+the history filter is rerun from the snapshot with the pinned tool and a new
+source map. No filtered history is fabricated by changing the manifest alone.
 
 The Control Plane gateway now requires both the App installation ID and the
 central controller repository ID from protected deployment configuration; it
