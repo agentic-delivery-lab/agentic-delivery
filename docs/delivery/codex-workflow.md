@@ -97,22 +97,26 @@ source checks, then a separate controller token narrowed to the controller
 repository with only Contents write for the `repository_dispatch` handoff.
 The runner's publication token follows the organization-wide ADR-0018
 Contents, Issues, and Pull requests boundary; Actions `workflows:write` is not
-required by the App contract. The webhook secret and App private key are stored only in
-Vercel Production environment variables
+required by the App contract. The webhook secret, dispatch HMAC secret, and
+App private key are stored only in Vercel Production environment variables
 (`AGENTIC_DELIVERY_WEBHOOK_SECRET`, `AGENTIC_DELIVERY_APP_ID`,
 `AGENTIC_DELIVERY_APP_PRIVATE_KEY`, `AGENTIC_DELIVERY_APP_INSTALLATION_ID`,
+`AGENTIC_DELIVERY_DISPATCH_SECRET`,
 `AGENTIC_DELIVERY_ORGANIZATION`, `AGENTIC_DELIVERY_ORGANIZATION_ID`, and
 `AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID`). The replay store must be a
 durable atomic adapter in a multi-instance deployment; a file-backed store is
 only valid for one process or a shared filesystem. The Actions controller receives the
-corresponding `CODEX_DELIVERY_APP_ID`, `CODEX_DELIVERY_APP_PRIVATE_KEY`, and
-optional `CODEX_DELIVERY_APP_INSTALLATION_ID` as repository Actions secrets.
-Rotate both the webhook secret and private key through the GitHub App and
-Vercel/Actions secret stores; never commit them.
+corresponding `CODEX_DELIVERY_APP_ID`, `CODEX_DELIVERY_APP_PRIVATE_KEY`,
+`CODEX_DELIVERY_DISPATCH_SECRET`, and optional
+`CODEX_DELIVERY_APP_INSTALLATION_ID` as central controller Actions secrets.
+Rotate the webhook secret, dispatch secret, and private key through the GitHub
+App and Vercel/Actions secret stores; never commit them.
 
-The ingress verifies the signature and delivery ID, checks the exact actor
-catalog, and calls GitHub `repository_dispatch` with only immutable source IDs
-and a body digest. The self-hosted preflight re-fetches the current comment or
+The ingress verifies the webhook signature and delivery ID, checks the exact
+actor catalog, signs the complete dispatch envelope with the separate dispatch
+secret, and calls GitHub `repository_dispatch` with only immutable source IDs,
+a body digest, and the signed identity fields. The self-hosted preflight
+re-fetches the current comment or
 review, maps a pull request to its issue-linked source, and then invokes the
 existing issue intake. A Vercel outage is fail-closed: it cannot authorize a
 delivery run by itself. Native `@copilot` and other GitHub-managed agent

@@ -48,6 +48,11 @@ they do not authorize migration, alter that issue's scope, or close it.
   origin App permissions and cannot mutate issue state until explicit
   activation.
 
+- Central `repository_dispatch` handoffs now carry a time-bounded HMAC signed
+  envelope. The dispatch secret is separate from the GitHub webhook secret and
+  remains confined to the gateway/controller boundary; preflight rejects
+  tampering, stale timestamps, and missing production configuration.
+
 - The draft controller release advances to `0.2.0-draft.35` at
   `02c29af7572ea0fc5a593786dc9583cb1d275f3f`, adopting the filtered
   Architecture draft7 candidate and the main-snapshot Primitive candidate;

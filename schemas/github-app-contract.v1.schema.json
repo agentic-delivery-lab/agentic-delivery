@@ -61,10 +61,11 @@
     "credentials": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["privateKey", "webhookSecret", "storage"],
+      "required": ["privateKey", "webhookSecret", "dispatchSecret", "storage"],
       "properties": {
         "privateKey": { "const": "central-deployment-only" },
         "webhookSecret": { "const": "central-gateway-only" },
+        "dispatchSecret": { "const": "central-gateway-and-controller-only" },
         "storage": { "const": "central-secret-store" }
       }
     },

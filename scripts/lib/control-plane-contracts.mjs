@@ -146,6 +146,14 @@ export function validateEventEnvelope(envelope) {
     && (typeof envelope.repository_full_name !== 'string' || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(envelope.repository_full_name))) {
     addError(errors, 'repository_full_name', 'must be an owner/repository name');
   }
+  if (envelope.dispatch_timestamp !== undefined
+    && (typeof envelope.dispatch_timestamp !== 'string' || !/^[1-9][0-9]*$/.test(envelope.dispatch_timestamp))) {
+    addError(errors, 'dispatch_timestamp', 'must be a positive millisecond timestamp');
+  }
+  if (envelope.dispatch_signature !== undefined
+    && (typeof envelope.dispatch_signature !== 'string' || !/^sha256=[0-9a-f]{64}$/i.test(envelope.dispatch_signature))) {
+    addError(errors, 'dispatch_signature', 'must be an HMAC-SHA256 signature');
+  }
   if (envelope.controller !== undefined) {
     if (!envelope.controller || typeof envelope.controller !== 'object' || Array.isArray(envelope.controller)) addError(errors, 'controller', 'must be an object');
     else {

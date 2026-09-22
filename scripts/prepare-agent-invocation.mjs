@@ -9,6 +9,7 @@ import {
   bodyDigest,
   hasInvocationMention,
   observationEventSupported,
+  validateDispatchEnvelopeSignature,
   validateActorCatalog,
 } from './lib/agent-invocation.mjs';
 import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
@@ -124,6 +125,11 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
   if (envelope.received_at !== undefined) {
     const freshness = validateReceivedAt(envelope.received_at, { now: now() });
     if (!freshness.valid) throw new Error(`The repository dispatch envelope is stale: ${freshness.reason}`);
+  }
+  const dispatchSecret = env.AGENTIC_DELIVERY_DISPATCH_SECRET || env.CODEX_DELIVERY_DISPATCH_SECRET;
+  if (dispatchSecret || envelope.dispatch_signature !== undefined || envelope.dispatch_timestamp !== undefined) {
+    const signature = validateDispatchEnvelopeSignature({ secret: dispatchSecret, envelope, now: now() });
+    if (!signature.valid) throw new Error(`The repository dispatch signature is invalid: ${signature.reason}`);
   }
   const controllerRepository = env.GITHUB_REPOSITORY;
   if (String(event.repository?.full_name) !== controllerRepository) throw new Error('The dispatch controller repository boundary is invalid.');

@@ -10,6 +10,16 @@ accepts a compatible legacy envelope without that field, but validates a
 present timestamp against the five-minute replay window and a thirty-second
 future clock-skew allowance. New webhook deliveries always include it.
 
+The gateway also signs the complete `repository_dispatch` client payload with
+the separate `AGENTIC_DELIVERY_DISPATCH_SECRET` using HMAC-SHA256. The
+signature covers the immutable envelope after removing only the signature
+field, and `dispatch_timestamp` is checked against the same five-minute replay
+window (with a thirty-second future-skew allowance) by the central preflight.
+The dispatch secret is held only by the central gateway and controller
+workflow; it is never sent to an origin repository, Codex model process, or
+untrusted primitive. `CODEX_DELIVERY_DISPATCH_SECRET` is the explicitly named
+Actions secret used by the controller workflow.
+
 Duplicate deliveries return a successful non-dispatch response and cannot
 create a second controller run. If dispatch fails after the claim, the gateway
 releases the claim so GitHub can retry the same delivery. Runner-local markers
@@ -50,6 +60,7 @@ either API call.
 
 The central Actions preflight repeats the installation and organization
 identity checks when those envelope fields and controller configuration are
-present, then resolves the origin full name from the numeric participant
-registry entry. A forged or misrouted dispatch therefore cannot redirect the
-run by changing only the readable repository name.
+present, verifies the dispatch HMAC and timestamp, then resolves the origin
+full name from the numeric participant registry entry. A forged or misrouted
+dispatch therefore cannot redirect the run by changing only the readable
+repository name.

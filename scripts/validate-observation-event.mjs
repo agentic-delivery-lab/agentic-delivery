@@ -2,7 +2,11 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { invocationEventSupported, observationEventSupported } from './lib/agent-invocation.mjs';
+import {
+  invocationEventSupported,
+  observationEventSupported,
+  validateDispatchEnvelopeSignature,
+} from './lib/agent-invocation.mjs';
 import { validateEventEnvelope } from './lib/control-plane-contracts.mjs';
 import { loadParticipantRegistry, participantForRepository } from './lib/participant-registry.mjs';
 
@@ -35,6 +39,8 @@ export async function validateObservationEvent({
   repositoryRoot: root = repositoryRoot,
   participantRegistry,
   controllerRepository,
+  dispatchSecret = process.env.AGENTIC_DELIVERY_DISPATCH_SECRET || process.env.CODEX_DELIVERY_DISPATCH_SECRET,
+  now = () => Date.now(),
 } = {}) {
   if (!eventPath) throw new ObservationValidationError('GITHUB_EVENT_PATH is required', 2);
   const event = await readJson(eventPath);
@@ -44,6 +50,10 @@ export async function validateObservationEvent({
   const errors = [];
   const envelopeResult = validateEventEnvelope(envelope);
   if (!envelopeResult.valid) errors.push(...envelopeResult.errors);
+  if (dispatchSecret || envelope?.dispatch_signature !== undefined || envelope?.dispatch_timestamp !== undefined) {
+    const signature = validateDispatchEnvelopeSignature({ secret: dispatchSecret, envelope, now: now() });
+    if (!signature.valid) errors.push(`dispatch signature: ${signature.reason}`);
+  }
   if (event?.repository?.full_name !== configuredController) errors.push('dispatch repository is not the configured Control Plane repository');
   if (envelope?.event !== 'pull_request') errors.push('observation dispatch must carry a pull_request event');
   if (!observationEventSupported(envelope?.event, envelope?.action)) errors.push('observation action is not in the observation catalog');

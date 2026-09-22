@@ -45,6 +45,36 @@ export function bodyDigest(body) {
   return createHash('sha256').update(String(body ?? ''), 'utf8').digest('hex');
 }
 
+function unsignedDispatchEnvelope(envelope) {
+  if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) return envelope;
+  const { dispatch_signature: _signature, ...unsigned } = envelope;
+  return unsigned;
+}
+
+export function dispatchEnvelopePayload(envelope) {
+  return JSON.stringify(unsignedDispatchEnvelope(envelope));
+}
+
+export function dispatchEnvelopeSignature({ secret, envelope } = {}) {
+  if (!secret) throw new Error('A dispatch signing secret is required.');
+  return `sha256=${createHmac('sha256', String(secret)).update(dispatchEnvelopePayload(envelope), 'utf8').digest('hex')}`;
+}
+
+export function validateDispatchEnvelopeSignature({ secret, envelope, now = Date.now(), maxAgeMs = 300_000, maxFutureSkewMs = 30_000 } = {}) {
+  if (!secret) return { valid: false, reason: 'The dispatch signing secret is not configured.' };
+  const timestamp = Number(envelope?.dispatch_timestamp);
+  if (!Number.isSafeInteger(timestamp) || timestamp <= 0) return { valid: false, reason: 'The dispatch timestamp is invalid.' };
+  if (!Number.isFinite(now) || timestamp < now - maxAgeMs) return { valid: false, reason: 'The dispatch envelope is older than the replay window.' };
+  if (timestamp > now + maxFutureSkewMs) return { valid: false, reason: 'The dispatch envelope timestamp is too far in the future.' };
+  const actual = String(envelope?.dispatch_signature ?? '');
+  if (!/^sha256=[0-9a-f]{64}$/i.test(actual)) return { valid: false, reason: 'The dispatch signature is invalid.' };
+  const expected = dispatchEnvelopeSignature({ secret, envelope });
+  if (expected.length !== actual.length || !timingSafeEqual(Buffer.from(expected), Buffer.from(actual))) {
+    return { valid: false, reason: 'The dispatch signature does not match the envelope.' };
+  }
+  return { valid: true, timestamp };
+}
+
 function visibleLines(body) {
   const lines = String(body ?? '').replace(/^\uFEFF/, '').split(/\r?\n/);
   const result = [];
@@ -175,8 +205,8 @@ export function invocationBody(eventName, payload) {
   return payload?.comment?.body ?? '';
 }
 
-export function invocationEnvelope({ deliveryId, eventName, action, repositoryId, source, actor, body, hop = 0, parentDeliveryId = null, controller, receivedAt, organizationId, installationId, repositoryFullName } = {}) {
-  return {
+export function invocationEnvelope({ deliveryId, eventName, action, repositoryId, source, actor, body, hop = 0, parentDeliveryId = null, controller, receivedAt, organizationId, installationId, repositoryFullName, dispatchSecret, dispatchTimestamp } = {}) {
+  const envelope = {
     version: INVOCATION_VERSION,
     delivery_id: String(deliveryId ?? ''),
     event: eventName,
@@ -193,4 +223,9 @@ export function invocationEnvelope({ deliveryId, eventName, action, repositoryId
     ...(repositoryFullName ? { repository_full_name: String(repositoryFullName) } : {}),
     ...(controller ? { controller: { version: controller.version, commit: controller.commit } } : {}),
   };
+  if (dispatchSecret) {
+    envelope.dispatch_timestamp = String(dispatchTimestamp ?? Date.now());
+    envelope.dispatch_signature = dispatchEnvelopeSignature({ secret: dispatchSecret, envelope });
+  }
+  return envelope;
 }

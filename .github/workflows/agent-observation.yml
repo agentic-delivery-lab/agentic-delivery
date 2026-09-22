@@ -42,4 +42,5 @@ jobs:
         env:
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}
         run: node controller/scripts/validate-observation-event.mjs controller

@@ -57,6 +57,8 @@
     "organization_id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
     "installation_id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
     "repository_full_name": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+    "dispatch_timestamp": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "dispatch_signature": { "type": "string", "pattern": "^sha256=[0-9a-f]{64}$" },
     "controller": {
       "type": "object",
       "additionalProperties": false,

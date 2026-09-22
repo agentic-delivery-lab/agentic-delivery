@@ -71,6 +71,7 @@ export function validateGithubAppContract(contract, catalog = actorCatalog, even
   if (permissions.workflows !== 'none') errors.push('permissions.workflows must be none');
   if (contract.credentials?.privateKey !== 'central-deployment-only') errors.push('credentials.privateKey must remain central-deployment-only');
   if (contract.credentials?.webhookSecret !== 'central-gateway-only') errors.push('credentials.webhookSecret must remain central-gateway-only');
+  if (contract.credentials?.dispatchSecret !== 'central-gateway-and-controller-only') errors.push('credentials.dispatchSecret must remain central-gateway-and-controller-only');
   if (contract.credentials?.storage !== 'central-secret-store') errors.push('credentials.storage must be central-secret-store');
   if (contract.tokenScopes?.origin?.repositoryIds !== 'origin-event-repository') errors.push('origin token must be origin-event-repository scoped');
   if (contract.tokenScopes?.origin?.permissions !== 'read-minimum') errors.push('origin token must use read-minimum permissions');

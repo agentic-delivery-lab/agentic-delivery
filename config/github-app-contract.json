@@ -30,6 +30,7 @@
   "credentials": {
     "privateKey": "central-deployment-only",
     "webhookSecret": "central-gateway-only",
+    "dispatchSecret": "central-gateway-and-controller-only",
     "storage": "central-secret-store"
   },
   "tokenScopes": {

@@ -62,6 +62,7 @@ function environment(env = process.env) {
     privateKey: env.AGENTIC_DELIVERY_APP_PRIVATE_KEY || env.CODEX_DELIVERY_APP_PRIVATE_KEY,
     installationId: env.AGENTIC_DELIVERY_APP_INSTALLATION_ID || env.CODEX_DELIVERY_APP_INSTALLATION_ID,
     webhookSecret: env.AGENTIC_DELIVERY_WEBHOOK_SECRET,
+    dispatchSecret: env.AGENTIC_DELIVERY_DISPATCH_SECRET || env.CODEX_DELIVERY_DISPATCH_SECRET,
     replayStateDirectory: env.AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY,
     replayWindowMs: Number(env.AGENTIC_DELIVERY_REPLAY_WINDOW_MS || 300_000),
   };
@@ -147,6 +148,7 @@ export async function handleWebhook(req, res, {
   if (!/^[1-9][0-9]*$/.test(String(config.controllerRepositoryId ?? ''))) {
     return reply(res, 500, { error: 'The central controller repository ID is not configured.' });
   }
+  if (!config.dispatchSecret) return reply(res, 500, { error: 'The dispatch signing secret is not configured.' });
   if (!/^[1-9][0-9]*$/.test(String(config.installationId ?? ''))) {
     return reply(res, 500, { error: 'The GitHub App installation ID is not configured.' });
   }
@@ -242,6 +244,8 @@ export async function handleWebhook(req, res, {
     organizationId: config.organizationId,
     installationId: config.installationId,
     repositoryFullName: repository,
+    dispatchSecret: config.dispatchSecret,
+    dispatchTimestamp: now(),
   });
   assertEventEnvelope(envelope);
   try {

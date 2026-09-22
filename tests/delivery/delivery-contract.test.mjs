@@ -119,6 +119,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.ok(!observationText.includes('ref: main'));
   assert.ok(!observationText.includes('CODEX_DELIVERY_APP_PRIVATE_KEY'));
   assert.ok(!observationText.includes('AGENTIC_DELIVERY_WEBHOOK_SECRET'));
+  assert.ok(observationText.includes('CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}'));
 
   const docs = await text('docs/delivery/README.md');
   assert.ok(docs.includes('pnpm branch:start'));

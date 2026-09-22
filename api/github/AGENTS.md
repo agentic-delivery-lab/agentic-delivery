@@ -10,7 +10,9 @@ Delivery Control Plane.
 ## Ownership
 
 - `api/github/webhook.mjs` owns transport-level signature, organization,
-  installation, delivery, actor, replay, and repository-identity checks.
+  installation, delivery, actor, replay, repository-identity, and central
+  dispatch-envelope-signature checks. The webhook secret authenticates GitHub;
+  the separate dispatch secret authenticates the controller handoff.
 - `config/event-catalog.yml` and `config/participants.yml` are the
   authoritative event and enrollment contracts.
 - `scripts/lib/control-plane-contracts.mjs` owns envelope validation shared by

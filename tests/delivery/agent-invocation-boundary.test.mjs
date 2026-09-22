@@ -12,10 +12,12 @@ import {
   INVOCATION_EVENTS,
   OBSERVATION_EVENTS,
   constantTimeSignatureValid,
+  dispatchEnvelopeSignature,
   hasInvocationMention,
   invocationEventSupported,
   observationEventSupported,
   webhookEventSupported,
+  validateDispatchEnvelopeSignature,
   validateActorCatalog,
 } from '../../scripts/lib/agent-invocation.mjs';
 import { handleWebhook } from '../../api/github/webhook.mjs';
@@ -71,6 +73,25 @@ test('webhook signatures and event actions require the supported contract', () =
   assert.equal(webhookEventSupported('pull_request', 'closed'), true);
   assert.equal(invocationEventSupported('pull_request', 'opened'), false);
   assert.equal(invocationEventSupported('repository_dispatch', 'created'), false);
+});
+
+test('repository dispatch envelopes use a separate time-bounded HMAC', () => {
+  const envelope = {
+    version: 1,
+    delivery_id: '12345678-1234-4234-8234-123456789012',
+    repository_id: '1358455028',
+    dispatch_timestamp: '1789992000000',
+  };
+  const secret = 'dispatch-secret';
+  const signed = {
+    ...envelope,
+    dispatch_signature: dispatchEnvelopeSignature({ secret, envelope }),
+  };
+  assert.equal(validateDispatchEnvelopeSignature({ secret, envelope: signed, now: 1789992000000 }).valid, true);
+  assert.equal(validateDispatchEnvelopeSignature({ secret: 'wrong-secret', envelope: signed, now: 1789992000000 }).valid, false);
+  assert.equal(validateDispatchEnvelopeSignature({ secret, envelope: { ...signed, repository_id: '777777777' }, now: 1789992000000 }).valid, false);
+  assert.equal(validateDispatchEnvelopeSignature({ secret, envelope: signed, now: 1790292000001 }).valid, false);
+  assert.equal(validateDispatchEnvelopeSignature({ secret, envelope: signed, now: 1789991969000 }).valid, false);
 });
 
 test('webhook rejects events from another organization or installation', async () => {
@@ -148,6 +169,7 @@ function githubPayload(payload) {
 function webhookEnv(overrides = {}) {
   return {
     AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
+    AGENTIC_DELIVERY_DISPATCH_SECRET: 'dispatch-secret',
     AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
     AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '1358455028',
     AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
@@ -283,6 +305,7 @@ test('webhook requires a durable replay store unless ephemeral mode is explicit'
       AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
       AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '1358455028',
       AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
+      AGENTIC_DELIVERY_DISPATCH_SECRET: 'dispatch-secret',
     },
     fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : response(204)),
     tokenProvider: { token: async () => 'installation-token' },
@@ -341,11 +364,17 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
     version: '0.2.0-draft.35',
     commit: '02c29af7572ea0fc5a593786dc9583cb1d275f3f',
   });
-  assert.equal(Object.keys(dispatch.client_payload).length, 15);
+  assert.equal(Object.keys(dispatch.client_payload).length, 17);
   assert.match(dispatch.client_payload.received_at, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(dispatch.client_payload.organization_id, '327861320');
   assert.equal(dispatch.client_payload.installation_id, '163255060');
   assert.equal(dispatch.client_payload.repository_full_name, 'agentic-delivery-lab/agentic-delivery');
+  assert.match(dispatch.client_payload.dispatch_timestamp, /^[1-9][0-9]*$/);
+  assert.equal(validateDispatchEnvelopeSignature({
+    secret: 'dispatch-secret',
+    envelope: dispatch.client_payload,
+    now: Number(dispatch.client_payload.dispatch_timestamp),
+  }).valid, true);
 });
 
 test('webhook claims a delivery once and releases the claim when dispatch fails', async () => {
@@ -361,6 +390,7 @@ test('webhook claims a delivery once and releases the claim when dispatch fails'
   const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
   const env = {
     AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
+    AGENTIC_DELIVERY_DISPATCH_SECRET: 'dispatch-secret',
     AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
     AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '1358455028',
     AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
@@ -479,6 +509,7 @@ test('one central webhook accepts a second enrolled repository and dispatches to
   await handleWebhook(request({ body, signature }), output, {
     env: {
       AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
+      AGENTIC_DELIVERY_DISPATCH_SECRET: 'dispatch-secret',
       AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/delivery-control-plane',
       AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '888888888',
       AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
@@ -562,6 +593,61 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
   await assert.rejects(
     prepareAgentInvocation({ env: baseEnv, fetchImpl }),
     /installation identity does not match/,
+  );
+});
+
+test('central preflight rejects a tampered signed dispatch envelope', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-signed-dispatch-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const eventPath = path.join(root, 'event.json');
+  const outputPath = path.join(root, 'output');
+  const body = '@agentic-delivery-lab-invoker-7f3a continue the saved plan';
+  const dispatchTimestamp = '1789992000000';
+  const unsigned = {
+    version: 1,
+    delivery_id: '92345678-1234-4234-8234-123456789012',
+    event: 'issue_comment',
+    action: 'created',
+    repository_id: '1358455028',
+    source: { kind: 'issue_comment', issue_number: 44, comment_id: 7, pull_request_number: null, review_id: null },
+    actor: { login: 'sjefsharp', type: 'User' },
+    hop: 0,
+    body_digest: (await import('../../scripts/lib/agent-invocation.mjs')).bodyDigest(body),
+    organization_id: '327861320',
+    installation_id: '163255060',
+    repository_full_name: 'agentic-delivery-lab/agentic-delivery',
+    dispatch_timestamp: dispatchTimestamp,
+  };
+  const signed = { ...unsigned, dispatch_signature: dispatchEnvelopeSignature({ secret: 'dispatch-secret', envelope: unsigned }) };
+  await writeFile(eventPath, JSON.stringify({
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    client_payload: signed,
+  }));
+  const env = {
+    GH_TOKEN: 'token',
+    GITHUB_EVENT_PATH: eventPath,
+    GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+    GITHUB_OUTPUT: outputPath,
+    CODEX_DELIVERY_STATE_DIR: root,
+    RUNNER_TEMP: root,
+    AGENTIC_DELIVERY_ORGANIZATION_ID: '327861320',
+    CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060',
+    CODEX_DELIVERY_DISPATCH_SECRET: 'dispatch-secret',
+  };
+  const fetchImpl = async (url) => {
+    if (url.endsWith('/issues/comments/7')) return response(200, { id: 7, body, user: { login: 'sjefsharp' }, author_association: 'OWNER' });
+    if (url.endsWith('/collaborators/sjefsharp/permission')) return response(200, { permission: 'write' });
+    throw new Error(`Unexpected URL ${url}`);
+  };
+  const accepted = await prepareAgentInvocation({ env, fetchImpl, now: () => Number(dispatchTimestamp) });
+  assert.equal(accepted.accepted, true);
+  const tampered = JSON.parse(await readFile(eventPath, 'utf8'));
+  tampered.client_payload.repository_id = '777777777';
+  tampered.client_payload.delivery_id = 'a2345678-1234-4234-8234-123456789012';
+  await writeFile(eventPath, JSON.stringify(tampered));
+  await assert.rejects(
+    prepareAgentInvocation({ env, fetchImpl, now: () => Number(dispatchTimestamp) }),
+    /dispatch signature does not match|dispatch repository is not an active participant/,
   );
 });
 

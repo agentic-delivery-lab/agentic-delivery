@@ -17,6 +17,7 @@ test('organization GitHub App contract includes lifecycle events and central cre
   assert.deepEqual(validateGithubAppContract(contract, undefined, eventCatalog), { valid: true, errors: [] });
   assert.equal(contract.installation.access, 'selected-repositories');
   assert.equal(contract.credentials.privateKey, 'central-deployment-only');
+  assert.equal(contract.credentials.dispatchSecret, 'central-gateway-and-controller-only');
   assert.equal(contract.tokenScopes.origin.repositoryIds, 'origin-event-repository');
   assert.equal(contract.tokenScopes.controller.repositoryIds, 'controller-repository');
   assert.equal(contract.permissions.workflows, 'none');

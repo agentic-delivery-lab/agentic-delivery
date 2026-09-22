@@ -138,12 +138,18 @@ Plane, not side effects of an arbitrary repository workflow or Project field.
 
 ### Event and execution boundary
 
-The App webhook verifies the signature, installation, organization, supported
-event/action, delivery ID and repository identity. It emits a signed,
-versioned event envelope to the central controller. The controller fetches the
-current GitHub object again, resolves the participant's pinned controller and
-contract versions, asks the semantic router for a proposal, and applies only
-deterministically authorized mutations to the originating repository.
+The App webhook verifies the GitHub signature, installation, organization,
+supported event/action, delivery ID and repository identity. It emits a
+versioned event envelope whose complete `repository_dispatch` payload is
+signed with a separate central HMAC dispatch secret. The controller verifies
+that signature and its bounded timestamp before fetching the current GitHub
+object again, resolving the participant's pinned controller and contract
+versions, asking the semantic router for a proposal, and applying only
+deterministically authorized mutations to the originating repository. The
+webhook secret and dispatch secret are separate credentials: the former
+authenticates GitHub ingress, while the latter authenticates the gateway-to-
+controller handoff. Neither is available to an origin repository or model
+process.
 
 An event is input, not a lifecycle transition. The lifecycle policy decides
 whether an issue, comment, pull request, review, workflow or Project event is
