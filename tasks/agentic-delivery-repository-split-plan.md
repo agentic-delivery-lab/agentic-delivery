@@ -176,12 +176,25 @@ CI and tests validate that evidence before either target is considered for
 operator publication. The central boundary manifest records Architecture,
 Primitives, and Distribution as `local-prepared`; that status does not claim
 that a remote repository, branch protection, or organization access exists.
-The current local extraction manifests deliberately still identify the
+The active local extraction branches deliberately still identify the
 planning-branch source commit `67d328b46d84ae599ebfe65ef550d156f689e112`.
-That is not the supplied `main` snapshot
-(`8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`), so publication is blocked until
-the history filter is rerun from the snapshot with the pinned tool and a new
-source map. No filtered history is fabricated by changing the manifest alone.
+They therefore remain incompatible with the supplied `main` snapshot
+(`8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`) and are not publishable. A
+separate, local-only rerun using the pinned `git-filter-repo` tag produced
+candidate branches named `work/migration-main-snapshot` in both target
+checkouts. The Architecture candidate is
+`cf527856fad86835e394829efab555f902e49224` (Architecture draft 0.1.0-draft.7,
+content digest
+`5a775b1dd26815f782cd07955664f9049c5606d6b698f571795c98d6178fb539`); the
+Primitives candidate is `01dc8df9eae5ee8394d05246dbf9ccdcddaa7c9` (Primitive
+draft 0.1.0-draft.4). Both carry 143 generated source mappings and pass the
+read-only `migration:source:check` against `main`. These branches are local
+review candidates only: they are not remote repositories, published release
+pins, or organization activation. The active release chain remains pinned to
+the older drafts until a separately reviewed upgrade PR adopts these exact
+candidate commits. No filtered history is fabricated by changing the manifest alone.
+The candidate source maps are generated artifacts from the pinned filter run,
+not a replacement for that run.
 
 The Control Plane gateway now requires both the App installation ID and the
 central controller repository ID from protected deployment configuration; it
