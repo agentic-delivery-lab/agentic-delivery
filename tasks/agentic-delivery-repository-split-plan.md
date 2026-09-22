@@ -82,6 +82,14 @@ request. The first successor issue must explicitly state whether it consumes
 the image-reference confirmation or leaves that confirmation as a separate
 precondition.
 
+The local implementation branch is an offline snapshot lineage: the current
+workspace `main` and `work/control-plane-migration-local` have no Git merge
+base. Its commits are therefore review evidence only, not reachable remote
+PR commits. Before an implementation issue or PR cites this plan as an
+official GitHub artifact, an authorized maintainer must publish or rebase the
+plan through a review branch based on the actual remote `main`; the issue must
+pin the resulting reachable commit, not this local-only lineage.
+
 ### Local implementation progress
 
 The implementation branch has progressed through the local portions of Phases
