@@ -2,493 +2,9 @@
 
 ## Document status
 
-This document is the implementation plan for
-[Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52).
-It is planning input, not an official architecture decision and not an active
-control-plane contract. Architecture decisions become official only after their
-own review pull requests are merged into `main`.
+This is the implementation-ready migration plan requested by [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52). It defines target ownership, staged migration, validation, and rollback. It is not an architecture decision or authorization to execute migration or change organization settings. Architecture decisions become official only through merged ADR review pull requests.
 
-### Execution authorization and current status (2026-09-22)
-
-The hard architecture gate is now being executed under the separately
-authorized successor issue [#53](https://github.com/agentic-delivery-lab/agentic-delivery/issues/53)
-and the user's explicit authorization in the controlling conversation. The
-following staged surfaces now exist for review: public
-`agentic-delivery-architecture`, public `agentic-delivery-primitives`, public
-`agentic-delivery-distribution`, the public `.github` governance candidate,
-and private `.github-private`. The central Control Plane remains the only
-authoritative lifecycle implementation in `agentic-delivery`.
-
-The immutable controller compatibility commits used by the release catalog are
-also published under `controller/<version>` tags in the Control Plane remote.
-This keeps rollback pins retrievable in a fresh hosted checkout after the
-local commit-message normalization, without rewriting or fabricating their
-history.
-
-Issue #52 remains the plan-persistence source issue and is not closed by this
-status update. Plan, migration, audit and compatibility evidence remains
-intentionally retained until the complete cutover definition in section 19 is
-met. Only then may the explicitly approved cleanup option close #52 and remove
-temporary plan/audit artifacts; production repositories, architecture
-decisions, contracts and provenance are not temporary artifacts.
-
-Issue boundary: Issue #52 is the plan-persistence source issue. It must not be
-used as authorization to create repositories, change GitHub settings, activate
-the control plane, or execute the migration. Any implementation work must use
-a separately authorized successor issue that references this plan and records
-the approved migration slice. This keeps the plan from silently changing the
-meaning, lifecycle state, or completion criteria of the issue that requested
-its persistence.
-
-### Successor-issue handoff contract
-
-When implementation starts, create or identify a separate issue for one
-approved migration slice. That issue must:
-
-1. use `Refs #52` (not `Closes #52`) when linking the persisted plan;
-2. state the exact phase, repositories, artifact families, external changes,
-   compatibility bridge, deterministic checks, rollback, and completion
-   evidence in scope;
-3. name the architecture decision or explicitly state why the slice is
-   already covered by an approved decision;
-4. state which parts are deliberately out of scope, especially repository
-   creation, App installation, organization settings, `.github-private`
-   activation, and lifecycle-field mutation unless separately authorized;
-5. use its own issue type, lifecycle stage, delivery state/readiness, and
-   pull-request closure reference; and
-6. never redefine #52's completion criteria or close #52 as a side effect.
-
-The first implementation issue should be the hard architecture gate for
-organization-wide Control Plane ownership, participation, distribution, and
-versioning. Later issues may implement the approved extraction slices. A
-pull request for this planning issue may therefore contain only the persisted
-plan and deletion of superseded task documents; implementation commits belong
-to the separately authorized successor issue even when they are developed on
-the same local worktree.
-
-The source snapshots match the current default branches at these commits:
-
-- `agentic-delivery`: `8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`;
-- `.github`: `58316e9bbfa48a9288e9d022266d3c8a3b52cc96`.
-
-### Issue-creation safety gate
-
-This plan can change the scope and acceptance criteria of a future
-implementation issue, so the issue must not be opened from memory or from a
-moving branch. Before creating the successor issue:
-
-1. freeze this plan at an identified commit and put that commit in the issue;
-2. confirm that the issue is a successor to #52 and uses `Refs #52`, never
-   `Closes #52`;
-3. select one bounded migration slice, name its affected repositories and
-   files, and state the compatibility bridge, deterministic checks, rollback,
-   and explicit exclusions;
-4. include the hard organization-wide Control Plane gate when the slice can
-   affect lifecycle, routing, orchestration, App ingress, workflow
-   distribution, enrollment, or versioning; and
-5. obtain human confirmation of any visual/reference material that cannot be
-   independently retrieved by the implementation agent.
-
-The supplied ChatGPT share URL for the reference image currently resolves to
-an unauthenticated landing page for the available read-only browser, not to
-the image or its conversation contents. The plan therefore records the
-diagram concepts explicitly provided in the task and treats the image as
-unverified evidence. No successor issue may claim that the image was fully
-validated until an authorized reviewer confirms the image contents or supplies
-an accessible export. This is an evidence boundary, not permission to broaden
-the issue or to block the already persisted plan.
-
-At plan freeze, the open issue remained #52 and the local implementation work
-was intentionally non-authoritative. That pre-authorization boundary has now
-been superseded for the current execution by the separately authorized #53
-successor issue and the explicit user authorization recorded there. The image
-reference remains an evidence gap unless an authorized reviewer supplies an
-accessible export; it is not silently treated as verified.
-
-The local implementation branch is an offline snapshot lineage: the current
-workspace `main` and `work/control-plane-migration-local` have no Git merge
-base. Its commits are therefore review evidence only, not reachable remote
-PR commits. Before an implementation issue or PR cites this plan as an
-official GitHub artifact, an authorized maintainer must publish or rebase the
-plan through a review branch based on the actual remote `main`; the issue must
-pin the resulting reachable commit, not this local-only lineage.
-
-### Live verification refresh after read-scope grant (2026-09-22)
-
-The read-only inventory was repeated after `read:user` and `read:project` were
-added to the GitHub CLI token. This refresh supersedes the initial plan-freeze
-statements about repository visibility and Project access; it does not authorize
-any write or cleanup operation.
-
-- The organization is still on GitHub Free. The live repository set is six
-  repositories on `main`: public `agentic-delivery`, `.github`,
-  `agentic-delivery-architecture`, `agentic-delivery-primitives`, and
-  `agentic-delivery-distribution`, plus private `.github-private`.
-- Public `.github`, Control Plane, Architecture, Primitives, and Distribution
-  repositories expose active rulesets. GitHub returns the documented upgrade
-  response when private `.github-private` rulesets are inspected on this plan;
-  this is an entitlement gap, not evidence that the private repository is
-  unprotected by another mechanism.
-- `.github-private` is observed as Private with default branch `main`. Its main
-  branch contains the inactive publication baseline with no profile or agents;
-  profile-only PR #1 remains open and separately reversible.
-- The GitHub App remains installation `163255060` for App `5011055`, with
-  selected-repository access, subscriptions limited to `issue_comment`,
-  `pull_request_review`, and `pull_request_review_comment`, and live
-  `workflows: write` permission. The desired contract still requires issue
-  lifecycle events and least-privilege `workflows: none`; changing App settings
-  is a separate operator action. The selected-repository list remains
-  unverified because the user-installation endpoint requires the full `user`
-  scope or an installation token; selected access must not be inferred.
-- Projects v2 is readable. The only observed organization Project is closed,
-  empty Project #1 (`@sjefsharp's untitled project`) with default fields and no
-  delivery items. There is no active operational Project projection.
-- GraphQL observes exactly nine enabled native Issue Types and exactly one
-  `Lifecycle Stage` single-select plus one `Delivery Readiness` single-select.
-  The live field and option IDs match the existing `ISSUE_FIELD_BINDINGS_JSON`
-  repository variable. No separate `Delivery State` field exists. The live
-  values therefore confirm ADR-0019's interpretation: `Delivery Readiness` is
-  the legacy display name of the single orthogonal Delivery State concept.
-- A read-only metadata dry-run for Issue #52 resolves its native `Task` type and
-  proposes only `Lifecycle Stage=Intake` and `Delivery Readiness=Not ready`;
-  those values were not applied because #52 is the plan source issue and must
-  not be changed as a side effect of evidence collection.
-- Organization Actions settings, organization Actions variables/secrets, and
-  the App installation repository list remain unavailable to this token. The
-  Copilot billing endpoint reports Business with unconfigured seat management;
-  custom-agent entitlement is still unverified. These are evidence gaps or
-  activation gates, not inferred absence.
-
-### App-installation authorization refresh (2026-09-23)
-
-The GitHub CLI token was refreshed with the full `user` scope. The effective
-scopes now include `gist`, `read:org`, `read:project`, `repo`, `user`, and
-`workflow`. The selected-repository endpoints were retried read-only:
-
-- `GET /user/installations` returned HTTP 403 stating that the token must be
-  authorized to a GitHub App to list installations;
-- `GET /user/installations/163255060/repositories` returned HTTP 403 stating
-  that a GitHub App, personal access token, or basic-auth credential is needed;
-- `GET /installation/repositories` returned HTTP 403 because an installation
-  access token is required.
-
-The [official App-installation endpoint contract](https://docs.github.com/en/rest/apps/installations)
-distinguishes a user access token that has explicit permission for the
-installation from an installation access token.
-The refreshed GitHub CLI OAuth token has the required OAuth scope but still is
-not an authorized token for these App-installation resources. This is therefore
-an authentication/authorization evidence gap, not evidence that the App has no
-selected repositories. The exact selected-repository list remains unverified.
-
-An authorized operator must obtain the list through the App installation UI or
-an installation access token and attach the redacted repository-ID/full-name
-result to the activation evidence. Do not broaden the App, infer access from
-the organization repository list, or activate a participant based on this
-failed read-only endpoint. No repository, App, workflow, field, Project,
-publication, issue, or cleanup state was changed by this retry.
-
-### Post-merge verification and remaining cutover gates (2026-09-22)
-
-The central Control Plane extraction PR [#54](https://github.com/agentic-delivery-lab/agentic-delivery/pull/54)
-merged into `agentic-delivery/main` at
-`d2bdbe4740394c9868f49b56d95f9ac8fc5af61d`. Its hosted portability matrix,
-self-hosted quality checks, ADR-quality check, and pinned deterministic and
-semantic Architecture Review all passed before the merge. The commit-range
-validator now batches Conventional Commit validation for non-zero PR ranges
-while retaining per-commit Gitmoji checks and the all-zero bootstrap fallback.
-
-Architecture PR #1, Primitives PR #1, Distribution PR #1, and public `.github`
-PR #9 are merged and independently verified. The three public target
-repositories have active `main` rulesets requiring their `validate` check.
-Public `.github` `main` is pinned at
-`af52c92e49616e78f8d6647cf5cf538a7e571d78`; its workflow template keeps
-separate immutable pins for the reusable workflow source and current controller
-release.
-
-Private `.github-private` remains Private with a profile-only PR #1 open. Its
-default `main` intentionally has no `profile/README.md` or agent projection
-until activation is independently reviewed. The GitHub Free API still rejects
-private branch-protection/ruleset inspection with the documented upgrade
-response, and Copilot Business billing is not configured with seats or a
-verified custom-agent entitlement. These are unresolved activation gates, not
-evidence of absence. No App installation, live two-repository mutation,
-lifecycle-field migration, Project automation activation, or organization-level
-agent publication has been claimed.
-
-The explicit-root release-chain check passes against the merged target
-checkouts: Control Plane `0.2.0-draft.37` at
-`7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b`, Architecture `0.1.0-draft.8`,
-Primitives `0.1.0-draft.4`, and zero private publication agents. Issue #52,
-the migration plan, audit evidence, compatibility bridges, and feature
-branches remain retained until the complete cutover definition is met; the
-merge of PR #54 does not authorize cleanup.
-
-The pre-existing `work/issue-52-plan-local-main2af` branch does have the
-remote-`main` ancestry, but it contains an earlier 1,847-line plan and does
-not include the current control-plane amendment, image evidence boundary, or
-draft37 release evidence. It is not a valid substitute for the current plan
-until a maintainer deliberately refreshes it and reviews the resulting diff.
-
-### Local implementation progress
-
-The following progress table was captured at the plan-freeze boundary. It
-distinguishes locally prepared contracts from activation and remains useful as
-the migration baseline; current remote PRs and entitlement limits are recorded
-in the execution update above and in the successor issue. It does not close
-Issue #52 or authorize cleanup before the final cutover gate.
-
-| Local slice | Evidence | Status boundary |
-| --- | --- | --- |
-| Generic Control Plane contracts and signed gateway | `config/`, `api/github/`, `scripts/lib/participant-registry.mjs`, `scripts/validate-multi-repository-acceptance.mjs` | Draft and shadow-only; no live App installation or mutation |
-| Pull-request observation path | `.github/workflows/agent-observation.yml`, `scripts/validate-observation-event.mjs`, draft37 release with draft36 rollback and draft23 bootstrap | Read-only observation; no lifecycle write-back or model execution |
-| Organization event catalog | `config/event-catalog.yml`, `schemas/event-catalog.v1.schema.json`, `scripts/lib/event-catalog.mjs`; runtime route maps in `scripts/lib/agent-invocation.mjs` derive from it | Canonical event/action/route contract; App manifest and participant subscriptions are validated projections |
-| Primitive selection contract | `config/primitive-selection.yml`, `schemas/primitive-selection.v1.schema.json`, `scripts/lib/primitive-selection.mjs` | Release-bound profile-to-Primitive mapping; validates against the pinned Primitive catalog and does not duplicate Primitive content |
-| Architecture and Primitive extractions | sibling checkouts and their `migration/manifest.json`, source maps, and snapshot-gated migration READMEs | Public target repositories and review PRs are merged; active `main` rulesets require `validate`; filtered histories and maps reproduce the supplied `main` snapshot; live enrollment remains provisional |
-| Distribution/bootstrap | `agentic-delivery-distribution`, draft25 bundle, 9/9 tests | Public target repository is merged and protected; no consumer enrollment; workflow and publication checks use immutable Control Plane source `204cd775705ea77737daafb95954019e528752eb`; the Dev Container base image is digest-pinned |
-| Private publication surface | `.github-private`, pending-entitlement surface and pinned validator | Private baseline exists without profile or agents on default `main`; profile-only PR #1 is separately reversible and remains unmerged pending private protection/entitlement verification |
-| GitHub special-surface contract | `migration/special-surfaces.yml`, `scripts/validate-special-surfaces.mjs` | Migration evidence distinguishes GitHub-consumed paths from governance paths and forbids runtime ownership |
-| Preview Automation templates | `automations/templates/*.automation.md`, manifest and validator; Distribution projection lock | Two manual read-only canonical templates and a hash-pinned Agent Plugin projection; `.github-private` remains excluded |
-
-The release-chain validator reads both dependency manifests and their digest
-implementations from the exact pinned Architecture and Primitive commits. It
-does not validate a dependency with a mutable sibling worktree tool.
-
-The architecture-review path now resolves the release-bound Architecture
-dependency, checks out that exact commit, reproduces its content digest, and
-fails closed when the conformance policy or tooling lock disagrees. The review
-workflow passes the pin explicitly to `harness-architecture-review`; a moving
-Architecture `main` is not accepted as review context.
-
-The local checks supporting these slices are `pnpm control-plane:check`,
-`pnpm github-app:check`, `pnpm control-plane:boundary`,
-`pnpm acceptance:check`, `pnpm migration:check`,
-the explicit-root `pnpm migration:source:check`,
-`pnpm special-surfaces:check`, `pnpm automation:check`,
-`pnpm traceability:check`, and `pnpm plan:check`,
-and the explicit-root `pnpm release-chain:check`. The Distribution checkout
-also runs `pnpm test`, including its repository-local CI isolation fixture.
-These checks are evidence for implementation readiness, not evidence that the
-corresponding GitHub repositories, settings, App installation, or publication
-surface exist.
-
-The extraction-source gate is run with the supplied `agentic-delivery` main
-commit (`8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`) and explicit Architecture
-and Primitives target roots. The active local candidates pass with 143 mapped
-commits each. The retained planning-branch candidates are still exercised as
-negative fixtures and remain blocked from publication because they do not match
-the supplied `main` snapshot.
-
-`pnpm plan:check` is a local documentation guard: it verifies the ordered
-twenty-eight-section plan, the Issue #52 persistence boundary, the successor
-issue contract, the inaccessible image evidence marker, the hard architecture
-gate, and the current immutable controller release pin. It does not inspect or
-mutate GitHub.
-
-The latest local regression evidence is: Control Plane `335/335` tests,
-Architecture `8/8`, Agentic Primitives `6/6`, Distribution `9/9`, and the
-private publication validator with zero projections. The Control Plane release
-chain suite includes the regression fixture that mutates a dependency
-worktree tool and still requires the exact pinned tool source. The cross-repository
-publication and release gates were run with explicit roots (`.github-private` and
-`agentic-delivery-primitives`, then Architecture, Primitives, Distribution, and
-`.github-private` for the release chain); the default root-only invocation is
-intentionally insufficient and fails closed rather than guessing sibling paths.
-All five prepared target
-checkouts are clean after their local commits; the clean public `.github`
-candidate is based on the supplied current snapshot in a separate worktree.
-The original public `.github` checkout retains pre-existing user changes and
-is intentionally not modified by this migration work.
-
-The migration evidence now records `.github` and `.github-private` as
-GitHub-defined special surfaces rather than domain repository targets. Their
-GitHub-consumed paths, governance paths, non-runtime boundary, workflow
-inheritance behavior, and private publication exclusions are validated by
-`pnpm special-surfaces:check` and its positive and negative fixtures.
-The observed public `.github` repository ID (`1368850419`) is recorded as a
-shadow participant with the same immutable controller and dependency pins;
-runtime admission still requires independently verified App repository access,
-so this local registry entry cannot activate it by itself.
-Shadow intake now requests only read permissions from the origin-scoped App
-token; active delivery is the only path that requests issue write capability.
-The local public `.github` candidate additionally has a dependency-free
-`scripts/validate-governance.mjs` check, a public profile, scoped instructions,
-and a SHA-pinned workflow-template caller. Because the original `.github`
-checkout contains unrelated uncommitted user work and was based on a stale
-remote-tracking tip, the review candidate is a separate clean worktree based
-on the supplied current `.github` snapshot: branch
-`work/issue-52-public-governance-snapshot` at
-`ad9489fa860e7214084da6a5d834078084f4908f`. The original dirty checkout is
-preserved and is not used as release evidence.
-
-The controller release also publishes a machine-readable support matrix. It
-pins accepted event-envelope, lifecycle, state-machine, and evidence versions,
-declares Primitive and Architecture major compatibility, sets the minimum
-bootstrap version, and requires a ninety-day support window with explicit
-pre-release and security-revocation rules. Contract validation fails closed
-when that metadata is incomplete, uses a mutable compatibility range, omits a
-current contract version, or omits a pinned Architecture/Primitive major.
-
-The Control Plane now also carries scoped `AGENTS.md` instructions for App
-ingress, contract configuration, central workflows, runtime libraries, and
-migration evidence. The repository-audit test guards those boundaries so the
-legacy root guidance cannot silently become a second ownership model.
-
-The locally prepared Architecture Authority and Agentic Primitives extractions
-now also carry `migration/manifest.json`, a pinned `git-filter-repo` tool
-identity, and a complete `migration/source-commit-map.csv`. Their repository
-CI and tests validate that evidence before either target is considered for
-operator publication. The central boundary manifest records Architecture,
-Primitives, and Distribution as `local-prepared`; that status does not claim
-that a remote repository, branch protection, or organization access exists.
-The retained planning branches deliberately identify the planning-branch
-source commit `67d328b46d84ae599ebfe65ef550d156f689e112`. They therefore remain
-incompatible with the supplied `main` snapshot
-(`8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`) and are not publishable. A
-separate, local-only rerun using the pinned `git-filter-repo` tag produced
-candidate branches named `work/migration-main-snapshot` in both target
-checkouts, which are the active local review candidates. The Architecture
-candidate is
-`9d4872c39e9c52075a7a299ad4584ac3eb704a1b` (Architecture draft 0.1.0-draft.8,
-content digest
-`ac4430f7aa86c016c51ea8f9458627d4412d36256960c1bf54b63e851dc2350c`); the
-Primitives candidate is `01dc8df9eae5ee8394d05246dbf9ccdcddaa7c9e` (Primitive
-draft 0.1.0-draft.4). Both carry 143 generated source mappings and pass the
-read-only `migration:source:check` against `main`. These branches are local
-review candidates only: they are not remote repositories or organization
-activation. The local release chain has now been advanced to draft37 so that
-the candidate dependencies are exercised end to end; draft36 remains the
-explicit rollback pin until a separately reviewed upgrade PR adopts the
-candidate commits. No filtered history is fabricated by changing the manifest alone.
-The candidate source maps are generated artifacts from the pinned filter run,
-not a replacement for that run.
-
-The Control Plane gateway now requires both the App installation ID and the
-central controller repository ID from protected deployment configuration; it
-has no fallback for either identity. Current draft controller `0.2.0-draft.37`
-is pinned to `7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b`; draft35 at
-`e1c2289f84dbea5304e681df9e6f692fff4d2fcd` and draft34 at
-`de7c8889ecf8bd7a0dfcd0017be845999061c1fd` remains the explicit rollback
-release, while draft23 at `03dc4071f29d3914479e9a0bd174759e79180f8c` remains
-the trusted bootstrap commit for this release. The release-bound primitive
-selection contract pins Primitive draft `0.1.0-draft.4` at
-`01dc8df9eae5ee8394d05246dbf9ccdcddaa7c9e` and its canonical digest, and
-checks every profile against the pinned catalog and orchestration policy.
-The current controller draft `0.2.0-draft.37` pins Architecture draft
-`0.1.0-draft.8` at `9d4872c39e9c52075a7a299ad4584ac3eb704a1b` with digest
-`ac4430f7aa86c016c51ea8f9458627d4412d36256960c1bf54b63e851dc2350c`, and
-Primitive draft `0.1.0-draft.4` at
-`01dc8df9eae5ee8394d05246dbf9ccdcddaa7c9e` with its canonical digest. The
-Architecture release now self-validates its ADR/context IDs and conformance
-and tooling-lock digests. The Distribution workflow source and the private
-publication validator remain pinned to the immutable Architecture-review
-commit `204cd775705ea77737daafb95954019e528752eb`; that source verifies the
-published bytes against the exact canonical Primitive commit. The private
-workflow does not receive central App credentials. This is still local, draft,
-and shadow-only; it does not activate a GitHub App or change any organization
-issue.
-
-Distribution now also validates a schema-backed capabilities lock, includes
-the Primitive source in its source lock, and carries the Architecture content
-digest into the consumer provenance lock. Cross-file checks reject drift
-between the Primitive release, Architecture release, Control Plane release,
-workflow source, and Agent Plugin projection.
-
-The draft release graph remains acyclic: Architecture draft4 indexes the
-Primitive draft4 snapshot, while that Primitive release retains the preceding
-Architecture draft3 as its governing pin. A later stable release may advance
-both only through an explicit, ordered promotion rather than by creating
-mutually self-referential release metadata.
-
-The offline acceptance matrix additionally exercises `.github-private` as an
-origin-event participant with an isolated issue namespace and no central App
-credentials in its publication workflow. Its repository ID remains a fixture
-until the private repository and App access are verified by an authorized
-operator. The matrix also requires the private validator to use the central
-Control Plane repository at an immutable SHA and credential-free checkouts.
-It now also proves both halves of the enrollment contract: selected App access
-and a matching participant-registry record; removing either fails closed before
-state mutation.
-
-The acceptance report records `liveGitHubVerification: not-run` and labels the
-two-repository result as offline fixture evidence. It must not be presented as
-proof of a live App installation, webhook delivery, organization-field
-mutation, or repository-local CI run.
-
-The gateway contract test also dispatches an enrolled second repository through
-an explicitly configured controller name and repository ID different from the
-current repository, proving that the central controller identity is a
-deployment contract rather than a repository-name fallback.
-
-Draft controller `0.2.0-draft.24` at
-`1c33a16b9a5a7e6480410c69bdda32648126eabc` accepts the planned pull-request
-observation actions through the same signed central gateway and dispatches them
-to a dedicated read-only `agent_observation` workflow. That workflow validates
-identity and enrollment using the participant's immutable controller commit,
-then stops before origin API access, issue routing, lifecycle mutation, or
-model execution. The explicit invocation event catalog remains unchanged;
-draft23 is retained for rollback and bootstrap trust.
-
-The offline multi-repository acceptance matrix now exercises two repositories
-with the same issue number through the shared controller contract, confirms
-distinct repository-ID state namespaces, runs the deterministic lifecycle
-write-back contract once per originating issue, carries identity through API,
-git, pull-request, and evidence projections, checks retained rollback pins,
-and verifies that private publication validation receives no App credentials.
-Its report is explicitly fixture evidence; live App installation, webhook
-delivery, organization fields, and repository-local CI remain operator/runtime
-checks.
-
-The release-coordination check `scripts/validate-release-chain.mjs` now takes
-the four extracted repository roots explicitly, reads the Architecture and
-Primitive release manifests from the exact Control Plane-pinned commits, and
-reproduces their content digests there. It also checks Distribution's
-workflow/source/capability/plugin locks and the
-`.github-private` validator's immutable workflow ref, credential-free checkout,
-canonical Primitive source, and per-agent provenance. It is exposed as
-`pnpm release-chain:check`; omitting any external root fails with exit code 2,
-so a consumer cannot silently pass by relying on an implicit sibling checkout.
-The same gate now requires the private workflow to check out the declared
-Primitive repository from the provenance-derived immutable commit and to run
-the validator with `--primitive-root primitives`; removing that reproduction
-step fails the release chain before publication.
-
-The same release-chain check now verifies the preview Automation projection:
-the Distribution lock must pin the current immutable Control Plane source
-commit, each Agent Plugin file must match the source bytes and SHA-256 digest,
-and no client-local settings or `.github-private` path may enter the projection.
-The current draft37 release and Distribution draft25 bundle carry that exact
-source pin; draft36 and Distribution draft24 remain the explicit rollback
-pairs for the immediately preceding release/bundle combination.
-This is a release gate, not a runtime import or an authorization to publish
-any repository.
-
-The Distribution repository now also has a deterministic consumer fixture that
-places an independently owned repository CI workflow beside the managed
-bootstrap targets, applies the bundle, and verifies that the local workflow is
-unchanged. This proves the bootstrap boundary does not claim or overwrite
-repository-specific CI; it does not claim that a live consumer workflow has
-run in GitHub.
-
-The Distribution draft12 bundle now emits structurally valid reusable-workflow
-YAML, and its validator rejects malformed job indentation instead of checking
-only source pins. The Control Plane release-chain check also verifies that the
-immutable workflow-source commit contains the publication validator and both
-reusable workflow entry points, and that the bootstrap commit contains the
-trusted enrollment/preflight code and dependency manifests. These are local
-release-integrity checks; they do not publish or activate a consumer.
-
-The read-only `pnpm organization:inventory` command now captures the current
-organization repository, visibility, default-branch, ruleset, workflow, open
-issue/PR, label, cross-reference, and capability evidence without persisting
-issue bodies or mutating GitHub. An unavailable endpoint is recorded as an
-evidence gap rather than interpreted as absence. Live reports are temporary
-operator evidence and are not committed as authoritative configuration. The
-inventory also probes both GitHub special surfaces directly. The 2026-09-22
-run observed public `.github` on `main` and received a 404 for
-`.github-private`; that result is recorded as `not-found-unverified`, because
-the current identity cannot distinguish an absent repository from inaccessible
-private metadata. It therefore does not authorize creation, activation, or a
-claim that the private surface is absent.
+Issue boundary: Issue #52 is the plan-persistence source issue. It does not authorize repository creation, organization or App setting changes, publication activation, lifecycle mutation, or migration execution. Implementation belongs to separately authorized successor issues linked with `Refs #52`, never `Closes #52`; each issue defines its own bounded scope and completion criteria.
 
 ## Executive summary
 
@@ -558,63 +74,78 @@ that ADR with history into Architecture Authority during the first extraction.
 
 ### Organization and repository evidence
 
-Read-only GitHub inspection found:
+The supplied main-branch snapshots establish the migration baseline:
 
-- organization `agentic-delivery-lab` is currently on GitHub Free;
-- `.github` and `agentic-delivery` are public;
-- no `.github-private` repository was returned by the visible repository
-  inventory, and the organization reports zero visible private repositories;
-  a direct read-only `GET /repos/agentic-delivery-lab/.github-private` also
-  returned `404 Not Found` for the current token. GitHub can use that response
-  for an inaccessible private repository as well as an absent one, so this is
-  still an unverified absence rather than proof that no such repository exists;
-- both repositories use `main` as their default branch;
-- `agentic-delivery` has no open pull requests and only the `main` branch;
-- `.github` has four stale feature branches and no open pull requests;
-- repository rulesets require `Validate pull request body` on both repositories;
-- no classic branch-protection resource was returned;
-- `agentic-delivery` has secret scanning and push protection enabled;
-- `.github` does not currently have those security features enabled;
-- the full current repository test suite passes;
-- GitHub still lists `adr-approval-signal` as an active workflow although the
-  workflow is absent from the inspected snapshot, which is a remote/snapshot
-  drift to resolve before workflow cleanup;
-- legacy `type:*` and `state:*` labels remain as migration evidence;
-- project inspection is blocked by the current token's missing `read:project`
-  scope.
+- `agentic-delivery` at
+  `8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`;
+- public `.github` at
+  `58316e9bbfa48a9288e9d022266d3c8a3b52cc96`.
 
-The repeatable read-only inventory was also run on 2026-09-22 (UTC). It
-observed exactly the two public repositories `agentic-delivery` and `.github`,
-both on `main`, with active pull-request-body rulesets. It observed the nine
-organization Issue Types and a GitHub Free organization plan. The Copilot
-billing endpoint reported a Business Copilot configuration, but that does not
-by itself prove custom-agent availability, seat assignment, preview access, or
-the existence of a private `.github-private` repository. The current identity
-could not read the App installation, organization Actions policy/secrets, or
-Projects v2; each is recorded as an evidence gap rather than absence. The
-inventory report is temporary live evidence and is not authoritative
-configuration.
+Those snapshots contain only the two repositories named in the original
+inventory. The mixed implementation described below is the pre-extraction
+baseline, not a claim that current `main` still has that repository-local
+topology.
 
-The local `.github` checkout was initially behind that remote snapshot at
-`387f4d3`; its remote-tracking `origin/main` was refreshed read-only to
-`58316e9bbfa48a9288e9d022266d3c8a3b52cc96` for inspection. Its working tree
-contains pre-existing user changes and was not checked out, reset, merged, or
-modified by this migration work. Snapshot analysis therefore uses the
-immutable remote-tracking commit, not the dirty local tree.
+A read-only organization inventory on 2026-09-23 returns six repositories,
+all with default branch `main`:
 
-That remote `.github` snapshot contains the ten issue forms, pull-request
-template, pull-request-body workflow, ruleset definition, validator, and its
-tests. The local untracked community files (`CODE_OF_CONDUCT.md`,
-`CONTRIBUTING.md`, `SECURITY.md`, and `SUPPORT.md`) are user work and are not
-treated as part of the inspected snapshot or this migration change.
+| Repository | Visibility | Current boundary |
+| --- | --- | --- |
+| `.github` | Public | Organization defaults and community-health surface |
+| `.github-private` | Private | Member profile and agent-publication governance surface |
+| `agentic-delivery` | Public | Central Control Plane |
+| `agentic-delivery-architecture` | Public | Architecture Authority |
+| `agentic-delivery-primitives` | Public | Canonical reusable capabilities |
+| `agentic-delivery-distribution` | Public | Developer environment and consumer distribution |
 
-The `agentic-delivery` checkout likewise refreshed its remote-tracking
-`origin/main` read-only; it resolves to the supplied source snapshot
-`8b9bd77e1cb6008ce9dab3bbe8652ab7979b4c99`. The implementation branch is
-therefore compared against a reachable immutable baseline without changing
-the protected local `main` branch.
+The current organization repositories and their default branches were verified
+with read-only GitHub CLI inspection. The organization plan was last observed
+as GitHub Free. Private-repository ruleset inspection is restricted under that
+plan, so the absence of an inspectable private ruleset is not treated as proof
+of protection. Copilot billing metadata previously indicated a Business
+configuration, but custom-agent availability, seat assignment, and supported
+surface entitlement remain unverified.
 
-### Actual repository coupling
+The private `.github-private` repository is confirmed Private on `main`. Its
+current default branch contains publication governance and provenance files,
+but no `profile/README.md` or published organization agents. Its member-profile
+activation pull request remains open and independently reversible. Keep the
+default branch inactive for those member/Copilot surfaces until entitlement,
+protection, ownership, and publication validation are reviewed.
+
+The supplied public `.github` snapshot contains organization Issue Forms,
+contribution templates, a pull-request-body workflow, a ruleset definition,
+and deterministic validation. A separate read-only inspection of its current
+remote `main` found nine Issue Form YAML files plus `ISSUE_TEMPLATE/config.yml`,
+the public profile, `CODEOWNERS`, both governance workflows, the ruleset,
+validator scripts and tests, and workflow templates. The public repository's
+validator and the copy in `agentic-delivery` have different content hashes;
+their behavior must be reconciled by tests rather than presumed equivalent.
+Its community-health files remain the only public default inheritance source.
+The split adds no inheritance behavior to `.github-private`.
+
+The organization-level GitHub App setting was reported by the operator as
+**All repositories** on 2026-09-23. That setting is not independently
+verifiable through the current read-only identity. The last observable App
+subscriptions omitted `issues` and the last observed permission set included
+`workflows: write`; both must be rechecked with App-authorized evidence before
+activation. Organization Actions settings/secrets, App installation details,
+and current Copilot entitlement remain explicit evidence gates rather than
+inferred absence.
+
+This differs from the versioned `config/github-app-contract.json`, which still
+declares `installation.access: selected-repositories`, lists `issues` in the
+event contract, and sets `workflows: none`. Treat this as live-configuration
+versus-contract drift: update the contract and App manifest only through the
+approved ADR follow-up. The operator setting does not update code, and the
+contract does not prove the live App configuration.
+
+Issue #53 already exists as the successor architecture-gate issue and links to
+this plan with `Refs #52`. Reuse that scoped issue for the distribution and
+versioning decision after confirming that its acceptance criteria still match
+the approved plan; do not create a duplicate gate issue.
+
+### Supplied-snapshot implementation coupling
 
 The current implementation is not an organization-wide Control Plane. It is a
 repository-local implementation with some repository-generic internals.
@@ -624,8 +155,8 @@ repository-local implementation with some repository-generic internals.
 | GitHub App registration | One App, ID `5011055`, slug `agentic-delivery-lab-invoker-7f3a` |
 | App permissions | Metadata read; Contents, Issues, Pull requests, and Workflows write |
 | App event subscriptions | `issue_comment`, `pull_request_review`, and `pull_request_review_comment` only |
-| App installation | One organization installation, ID `163255060`, with selected-repository access |
-| Exact selected repositories | Not readable with the current user token because `read:user` is missing |
+| App installation | One organization installation, ID `163255060`; selected access was last observed on 2026-09-22 and **All repositories** was reported by the operator on 2026-09-23 |
+| Effective repository access | Not independently readable: refreshed OAuth user-token requests to App-installation endpoints were rejected because App-authorized credentials are required |
 | Webhook reception | `api/github/webhook.mjs` verifies signatures and filters invocation events |
 | Webhook repository filter | Falls back to `agentic-delivery-lab/agentic-delivery` and rejects every other repository |
 | Webhook handoff | Sends `repository_dispatch` back to the same repository |
@@ -648,7 +179,7 @@ repository-local implementation with some repository-generic internals.
 | API mutation target | Derived from `GITHUB_REPOSITORY` in most controller code |
 | Installation token scope | Permissions are narrowed, but `repository_ids` is not supplied, so a token can cover all selected repositories |
 
-The current path is therefore:
+The supplied-snapshot path is therefore:
 
 ```text
 App webhook
@@ -669,6 +200,26 @@ Reusable migration foundations already exist:
 - git, branch, issue, comment, field, and pull-request operations already use a
   selected repository value;
 - tests already use generic fixtures such as `fixture/repo` and `owner/repo`.
+
+### Current-main staged decoupling since the supplied snapshots
+
+Current `main` has moved beyond the ZIP baseline. It now contains versioned
+event, participant, release, App, and Primitive-selection contracts; a
+repository-ID participant registry; signed dispatch/replay protection; a
+central controller/origin identity boundary; and draft Architecture and
+Primitive pins. All six organization repositories are present in the current
+registry as `shadow` participants. Do not recreate these structures or treat
+the draft release as proof of an approved production cutover.
+
+The deterministic `pnpm acceptance:check` fixture demonstrates two repository
+IDs using one controller, distinct namespaces for the same issue number,
+origin-only write-back, upgrade/rollback, and `.github-private` participation
+without local App credentials. Its report classifies itself as
+`offline-fixture`; `liveGitHubVerification` and repository-local CI are not
+proven by that check. Current live App settings also diverge from
+`config/github-app-contract.json`, as noted above. Therefore Phase 0 must
+reconcile this already-implemented draft with ADR-0018 and live evidence before
+any further extraction, new activation, or removal of the legacy local route.
 
 ### Work-state model and architecture drift
 
@@ -700,18 +251,14 @@ recreate the lifecycle state machine.
 
 ### Evidence gaps
 
-Before organization changes, an authorized owner must inspect:
-
-```bash
-gh auth refresh -s read:project -s read:user
-gh project list --owner agentic-delivery-lab
-gh project field-list <project-number> --owner agentic-delivery-lab
-gh api /user/installations/163255060/repositories
-```
-
-The owner must also inspect organization secrets/variables, custom Copilot
-instructions, custom-agent policy, selected App repositories, and any enterprise
-relationship in the GitHub UI.
+Before activation, an authorized owner must inspect Projects, the App
+installation's effective repository access, event subscriptions, and
+permissions using the GitHub UI or credentials explicitly authorized for the
+App installation. A `gh auth refresh` OAuth token alone does not authorize
+App-installation endpoints. Also inspect organization Actions settings and
+secrets/variables, Copilot custom instructions, custom-agent policy, and any
+enterprise relationship in their authoritative settings surfaces. Record
+unavailable views as evidence gaps; do not infer absence.
 
 ## 2. GitHub special-repository findings
 
@@ -727,6 +274,23 @@ Workflows in `.github/.github/workflows` are not inherited. `workflow-templates`
 offers starter files that are copied into consumers; it is not live execution
 or synchronization. Ruleset JSON in the repository is desired-state evidence,
 not active enforcement by itself.
+
+The live public repository already owns the PR-body validator, its tests, and a
+local `pull_request_target` workflow. Keep that validator canonical in public
+`.github`, because it validates the organization contribution contract rather
+than delivery lifecycle behavior. Publish a small composite Action beside the
+public workflow so an opted-in consumer can call the same implementation at
+an immutable `.github` commit. GitHub documents cross-repository Action
+references by owner/repository/path and SHA, and exposes `github.action_path`
+for scripts shipped with composite Actions ([creating a composite action](https://docs.github.com/en/actions/tutorials/create-actions/create-a-composite-action),
+[Action metadata syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/metadata-syntax)).
+The public repository's own workflow uses its local Action; consumer workflows
+are thin, explicitly installed callers. They pass only the PR author and body,
+never check out or execute PR-head code, and receive no secrets or lifecycle
+permissions. The Action does not enroll repositories or receive lifecycle
+authority. The existing `validate-governance.yml` and
+`scripts/validate-governance.mjs` also remain local checks of the
+special-repository boundary; they are not thin Control Plane callers.
 
 Position `.github` as a public organization-governance adapter, not a runtime
 repository.
@@ -759,23 +323,34 @@ Do not infer unsupported behavior:
 - it is not a secret store, runtime state store, documentation dump, or second
   control plane.
 
-Create `.github-private` only after private-repository ruleset or branch
-protection is available. On the current plan, do not publish organization
-agents to an unprotected private repository. Member-profile activation and the
-first agent publication must be separate and independently reversible.
+`.github-private` already exists as a private repository. Keep member-profile
+and Copilot publication inactive until its effective access and available
+branch/ruleset protections are verified; on the currently observed plan, do
+not publish organization agents to a repository without adequate protection.
+Member-profile activation and the first agent publication must be separate and
+independently reversible.
 
 ## 3. Mandatory architecture decision
 
-Create an ADR titled:
+Use the existing ADR titled:
 
 ```text
 Organization-wide Agentic Delivery control-plane distribution and versioning
 ```
 
-Because Architecture Authority does not yet exist, first merge this ADR under
-the current ADR process in `agentic-delivery`. During the first architecture
-extraction, preserve its history, assign its global Architecture Authority ID,
-and retain the legacy ADR alias.
+This is ADR-0018 in the current repository. Do not create a duplicate record.
+Before any content migration, onboarding, publication, or lifecycle activation,
+review and amend or supersede ADR-0018 under a separately authorized successor
+issue and pull request. The current ADR selects selected-repository access by
+default, which conflicts with the operator-reported **All repositories**
+installation setting; the successor decision must resolve this explicitly and
+must keep registry enrollment as a separate authorization gate. Issue #52 is
+the plan-persistence issue, not authorization to approve or implement the ADR.
+
+During the first Architecture Authority extraction, preserve ADR-0018's history,
+assign its global Architecture Authority ID, and retain a legacy alias. Migrate
+ADR-0019 with history as the related Delivery State decision; do not duplicate
+either rationale in arc42.
 
 The ADR must record:
 
@@ -783,7 +358,9 @@ The ADR must record:
 - `agentic-delivery` as the deliberate permanent Control Plane owner;
 - central App webhook ingress and central lifecycle execution;
 - the App organization-installation model;
-- selected-repository access as the default;
+- one organization installation configured for **All repositories**, as reported
+  by the operator, with participant-registry enrollment as the independent
+  authorization gate;
 - the two-part participation contract;
 - repository ID as primary identity;
 - the signed event envelope;
@@ -810,7 +387,7 @@ Alternatives and outcomes:
 | Use `.github-private` as runtime | Reject: unsupported special-repository behavior and wrong boundary |
 | Use App access alone as enrollment | Reject: accidental App access would activate delivery |
 | Use registry alone as enrollment | Reject: the App may lack actual repository access |
-| Use selected App access plus participant registry | Select |
+| Use organization-wide App installation access plus participant registry | Select |
 
 ## 4. Target bounded contexts
 
@@ -876,12 +453,12 @@ repositories, not generic domain bounded contexts.
 Use these exact repositories:
 
 1. `.github` — existing, public;
-2. `.github-private` — new, private;
-3. `agentic-delivery-architecture` — new, public;
+2. `.github-private` — existing, private;
+3. `agentic-delivery-architecture` — existing staged target, public;
 4. `agentic-delivery` — existing, public, deliberately reduced to the Control
    Plane;
-5. `agentic-delivery-primitives` — new, public;
-6. `agentic-delivery-distribution` — new, public.
+5. `agentic-delivery-primitives` — existing staged target, public;
+6. `agentic-delivery-distribution` — existing staged target, public.
 
 Keeping `agentic-delivery` avoids rewriting existing issue and pull-request
 URLs and preserves the functioning implementation as the incremental migration
@@ -915,11 +492,22 @@ architecture review, Automations, or generated publications.
 |   |-- pull_request_template.md
 |   |-- rulesets/
 |   |   `-- require-pull-request-body.json
+|   |-- actions/
+|   |   `-- validate-pull-request-body/
+|   |       `-- action.yml                 # canonical shared governance Action
 |   `-- workflows/
-|       `-- validate-governance.yml       # thin pinned caller
+|       |-- pull-request-body.yml         # local public-repo entry point
+|       `-- validate-governance.yml       # local special-surface check
+|-- scripts/
+|   |-- validate-governance.mjs
+|   `-- validate-pull-request-body.mjs    # canonical validator source
+|-- tests/
+|   `-- validate-pull-request-body.test.mjs
 |-- workflow-templates/
 |   |-- agentic-delivery-quality.yml
-|   `-- agentic-delivery-quality.properties.json
+|   |-- agentic-delivery-quality.properties.json
+|   |-- pull-request-body.yml             # optional thin caller; SHA pin required
+|   `-- pull-request-body.properties.json
 |-- AGENTS.md
 `-- README.md
 ```
@@ -1168,8 +756,13 @@ agentic-delivery-distribution/
 
 1. **App registration:** one definition with the minimum organization-wide
    superset of required events and permissions.
-2. **App installation:** one installation on `agentic-delivery-lab`, using
-   selected-repository access by default.
+2. **App installation:** one installation on `agentic-delivery-lab` configured
+   for **All repositories**, as reported by the operator. This grants the App
+   installation access to all current and future organization repositories;
+   it does not enroll repositories or authorize mutation by itself. The
+   participant registry remains the only participation gate. Confirm the
+   effective setting through an App-authorized view before activation. See
+   [installing a GitHub App](https://docs.github.com/en/apps/using-github-apps/installing-your-own-github-app).
 3. **Webhook reception:** one ingress validates signature, organization,
    installation, event/action, repository identity, actor context, and delivery
    ID.
@@ -1184,7 +777,28 @@ agentic-delivery-distribution/
 8. **Credential storage:** App private key, webhook secret, and dispatch-signing
    secret remain in central secret stores.
 9. **Mutation:** the controller mints a short-lived token limited to the origin
-   repository ID and the minimum permission subset for the operation.
+   repository ID and the minimum permission subset for the operation. A
+   participant registry record is required even when the App installation can
+   access every repository; absent or disabled records fail closed.
+
+The checked-in App contract is the starting permission ceiling, not proof of
+the live registration. Keep the target permission set endpoint-driven and
+minimal:
+
+| Permission | Purpose | Boundary |
+| --- | --- | --- |
+| Metadata: read | Resolve repository identity and basic metadata | Always available; cannot authorize participation |
+| Contents: write | Only operations that require content/dispatch writes | Installation token is limited to the controller repository for dispatch or the origin repository for approved branch writes |
+| Issues: write | Approved issue/comment/type/field operations | Origin repository only; shadow mode requests read-only permissions |
+| Pull requests: write | Approved PR creation or update | Origin repository only; omit on observation-only routes |
+| Workflows: none | Not required for central workflow execution or pinned reusable-workflow calls | Keep `none`; Actions uses its own scoped token, and any endpoint-specific exception requires an ADR and test |
+| Projects: none by default | No active Projects automation is established | Add only after the projection contract exists and official endpoint permissions are verified |
+
+Resolve endpoint requirements against [Choosing permissions for a GitHub
+App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app)
+and the endpoint-specific permission reference. Do not grant `workflows: write`
+because Actions workflows exist or execute; reauthorize only the least
+permission a concrete API call requires.
 
 ### Participant registry
 
@@ -1354,6 +968,7 @@ process or untrusted repository code.
 | Participant registry schema | Integer major |
 | Thin bootstrap bundle | SemVer plus exact source SHA |
 | Reusable workflow | Exact commit SHA in caller |
+| Public governance Action | Exact `.github` commit SHA in each consumer; upgrade by reviewed caller/bundle PR |
 | Primitive release | SemVer plus source commit and digest |
 | Architecture release | SemVer plus source commit and digest |
 
@@ -1498,10 +1113,10 @@ Rules:
 
 ## 11. Diagram coverage and corrections
 
-The reference image is
-[`GitHub Organization Automation (Free)`](https://chatgpt.com/s/m_6ab02b51ffbc8191bed2d20b522e4673).
-This plan covers its architectural intent but does not reproduce unsupported
-GitHub assumptions.
+The reference image is the attachment on [Issue #52's architecture-diagram
+comment](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52#issuecomment-5799402538).
+The table below maps its concepts to bounded owners and records corrections
+where the diagram's proposed GitHub behavior is unsupported or not verified.
 
 | Diagram concept | Target treatment |
 | --- | --- |
@@ -1624,59 +1239,88 @@ must not depend on an external Kroki service.
 
 ## 14. Current-to-target artifact mapping
 
-| Current artifact or family | Target owner and path | Canonical status, bridge, and history |
-| --- | --- | --- |
-| `.agents/codex-delivery.md` | Primitives `agents/codex/codex-delivery.md` | Canonical Primitive; temporary local fallback; filter history |
-| architecture-decision skill | Primitives `skills/architecture-decision` | Canonical reusable skill; resolve Architecture release by immutable ref |
-| ubiquitous-language skill | Primitives `skills/ubiquitous-language` | Canonical reusable skill; read pinned terminology release |
-| delivery-workflow skill | Primitives `skills/delivery-workflow` | Canonical reusable skill; temporary local forwarding path |
-| plain-language skill | Primitives `skills/plain-language-communication` | Canonical reusable skill |
-| `config/agent-actors.json` (historically `.github/agent-actors.json`) | Control Plane `config/agent-actors.json` | Canonical organization-wide invocation catalog; history-preserving move |
-| `config/issue-metadata.yml` (historically `.github/issue-metadata.yml`) | Control Plane `config/lifecycle.yml` and `config/issue-fields.yml` | Canonical executable contract during the extraction bridge; future split remains versioned and must not duplicate state |
-| `config/orchestration-policy.yml` (historically `.github/orchestration-policy.yml`) | Control Plane `config/orchestration-policy.yml` | Canonical executable orchestration source; history-preserving move |
-| `api/github/webhook.mjs` | Control Plane ingress | Remove fixed repository; retain deployment adapter |
-| `agent-invocation.yml` | Control Plane gateway | Central `repository_dispatch` target only |
-| `issue-intake.yml` | Control Plane controller | Remove repository-local normal event trigger after cutover |
-| `codex-delivery.yml` | Control Plane execution | Separate controller and origin checkouts |
-| App token provider | Control Plane App broker | Add repository-ID scoping and operation permissions |
-| repo App variables/secrets | Central protected environment | Remove from participants after cutover |
-| `ISSUE_FIELD_BINDINGS_JSON` | Control Plane field lock | No per-repository duplicate |
-| runner state | Control Plane runner | Preserve repository-ID/issue namespace; add contract versions |
-| architecture ADR/primitive index | Architecture `generated/adr-primitive-index.json` | Derived from released Primitive manifests |
-| delivery evidence schema | Control Plane `schemas/delivery-evidence.v1.schema.json` | Canonical executable evidence contract |
-| architecture review policy | Architecture `policies/conformance.yml` | Canonical conformance rules |
-| architecture review execution | Control Plane reusable workflow/controller | Pinned Architecture release |
-| global ADRs | Architecture top-level `decisions/<stable-ADR-id>-*.md` | History-filtered; historical numeric names remain where required, new records use `ADA-*`; legacy aliases retained |
-| local Codex/App/runner ADRs | Control Plane `docs/decisions/ADCP-*` | Repository-local engineering architecture |
-| `docs/delivery/**` | Control Plane `docs/operations/**` | Operational documentation |
-| `docs/domain/**` | Architecture `architecture/domain/**` | Canonical domain model; temporary old-path reference |
-| ADR/domain validators | Architecture `tools/**` | Deterministic architecture validation |
-| branch/commit/changelog validators | Primitives `validators/repository-delivery/**` | Reusable repository governance primitives |
-| pull-request-body validator | Control Plane reusable validation | `.github` and consumers use thin callers |
-| runner/preflight/sandbox/session logic | Control Plane `src/runner` and `src/sessions` | Remains central runtime |
-| issue routing/transitions | Control Plane lifecycle/routing | Compatibility alias for field rename only |
-| git branch/PR publication | Control Plane | Target origin with scoped App token |
-| current tests | Move with the artifact under test | Preserve history with source path filters |
-| historical `tasks/**` | Git history only | Superseded by this plan; no runtime responsibility |
-| root `AGENTS.md` | Split scoped instructions across repositories | Do not copy wholesale |
-| `CHANGELOG.md` | Remains Control Plane history | New repositories start their own changelogs |
-| package/workspace files | Control Plane reduced manifest plus new repo manifests | No cross-repository relative imports |
+Paths below identify the supplied snapshot first and note a post-snapshot
+current-main move when applicable. Do not mistake newer configuration paths or
+staged repositories for content that existed in the supplied ZIPs.
+
+| Supplied snapshot → current-main artifact | Target bounded context, repository, and path | Authority, GitHub behavior, and reason | Dependencies, bridge, and history |
+| --- | --- | --- | --- |
+| `.agents/codex-delivery.md` | Primitives / `agentic-delivery-primitives` / `agents/codex/codex-delivery.md` | Canonical reusable agent role; GitHub does not execute it directly; organization Copilot publication is a separate validated projection | Depends on released skills and capability policy; keep a compatibility adapter until CP pins the Primitive release; filter original history |
+| `.agents/skills/architecture-decision/**` | Primitives / `agentic-delivery-primitives` / `skills/architecture-decision/**` | Canonical skill; not implicitly distributed by `.github` or `.github-private` | Consumes pinned Architecture ADR contract; bootstrap/plugin installs it; keep a pinned compatibility package during rollout; filter history |
+| `.agents/skills/ubiquitous-language/**` | Primitives / `agentic-delivery-primitives` / `skills/ubiquitous-language/**` | Canonical reusable skill; GitHub special repos do not resolve it | Depends on Architecture terminology release; consumer installation is explicit; temporary forwarding adapter then remove; filter history |
+| `.agents/skills/delivery-workflow/**` | Primitives / `agentic-delivery-primitives` / `skills/delivery-workflow/**` | Reusable workflow capability, not the lifecycle state machine | Depends on versioned CP contracts; CP composes it by Primitive ID; retain compatibility adapter until parity; filter history |
+| `.agents/skills/plain-language-communication/**` | Primitives / `agentic-delivery-primitives` / `skills/plain-language-communication/**` | Canonical writing capability; organization governance does not make it a runtime dependency | Architecture owns the communication principle; bootstrap/plugin installs the skill; filter history |
+| Primitive metadata comments across `.agents/**`, `scripts/**`, and `AGENTS.md` | Primitives / metadata beside each primitive; Architecture / generated traceability | Primitive implementation owns `id`, `kind`, `enforcement`, `adrs`, and `domains`; Architecture consumes metadata, never implementation | Pin metadata schema; generate traceability from released manifests; retain parsers for one compatibility window; preserve source history |
+| Snapshot `.github/agent-actors.json` → current `config/agent-actors.json` | Control Plane / `agentic-delivery` / `config/agent-actors.json` | Canonical actor/invocation policy; GitHub stores actor identity but does not consume this file | Depends on App event identity and enrollment; one central versioned catalog replaces repo copies; preserve the `.github`→`config` move history |
+| Snapshot `.github/issue-metadata.yml` → current `config/issue-metadata.yml` | Control Plane / `agentic-delivery` / `config/lifecycle.yml` and `config/issue-fields.yml` | Canonical schema/options and transition rules; actual Issue Type and field values remain in GitHub | Consumed by webhook, intake, mutation and tests; maintain `readiness` alias until ADR-0019 migration completes; preserve the `.github`→`config` history |
+| Snapshot `.github/orchestration-policy.yml` → current `config/orchestration-policy.yml` | Control Plane / `agentic-delivery` / `config/orchestration-policy.yml` | Sole canonical pattern/profile policy; no issue state or agent copies in consumers | Selects immutable Primitive capabilities; consumers pass only bounded inputs; keep the old-path bridge until all participants upgrade; preserve move history |
+| Current-main additions: `config/event-catalog.yml`, `participants.yml`, `controller-release.json`, and `schemas/**` | Control Plane / `agentic-delivery` / `config/**`, `schemas/**` | Canonical event, enrollment, release, and contract definitions; GitHub does not read them natively | App ingress and workflows validate these records; immutable release pins; retain versioned schemas and source commits; these files were not in the supplied ZIP baseline |
+| `api/github/webhook.mjs` | Control Plane / `agentic-delivery` / `api/github/webhook.mjs` | Canonical App event receiver and router boundary; App webhook delivery invokes it | Depends on signed GitHub payload, installation, and registry; replace fixed repo filter, retain current endpoint during shadow; preserve history |
+| Snapshot `.github/workflows/agent-invocation.yml` → current central workflow; current-main `agent-observation.yml` | Control Plane / `agentic-delivery` / `.github/workflows/**` | Central workflow entry points; GitHub runs them only in the repository hosting them, not by `.github` inheritance | App dispatches to central repository; local CI remains independent; retain local triggers until parity and exact cutover; preserve existing history; observation workflow is post-snapshot |
+| `.github/workflows/issue-intake.yml` and `codex-delivery.yml` | Control Plane / `agentic-delivery` / reusable workflow and controller paths | Canonical lifecycle execution; GitHub Actions executes central jobs; consumers receive thin SHA-pinned callers only where local context is required | Depends on event envelope and participant pin; preserve the old workflow route for rollback until the active registry cutover; preserve history |
+| `scripts/lib/issue-routing.mjs`, `lifecycle-transitions.mjs`, `orchestration-policy.mjs`, and associated scripts | Control Plane / `agentic-delivery` / `src/lifecycle/**` and `src/orchestration/**` | Canonical executable state machine and route authorization; issue words are not deterministic transitions | Consumes native Issue Type/fields and semantic proposal; do not copy into agents or participants; path-filter history and compatibility tests |
+| `scripts/lib/github-app.mjs`, `replay-protection.mjs`, and `api/github/**` | Control Plane / `agentic-delivery` / `src/github-app/**` | Canonical App authentication and signed event boundary | Requires central secrets; installation tokens are scoped to origin ID; remove participant App secrets after cutover; preserve history |
+| Repository App variables/secrets (`CODEX_DELIVERY_*`, dispatch/webhook keys) | Control Plane deployment / central Actions environment or App host | Credential values are not repository artifacts and never enter `.github-private` or consumer repos | Rotate only after central smoke evidence; remove old participant credentials after one rollback window; no historical secret values are migrated |
+| `ISSUE_FIELD_BINDINGS_JSON` and organization field IDs | Control Plane / `agentic-delivery` / schema-validated organization-field binding | Binding IDs are configuration; actual values remain native GitHub fields | Requires authorized GraphQL scope; issue state stays GitHub-owned; migrate aliases without a second field; no secret material or copied values |
+| `scripts/setup-runner-codex.mjs`, Codex client/session loop, and runner state | Control Plane / `agentic-delivery` / `src/runner/**` and `src/sessions/**` | Canonical execution runtime; runner/session state is operational, not durable Issue state | Key state by repository ID, issue, controller, and state-machine versions; keep resumable compatibility; preserve code history but never filter runtime state |
+| `config/primitive-selection.yml` and Primitive catalog | Control Plane / `agentic-delivery` / `config/primitive-selection.yml`; source definitions in Primitives | CP selects capabilities, Primitives owns implementation; no duplicated agent source | Depends on immutable Primitive release and tool-policy version; update selection by reviewed release pin; filter source files to owning repo |
+| `docs/architecture/adr-primitive-index.json` and `scripts/generate-adr-primitive-index.mjs` | Architecture / `agentic-delivery-architecture` / generated traceability index and generator | Derived index only; it is not a second manually maintained ADR/Primitive registry | Generate from Primitive manifests and Architecture ADRs; validate both pinned inputs; preserve generator/index history where practical |
+| `docs/architecture/delivery-evidence.schema.json` | Control Plane / `agentic-delivery` / `schemas/delivery-evidence.v1.schema.json` | Canonical executable evidence contract; evidence links reference GitHub records rather than copying issue state | Consumed by orchestration/write-back and Architecture review; version migrations are explicit; filter with schema/tests |
+| `docs/architecture/harness-review.yml` and `harness-conformance-review.md` | Architecture / `agentic-delivery-architecture` / `architecture/conformance/**` | Canonical conformance policy and human-readable review criteria | CP loads an immutable Architecture release; keep old policy as read-only bridge until pin parity; preserve history |
+| Global architecture ADRs in `docs/decisions/**` | Architecture / `agentic-delivery-architecture` / `decisions/<global-id>-*.md` | Individual ADR files remain canonical; arc42 section 9 indexes them without copying rationale | Use history-preserving path filtering, stable global IDs and legacy aliases; local files remain until Architecture v1 release |
+| Control Plane implementation ADRs in `docs/decisions/**` | Control Plane / `agentic-delivery` / `docs/decisions/ADCP-*.md` | Local implementation choices stay beside the runtime; not every ADR becomes global architecture | Reference global ADR URNs and immutable commits; filter history; maintain aliases for prior `ADR-NNNN` references |
+| `docs/delivery/**` | Control Plane / `agentic-delivery` / `docs/operations/**` | Canonical runbooks for App, runner, upgrades, recovery, and operations | Depends on deployed release and central secret boundary; old links redirect via README during one support window; preserve history |
+| `docs/domain/**` | Architecture / `agentic-delivery-architecture` / `architecture/domain/**` | Canonical bounded contexts and ubiquitous-language register | Primitives and CP consume pinned versions; old paths become link-only compatibility references after v1; preserve history |
+| Current-main `automations/templates/*.automation.md` and manifest/schema | Control Plane / `agentic-delivery` / `automations/templates/**` | Canonical preview Automation definitions; local schedules, models, permissions, enablement, and run history remain client-local | Distribution emits reviewed Agent Plugin projections; no `.github-private` role; validate supported frontmatter and immutable source pins; preserve the source history that exists |
+| Current-main `migration/repository-boundaries.yml` and `special-surfaces.yml` | Migration-only contracts in Control Plane until cutover; durable context map in Architecture | These files describe the extraction, not the runtime state machine; architecture context remains authoritative after migration | Convert accepted mappings into target-repo provenance/conformance manifests, then remove temporary migration ledgers after Phase 12; retain source commit maps and original Git history |
+| `scripts/validate-repository-boundaries.mjs`, `validate-special-surfaces.mjs`, and `validate-extraction-source.mjs` | One-off migration validation in Control Plane; reusable Architecture conformance checks move to Architecture `tools/**` | Deterministically validate extraction, history ancestry, and special-surface paths; do not become a permanent control plane | Run before each target import; retain logs only with the implementation issue, remove migration-only scripts after all target manifests and releases are accepted; preserve history in the source repository |
+| `scripts/validate-adrs.mjs`, `validate-domain-language.mjs`, and architecture review validators | Architecture / `agentic-delivery-architecture` / `tools/**` | Deterministic validators enforce Architecture-owned models and ADR structure | Run in Architecture CI and pinned CP review; migrate with fixtures and history; local callers remain read-only until parity |
+| Branch, commit, changelog validators and general reusable deterministic primitive scripts | Primitives / `agentic-delivery-primitives` / `validators/**` | Reusable capability implementation; not organization special-repo defaults by itself | Consumers pin the Primitive version; bootstrap installs only approved utilities; filter history; retain old scripts as adapters until consumer migration |
+| `agentic-delivery/.github/workflows/pull-request-body.yml`, `scripts/validate-pull-request-body.mjs`, and tests | Public governance / `.github` / `.github/actions/validate-pull-request-body`, `scripts/validate-pull-request-body.mjs`, and `tests/validate-pull-request-body.test.mjs` | The live public `.github` validator is canonical for the organization PR contract; its content is not assumed identical to the Control Plane copy. A public composite Action lets opted-in consumers reuse it without lifecycle permissions | Compare behavior against both fixture suites, then make the public suite authoritative. Update the Control Plane workflow and `repository-audit` test to call the immutable public Action; retain the local validator until parity and consumer checks pass, then delete only that duplicate. Keep its original commit history in `agentic-delivery`; do not fabricate a file move or include this governance check in lifecycle authorization |
+| Other `tests/**` | Repository owning each tested artifact / adjacent `tests/**` | Tests move with canonical implementation, not to a central test-only repo | Cross-repo acceptance fixtures stay in CP and consume immutable test contracts; preserve path-filter history and test old/new compatibility |
+| Historical `tasks/**` except this plan | Git history only | No runtime authority; only the consolidated migration plan is a current planning deliverable | Old task files are already absent from current `main`; keep their history, do not recreate or retain progress/audit logs |
+| Root `AGENTS.md`, `.github/workflows/AGENTS.md`, and scoped instruction files | Split across each bounded repository in scoped `AGENTS.md` | Instructions are repository-local guidance, not a hidden control plane | Rewrite by mission, mutation limits, authorities, capabilities and validators; do not copy wholesale; preserve relevant history only |
+| Current-main root `README.md` and scoped `README.md` files | Each target repository's root README, scoped to its mission | Human discovery/operations content, not GitHub special-surface behavior | Split only relevant mission content; link to canonical cross-repo docs by immutable release/reference; preserve source history where content moves |
+| `CHANGELOG.md` | Control Plane / `agentic-delivery` / `CHANGELOG.md` | Curated human-facing history remains local to Control Plane; new repos keep their own changelogs | Continue Conventional Commits and curated entries; no audit dumps or generated chronology; preserve full history |
+| `package.json`, `pnpm-workspace.yaml`, lockfile, and root scripts | Control Plane / reduced manifest and local workspace; each target repo gets an independent manifest | No cross-repository workspace or filesystem imports | Split packages only after API/contract tests; pin toolchains/dependencies; preserve original workspace history and use immutable release APIs |
 
 ### Public `.github` mapping
 
-- Keep all issue forms and the pull-request template in place.
-- Replace the local PR-body implementation with a thin pinned Control Plane
-  caller only after fixture parity.
-- Keep the ruleset JSON as desired-state evidence.
-- Add a public profile only when public-facing content is approved.
-- Keep `workflow-templates` explicitly documented as starter copies.
+| Current/proposed artifact | Target path and authority | GitHub behavior and dependency/migration contract |
+| --- | --- | --- |
+| Public profile | `.github/profile/README.md`; canonical public content (already present on remote `main`) | GitHub renders publicly; retain existing content and history; no private member copy |
+| Issue Forms | `.github/ISSUE_TEMPLATE/**`; canonical public community-health UX | GitHub inherits supported forms when a consumer has no local equivalent; keep IDs/types orthogonal to lifecycle; preserve current files/history |
+| Pull-request template | `.github/pull_request_template.md`; canonical default contribution UX | GitHub uses it as a default if a consumer lacks a local template; consumers may override; keep `Source` and `Plan` separate |
+| Pull-request-body workflow | `.github/workflows/pull-request-body.yml`; public repository's own local entry point | It invokes the canonical public governance Action; workflows are not inherited, so opted-in consumer workflows are installed explicitly and pinned to an immutable `.github` commit |
+| Shared PR-body validator | `.github/actions/validate-pull-request-body/action.yml`, `scripts/validate-pull-request-body.mjs`, and `tests/validate-pull-request-body.test.mjs`; canonical public governance check | Test the supported author/body contract and injection safety in `.github`; consumer callers pass only event author/body and grant no secrets or lifecycle permissions |
+| Special-surface governance workflow | `.github/workflows/validate-governance.yml` plus `scripts/validate-governance.mjs`; canonical local boundary check | Validates `.github` paths and exclusions on `.github` PRs/pushes; it is neither inherited nor a Control Plane caller |
+| Ruleset definition | `.github/rulesets/require-pull-request-body.json`; desired-state governance | GitHub does not activate JSON by repository presence; an authorized maintainer applies and verifies live rules; no history rewrite |
+| Workflow templates | `.github/workflow-templates/**`; starter files, not live defaults | GitHub copies templates only when a repository owner chooses them; governance Action calls pin an immutable `.github` commit, while lifecycle calls pin the Control Plane commit; no automatic synchronization |
+| Other community-health files | None observed on remote `main` beyond the existing templates/forms; add a public root file only after policy approval | GitHub inheritance supports documented files only when no local equivalent exists; do not invent organization policies merely to fill the tree |
+| `.github` instructions and README | `.github/AGENTS.md`, `.github/README.md`; repository-local governance | Not special GitHub-consumed paths; document ownership and override behavior; preserve relevant history |
 
 ### `.github-private` origins
 
-There are no existing organization `.agent.md` files. Do not directly copy
-`.agents/codex-delivery.md`; it is not a validated GitHub Copilot custom-agent
-profile. Author each future Copilot agent first in Primitives and start its
-publication provenance at that Primitive commit.
+There are no existing organization `.agent.md` files on its current default
+branch. Do not directly copy `.agents/codex-delivery.md`; it is not a validated
+GitHub Copilot custom-agent profile. Author each future Copilot agent first in
+Primitives and start publication provenance at that immutable Primitive commit.
+
+| Current/proposed artifact | Target path and authority | GitHub behavior and dependency/migration contract |
+| --- | --- | --- |
+| Member-only organization profile | `.github-private/profile/README.md`; canonical private member-facing content | GitHub renders for organization members only when exact repo name is Private and file is on default branch; keep activation in its own reversible PR |
+| Organization custom-agent profiles | `.github-private/agents/*.agent.md`; generated/promoted projections from Primitives | GitHub Copilot consumes root `/agents` on supported org surfaces, subject to entitlement/preview; one canonical Primitive source; each projection has lock/provenance and PR-based promotion |
+| Publication lock | `provenance/agents.lock.json`; generated manifest | Not directly consumed by GitHub profile resolution; validation verifies Primitive ID, agent ID, source SHA/ref, digest, ADRs, tool policy, release and compatibility; never hand-edit as a second registry |
+| CODEOWNERS and publication rules | `.github/CODEOWNERS` and versioned ruleset desired state | GitHub uses CODEOWNERS only when protection requires it; actual ruleset must be separately activated and verified; protect `agents/**`, `provenance/**`, workflow, and profile owners |
+| Publication validation workflow | `.github/workflows/validate-published-agents.yml`; thin SHA-pinned caller | GitHub Actions runs it only for this repository; it checks syntax/schema, secret patterns, tool/MCP allowlists, name collisions, exact source bytes/hash, and supported Copilot compatibility |
+| Pull-request template | No private copy; inherit public `.github` default | GitHub default template inheritance applies; local override would create duplicated contribution UX and is excluded |
+| `AGENTS.md` and README | Repository root; narrow member/publication instructions | Not GitHub special-consumed paths; document ownership, promotion, rollback and exclusions; no general private-document dump |
+| Skills, hooks, plugins, MCP definitions, organization custom instructions | Excluded from `.github-private` | No assumed org-wide distribution; skills/plugins follow their separately documented Primitive/Distribution or GitHub settings mechanisms |
+
+There is no `.github-private` source agent to history-filter. The new agent
+projection starts at its actual promotion commit; the lock records the
+canonical Primitive source commit and content hash. The member profile is new
+content, not copied profile history.
 
 ## 15. ADR ownership and identifiers
 
@@ -1701,6 +1345,8 @@ Future physical ownership of current ADRs:
 | 0015 resumable runner | Delivery-control architecture | Control Plane |
 | 0016 structured PR descriptions | Organization governance | Architecture |
 | 0017 invocation boundary | Global invocation architecture | Architecture, with ingress implementation in Control Plane |
+| 0018 organization-wide Control Plane distribution and versioning | Global delivery-control architecture | Architecture; amend or supersede to resolve the reported All-repository installation model |
+| 0019 canonicalize Delivery State | Cross-repository lifecycle architecture and governance | Architecture, with field/API migration implementation in Control Plane |
 
 Canonical ADR URN:
 
@@ -1721,12 +1367,14 @@ Preserve every old `ADR-NNNN` through an alias file that resolves to exactly one
 canonical ID. Never reuse an old number. Cross-repository references include
 the canonical ID, repository URL, and immutable commit.
 
-Required new ADRs before migration:
+Required architecture decisions and ADR updates before migration:
 
-1. organization-wide Control Plane distribution and versioning;
+1. review or supersede ADR-0018 to finalize the organization-wide App access,
+   participation, Control Plane distribution, and versioning model; do not
+   create a duplicate ADR;
 2. bounded contexts, repository topology, and dependency direction;
 3. ADR namespace and history migration;
-4. Delivery State versus Delivery Readiness;
+4. ratify or revise ADR-0019 for Delivery State versus Delivery Readiness;
 5. canonical architecture/tooling/diagram strategy;
 6. cross-repository architecture conformance and pinning;
 7. organization-agent ownership and `.github-private` promotion;
@@ -1831,13 +1479,23 @@ Issue
 
 ## 18. Migration phases
 
+These phases describe the required dependency order, not permission to execute
+them. Before each phase, compare current `main`, deployed behavior, and
+operator evidence with its completion criteria. If a criterion is already
+proven, record that evidence in the implementation issue and skip duplicate
+work; do not infer completion from local draft branches or repository
+existence.
+
 ### Phase 0 — Inventory, entitlement verification, and hard ADR gate
 
-- **Prerequisites:** Issue #52 or a successor implementation issue; clean and
-  synchronized `main`.
+- **Prerequisites:** a separately authorized successor implementation issue
+  that references the frozen plan with `Refs #52`; clean and synchronized
+  `main`. Issue #52 requests the plan and does not authorize implementation.
 - **Repositories:** current `agentic-delivery` and `.github`.
-- **Create/change:** current-state inventory, organization-wide Control Plane
-  ADR, domain-language proposal, topology and versioning decisions.
+- **Create/change:** amend or supersede ADR-0018 to resolve the operator-
+  reported All-repository App setting and explicit participation; align
+  ADR-0019 and domain-language terms; finalize topology and versioning
+  decisions. Do not create a duplicate ADR-0018.
 - **Compatibility:** no runtime change.
 - **Validate:** current tests, GitHub inventory, ADR and domain checks.
 - **Rollback:** close or revert provisional ADR PR; no infrastructure changed.
@@ -1847,22 +1505,27 @@ Issue
 ### Phase 1 — Establish Architecture Authority
 
 - **Prerequisite:** Phase 0 gate.
-- **Repository:** new `agentic-delivery-architecture`.
+- **Repository:** existing `agentic-delivery-architecture` target repository;
+  verify its protections and staged contents before importing history.
 - **Move/create:** history-filtered global ADR/domain material, official arc42
   structure, principles, schemas, tooling lock, and conformance baseline.
 - **Bridge:** old architecture paths remain official until Architecture v1;
   then become read-only references.
 - **Validate:** history manifest, aliases, links, model render, arc42 structure.
-- **Rollback:** archive the new repository; current source remains intact.
+- **Rollback:** keep the existing Architecture target read-only, restore source
+  paths as the authority, and retain target history for inspection; do not
+  delete the repository or rewrite history.
 - **Complete when:** immutable Architecture v1 exists.
 
 ### Phase 2 — Decouple the Control Plane inside `agentic-delivery`
 
 - **Prerequisite:** Architecture v1.
-- **Move/create:** participant registry, schemas, compatibility manifest,
-  generic ingress, controller/target separation, repository-ID token scoping.
-- **Bridge:** current repository remains the only active participant; existing
-  workflows remain mutating.
+- **Complete/verify:** participant registry, schemas, compatibility manifest,
+  generic ingress, controller/target checkout separation, and repository-ID
+  token scoping already present in current `main`; extend only where
+  acceptance evidence identifies a gap.
+- **Bridge:** current participant records remain `shadow`; retain the legacy
+  local route for compatibility until the separate cutover phase.
 - **Validate:** parameterized repository A/B tests, hard-coded reference scan,
   token-scope tests, state namespace tests, and the offline
   `pnpm acceptance:check` matrix.
@@ -1873,8 +1536,9 @@ Issue
 ### Phase 3 — Central gateway and shadow execution
 
 - **Prerequisite:** generic controller.
-- **Change:** add central gateway, signed envelope, dispatch authentication,
-  replay protection, and shadow participant mode.
+- **Change:** verify and complete the central gateway, signed envelope,
+  dispatch authentication, replay protection, and shadow mode already present
+  in current `main`; do not create a second gateway.
 - **Organization:** subscribe the App to the approved additional events and
   approve only required permissions.
 - **Bridge:** local route remains the only mutating route; central route reads
@@ -1895,9 +1559,21 @@ Issue
 - rollback by disabling the registry entry and re-enabling the local route;
 - complete when all normal issue delivery is central.
 
-### Phase 5 — Establish Distribution
+### Phase 5 — Establish Agentic Primitives
 
-- create `agentic-delivery-distribution`;
+- use the existing `agentic-delivery-primitives` target repository and
+  history-filter agents, skills, hooks, validators, and capability contracts
+  into it;
+- publish Primitive v1 with metadata, tool policy, and governing ADR references;
+- point Control Plane selection manifests at the immutable release;
+- compare local and released digests;
+- remove local canonical copies only after parity and consumer-pin validation;
+- rollback by restoring the previous exact Primitive pin while the local
+  compatibility copy remains available.
+
+### Phase 6 — Establish Distribution
+
+- use the existing `agentic-delivery-distribution` target repository;
 - implement Dev Container, Feature, bootstrap, thin workflow templates, source
   locks, and Agent Plugin packaging;
 - make all adoption opt-in and PR-based;
@@ -1905,55 +1581,69 @@ Issue
   of copied lifecycle logic;
 - rollback by closing the bootstrap PR or restoring the previous pin.
 
-### Phase 6 — Onboard a second repository
+### Phase 7 — Onboard a second repository
 
 Use `agentic-delivery-architecture` as the first second participant:
 
-1. grant selected App access;
-2. add a shadow registry entry;
+1. confirm the organization installation effectively has access to this
+   repository; do not treat All-repository access as enrollment;
+2. verify its existing shadow registry entry and repository-ID binding; do not
+   duplicate the record;
 3. compare event results;
 4. activate the exact controller commit;
 5. prove that the two repositories can use identical issue numbers without
    state collision;
-6. rollback by disabling the record and removing App access.
+6. rollback by disabling the registry record and verifying subsequent events
+   fail closed; do not change organization-wide App access as a repository-
+   specific rollback.
 
-### Phase 7 — Migrate existing and future repositories
+### Phase 8 — Migrate existing and future repositories
 
-Onboard in controlled order:
+Verify or onboard in controlled order:
 
 1. `.github` where issue/PR orchestration is useful;
-2. Primitives after its creation;
-3. Distribution;
-4. `.github-private` after its creation;
+2. the existing Primitives repository at its first immutable release;
+3. the existing Distribution repository;
+4. `.github-private` after publication ownership and protections are approved;
 5. future application, platform, or documentation repositories.
 
-For each: App access, registry shadow, optional bootstrap PR, validation,
-activation, and signed evidence.
+For each existing repository, verify its current shadow record, effective App
+access, and contract pins; do not duplicate registry records. For a future
+repository, add an explicit shadow record through a reviewed PR. Use an
+optional bootstrap PR, validate, activate intentionally, and retain signed
+evidence. Keep repository-specific CI/CD independent.
 
-### Phase 8 — Establish Primitives
+### Phase 9 — Establish `.github-private` publication
 
-- history-filter agents, skills, and reusable validators;
-- publish Primitive v1;
-- point Control Plane selection manifests at the release;
-- compare local and released digests;
-- remove local canonical copies after parity.
-
-### Phase 9 — Establish `.github-private`
-
-- confirm private protection entitlement;
-- create the exact private repository and protect `main`;
-- merge baseline governance without agents;
-- publish the member profile in a separate PR;
+- verify the existing repository is Private, review `main` protection and
+  access, and pause publication if the GitHub plan cannot provide required
+  controls;
+- review baseline governance already on `main`; do not recreate it;
+- keep member-profile activation in its separate, reversible PR;
 - optionally enroll issue/PR orchestration without adding App credentials;
-- verify Copilot entitlement before a separate first agent promotion.
+- verify Copilot entitlement before a separate first agent promotion;
+- rollback publication by reverting/removing the promoted projection and its
+  lock, without changing Primitive canonical content or lifecycle enrollment.
 
 ### Phase 10 — Reduce `.github`
 
-- preserve public community-health files;
-- replace local validator implementation with a thin pinned caller after
-  parity;
-- add public profile and workflow starters only where approved;
-- prove inheritance in a repository without local overrides.
+- preserve the live public profile, Issue Forms, pull-request template,
+  ruleset desired state, local governance workflow, validator, and tests;
+- reconcile the public and Control Plane copies of the PR-body validator by
+  running both suites against a shared fixture set;
+- add a composite governance Action that invokes the public canonical
+  validator; keep it free of lifecycle logic, credentials, and write
+  permissions;
+- change `.github`'s own pull-request-body workflow to use the local Action;
+- offer an optional thin consumer workflow template and install it by reviewed
+  Distribution PR only where the organization requires that check; pin the
+  Action to an immutable `.github` commit and never check out PR-head code;
+- retain the Control Plane's duplicate until the public Action passes parity
+  and at least one real consumer check; then remove that duplicate and update
+  the Control Plane's audit test without changing lifecycle behavior;
+- add no profile or community-health file already present; prove inheritance
+  in a repository without local overrides and prove that workflow files are
+  not inherited.
 
 ### Phase 11 — Delivery State and Projects
 
@@ -1985,9 +1675,15 @@ remove:
 
 - Issue Form and YAML validation;
 - pull-request-template fixtures;
-- exact reusable workflow pins;
+- local PR-body workflow uses the canonical composite Action;
+- composite Action contract and `github.action_path` script resolution;
+- consumer-template Action references pin full immutable commit SHAs;
+- callers pass event data as inputs and never execute PR-head code, receive
+  secrets, or get issue-write permissions;
 - ruleset JSON schema;
 - community-health path/inheritance test;
+- parity fixtures shared with the Control Plane copy until that copy is
+  removed;
 - secret scanning.
 
 ### `.github-private`
@@ -2101,13 +1797,19 @@ Plan, but do not combine with repository content PRs:
 - inventory Projects and map fields/views as projections;
 - stop writing legacy type/state labels;
 - configure and verify live rulesets per repository;
-- verify exact App selected repositories;
+- publish the public PR-body governance Action from `.github`; install only
+  reviewed, SHA-pinned thin callers where that organization check is required;
+- reconcile the reported All-repository installation with the versioned App
+  contract, verify effective access and event subscriptions through an
+  App-authorized surface, and keep registry enrollment as the separate
+  participation gate;
 - add only approved App event subscriptions and permissions;
 - store App credentials centrally;
 - publish reusable workflows from Control Plane;
 - keep `.github` public;
-- upgrade the plan before protected `.github-private` activation;
-- create `.github-private` as Private with minimal access;
+- verify the existing `.github-private` repository is Private and minimally
+  accessible; resolve the GitHub Free protection gap or upgrade the plan before
+  member/Copilot publication activation;
 - verify Copilot custom-agent availability and policy;
 - keep organization custom instructions in GitHub settings;
 - exclude enterprise-only managed settings without entitlement;
@@ -2124,7 +1826,9 @@ Plan, but do not combine with repository content PRs:
 | Default community-health files | Public `.github` | Public | Local equivalent wins |
 | Issue forms | `.github/.github/ISSUE_TEMPLATE` | Public | Local template directory replaces organization set |
 | PR template | `.github/.github/pull_request_template.md` | Public | Local template wins |
-| Thin workflow bootstrap | Local consumer; starter in `.github/workflow-templates` | Consumer-specific | Not inherited automatically |
+| PR-body governance check | Canonical validator and composite Action in public `.github`; optional thin caller in each opted-in repository | Public Action; consumer-owned workflow | Not inherited; pin Action SHA, pass only author/body, preserve repository CI |
+| Issue-based lifecycle entry | Central App event gateway and Control Plane; thin local caller only for checks needing local Actions context | Central, version-pinned | Does not depend on `.github` workflow inheritance or PR-body Action enrollment |
+| Thin workflow bootstrap | Local consumer; starter in `.github/workflow-templates` | Consumer-specific | Not inherited automatically; use a reviewed installation/update PR |
 | Organization custom agents | Canonical in Primitives; projection in `.github-private/agents` | Copilot entitlement/preview | Default-branch projection only |
 | Organization custom instructions | GitHub organization settings | Supported Copilot plan | Not sourced from `.github-private` |
 | Agent skills | Primitives, then bootstrap/plugin/local install | Client/repository-specific | No `.github-private` inheritance |
@@ -2255,12 +1959,14 @@ Failure behavior:
 
 Only genuine evidence gaps remain:
 
-1. **App repository selection:** obtain an authorized App-installation view or
-   installation token and record the exact current selected repositories; the
-   GitHub CLI OAuth token now has `user` but GitHub still rejects the App
+1. **App installation access:** verify the operator-reported All-repository
+   mode and effective access using an App-authorized view or installation
+   credential; the refreshed GitHub CLI OAuth token is still rejected by App
    installation endpoints.
-2. **Projects:** obtain `read:project` and inventory actual Projects, fields,
-   and views.
+2. **Projects:** the current GitHub CLI identity lacks `read:project`. An
+   authorized owner must inventory current Projects, fields, and views and
+   confirm whether the previously observed closed, empty Project #1 remains the
+   only organization Project.
 3. **Delivery State ADR:** confirm the recommended in-place rename or stop the
    field migration and redesign the concept.
 4. **Private repository protection:** obtain GitHub Team or equivalent before
@@ -2276,44 +1982,57 @@ decision and must not turn `.github-private` into a private monolith.
 
 ## 27. Recommended PR and operator sequence
 
-1. Current-state evidence and migration source issue.
-2. Organization-wide Control Plane distribution/versioning ADR.
+This is the dependency order, not a list of unstarted work. Current `main`
+already contains draft contracts, shadow records, and offline acceptance
+fixtures. Reuse them only when their evidence satisfies the gate; avoid
+duplicate PRs, and do not treat draft code as production activation.
+
+1. Revalidate Issue #53, which already references #52, as the architecture-gate
+   implementation issue; do not create a duplicate issue. Freeze the plan at
+   the merged commit before implementation.
+2. Amend or supersede ADR-0018 to resolve the reported All-repository App
+   installation and organization-wide Control Plane distribution/versioning.
 3. Domain-language proposal for repository participation and controller
    releases.
-4. Amend or supersede ADR-0012, ADR-0014, ADR-0015, and ADR-0017.
+4. Align ADR-0012, ADR-0014, ADR-0015, ADR-0017, and ADR-0019 with the approved
+   global contracts; preserve local implementation decisions in Control Plane.
 5. Architecture history-preserving import.
 6. Architecture arc42, principles, contracts, and release v1.
-7. Control Plane participant registry and schemas.
-8. Generic webhook without fixed origin repository.
-9. App token provider with repository-ID scope.
-10. Controller/target checkout separation.
-11. Signed envelope and replay protection.
-12. Central gateway workflow.
-13. Two-repository fixtures and compatibility tests.
-14. Operator verification of selected App repositories and permissions.
+7. Review/complete the existing Control Plane participant registry and schemas.
+8. Verify the generic webhook has no fixed origin-repository assumption.
+9. Verify the App token provider's origin repository-ID scope.
+10. Verify controller/origin checkout separation.
+11. Verify the signed envelope and replay protections.
+12. Validate the existing central gateway workflow.
+13. Run and close gaps from the two-repository acceptance fixtures.
+14. Operator verification of the reported All-repository App installation,
+    effective repository access, event subscriptions, and permissions through
+    an App-authorized surface.
 15. Operator approval of required event subscriptions.
-16. `agentic-delivery` shadow enrollment.
+16. Verify the existing `agentic-delivery` shadow enrollment.
 17. Shadow parity evidence.
 18. `agentic-delivery` central cutover.
 19. Disable local normal intake.
-20. Distribution repository and thin bootstrap bundle.
-21. Architecture App access and shadow enrollment.
-22. Architecture active enrollment and multi-repository acceptance.
-23. Primitives history-preserving import.
-24. Primitive v1 release and Control Plane pin.
-25. `.github` thin validation caller and optional enrollment.
-26. GitHub plan/protection operator change.
-27. Empty private `.github-private` creation and immediate protection.
-28. `.github-private` baseline governance PR, without profile or agents.
-29. Separate member-profile PR.
-30. Optional `.github-private` issue-based enrollment.
-31. First Copilot agent authoring PR in Primitives.
-32. Separate first `.github-private` agent promotion PR.
-33. Dev Container and Feature release.
-34. Agent Plugin and Automation pilot.
-35. Delivery State compatibility and field rename.
-36. Projects projection.
-37. Legacy config, workflow, secret, label automation, and bridge removal.
+20. History-preserving Primitive extraction and Primitive v1 release in the
+    existing target repository.
+21. Distribution bundle, thin bootstrap, Dev Container, and Feature release in
+    the existing target repository.
+22. Architecture App access verification, shadow enrollment, and parity.
+23. Architecture active enrollment and multi-repository acceptance.
+24. `.github` public governance Action and optional SHA-pinned consumer caller;
+    keep it separate from central lifecycle enrollment.
+25. GitHub plan/protection decision and operator verification.
+26. Review current `.github-private` protections and baseline governance;
+    activate no surface before that gate passes.
+27. Review the existing member-profile PR separately; do not open a duplicate.
+28. Optional `.github-private` issue-based enrollment without central App
+    credentials.
+29. First Copilot agent authoring PR in Primitives.
+30. Separate `.github-private` agent-promotion PR with provenance and rollback.
+31. Agent Plugin and Automation pilot.
+32. Delivery State compatibility migration and field rename.
+33. Projects projection.
+34. Legacy config, workflow, secret, label automation, and bridge removal.
 
 Repository creation, visibility, access, rulesets, App settings, secrets, and
 organization fields are operator actions with their own issues and evidence.
@@ -2326,6 +2045,12 @@ following:
 
 - `.github` remains public and supplies the intended issue forms, PR template,
   and community-health defaults to a repository without local overrides;
+- the public `.github` validator, its tests, and special-surface workflow stay
+  canonical there; the PR-body Action is pinned in every opted-in consumer,
+  checks only event author/body, and neither checks out PR-head code nor
+  receives secrets or lifecycle write permission;
+- the duplicate Control Plane PR-body validator is removed after public Action
+  parity, while the Control Plane still owns lifecycle authorization;
 - workflows are not described as inherited;
 - `.github-private` is exactly Private, protected, and narrowly accessible;
 - `.github-private/profile/README.md` renders for members and not publicly;
@@ -2351,7 +2076,8 @@ following:
   orchestration implementation exists;
 - the App organization installation serves at least two participating
   repositories;
-- selected App access and registry enrollment are both required;
+- effective organization-App access and an explicit active registry record
+  are both required; App access alone never enrolls or authorizes mutation;
 - no production origin path is hard-coded to `agentic-delivery`;
 - participants pin exact controller commits and do not silently follow `main`;
 - the explicit-root release-chain check reproduces the pinned Architecture and
