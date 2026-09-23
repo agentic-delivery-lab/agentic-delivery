@@ -35,7 +35,6 @@ pnpm control-plane:boundary
 pnpm metadata:check
 pnpm migration:check
 pnpm migration:source:check -- --source-root <path> --source-commit <sha> --source-ref refs/heads/main --target-root <architecture-path> --target-root <primitives-path>
-pnpm plan:check
 pnpm traceability:check
 pnpm control-plane:check
 pnpm acceptance:check
