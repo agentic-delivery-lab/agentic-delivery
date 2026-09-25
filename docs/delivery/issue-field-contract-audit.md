@@ -16,6 +16,12 @@ organization issue types and to issues without a type. Their visibility is
 Organization only. The live type and field names match the versioned contract
 in [`config/issue-metadata.yml`](../../config/issue-metadata.yml).
 
+Visibility is a point-in-time observation, not a versioned or runtime-enforced
+invariant: the metadata contract has no expected-visibility property, and the
+validator does not reject a visibility change. This audit does not establish
+Organization-only visibility as a lasting security policy. If that access
+boundary must be enforced, define it in a separately reviewed contract change.
+
 The domain term is **Delivery State**. `Delivery Readiness` remains the current
 live display name and versioned compatibility key until an approved migration
 renames the existing field in place. This audit did not create a second field

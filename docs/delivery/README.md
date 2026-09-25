@@ -71,8 +71,10 @@ observed or explicitly assigned.
 as single-select fields pinned to every issue type and to issues without a
 type. Intake and delivery read the live `IssueType.pinnedFields` and
 `Organization.pinnedIssueFields` catalogs and hold when those bindings do not
-match the contract. The organization currently limits field visibility to
-members and collaborators. `Lifecycle Stage` contains Intake, Discovery,
+match the contract. The current live fields report `ORG_ONLY` visibility in
+GraphQL and `organization_members_only` in REST. This visibility is recorded by
+the audit but is not a versioned or runtime-enforced rule. `Lifecycle Stage`
+contains Intake, Discovery,
 Definition, Decision, Planning, Execution, Validation, Acceptance, Done, and
 Parked. `Delivery Readiness` is the live legacy name for the separate Delivery
 State concept; its values include Needs information, Ready, Working, Waiting,
