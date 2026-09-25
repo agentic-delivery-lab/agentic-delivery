@@ -37,6 +37,10 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Issue intake, delivery, and metadata migration now verify that the live
+  Lifecycle Stage and Delivery Readiness fields are pinned to every enabled
+  issue type and to issues without a type before authorizing field changes.
+
 - The public `.github` governance candidate is now based on the supplied
   current snapshot in a clean worktree and is validated by its immutable
   evidence pin; the original dirty user checkout is not release evidence.
@@ -319,6 +323,7 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) requires both mandatory issue-field pin targets in the versioned contract, preventing partial configuration from skipping a live pin check.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) removes the central controller repository-ID runtime default; the gateway now requires an explicit `AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID` before dispatch.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) makes every controller compatibility and rollback pin resolve to an actual commit in the Control Plane history before release validation succeeds.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) requires delivery execution to carry an authenticated numeric origin repository ID and rejects mismatches before model startup or GitHub mutation; App installation tokens are never requested without an origin scope.

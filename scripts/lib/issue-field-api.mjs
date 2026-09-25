@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"issue-field-controller-boundary","kind":"script","enforcement":"deterministic","adrs":["ADR-0012","ADR-0015"],"domains":["agentic-delivery-governance"]}
+// agentic-primitive: {"id":"issue-field-controller-boundary","kind":"script","enforcement":"deterministic","adrs":["ADR-0012","ADR-0015","ADR-0018","ADR-0019"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 
 const GRAPHQL_ENDPOINT = 'https://api.github.com/graphql';
 // GitHub's newer issue-type and issue-field schema is only exposed through
@@ -36,11 +36,27 @@ query IssueControlPlane($owner: String!, $name: String!, $number: Int!, $organiz
     }
   }
   organization(login: $organization) {
-    issueTypes(first: 100) { nodes { id name isEnabled } }
+    issueTypes(first: 100) {
+      nodes {
+        id
+        name
+        isEnabled
+        pinnedFields {
+          ... on Node { id }
+          ... on IssueFieldCommon { name dataType visibility }
+        }
+      }
+    }
+    pinnedIssueFields(first: 100) {
+      nodes {
+        ... on Node { id }
+        ... on IssueFieldCommon { name dataType visibility }
+      }
+    }
     issueFields(first: 100) {
       nodes {
         ... on Node { id }
-        ... on IssueFieldCommon { name dataType }
+        ... on IssueFieldCommon { name dataType visibility }
         ... on IssueFieldSingleSelect { options { id name description } }
       }
     }
@@ -138,6 +154,7 @@ export async function readIssueControlPlane({ graphql, repository, issueNumber: 
     subIssues: issue.subIssues?.nodes ?? [],
     organizationIssueTypes: data?.organization?.issueTypes?.nodes ?? [],
     organizationIssueFields: data?.organization?.issueFields?.nodes ?? [],
+    organizationPinnedIssueFields: data?.organization?.pinnedIssueFields?.nodes ?? [],
   };
 }
 
@@ -155,17 +172,96 @@ function observedOrganizationField(fields, definition) {
   return (fields ?? []).find((field) => ids.includes(field?.id) || field?.name === definition?.name) ?? null;
 }
 
+function fieldIsPinned(fields, definition) {
+  const ids = [definition?.runtime_id, definition?.github_id, definition?.id]
+    .filter((value) => typeof value === 'string' && value.trim());
+  return (fields ?? []).some((field) => ids.includes(field?.id));
+}
+
+function validateIssueTypeCatalog({ config, organizationIssueTypes, errors }) {
+  if (!Array.isArray(organizationIssueTypes)) {
+    errors.push('The organization issue-type catalog was not returned; cannot verify configured native issue types.');
+    return;
+  }
+
+  const configuredTypes = config?.issue_types;
+  if (!Array.isArray(configuredTypes)) {
+    errors.push('The repository native issue-type catalog was not returned.');
+    return;
+  }
+
+  if (!organizationIssueTypes.some((type) => type?.isEnabled === true)) {
+    errors.push('The organization has no enabled issue types; cannot verify issue-field pinning.');
+  }
+  for (const type of organizationIssueTypes) {
+    if (typeof type?.isEnabled !== 'boolean') {
+      errors.push(`Enabled state for organization issue type ${type?.name ?? type?.id ?? '(unknown)'} was not returned.`);
+    }
+  }
+
+  for (const configuredType of configuredTypes) {
+    const nativeName = configuredType?.native_name;
+    if (typeof nativeName !== 'string' || !nativeName.trim()) {
+      errors.push('The repository native issue-type catalog contains an entry without a native name.');
+      continue;
+    }
+    const observedType = organizationIssueTypes.find((type) => type?.name === nativeName);
+    if (!observedType) {
+      errors.push(`Configured organization issue type ${nativeName} was not returned.`);
+    } else if (observedType.isEnabled !== true) {
+      errors.push(`Configured organization issue type ${nativeName} is not enabled.`);
+    }
+  }
+}
+
+function validateIssueFieldPinning({ fieldKey, definition, organizationIssueTypes, organizationPinnedIssueFields, errors }) {
+  const targets = Array.isArray(definition?.pinned_to) ? definition.pinned_to : [];
+  const supportedTargets = new Set(['all-issue-types', 'issues-without-type']);
+  for (const target of targets) {
+    if (!supportedTargets.has(target)) errors.push(`The pin target ${target} for ${fieldKey} is not supported.`);
+  }
+
+  if (targets.includes('all-issue-types')) {
+    if (Array.isArray(organizationIssueTypes)) {
+      const enabledTypes = organizationIssueTypes.filter((type) => type?.isEnabled === true);
+      for (const type of enabledTypes) {
+        if (!Array.isArray(type.pinnedFields)) {
+          errors.push(`Pinned fields for organization issue type ${type.name ?? type.id} were not returned.`);
+        } else if (!fieldIsPinned(type.pinnedFields, definition)) {
+          errors.push(`The organization issue field ${definition.name} is not pinned to enabled issue type ${type.name ?? type.id}.`);
+        }
+      }
+    }
+  }
+
+  if (targets.includes('issues-without-type')) {
+    if (!Array.isArray(organizationPinnedIssueFields)) {
+      errors.push(`The organization pin catalog for issues without a type was not returned; cannot verify ${definition.name} pinning.`);
+    } else if (!fieldIsPinned(organizationPinnedIssueFields, definition)) {
+      errors.push(`The organization issue field ${definition.name} is not pinned to issues without a type.`);
+    }
+  }
+}
+
 /**
  * Verify the live organization field catalog before any controller mutation.
  * The repository contract uses logical IDs; the runtime binding must match
  * the GitHub IDs and option names observed by the trusted GraphQL read.
  */
-export function validateOrganizationIssueFields({ config, organizationIssueFields, requireOptions = true, requireRuntimeBindings = false } = {}) {
+export function validateOrganizationIssueFields({
+  config,
+  organizationIssueFields,
+  organizationIssueTypes,
+  organizationPinnedIssueFields,
+  requireOptions = true,
+  requireRuntimeBindings = false,
+} = {}) {
   const errors = [];
   const observed = {};
   if (!Array.isArray(organizationIssueFields)) {
     return { valid: false, errors: ['The organization issue-field catalog was not returned.'], observed };
   }
+  validateIssueTypeCatalog({ config, organizationIssueTypes, errors });
   for (const fieldKey of ['lifecycle_stage', 'readiness']) {
     const definition = config?.fields?.[fieldKey];
     if (!definition) {
@@ -179,6 +275,13 @@ export function validateOrganizationIssueFields({ config, organizationIssueField
     }
     observed[fieldKey] = field;
     if (field.dataType !== 'SINGLE_SELECT') errors.push(`The organization issue field ${definition.name} is not SINGLE_SELECT.`);
+    validateIssueFieldPinning({
+      fieldKey,
+      definition,
+      organizationIssueTypes,
+      organizationPinnedIssueFields,
+      errors,
+    });
     const configuredFieldId = runtimeId(definition);
     if (requireRuntimeBindings && !definition.runtime_id && !definition.github_id) {
       errors.push(`The runtime binding for ${fieldKey} is missing.`);

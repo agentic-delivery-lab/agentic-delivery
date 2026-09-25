@@ -248,6 +248,14 @@ export function validateIssueMetadataConfig(config) {
   for (const key of ['lifecycle_stage', 'readiness']) {
     const field = fields[key];
     if (!field || field.kind !== 'single-select' || typeof field.name !== 'string' || !Array.isArray(field.options) || !field.options.length || !Array.isArray(field.pinned_to) || !field.pinned_to.length) errors.push(`fields.${key} must be a pinned single-select field`);
+    const pinTargets = Array.isArray(field?.pinned_to) ? field.pinned_to : [];
+    const requiredPinTargets = ['all-issue-types', 'issues-without-type'];
+    const supportedPinTargets = new Set(requiredPinTargets);
+    if (pinTargets.some((target) => !supportedPinTargets.has(target))) errors.push(`fields.${key} contains an unsupported pin target`);
+    if (requiredPinTargets.some((target) => !pinTargets.includes(target))) {
+      errors.push(`fields.${key}.pinned_to must include all-issue-types and issues-without-type`);
+    }
+    if (new Set(pinTargets).size !== pinTargets.length) errors.push(`fields.${key} repeats a pin target`);
     const ids = new Set();
     for (const option of field?.options ?? []) {
       if (!option || !ID.test(option.id ?? '') || typeof option.name !== 'string' || !option.name.trim()) errors.push(`fields.${key} contains an invalid option`);
