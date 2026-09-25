@@ -137,6 +137,31 @@ test('organization field validation checks every enabled type and the no-type pi
   assert.match(noTypeResult.errors.join(' '), /Delivery Readiness is not pinned to issues without a type/);
 });
 
+test('organization field validation requires every configured native type to be present and enabled', () => {
+  const missingType = issueTypesFromConfig().filter((type) => type.name !== 'Task');
+  const missingResult = validateLiveCatalog(catalogFromConfig(), { organizationIssueTypes: missingType });
+  assert.equal(missingResult.valid, false);
+  assert.match(missingResult.errors.join(' '), /Configured organization issue type Task was not returned/);
+
+  const disabledType = issueTypesFromConfig();
+  disabledType.find((type) => type.name === 'Task').isEnabled = false;
+  const disabledResult = validateLiveCatalog(catalogFromConfig(), { organizationIssueTypes: disabledType });
+  assert.equal(disabledResult.valid, false);
+  assert.match(disabledResult.errors.join(' '), /Configured organization issue type Task is not enabled/);
+});
+
+test('organization pin validation requires the configured field identity even when names match', () => {
+  const issueTypes = issueTypesFromConfig();
+  const task = issueTypes.find((type) => type.name === 'Task');
+  task.pinnedFields = task.pinnedFields.map((field) => field.name === 'Lifecycle Stage'
+    ? { ...field, id: 'different-field-id' }
+    : field);
+
+  const result = validateLiveCatalog(catalogFromConfig(), { organizationIssueTypes: issueTypes });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /Lifecycle Stage is not pinned to enabled issue type Task/);
+});
+
 test('organization field validation fails closed when live pin catalogs are missing', () => {
   const result = validateOrganizationIssueFields({ config, organizationIssueFields: catalogFromConfig() });
   assert.equal(result.valid, false);

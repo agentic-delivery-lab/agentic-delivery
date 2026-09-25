@@ -279,6 +279,7 @@
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
+        "issue-field-controller-boundary",
         "organization-webhook-ingress",
         "participant-registry",
         "participant-registry-validator",
@@ -301,6 +302,7 @@
       ],
       "primitives": [
         "delivery-state-domain-language",
+        "issue-field-controller-boundary",
         "issue-metadata-contract",
         "issue-metadata-resolver",
         "organization-metadata-runbook"
@@ -325,6 +327,7 @@
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
+        "issue-field-controller-boundary",
         "organization-webhook-ingress",
         "participant-registry",
         "participant-registry-validator",
@@ -697,9 +700,12 @@
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0012",
-        "ADR-0015"
+        "ADR-0015",
+        "ADR-0018",
+        "ADR-0019"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },

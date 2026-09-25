@@ -42,6 +42,8 @@ The current GraphQL schema exposes the type-specific pin list as
 `Organization.pinnedIssueFields`. The authenticated query returned both target
 fields on every enabled type and in the no-type list. Field visibility was
 `ORG_ONLY` in GraphQL and `organization_members_only` in the REST catalog.
+The configuration binding IDs were compared with the live GraphQL field and
+option node IDs; the public report records the match result but omits those IDs.
 
 The query shape used for the inventory was:
 
@@ -105,6 +107,14 @@ The repository now reads live type pins and no-type pins in the shared query
 and validates them before intake routing, delivery, or metadata migration can
 authorize issue-field writes. If the App token cannot read those catalogs, the
 existing fail-closed path holds the route without changing issue fields.
+
+This report is a redacted operator record, not a retained raw-response artifact
+or immutable response digest. The listed query can be rerun by an authorized
+organization reader, but a reviewer cannot independently reproduce the exact
+field/option identity comparison or the issue-value reads from this public file
+alone. Keep the raw, Organization-only responses in an approved restricted
+evidence store if later acceptance requires that level of reproduction; do not
+publish those responses in this repository.
 
 ## Deferred proof and dependencies
 

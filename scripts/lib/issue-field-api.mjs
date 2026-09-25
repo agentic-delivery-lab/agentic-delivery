@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"issue-field-controller-boundary","kind":"script","enforcement":"deterministic","adrs":["ADR-0012","ADR-0015"],"domains":["agentic-delivery-governance"]}
+// agentic-primitive: {"id":"issue-field-controller-boundary","kind":"script","enforcement":"deterministic","adrs":["ADR-0012","ADR-0015","ADR-0018","ADR-0019"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 
 const GRAPHQL_ENDPOINT = 'https://api.github.com/graphql';
 // GitHub's newer issue-type and issue-field schema is only exposed through
@@ -175,7 +175,43 @@ function observedOrganizationField(fields, definition) {
 function fieldIsPinned(fields, definition) {
   const ids = [definition?.runtime_id, definition?.github_id, definition?.id]
     .filter((value) => typeof value === 'string' && value.trim());
-  return (fields ?? []).some((field) => ids.includes(field?.id) || field?.name === definition?.name);
+  return (fields ?? []).some((field) => ids.includes(field?.id));
+}
+
+function validateIssueTypeCatalog({ config, organizationIssueTypes, errors }) {
+  if (!Array.isArray(organizationIssueTypes)) {
+    errors.push('The organization issue-type catalog was not returned; cannot verify configured native issue types.');
+    return;
+  }
+
+  const configuredTypes = config?.issue_types;
+  if (!Array.isArray(configuredTypes)) {
+    errors.push('The repository native issue-type catalog was not returned.');
+    return;
+  }
+
+  if (!organizationIssueTypes.some((type) => type?.isEnabled === true)) {
+    errors.push('The organization has no enabled issue types; cannot verify issue-field pinning.');
+  }
+  for (const type of organizationIssueTypes) {
+    if (typeof type?.isEnabled !== 'boolean') {
+      errors.push(`Enabled state for organization issue type ${type?.name ?? type?.id ?? '(unknown)'} was not returned.`);
+    }
+  }
+
+  for (const configuredType of configuredTypes) {
+    const nativeName = configuredType?.native_name;
+    if (typeof nativeName !== 'string' || !nativeName.trim()) {
+      errors.push('The repository native issue-type catalog contains an entry without a native name.');
+      continue;
+    }
+    const observedType = organizationIssueTypes.find((type) => type?.name === nativeName);
+    if (!observedType) {
+      errors.push(`Configured organization issue type ${nativeName} was not returned.`);
+    } else if (observedType.isEnabled !== true) {
+      errors.push(`Configured organization issue type ${nativeName} is not enabled.`);
+    }
+  }
 }
 
 function validateIssueFieldPinning({ fieldKey, definition, organizationIssueTypes, organizationPinnedIssueFields, errors }) {
@@ -186,11 +222,8 @@ function validateIssueFieldPinning({ fieldKey, definition, organizationIssueType
   }
 
   if (targets.includes('all-issue-types')) {
-    if (!Array.isArray(organizationIssueTypes)) {
-      errors.push(`The organization issue-type catalog was not returned; cannot verify ${definition.name} pinning.`);
-    } else {
-      const enabledTypes = organizationIssueTypes.filter((type) => type?.isEnabled !== false);
-      if (!enabledTypes.length) errors.push(`The organization has no enabled issue types; cannot verify ${definition.name} pinning.`);
+    if (Array.isArray(organizationIssueTypes)) {
+      const enabledTypes = organizationIssueTypes.filter((type) => type?.isEnabled === true);
       for (const type of enabledTypes) {
         if (!Array.isArray(type.pinnedFields)) {
           errors.push(`Pinned fields for organization issue type ${type.name ?? type.id} were not returned.`);
@@ -228,6 +261,7 @@ export function validateOrganizationIssueFields({
   if (!Array.isArray(organizationIssueFields)) {
     return { valid: false, errors: ['The organization issue-field catalog was not returned.'], observed };
   }
+  validateIssueTypeCatalog({ config, organizationIssueTypes, errors });
   for (const fieldKey of ['lifecycle_stage', 'readiness']) {
     const definition = config?.fields?.[fieldKey];
     if (!definition) {
