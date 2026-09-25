@@ -111,8 +111,10 @@ repository Actions variable; it is not copied into this report.
 
 The repository now reads live type pins and no-type pins in the shared query
 and validates them before intake routing, delivery, or metadata migration can
-authorize issue-field writes. If the App token cannot read those catalogs, the
-existing fail-closed path holds the route without changing issue fields.
+authorize issue-field writes. If the App token cannot read those catalogs,
+delivery and metadata migration abort with an error before any issue-field
+write. These callers do not convert that failure into an explicit held route
+or update the issue's Delivery State.
 
 This report is a redacted operator record, not a retained raw-response artifact
 or immutable response digest. The listed query can be rerun by an authorized

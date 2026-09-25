@@ -34,6 +34,18 @@ test('issue metadata config rejects unsupported and duplicate field pin targets'
   unsupported.fields.lifecycle_stage.pinned_to = ['bug'];
   assert.match(validateIssueMetadataConfig(unsupported).errors.join(' '), /unsupported pin target/);
 
+  for (const fieldKey of ['lifecycle_stage', 'readiness']) {
+    for (const missingTarget of ['all-issue-types', 'issues-without-type']) {
+      const missingRequiredTarget = structuredClone(config);
+      missingRequiredTarget.fields[fieldKey].pinned_to = missingRequiredTarget.fields[fieldKey].pinned_to
+        .filter((target) => target !== missingTarget);
+      assert.match(
+        validateIssueMetadataConfig(missingRequiredTarget).errors.join(' '),
+        /pinned_to must include all-issue-types and issues-without-type/,
+      );
+    }
+  }
+
   const duplicate = structuredClone(config);
   duplicate.fields.readiness.pinned_to = ['issues-without-type', 'issues-without-type'];
   assert.match(validateIssueMetadataConfig(duplicate).errors.join(' '), /repeats a pin target/);
