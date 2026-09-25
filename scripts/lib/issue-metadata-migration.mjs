@@ -142,7 +142,19 @@ export function migrationLabels({ issue = {}, config, plan } = {}) {
  * Apply only the operations present in a previously generated plan. The
  * caller owns the REST label endpoint and must verify the result afterward.
  */
-export async function applyIssueMetadataMigration({ plan, issue, config, graphql, updateLabels, verify, bindings = {}, organizationIssueFields = null, actor = 'controller' } = {}) {
+export async function applyIssueMetadataMigration({
+  plan,
+  issue,
+  config,
+  graphql,
+  updateLabels,
+  verify,
+  bindings = {},
+  organizationIssueTypes = null,
+  organizationIssueFields = null,
+  organizationPinnedIssueFields = null,
+  actor = 'controller',
+} = {}) {
   if (actor !== 'controller') throw new Error('Only the deterministic controller may apply metadata migration.');
   if (!plan || plan.idempotent !== true) throw new Error('A validated idempotent migration plan is required.');
   const manualActions = (plan.actions ?? []).filter((action) => action.kind.startsWith('manual-'));
@@ -153,7 +165,13 @@ export async function applyIssueMetadataMigration({ plan, issue, config, graphql
   if (requiresFieldCatalog) {
     if (!Array.isArray(organizationIssueFields)) throw new Error('A live organization issue-field catalog is required before metadata migration.');
     boundConfig = bindIssueMetadataConfig(config, { fields: bindings.fields ?? {} });
-    const fieldContract = validateOrganizationIssueFields({ config: boundConfig, organizationIssueFields, requireRuntimeBindings: true });
+    const fieldContract = validateOrganizationIssueFields({
+      config: boundConfig,
+      organizationIssueFields,
+      organizationIssueTypes,
+      organizationPinnedIssueFields,
+      requireRuntimeBindings: true,
+    });
     if (!fieldContract.valid) throw new Error(`Cannot migrate metadata automatically: ${fieldContract.errors.join(' ')}`);
   }
   for (const action of plan.actions ?? []) {

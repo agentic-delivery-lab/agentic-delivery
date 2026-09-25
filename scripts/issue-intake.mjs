@@ -264,7 +264,12 @@ export async function classifyAndRoute({
   if (useGraphql && !graphql) graphql = githubGraphqlApi({ token: originToken, fetchImpl });
   const readTrustedControlPlane = async (controlIssueNumber) => {
     const enriched = await controlPlaneReader({ graphql, repository, issueNumber: controlIssueNumber, organization: repository.split('/')[0] });
-    const fieldContract = validateOrganizationIssueFields({ config: effectiveConfig, organizationIssueFields: enriched.organizationIssueFields });
+    const fieldContract = validateOrganizationIssueFields({
+      config: effectiveConfig,
+      organizationIssueFields: enriched.organizationIssueFields,
+      organizationIssueTypes: enriched.organizationIssueTypes,
+      organizationPinnedIssueFields: enriched.organizationPinnedIssueFields,
+    });
     if (!fieldContract.valid) throw new Error(`Required organization issue fields are not ready: ${fieldContract.errors.join(' ')}`);
     return enriched;
   };

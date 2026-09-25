@@ -442,7 +442,12 @@ export async function deliver(env = process.env, dependencies = {}) {
   const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
   const readTrustedControlPlane = async ({ issueNumber = issue } = {}) => {
     const value = await readControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
-    const fieldContract = validateOrganizationIssueFields({ config: lifecycleConfig, organizationIssueFields: value.organizationIssueFields });
+    const fieldContract = validateOrganizationIssueFields({
+      config: lifecycleConfig,
+      organizationIssueFields: value.organizationIssueFields,
+      organizationIssueTypes: value.organizationIssueTypes,
+      organizationPinnedIssueFields: value.organizationPinnedIssueFields,
+    });
     if (!fieldContract.valid) throw new Error(`Required organization issue fields are not ready: ${fieldContract.errors.join(' ')}`);
     return value;
   };

@@ -76,7 +76,9 @@ export async function runMigration({ env = process.env, argv = process.argv, roo
     config,
     graphql,
     bindings: runtimeBindings,
+    organizationIssueTypes: controlPlane.organizationIssueTypes,
     organizationIssueFields: controlPlane.organizationIssueFields,
+    organizationPinnedIssueFields: controlPlane.organizationPinnedIssueFields,
     actor: 'controller',
     verify: () => verifyEventually(async () => {
       const observed = await readIssueControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });

@@ -29,6 +29,20 @@ test('issue metadata config defines orthogonal native types, lifecycle fields, g
   assert.ok(!config.fields.lifecycle_stage.options.some((option) => option.id === 'needs-triage'));
 });
 
+test('issue metadata config rejects unsupported and duplicate field pin targets', () => {
+  const unsupported = structuredClone(config);
+  unsupported.fields.lifecycle_stage.pinned_to = ['bug'];
+  assert.match(validateIssueMetadataConfig(unsupported).errors.join(' '), /unsupported pin target/);
+
+  const duplicate = structuredClone(config);
+  duplicate.fields.readiness.pinned_to = ['issues-without-type', 'issues-without-type'];
+  assert.match(validateIssueMetadataConfig(duplicate).errors.join(' '), /repeats a pin target/);
+
+  const malformed = structuredClone(config);
+  malformed.fields.readiness.pinned_to = 'all-issue-types';
+  assert.match(validateIssueMetadataConfig(malformed).errors.join(' '), /must be a pinned single-select field/);
+});
+
 test('native issue type wins and legacy type labels are only a migration fallback', () => {
   const native = issueMetadata({
     issueType: { name: 'Feature' },

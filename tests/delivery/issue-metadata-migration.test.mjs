@@ -19,6 +19,15 @@ function liveCatalog() {
   }));
 }
 
+function liveIssueTypes() {
+  return config.issue_types.map((type) => ({
+    id: `live-type-${type.id}`,
+    name: type.native_name,
+    isEnabled: true,
+    pinnedFields: liveCatalog(),
+  }));
+}
+
 function liveBindings() {
   return {
     fields: Object.fromEntries(['lifecycle_stage', 'readiness'].map((key) => [key, {
@@ -112,10 +121,39 @@ test('migration application preflights runtime bindings before native type or fi
     plan,
     issue: { id: 'I_11' },
     config,
+    organizationIssueTypes: liveIssueTypes(),
     organizationIssueFields: liveCatalog(),
+    organizationPinnedIssueFields: liveCatalog(),
     graphql: async () => { calls.push('graphql'); },
     updateLabels: async () => { calls.push('labels'); },
   }), /runtime binding/);
+  assert.deepEqual(calls, []);
+});
+
+test('migration application refuses field writes when a configured live pin is missing', async () => {
+  const calls = [];
+  const issueTypes = liveIssueTypes();
+  issueTypes.find((type) => type.name === 'Task').pinnedFields = issueTypes
+    .find((type) => type.name === 'Task').pinnedFields.filter((field) => field.name !== 'Lifecycle Stage');
+  const plan = planIssueMetadataMigration({
+    issue: { number: 14, state: 'open', labels: [{ name: 'type:task' }, { name: 'state:ready-for-plan' }] },
+    config,
+    organizationIssueTypes: issueTypes,
+    organizationIssueFields: liveCatalog(),
+    bindings: liveBindings(),
+  });
+
+  await assert.rejects(() => applyIssueMetadataMigration({
+    plan,
+    issue: { id: 'I_14' },
+    config,
+    organizationIssueTypes: issueTypes,
+    organizationIssueFields: liveCatalog(),
+    organizationPinnedIssueFields: liveCatalog(),
+    bindings: liveBindings(),
+    graphql: async () => { calls.push('graphql'); },
+    updateLabels: async () => { calls.push('labels'); },
+  }), /Lifecycle Stage is not pinned to enabled issue type Task/);
   assert.deepEqual(calls, []);
 });
 
@@ -145,7 +183,9 @@ test('migration applies provisioned fields with explicit runtime bindings', asyn
     plan,
     issue: { id: 'I_12', labels: [{ name: 'type:task' }, { name: 'state:ready-for-plan' }] },
     config,
+    organizationIssueTypes: liveIssueTypes(),
     organizationIssueFields: liveCatalog(),
+    organizationPinnedIssueFields: liveCatalog(),
     bindings: liveBindings(),
     graphql: async (query, variables) => { calls.push({ query, variables }); },
     updateLabels: async (labels) => { calls.push({ labels }); },

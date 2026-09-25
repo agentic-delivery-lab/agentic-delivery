@@ -37,6 +37,10 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Issue intake, delivery, and metadata migration now verify that the live
+  Lifecycle Stage and Delivery Readiness fields are pinned to every enabled
+  issue type and to issues without a type before authorizing field changes.
+
 - The public `.github` governance candidate is now based on the supplied
   current snapshot in a clean worktree and is validated by its immutable
   evidence pin; the original dirty user checkout is not release evidence.

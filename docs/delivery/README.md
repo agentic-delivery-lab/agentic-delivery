@@ -67,13 +67,23 @@ GitHub Issue Types are the durable classification. Existing `type:*` labels
 are read-only migration evidence and are removed only after a native type is
 observed or explicitly assigned.
 
-`Lifecycle Stage` is a small pinned single-select field with Intake, Discovery,
+`config/issue-metadata.yml` declares `Lifecycle Stage` and `Delivery Readiness`
+as single-select fields pinned to every issue type and to issues without a
+type. Intake and delivery read the live `IssueType.pinnedFields` and
+`Organization.pinnedIssueFields` catalogs and hold when those bindings do not
+match the contract. The organization currently limits field visibility to
+members and collaborators. `Lifecycle Stage` contains Intake, Discovery,
 Definition, Decision, Planning, Execution, Validation, Acceptance, Done, and
-Parked. `Delivery Readiness` is a separate pinned field for temporary gates
-such as Needs information, Ready, Working, Waiting, Awaiting human, or
-Blocked. Governance labels such as `adr:needed`, `security-review`, and
-`human-review` remain orthogonal controls. The runner's resumable execution
-state is stored separately in its protected per-issue state directory.
+Parked. `Delivery Readiness` is the live legacy name for the separate Delivery
+State concept; its values include Needs information, Ready, Working, Waiting,
+Awaiting human, or Blocked. Governance labels such as `adr:needed`,
+`security-review`, and `human-review` remain orthogonal controls. The runner's
+resumable execution state is stored separately in its protected per-issue state
+directory.
+
+See the [issue-field contract audit](issue-field-contract-audit.md) for the
+time-stamped live inventory, API evidence, access limits, and remaining runtime
+verification.
 
 The lifecycle is not a mandatory waterfall. An Idea may use discovery and
 optional research; Research can finish with evidence; Requirements can mature

@@ -66,7 +66,14 @@ async function fixture(t) {
       {id:`FV_READY_${number}`, field:{id:'delivery-readiness', name:'Delivery Readiness'}, value:readinessNames[faults.sourceFields.readiness], name:readinessNames[faults.sourceFields.readiness], optionId:faults.sourceFields.readiness},
     ],
     parent:null, subIssues:[],
-    organizationIssueTypes:issueTypes.map(([id, name]) => ({id:`IT_${id}`, name, isEnabled:true})),
+    organizationIssueTypes:issueTypes.map(([id, name]) => ({id:`IT_${id}`, name, isEnabled:true, pinnedFields:[
+      {id:'lifecycle-stage',name:'Lifecycle Stage',dataType:'SINGLE_SELECT'},
+      {id:'delivery-readiness',name:'Delivery Readiness',dataType:'SINGLE_SELECT'},
+    ]})),
+    organizationPinnedIssueFields:[
+      {id:'lifecycle-stage',name:'Lifecycle Stage',dataType:'SINGLE_SELECT'},
+      {id:'delivery-readiness',name:'Delivery Readiness',dataType:'SINGLE_SELECT'},
+    ],
     organizationIssueFields:faults.organizationIssueFieldsMissing ? [] : [
       {id:'lifecycle-stage',name:'Lifecycle Stage',dataType:'SINGLE_SELECT',options:Object.entries(stageNames).map(([id,name]) => ({id,name}))},
       {id:'delivery-readiness',name:'Delivery Readiness',dataType:'SINGLE_SELECT',options:Object.entries(readinessNames).map(([id,name]) => ({id,name}))},
