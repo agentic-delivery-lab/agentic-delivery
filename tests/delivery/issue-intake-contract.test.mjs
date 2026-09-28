@@ -103,8 +103,10 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.match(await text('.github/workflows/issue-intake.yml'), /steps\.invocation\.outputs\.accepted == 'true'/);
   assert.doesNotMatch(await text('.github/workflows/issue-intake.yml'), /\n\s*issue_comment:\s*\n/);
   const intakeSteps = intakeWorkflow.jobs.classify.steps;
+  const trustedIntakeCheckout = intakeSteps.find((step) => step.name === 'Check out trusted intake');
   const install = intakeSteps.find((step) => step.name === 'Install intake dependencies');
   const invocation = intakeSteps.find((step) => step.name === 'Validate and normalize explicit agent invocation');
+  assert.equal(trustedIntakeCheckout.with.path, 'trusted-intake');
   assert.equal(install['working-directory'], 'trusted-intake');
   assert.equal(invocation['working-directory'], 'trusted-intake');
   assert.equal(intakeWorkflow.jobs.deliver.permissions.contents, 'read');
