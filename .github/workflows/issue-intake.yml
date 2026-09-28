@@ -115,6 +115,7 @@ jobs:
         with:
           # Bootstrap pin: config/controller-release.json bootstrapCommit.
           ref: 03dc4071f29d3914479e9a0bd174759e79180f8c
+          path: trusted-intake
           persist-credentials: false
 
       - name: Set up pnpm and Node.js
@@ -157,6 +158,11 @@ jobs:
         with:
           ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '03dc4071f29d3914479e9a0bd174759e79180f8c' }}
           persist-credentials: false
+
+      - name: Install validated controller dependencies
+        if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: .
 
       - name: Set up pinned Codex CLI
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.force }}
