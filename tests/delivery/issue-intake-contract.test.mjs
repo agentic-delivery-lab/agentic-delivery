@@ -106,9 +106,17 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   const trustedIntakeCheckout = intakeSteps.find((step) => step.name === 'Check out trusted intake');
   const install = intakeSteps.find((step) => step.name === 'Install intake dependencies');
   const invocation = intakeSteps.find((step) => step.name === 'Validate and normalize explicit agent invocation');
+  const controllerCheckout = intakeSteps.find((step) => step.name === 'Check out the validated controller release');
+  const controllerInstall = intakeSteps.find((step) => step.name === 'Install validated controller dependencies');
+  const routing = intakeSteps.find((step) => step.name === 'Reason about and validate issue routing');
   assert.equal(trustedIntakeCheckout.with.path, 'trusted-intake');
   assert.equal(install['working-directory'], 'trusted-intake');
   assert.equal(invocation['working-directory'], 'trusted-intake');
+  assert.equal(controllerCheckout.with.path, undefined);
+  assert.equal(controllerInstall['working-directory'], '.');
+  assert.match(controllerInstall.run, /pnpm install --frozen-lockfile --ignore-scripts/);
+  assert.ok(intakeSteps.indexOf(controllerCheckout) < intakeSteps.indexOf(controllerInstall));
+  assert.ok(intakeSteps.indexOf(controllerInstall) < intakeSteps.indexOf(routing));
   assert.equal(intakeWorkflow.jobs.deliver.permissions.contents, 'read');
   assert.equal(intakeWorkflow.jobs.deliver.permissions.issues, 'write');
   assert.equal(intakeWorkflow.jobs.deliver.permissions['pull-requests'], undefined);

@@ -323,9 +323,9 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
-- The issue-intake workflow now checks out its pinned bootstrap into the
-  `trusted-intake` directory used by dependency installation and invocation
-  validation, so issue events can continue to routing with the GitHub App.
+- The issue-intake workflow installs dependencies for the validated controller
+  checkout before routing, so its `yaml` import resolves from the controller's
+  own workspace.
 
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) requires both mandatory issue-field pin targets in the versioned contract, preventing partial configuration from skipping a live pin check.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) removes the central controller repository-ID runtime default; the gateway now requires an explicit `AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID` before dispatch.
