@@ -29,7 +29,7 @@ test('the checked-in controller release pins every enrolled participant', async 
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
   assert.equal(release.version, '0.2.0-draft.38');
-  assert.equal(release.commit, '8c9fcdc5b12caa8874c7299acb96459188329ef8');
+  assert.equal(release.commit, '9367c5a1c58eb6215b92d34fbe5490cd85fb061f');
   assert.equal(release.bootstrapCommit, 'ec9ee99e0031b77afd6bc89e1195577909a45cca');
   assert.deepEqual(release.support.eventEnvelopeVersions, [1]);
   assert.deepEqual(release.support.lifecycleVersions, ['1.0.0']);
