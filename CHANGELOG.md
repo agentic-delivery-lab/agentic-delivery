@@ -323,6 +323,10 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- Issue intake and delivery now read the non-sensitive GitHub App and
+  installation IDs from Actions variables while keeping the App private key
+  in Actions secrets.
+
 - The issue-intake workflow installs dependencies for the validated controller
   checkout before routing, so its `yaml` import resolves from the controller's
   own workspace.

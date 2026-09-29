@@ -18,10 +18,6 @@ on:
     secrets:
       CODEX_DELIVERY_APP_PRIVATE_KEY:
         required: true
-      CODEX_DELIVERY_APP_ID:
-        required: true
-      CODEX_DELIVERY_APP_INSTALLATION_ID:
-        required: false
       CODEX_DELIVERY_DISPATCH_SECRET:
         required: true
   workflow_dispatch:
@@ -133,9 +129,9 @@ jobs:
         if: ${{ inputs.agent_invocation }}
         env:
           GH_TOKEN: ${{ github.token }}
-          CODEX_DELIVERY_APP_ID: ${{ secrets.CODEX_DELIVERY_APP_ID }}
+          CODEX_DELIVERY_APP_ID: ${{ vars.CODEX_DELIVERY_APP_ID }}
           CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
-          CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ secrets.CODEX_DELIVERY_APP_INSTALLATION_ID }}
+          CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ vars.CODEX_DELIVERY_APP_INSTALLATION_ID }}
           CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -173,9 +169,9 @@ jobs:
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          CODEX_DELIVERY_APP_ID: ${{ secrets.CODEX_DELIVERY_APP_ID }}
+          CODEX_DELIVERY_APP_ID: ${{ vars.CODEX_DELIVERY_APP_ID }}
           CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
-          CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ secrets.CODEX_DELIVERY_APP_INSTALLATION_ID }}
+          CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ vars.CODEX_DELIVERY_APP_INSTALLATION_ID }}
           GITHUB_GRAPHQL: 'true'
           ISSUE_FIELD_BINDINGS_JSON: ${{ vars.ISSUE_FIELD_BINDINGS_JSON }}
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
@@ -231,6 +227,4 @@ jobs:
       invocation_authorized: ${{ needs.classify.outputs.invocation_authorized }}
       invocation_body_digest: ${{ needs.classify.outputs.invocation_body_digest }}
     secrets:
-      CODEX_DELIVERY_APP_ID: ${{ secrets.CODEX_DELIVERY_APP_ID }}
       CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
-      CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ secrets.CODEX_DELIVERY_APP_INSTALLATION_ID }}

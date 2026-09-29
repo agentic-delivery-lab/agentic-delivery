@@ -85,10 +85,6 @@ on:
     secrets:
       CODEX_DELIVERY_APP_PRIVATE_KEY:
         required: true
-      CODEX_DELIVERY_APP_ID:
-        required: true
-      CODEX_DELIVERY_APP_INSTALLATION_ID:
-        required: false
   workflow_dispatch:
     inputs:
       issue:
@@ -148,9 +144,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_GRAPHQL: 'true'
-          CODEX_DELIVERY_APP_ID: ${{ secrets.CODEX_DELIVERY_APP_ID }}
+          CODEX_DELIVERY_APP_ID: ${{ vars.CODEX_DELIVERY_APP_ID }}
           CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
-          CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ secrets.CODEX_DELIVERY_APP_INSTALLATION_ID }}
+          CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ vars.CODEX_DELIVERY_APP_INSTALLATION_ID }}
           SOURCE_ISSUE: ${{ inputs.issue || github.event.inputs.issue }}
           INTAKE_ROUTE: ${{ inputs.route || 'resume' }}
           INVOCATION_EVENT: ${{ inputs.invocation_event_name != '' && 'true' || 'false' }}
