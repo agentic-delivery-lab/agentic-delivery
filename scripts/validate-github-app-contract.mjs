@@ -67,6 +67,8 @@ export function validateGithubAppContract(contract, catalog = actorCatalog, even
   if (permissions.metadata !== 'read') errors.push('permissions.metadata must be read');
   if (permissions.contents !== 'write') errors.push('permissions.contents must be write');
   if (permissions.issues !== 'write') errors.push('permissions.issues must be write');
+  if (permissions.issue_fields !== 'read') errors.push('permissions.issue_fields must be read');
+  if (permissions.issue_types !== 'read') errors.push('permissions.issue_types must be read');
   if (permissions.pull_requests !== 'write') errors.push('permissions.pull_requests must be write');
   if (permissions.workflows !== 'none') errors.push('permissions.workflows must be none');
   if (contract.credentials?.privateKey !== 'central-deployment-only') errors.push('credentials.privateKey must remain central-deployment-only');
@@ -75,8 +77,11 @@ export function validateGithubAppContract(contract, catalog = actorCatalog, even
   if (contract.credentials?.storage !== 'central-secret-store') errors.push('credentials.storage must be central-secret-store');
   if (contract.tokenScopes?.origin?.repositoryIds !== 'origin-event-repository') errors.push('origin token must be origin-event-repository scoped');
   if (contract.tokenScopes?.origin?.permissions !== 'read-minimum') errors.push('origin token must use read-minimum permissions');
+  if (contract.tokenScopes?.origin?.organizationPermissions?.issue_fields !== 'read') errors.push('origin token must request organization issue_fields read');
+  if (contract.tokenScopes?.origin?.organizationPermissions?.issue_types !== 'read') errors.push('origin token must request organization issue_types read');
   if (contract.tokenScopes?.controller?.repositoryIds !== 'controller-repository') errors.push('controller token must be controller-repository scoped');
   if (contract.tokenScopes?.controller?.permissions !== 'contents-write-dispatch-only') errors.push('controller token must be contents-write-dispatch-only');
+  if (contract.tokenScopes?.controller?.organizationPermissions !== undefined) errors.push('controller token must not request organization permissions');
   return { valid: errors.length === 0, errors };
 }
 

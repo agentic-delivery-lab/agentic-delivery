@@ -24,6 +24,8 @@
     "metadata": "read",
     "contents": "write",
     "issues": "write",
+    "issue_fields": "read",
+    "issue_types": "read",
     "pull_requests": "write",
     "workflows": "none"
   },
@@ -36,7 +38,11 @@
   "tokenScopes": {
     "origin": {
       "repositoryIds": "origin-event-repository",
-      "permissions": "read-minimum"
+      "permissions": "read-minimum",
+      "organizationPermissions": {
+        "issue_fields": "read",
+        "issue_types": "read"
+      }
     },
     "controller": {
       "repositoryIds": "controller-repository",

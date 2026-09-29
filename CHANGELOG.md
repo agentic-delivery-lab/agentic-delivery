@@ -37,6 +37,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Origin-scoped intake and delivery App tokens now request the approved
+  organization `issue_fields: read` and `issue_types: read` permissions while
+  keeping repository-ID narrowing and the controller dispatch token's
+  contents-only write scope.
+
 - Issue intake, delivery, and metadata migration now verify that the live
   Lifecycle Stage and Delivery Readiness fields are pinned to every enabled
   issue type and to issues without a type before authorizing field changes.

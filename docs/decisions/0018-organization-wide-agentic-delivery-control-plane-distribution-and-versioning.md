@@ -119,6 +119,16 @@ is not created. The organization owner must separately verify the live App
 registration, installation repository selection, event subscriptions and
 least-privilege permissions before activation.
 
+The minimum organization permissions include `issue_fields: read` and
+`issue_types: read` so the controller can validate the live issue-field and
+native Issue Type catalogs. Origin-scoped installation tokens request these
+reads alongside only the operation-specific repository permissions and remain
+narrowed to the originating numeric repository ID. Controller dispatch tokens
+request only `contents: write`; the App has no organization write or
+administration permission. [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
+tracks this implementation and the read-only canary that must verify it after
+the immutable controller pin is active.
+
 ### Participation contract
 
 Participation is the conjunction of two independently auditable conditions:

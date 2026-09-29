@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 
-import { GithubAppTokenProvider } from '../../scripts/lib/github-app.mjs';
+import { GithubAppTokenProvider, ORIGIN_ISSUE_METADATA_READ_PERMISSIONS } from '../../scripts/lib/github-app.mjs';
 
 test('GitHub App provider mints scoped installation tokens and refreshes near expiry', async () => {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -56,4 +56,31 @@ test('GitHub App provider can narrow an installation token to repository IDs', a
 
   assert.equal(await provider.token({ repositoryIds: ['777777777'] }), 'scoped');
   assert.deepEqual(requestBody.repository_ids, ['777777777']);
+});
+
+test('GitHub App provider combines approved organization reads with the origin repository restriction', async () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const permissions = {
+    ...ORIGIN_ISSUE_METADATA_READ_PERMISSIONS,
+    contents: 'read',
+    issues: 'write',
+    pull_requests: 'read',
+    metadata: 'read',
+  };
+  let requestBody;
+  const provider = new GithubAppTokenProvider({
+    repository: 'agentic-delivery-lab/agentic-delivery',
+    appId: '123',
+    privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+    installationId: '456',
+    permissions,
+    fetchImpl: async (url, options) => {
+      requestBody = JSON.parse(options.body);
+      return new Response(JSON.stringify({ token: 'origin-scoped', expires_at: '2026-09-10T13:00:00Z' }), { status: 201 });
+    },
+    now: () => Date.parse('2026-09-10T12:00:00Z'),
+  });
+
+  assert.equal(await provider.token({ repositoryIds: ['777777777'] }), 'origin-scoped');
+  assert.deepEqual(requestBody, { permissions, repository_ids: ['777777777'] });
 });

@@ -34,6 +34,21 @@ authoritative compatibility contract until ADR-0019's separately authorized
 field migration is complete; do not create a second field or rename it from a
 content pull request.
 
+## GitHub App permissions
+
+The central GitHub App installation needs the organization permissions
+`Issue Fields: read` and `Issue Types: read` to read the definitions, pins,
+options, and native types used by lifecycle validation. The versioned App
+contract lists both permissions. Intake and delivery request these two reads
+with their operation-specific repository permissions and narrow each token to
+the originating repository ID. The controller-only dispatch token requests
+`Contents: write` and no organization permissions.
+
+The installation permission grant does not prove that a token can read the
+catalog. After the immutable controller pin is updated, run the read-only
+canary on issue #62 and confirm the catalog and issue values are readable with
+no field writes.
+
 Run the dry-run manifest before changing organization settings:
 
 ```text

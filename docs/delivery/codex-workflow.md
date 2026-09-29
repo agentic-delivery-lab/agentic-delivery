@@ -97,8 +97,12 @@ source checks, then a separate controller token narrowed to the controller
 repository with only Contents write for the `repository_dispatch` handoff.
 The runner's publication token follows the organization-wide ADR-0018
 Contents, Issues, and Pull requests boundary; Actions `workflows:write` is not
-required by the App contract. The Vercel ingress uses these Production
-environment variables: `AGENTIC_DELIVERY_WEBHOOK_SECRET`,
+required by the App contract. Origin intake and delivery tokens also request
+`issue_fields: read` and `issue_types: read` to validate organization
+metadata. These tokens remain narrowed to the originating repository ID; the
+controller dispatch token requests only `contents: write`. The Vercel ingress
+uses these Production environment variables:
+`AGENTIC_DELIVERY_WEBHOOK_SECRET`,
 `AGENTIC_DELIVERY_APP_ID`, `AGENTIC_DELIVERY_APP_PRIVATE_KEY`,
 `AGENTIC_DELIVERY_APP_INSTALLATION_ID`, `AGENTIC_DELIVERY_DISPATCH_SECRET`,
 `AGENTIC_DELIVERY_ORGANIZATION`, `AGENTIC_DELIVERY_ORGANIZATION_ID`, and
@@ -245,14 +249,15 @@ issue edits.
   to the runner service user and back it up as operational data.
 - Repository Actions variables `CODEX_DELIVERY_APP_ID` and, optionally,
   `CODEX_DELIVERY_APP_INSTALLATION_ID`; Actions secret
-  `CODEX_DELIVERY_APP_PRIVATE_KEY`. Install the App only on this repository
-  with Metadata read plus Issues, Contents, Pull requests, and Workflows write.
-  Issue intake uses a repository-scoped installation token to read the issue
-  and organization issue-field contract and to perform validated issue
-  write-back. Delivery uses a repository-scoped token for its authorized issue
-  and pull-request operations. The private key and tokens stay in memory,
-  are redacted, and are never exposed to Codex. The workflow token still
-  supports Actions-level authorization and controller-repository operations;
+  `CODEX_DELIVERY_APP_PRIVATE_KEY`. Install the central App with selected-
+  repository access, repository Metadata read plus Contents, Issues, and Pull
+  requests write, and organization Issue Fields and Issue Types read. Do not
+  grant Workflows write. Issue intake uses a repository-scoped installation
+  token to read the issue and organization issue-field contract and to perform
+  validated issue write-back. Delivery uses a repository-scoped token for its
+  authorized issue and pull-request operations. The private key and tokens
+  stay in memory, are redacted, and are never exposed to Codex. The workflow
+  token still supports Actions-level authorization and controller-repository operations;
   it cannot replace the installed App token for organization issue-field
   access.
 

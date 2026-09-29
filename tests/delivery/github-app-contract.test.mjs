@@ -18,10 +18,23 @@ test('organization GitHub App contract includes lifecycle events and central cre
   assert.equal(contract.installation.access, 'selected-repositories');
   assert.equal(contract.credentials.privateKey, 'central-deployment-only');
   assert.equal(contract.credentials.dispatchSecret, 'central-gateway-and-controller-only');
+  assert.equal(contract.permissions.issue_fields, 'read');
+  assert.equal(contract.permissions.issue_types, 'read');
   assert.equal(contract.tokenScopes.origin.repositoryIds, 'origin-event-repository');
+  assert.deepEqual(contract.tokenScopes.origin.organizationPermissions, { issue_fields: 'read', issue_types: 'read' });
   assert.equal(contract.tokenScopes.controller.repositoryIds, 'controller-repository');
+  assert.equal(contract.tokenScopes.controller.organizationPermissions, undefined);
   assert.equal(contract.permissions.workflows, 'none');
   assert.doesNotMatch(deliverySource, /workflows\s*:\s*['"]write['"]/);
+});
+
+test('intake and delivery include only the approved organization reads in origin token requests', async () => {
+  const intakeSource = await readFile(path.join(repositoryRoot, 'scripts/issue-intake.mjs'), 'utf8');
+  const deliverySource = await readFile(path.join(repositoryRoot, 'scripts/codex-delivery.mjs'), 'utf8');
+  assert.match(intakeSource, /\.\.\.ORIGIN_ISSUE_METADATA_READ_PERMISSIONS/);
+  assert.match(deliverySource, /\.\.\.ORIGIN_ISSUE_METADATA_READ_PERMISSIONS/);
+  assert.match(intakeSource, /repositoryIds:\s*\[env\.ORIGIN_REPOSITORY_ID\]/);
+  assert.match(deliverySource, /repositoryIds:\s*\[originRepositoryId\]/);
 });
 
 test('GitHub App contract rejects a missing issue subscription or broad workflow permission', async () => {
@@ -29,10 +42,16 @@ test('GitHub App contract rejects a missing issue subscription or broad workflow
   const invalid = structuredClone(contract);
   delete invalid.events.issues;
   invalid.permissions.workflows = 'write';
+  invalid.permissions.issue_fields = 'write';
+  invalid.tokenScopes.origin.organizationPermissions.issue_types = 'write';
+  invalid.tokenScopes.controller.organizationPermissions = { issue_fields: 'read' };
   const result = validateGithubAppContract(invalid);
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((error) => error.includes('events.issues')));
   assert.ok(result.errors.some((error) => error.includes('permissions.workflows')));
+  assert.ok(result.errors.some((error) => error.includes('permissions.issue_fields')));
+  assert.ok(result.errors.some((error) => error.includes('origin token must request organization issue_types read')));
+  assert.ok(result.errors.some((error) => error.includes('controller token must not request organization permissions')));
 });
 
 test('the organization event catalog is the source projection for App actions', async () => {

@@ -14,7 +14,7 @@ import { validateCommitRange } from './validate-commit-range.mjs';
 import { validateBranchName } from './validate-branch-name.mjs';
 import { deterministicReview, validateEvidenceRecord } from './lib/architecture-review.mjs';
 import { validateTransition } from './lib/lifecycle-transitions.mjs';
-import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
+import { appConfiguration, GithubAppTokenProvider, ORIGIN_ISSUE_METADATA_READ_PERMISSIONS } from './lib/github-app.mjs';
 import { bodyDigest } from './lib/agent-invocation.mjs';
 import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType, validateOrganizationIssueFields } from './lib/issue-field-api.mjs';
 import { issueMetadata, issueFieldMutation, validateFieldMutation } from './lib/issue-metadata.mjs';
@@ -383,7 +383,7 @@ export async function deliver(env = process.env, dependencies = {}) {
       // installation token aligned with config/github-app-contract.json and
       // the least-privilege App contract: workflow distribution is a separate
       // reviewed projection owned by the Distribution boundary.
-      permissions: { contents: 'write', issues: 'write', pull_requests: 'write' },
+      permissions: { ...ORIGIN_ISSUE_METADATA_READ_PERMISSIONS, contents: 'write', issues: 'write', pull_requests: 'write' },
     })
     : null;
   const originToken = appProvider

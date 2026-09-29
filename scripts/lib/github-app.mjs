@@ -1,6 +1,11 @@
 // agentic-primitive: {"id":"github-app-token-provider","kind":"script","enforcement":"deterministic","adrs":["ADR-0018"],"domains":["agentic-delivery-control-plane"]}
 import { createPrivateKey, createSign } from 'node:crypto';
 
+export const ORIGIN_ISSUE_METADATA_READ_PERMISSIONS = Object.freeze({
+  issue_fields: 'read',
+  issue_types: 'read',
+});
+
 function base64url(value) {
   return Buffer.from(value).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }

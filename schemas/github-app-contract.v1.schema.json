@@ -49,11 +49,13 @@
     "permissions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["metadata", "contents", "issues", "pull_requests", "workflows"],
+      "required": ["metadata", "contents", "issues", "issue_fields", "issue_types", "pull_requests", "workflows"],
       "properties": {
         "metadata": { "const": "read" },
         "contents": { "const": "write" },
         "issues": { "const": "write" },
+        "issue_fields": { "const": "read" },
+        "issue_types": { "const": "read" },
         "pull_requests": { "const": "write" },
         "workflows": { "const": "none" }
       }
@@ -77,10 +79,19 @@
         "origin": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["repositoryIds", "permissions"],
+          "required": ["repositoryIds", "permissions", "organizationPermissions"],
           "properties": {
             "repositoryIds": { "const": "origin-event-repository" },
-            "permissions": { "const": "read-minimum" }
+            "permissions": { "const": "read-minimum" },
+            "organizationPermissions": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["issue_fields", "issue_types"],
+              "properties": {
+                "issue_fields": { "const": "read" },
+                "issue_types": { "const": "read" }
+              }
+            }
           }
         },
         "controller": {
