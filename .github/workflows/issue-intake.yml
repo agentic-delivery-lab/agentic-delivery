@@ -64,7 +64,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           # Bootstrap pin: config/controller-release.json bootstrapCommit.
-          ref: e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d
+          ref: 6397de06fc9baa90555564d39894a4c7ac8182fa
           path: trusted-intake
           persist-credentials: false
 
@@ -97,7 +97,7 @@ jobs:
       source_issue: ${{ steps.invocation.outputs.source_issue || steps.intake.outputs.issue }}
       origin_repository: ${{ steps.invocation.outputs.origin_repository || github.repository }}
       origin_repository_id: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
-      participant_mode: ${{ steps.invocation.outputs.participant_mode }}
+      participant_mode: ${{ steps.invocation.outputs.participant_mode || (inputs.shadow_mode && 'shadow') || '' }}
       controller_version: ${{ steps.invocation.outputs.controller_version || github.event.client_payload.controller.version }}
       controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || 'e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d' }}
       invocation_event_name: ${{ steps.invocation.outputs.invocation_event_name }}
@@ -115,7 +115,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           # Bootstrap pin: config/controller-release.json bootstrapCommit.
-          ref: e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d
+          ref: 6397de06fc9baa90555564d39894a4c7ac8182fa
           path: trusted-intake
           persist-credentials: false
 
