@@ -97,20 +97,26 @@ source checks, then a separate controller token narrowed to the controller
 repository with only Contents write for the `repository_dispatch` handoff.
 The runner's publication token follows the organization-wide ADR-0018
 Contents, Issues, and Pull requests boundary; Actions `workflows:write` is not
-required by the App contract. The webhook secret, dispatch HMAC secret, and
-App private key are stored only in Vercel Production environment variables
-(`AGENTIC_DELIVERY_WEBHOOK_SECRET`, `AGENTIC_DELIVERY_APP_ID`,
-`AGENTIC_DELIVERY_APP_PRIVATE_KEY`, `AGENTIC_DELIVERY_APP_INSTALLATION_ID`,
-`AGENTIC_DELIVERY_DISPATCH_SECRET`,
+required by the App contract. The Vercel ingress uses these Production
+environment variables: `AGENTIC_DELIVERY_WEBHOOK_SECRET`,
+`AGENTIC_DELIVERY_APP_ID`, `AGENTIC_DELIVERY_APP_PRIVATE_KEY`,
+`AGENTIC_DELIVERY_APP_INSTALLATION_ID`, `AGENTIC_DELIVERY_DISPATCH_SECRET`,
 `AGENTIC_DELIVERY_ORGANIZATION`, `AGENTIC_DELIVERY_ORGANIZATION_ID`, and
-`AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID`). The replay store must be a
-durable atomic adapter in a multi-instance deployment; a file-backed store is
-only valid for one process or a shared filesystem. The Actions controller receives the
-corresponding `CODEX_DELIVERY_APP_ID`, `CODEX_DELIVERY_APP_PRIVATE_KEY`,
-`CODEX_DELIVERY_DISPATCH_SECRET`, and optional
-`CODEX_DELIVERY_APP_INSTALLATION_ID` as central controller Actions secrets.
-Rotate the webhook secret, dispatch secret, and private key through the GitHub
-App and Vercel/Actions secret stores; never commit them.
+`AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID`. Treat the webhook secret, App
+private key, and dispatch secret as secrets; the IDs and organization values
+are configuration. The replay store must be a durable atomic adapter in a
+multi-instance deployment; a file-backed store is only valid for one process
+or a shared filesystem.
+
+In the central controller repository's Actions settings, store
+`CODEX_DELIVERY_APP_ID` and, optionally,
+`CODEX_DELIVERY_APP_INSTALLATION_ID` as repository variables. Store
+`CODEX_DELIVERY_APP_PRIVATE_KEY` and `CODEX_DELIVERY_DISPATCH_SECRET` as
+Actions secrets. The issue-intake and delivery workflows read the IDs through
+the `vars` context and receive the private key and dispatch secret through
+explicit secret inputs. Rotate the webhook secret, dispatch secret, and
+private key through their respective Vercel or Actions secret stores; never
+commit them.
 
 The ingress verifies the webhook signature and delivery ID, checks the exact
 actor catalog, signs the complete dispatch envelope with the separate dispatch
@@ -237,15 +243,18 @@ issue edits.
   `RUNNER_WORKSPACE`. Set repository variable `CODEX_DELIVERY_STATE_DIR` to an
   absolute directory outside disposable checkouts if needed. Restrict access
   to the runner service user and back it up as operational data.
-- GitHub App secrets `CODEX_DELIVERY_APP_ID` and
-  `CODEX_DELIVERY_APP_PRIVATE_KEY`, with optional secret
-  `CODEX_DELIVERY_APP_INSTALLATION_ID`. Install the App only on this repository
+- Repository Actions variables `CODEX_DELIVERY_APP_ID` and, optionally,
+  `CODEX_DELIVERY_APP_INSTALLATION_ID`; Actions secret
+  `CODEX_DELIVERY_APP_PRIVATE_KEY`. Install the App only on this repository
   with Metadata read plus Issues, Contents, Pull requests, and Workflows write.
-  The controller mints short-lived installation tokens only for child issue
-  creation and publication. It keeps the private key and token in memory,
-  redacts them, and never exposes them to Codex. `GITHUB_TOKEN` remains the
-  default for reads, permission checks, governance labels, issue fields, and
-  comments.
+  Issue intake uses a repository-scoped installation token to read the issue
+  and organization issue-field contract and to perform validated issue
+  write-back. Delivery uses a repository-scoped token for its authorized issue
+  and pull-request operations. The private key and tokens stay in memory,
+  are redacted, and are never exposed to Codex. The workflow token still
+  supports Actions-level authorization and controller-repository operations;
+  it cannot replace the installed App token for organization issue-field
+  access.
 
 Run `self-hosted-runner-smoke` with input `codex=true` for a check without a
 model turn. The setup step supplies the executable without copying
