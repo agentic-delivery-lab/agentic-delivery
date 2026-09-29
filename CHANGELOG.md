@@ -42,13 +42,16 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
-- Origin-scoped intake and delivery App tokens now request the approved
-  organization `issue_fields: read` and `issue_types: read` permissions while
-  keeping repository-ID narrowing and the controller dispatch token's
-  contents-only write scope.
-- Manual issue-intake dispatch now defaults to shadow mode so a canary can
-  verify App reads without changing issue types or lifecycle fields; the
-  effective mode also blocks downstream delivery.
+- Origin-scoped App tokens now use explicit invocation-preflight, shadow
+  intake, active intake, and delivery permission profiles. The versioned
+  contract is checked against each runtime request; origin repository IDs
+  still narrow repository resources, while the approved issue-field and issue
+  type reads remain organization-wide.
+- Direct intake resolves the participant mode from the pinned registry by
+  repository ID and verifies the expected repository name. Manual shadow mode
+  can force read-only behavior but cannot promote a registered shadow
+  participant, and delivery requires an active participant with no shadow
+  override.
 
 - Issue intake, delivery, and metadata migration now verify that the live
   Lifecycle Stage and Delivery Readiness fields are pinned to every enabled

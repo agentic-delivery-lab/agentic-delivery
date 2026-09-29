@@ -1,9 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 import actorCatalog from '../config/agent-actors.json' with { type: 'json' };
 import { invocationEventSupported, observationEventSupported } from './lib/agent-invocation.mjs';
+import { GITHUB_APP_TOKEN_PERMISSION_PROFILES } from './lib/github-app.mjs';
 import { parseRepositoryYaml } from './lib/yaml.mjs';
 import { validateEventCatalog } from './lib/event-catalog.mjs';
 
@@ -76,9 +78,17 @@ export function validateGithubAppContract(contract, catalog = actorCatalog, even
   if (contract.credentials?.dispatchSecret !== 'central-gateway-and-controller-only') errors.push('credentials.dispatchSecret must remain central-gateway-and-controller-only');
   if (contract.credentials?.storage !== 'central-secret-store') errors.push('credentials.storage must be central-secret-store');
   if (contract.tokenScopes?.origin?.repositoryIds !== 'origin-event-repository') errors.push('origin token must be origin-event-repository scoped');
-  if (contract.tokenScopes?.origin?.permissions !== 'read-minimum') errors.push('origin token must use read-minimum permissions');
-  if (contract.tokenScopes?.origin?.organizationPermissions?.issue_fields !== 'read') errors.push('origin token must request organization issue_fields read');
-  if (contract.tokenScopes?.origin?.organizationPermissions?.issue_types !== 'read') errors.push('origin token must request organization issue_types read');
+  const originProfiles = contract.tokenScopes?.origin?.profiles;
+  const expectedProfileNames = Object.keys(GITHUB_APP_TOKEN_PERMISSION_PROFILES).sort();
+  const actualProfileNames = Object.keys(originProfiles ?? {}).sort();
+  if (!isDeepStrictEqual(actualProfileNames, expectedProfileNames)) {
+    errors.push(`origin token profiles must be exactly ${expectedProfileNames.join(', ')}`);
+  }
+  for (const [name, expected] of Object.entries(GITHUB_APP_TOKEN_PERMISSION_PROFILES)) {
+    if (!isDeepStrictEqual(originProfiles?.[name], expected)) {
+      errors.push(`origin token profile ${name} must exactly match its runtime permission map`);
+    }
+  }
   if (contract.tokenScopes?.controller?.repositoryIds !== 'controller-repository') errors.push('controller token must be controller-repository scoped');
   if (contract.tokenScopes?.controller?.permissions !== 'contents-write-dispatch-only') errors.push('controller token must be contents-write-dispatch-only');
   if (contract.tokenScopes?.controller?.organizationPermissions !== undefined) errors.push('controller token must not request organization permissions');

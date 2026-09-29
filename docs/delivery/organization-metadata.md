@@ -1,4 +1,4 @@
-<!-- agentic-primitive: {"id":"organization-metadata-runbook","kind":"instruction","enforcement":"instructional","adrs":["ADR-0012","ADR-0013","ADR-0015","ADR-0016","ADR-0017","ADR-0019"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"organization-metadata-runbook","kind":"instruction","enforcement":"instructional","adrs":["ADR-0012","ADR-0013","ADR-0015","ADR-0016","ADR-0017","ADR-0018","ADR-0019"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]} -->
 
 # Organization GitHub metadata runbook
 
@@ -47,14 +47,25 @@ repository ID. The controller-only dispatch token requests `Contents: write`
 and no organization permissions.
 
 The installation permission grant does not prove that a token can read the
-catalog. After the immutable controller pin is updated, run the read-only
-canary on issue #62 from **Actions → issue-intake → Run workflow**. Set `issue`
-to `62`, keep `force` set to `false`, and keep `shadow_mode` set to `true`.
-Leave `controller_commit` blank so the workflow uses the reviewed pin. Confirm
-that the organization fields, Issue Types, pins, and issue values are readable
-without an App permission error, and that the run reports no issue-field
-changes. The route may remain held because the canary has no delivery work.
-Record the run link and result on issue #66.
+catalog. The versioned contract gives each App token request an explicit
+operation profile. Invocation preflight requests `Contents: read`, `Issues:
+read`, `Pull requests: read`, and `Metadata: read`. Shadow intake uses those
+repository reads plus `Issue Fields: read` and `Issue Types: read`; active
+intake requests `Issues: write` instead. Delivery requests `Contents: write`,
+`Issues: write`, and `Pull requests: write` plus the same two organization
+reads. Every origin token is narrowed to the originating repository ID for
+repository resources. The organization catalog reads remain organization-wide.
+
+After the immutable controller pin is updated, run the read-only canary on
+issue #62 from **Actions → issue-intake → Run workflow**. Set `issue` to `62`,
+keep `force` set to `false`, and keep `shadow_mode` set to `true`. Leave
+`controller_commit` blank so the workflow uses the reviewed pin. The workflow
+reads the participant mode from the pinned registry; `shadow_mode` can force a
+run to be read-only, but setting it to `false` cannot promote a registered
+shadow participant. Confirm that the organization fields, Issue Types, pins,
+and issue values are readable without an App permission error, and that the
+run reports no issue-field changes. The route may remain held because the
+canary has no delivery work. Record the run link and result on issue #66.
 
 Run the dry-run manifest before changing organization settings:
 

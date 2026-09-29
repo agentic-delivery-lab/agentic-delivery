@@ -79,17 +79,18 @@
         "origin": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["repositoryIds", "permissions", "organizationPermissions"],
+          "required": ["repositoryIds", "profiles"],
           "properties": {
             "repositoryIds": { "const": "origin-event-repository" },
-            "permissions": { "const": "read-minimum" },
-            "organizationPermissions": {
+            "profiles": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["issue_fields", "issue_types"],
+              "required": ["invocationPreflight", "shadowIntake", "activeIntake", "delivery"],
               "properties": {
-                "issue_fields": { "const": "read" },
-                "issue_types": { "const": "read" }
+                "invocationPreflight": { "$ref": "#/$defs/originTokenProfile" },
+                "shadowIntake": { "$ref": "#/$defs/originTokenProfile" },
+                "activeIntake": { "$ref": "#/$defs/originTokenProfile" },
+                "delivery": { "$ref": "#/$defs/originTokenProfile" }
               }
             }
           }
@@ -101,6 +102,34 @@
           "properties": {
             "repositoryIds": { "const": "controller-repository" },
             "permissions": { "const": "contents-write-dispatch-only" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "originTokenProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryPermissions", "organizationPermissions"],
+      "properties": {
+        "repositoryPermissions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["contents", "issues", "pull_requests"],
+          "properties": {
+            "contents": { "enum": ["read", "write"] },
+            "issues": { "enum": ["read", "write"] },
+            "pull_requests": { "enum": ["read", "write"] },
+            "metadata": { "const": "read" }
+          }
+        },
+        "organizationPermissions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "issue_fields": { "const": "read" },
+            "issue_types": { "const": "read" }
           }
         }
       }

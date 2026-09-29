@@ -123,8 +123,12 @@ The minimum organization permissions include `issue_fields: read` and
 `issue_types: read` so the controller can validate the live issue-field and
 native Issue Type catalogs. These catalogs are organization-wide resources:
 the two reads are not narrowed by `repository_ids`. Origin-scoped installation
-tokens request them alongside only the operation-specific repository
-permissions; `repository_ids` continues to restrict repository resources to
+tokens request them only for shadow intake, active intake, and delivery. The
+versioned App contract records the exact repository permissions for each
+operation: invocation preflight reads repository contents, issues, pull
+requests, and metadata; shadow intake uses read-only repository permissions;
+active intake adds issue write; and delivery adds contents, issue, and pull
+request write. `repository_ids` continues to restrict repository resources to
 the originating numeric repository. Controller dispatch tokens request only
 `contents: write`; the App has no organization write or administration
 permission. [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
@@ -147,6 +151,12 @@ is a verification value, not an identity key. App access without a registry
 entry does not activate delivery; a registry entry without App access fails
 closed. Enrollment and mode changes are reviewed pull requests in the Control
 Plane, not side effects of an arbitrary repository workflow or Project field.
+
+A manual `shadow_mode` input is a run-level safety override. It may force an
+active participant to run read-only, but it cannot change the participant
+registry or promote a shadow participant. Direct intake resolves the registered
+mode by repository ID and verifies the expected full name. Delivery requires
+an active registry entry and no shadow override.
 
 ### Event and execution boundary
 

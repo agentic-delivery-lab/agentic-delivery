@@ -280,6 +280,7 @@
         "github-app-publication-boundary",
         "github-app-token-provider",
         "issue-field-controller-boundary",
+        "organization-metadata-runbook",
         "organization-webhook-ingress",
         "participant-registry",
         "participant-registry-validator",
@@ -328,6 +329,7 @@
         "github-app-publication-boundary",
         "github-app-token-provider",
         "issue-field-controller-boundary",
+        "organization-metadata-runbook",
         "organization-webhook-ingress",
         "participant-registry",
         "participant-registry-validator",
@@ -835,9 +837,11 @@
         "ADR-0015",
         "ADR-0016",
         "ADR-0017",
+        "ADR-0018",
         "ADR-0019"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 
-import { GithubAppTokenProvider, ORIGIN_ISSUE_METADATA_READ_PERMISSIONS } from '../../scripts/lib/github-app.mjs';
+import { githubAppTokenPermissions, GithubAppTokenProvider } from '../../scripts/lib/github-app.mjs';
 
 test('GitHub App provider mints scoped installation tokens and refreshes near expiry', async () => {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -58,15 +58,9 @@ test('GitHub App provider can narrow an installation token to repository IDs', a
   assert.deepEqual(requestBody.repository_ids, ['777777777']);
 });
 
-test('GitHub App provider combines approved organization reads with the origin repository restriction', async () => {
+test('GitHub App provider applies the active intake profile with the origin repository restriction', async () => {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-  const permissions = {
-    ...ORIGIN_ISSUE_METADATA_READ_PERMISSIONS,
-    contents: 'read',
-    issues: 'write',
-    pull_requests: 'read',
-    metadata: 'read',
-  };
+  const permissions = githubAppTokenPermissions('activeIntake');
   let requestBody;
   const provider = new GithubAppTokenProvider({
     repository: 'agentic-delivery-lab/agentic-delivery',

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
-import { appConfiguration, GithubAppTokenProvider, ORIGIN_ISSUE_METADATA_READ_PERMISSIONS } from './lib/github-app.mjs';
+import { appConfiguration, githubAppTokenPermissions, GithubAppTokenProvider } from './lib/github-app.mjs';
 import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType, validateOrganizationIssueFields } from './lib/issue-field-api.mjs';
 import {
   classifyIssue,
@@ -246,7 +246,7 @@ export async function classifyAndRoute({
       // Shadow execution evaluates the exact same route but must not request
       // mutation capability. Active delivery gets issue write only when the
       // participant mode has already passed the deterministic enrollment gate.
-      permissions: { ...ORIGIN_ISSUE_METADATA_READ_PERMISSIONS, contents: 'read', issues: shadowMode ? 'read' : 'write', pull_requests: 'read', metadata: 'read' },
+      permissions: githubAppTokenPermissions(shadowMode ? 'shadowIntake' : 'activeIntake'),
       fetchImpl,
     })
     : null;

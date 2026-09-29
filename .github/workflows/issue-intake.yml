@@ -32,7 +32,7 @@ on:
         default: false
         type: boolean
       shadow_mode:
-        description: Evaluate the route without changing issue type or lifecycle fields
+        description: Force this run to shadow behavior; registry shadow mode cannot be overridden
         required: false
         default: true
         type: boolean
@@ -97,7 +97,8 @@ jobs:
       source_issue: ${{ steps.invocation.outputs.source_issue || steps.intake.outputs.issue }}
       origin_repository: ${{ steps.invocation.outputs.origin_repository || github.repository }}
       origin_repository_id: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
-      participant_mode: ${{ steps.invocation.outputs.participant_mode || (inputs.shadow_mode && 'shadow') || '' }}
+      participant_mode: ${{ steps.invocation.outputs.participant_mode || steps.participant.outputs.participant_mode || '' }}
+      shadow_run: ${{ (steps.invocation.outputs.participant_mode == 'shadow' || steps.participant.outputs.participant_mode == 'shadow' || (github.event_name == 'workflow_dispatch' && inputs.shadow_mode)) && 'true' || 'false' }}
       controller_version: ${{ steps.invocation.outputs.controller_version || github.event.client_payload.controller.version }}
       controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || 'e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d' }}
       invocation_event_name: ${{ steps.invocation.outputs.invocation_event_name }}
@@ -127,6 +128,28 @@ jobs:
 
       - name: Install intake dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: trusted-intake
+
+      - name: Resolve participant mode for direct intake
+        id: participant
+        if: ${{ !inputs.agent_invocation }}
+        env:
+          ORIGIN_REPOSITORY: ${{ github.repository }}
+          ORIGIN_REPOSITORY_ID: ${{ github.event.repository.id }}
+        run: |
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import { loadParticipantRegistry, participantForRepository } from './scripts/lib/participant-registry.mjs';
+
+          const registry = await loadParticipantRegistry();
+          if (!registry.valid) throw new Error(`The participant registry is invalid: ${registry.errors.join(' ')}`);
+          const participant = participantForRepository(registry, process.env.ORIGIN_REPOSITORY_ID);
+          if (!participant) throw new Error('The event repository is not enrolled in the participant registry.');
+          if (participant.expectedFullName !== process.env.ORIGIN_REPOSITORY) {
+            throw new Error('The event repository name does not match the participant registry.');
+          }
+          if (participant.mode === 'disabled') throw new Error('The participant registry mode is disabled.');
+          process.stdout.write(`participant_mode=${participant.mode}\n`);
+          NODE
         working-directory: trusted-intake
 
       - name: Validate and normalize explicit agent invocation
@@ -191,7 +214,7 @@ jobs:
           GITHUB_TRIGGERING_ACTOR: ${{ steps.invocation.outputs.invocation_actor || github.triggering_actor || github.actor }}
           ORIGIN_REPOSITORY: ${{ steps.invocation.outputs.origin_repository || github.repository }}
           ORIGIN_REPOSITORY_ID: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
-          CONTROL_PLANE_MODE: ${{ steps.invocation.outputs.participant_mode || (inputs.shadow_mode && 'shadow') || '' }}
+          CONTROL_PLANE_MODE: ${{ (steps.invocation.outputs.participant_mode == 'shadow' || steps.participant.outputs.participant_mode == 'shadow' || (github.event_name == 'workflow_dispatch' && inputs.shadow_mode)) && 'shadow' || steps.invocation.outputs.participant_mode || steps.participant.outputs.participant_mode || '' }}
           CONTROL_PLANE_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || 'e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d' }}
         run: node scripts/issue-intake.mjs
 
@@ -209,7 +232,8 @@ jobs:
        needs.classify.outputs.route == 'architecture' ||
        needs.classify.outputs.route == 'validate' ||
        needs.classify.outputs.route == 'coordinate') &&
-      needs.classify.outputs.participant_mode != 'shadow'
+      needs.classify.outputs.participant_mode == 'active' &&
+      needs.classify.outputs.shadow_run != 'true'
     permissions:
       contents: read
       issues: write
