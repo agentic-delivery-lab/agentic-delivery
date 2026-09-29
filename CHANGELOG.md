@@ -13,7 +13,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 - The controller release advances to `0.2.0-draft.38` at
   `9367c5a1c58eb6215b92d34fbe5490cd85fb061f`; the central participant moves
   to that immutable pin while draft37 remains in the compatibility list. The
-  bootstrap uses commit `ec9ee99e0031b77afd6bc89e1195577909a45cca`, which
+  bootstrap uses commit `23e4b46e1ddb142e0ddac18ac72144b8bb151db7`, which
   contains the draft38 participant registry.
 - Private agent publication validation can now reproduce each projection from
   the exact Primitive source commit named by its provenance lock; the release

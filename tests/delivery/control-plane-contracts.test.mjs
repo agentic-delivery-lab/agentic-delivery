@@ -30,7 +30,7 @@ test('the checked-in controller release pins every enrolled participant', async 
   assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
   assert.equal(release.version, '0.2.0-draft.38');
   assert.equal(release.commit, '9367c5a1c58eb6215b92d34fbe5490cd85fb061f');
-  assert.equal(release.bootstrapCommit, 'ec9ee99e0031b77afd6bc89e1195577909a45cca');
+  assert.equal(release.bootstrapCommit, '23e4b46e1ddb142e0ddac18ac72144b8bb151db7');
   assert.deepEqual(release.support.eventEnvelopeVersions, [1]);
   assert.deepEqual(release.support.lifecycleVersions, ['1.0.0']);
   assert.deepEqual(release.support.stateMachineVersions, ['1.0.0']);
