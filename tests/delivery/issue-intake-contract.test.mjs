@@ -100,7 +100,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   );
   const intakeSource = await text('.github/workflows/issue-intake.yml');
   assert.match(intakeSource, /Check out the validated controller release/);
-  assert.match(intakeSource, /ref: 6397de06fc9baa90555564d39894a4c7ac8182fa/);
+  assert.match(intakeSource, /ref: ec9ee99e0031b77afd6bc89e1195577909a45cca/);
   assert.doesNotMatch(intakeSource, /ref: main/);
   assert.ok(intakeSource.indexOf('Validate and normalize explicit agent invocation')
     < intakeSource.indexOf('Check out the validated controller release'));

@@ -13,7 +13,7 @@ on:
       controller_commit:
         description: Immutable controller commit used when the event has no participant envelope
         required: false
-        default: 'e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d'
+        default: '8c9fcdc5b12caa8874c7299acb96459188329ef8'
         type: string
     secrets:
       CODEX_DELIVERY_APP_PRIVATE_KEY:
@@ -39,7 +39,7 @@ on:
       controller_commit:
         description: Immutable controller commit for this manual run
         required: false
-        default: 'e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d'
+        default: '8c9fcdc5b12caa8874c7299acb96459188329ef8'
         type: string
 
 permissions:
@@ -64,7 +64,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           # Bootstrap pin: config/controller-release.json bootstrapCommit.
-          ref: 6397de06fc9baa90555564d39894a4c7ac8182fa
+          ref: ec9ee99e0031b77afd6bc89e1195577909a45cca
           path: trusted-intake
           persist-credentials: false
 
@@ -100,7 +100,7 @@ jobs:
       participant_mode: ${{ steps.invocation.outputs.participant_mode || steps.participant.outputs.participant_mode || '' }}
       shadow_run: ${{ (steps.invocation.outputs.participant_mode == 'shadow' || steps.participant.outputs.participant_mode == 'shadow' || (github.event_name == 'workflow_dispatch' && inputs.shadow_mode)) && 'true' || 'false' }}
       controller_version: ${{ steps.invocation.outputs.controller_version || github.event.client_payload.controller.version }}
-      controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || 'e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d' }}
+      controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '8c9fcdc5b12caa8874c7299acb96459188329ef8' }}
       invocation_event_name: ${{ steps.invocation.outputs.invocation_event_name }}
       invocation_source_kind: ${{ steps.invocation.outputs.invocation_source_kind }}
       invocation_comment_id: ${{ steps.invocation.outputs.invocation_comment_id }}
@@ -116,7 +116,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           # Bootstrap pin: config/controller-release.json bootstrapCommit.
-          ref: 6397de06fc9baa90555564d39894a4c7ac8182fa
+          ref: ec9ee99e0031b77afd6bc89e1195577909a45cca
           path: trusted-intake
           persist-credentials: false
 
@@ -171,7 +171,7 @@ jobs:
       - name: Validate the selected controller commit
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
         env:
-          CONTROLLER_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || 'e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d' }}
+          CONTROLLER_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '8c9fcdc5b12caa8874c7299acb96459188329ef8' }}
         run: |
           set -euo pipefail
           [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
@@ -180,7 +180,7 @@ jobs:
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || 'e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d' }}
+          ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '8c9fcdc5b12caa8874c7299acb96459188329ef8' }}
           persist-credentials: false
 
       - name: Install validated controller dependencies
@@ -215,7 +215,7 @@ jobs:
           ORIGIN_REPOSITORY: ${{ steps.invocation.outputs.origin_repository || github.repository }}
           ORIGIN_REPOSITORY_ID: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
           CONTROL_PLANE_MODE: ${{ (steps.invocation.outputs.participant_mode == 'shadow' || steps.participant.outputs.participant_mode == 'shadow' || (github.event_name == 'workflow_dispatch' && inputs.shadow_mode)) && 'shadow' || steps.invocation.outputs.participant_mode || steps.participant.outputs.participant_mode || '' }}
-          CONTROL_PLANE_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || 'e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d' }}
+          CONTROL_PLANE_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '8c9fcdc5b12caa8874c7299acb96459188329ef8' }}
         run: node scripts/issue-intake.mjs
 
   deliver:
