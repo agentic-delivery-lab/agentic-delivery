@@ -199,7 +199,7 @@ test('shadow participant intake evaluates routing without mutating origin issue 
       SOURCE_ISSUE: '17',
       GH_TOKEN: 'token',
       GITHUB_ACTOR: 'maintainer',
-      CONTROL_PLANE_MODE: 'shadow',
+      PARTICIPANT_MODE: 'shadow',
     },
     event: { action: 'edited', issue: {}, repository: { full_name: origin } },
     fetchImpl: fixture.fetchImpl,
@@ -237,7 +237,7 @@ test('shadow participant intake requests read-only origin App permissions', asyn
       SOURCE_ISSUE: '17',
       GH_TOKEN: 'controller-token',
       GITHUB_ACTOR: 'maintainer',
-      CONTROL_PLANE_MODE: 'shadow',
+      PARTICIPANT_MODE: 'shadow',
     },
     event: { action: 'edited', issue: {}, repository: { full_name: origin } },
     fetchImpl,
@@ -247,6 +247,89 @@ test('shadow participant intake requests read-only origin App permissions', asyn
   assert.deepEqual(tokenRequests[0].repository_ids, ['777777777']);
   assert.equal(tokenRequests[0].permissions.issues, 'read');
   assert.equal(tokenRequests[0].permissions.contents, 'read');
+});
+
+test('an active participant read-only override uses the read-only App profile and performs no issue writes', async () => {
+  const origin = 'agentic-delivery-lab/service-a';
+  const fixture = apiFixture({
+    state: 'open', title: 'Task: read-only intake', body: 'Check the organization metadata without changing this issue.',
+    labels: [{ name: 'type:task' }, { name: 'state:requirements' }],
+  }, 'write', [], origin);
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const tokenRequests = [];
+  const graphqlRequests = [];
+  const organizationFields = ['lifecycle_stage', 'readiness'].map((key) => ({
+    id: config.fields[key].id,
+    name: config.fields[key].name,
+    dataType: 'SINGLE_SELECT',
+    options: config.fields[key].options.map(({ id, name }) => ({ id, name })),
+  }));
+  const organizationIssueTypes = config.issue_types.map((type) => ({
+    id: `IT_${type.id}`,
+    name: type.native_name,
+    isEnabled: true,
+    pinnedFields: organizationFields,
+  }));
+  const fetchImpl = async (url, options) => {
+    if (url.endsWith('/access_tokens')) {
+      tokenRequests.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({ token: 'read-only-origin-token', expires_at: '2099-01-01T00:00:00Z' }), { status: 201 });
+    }
+    return fixture.fetchImpl(url, options);
+  };
+  const result = await classifyAndRoute({
+    env: {
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      ORIGIN_REPOSITORY: origin,
+      ORIGIN_REPOSITORY_ID: '777777777',
+      CODEX_DELIVERY_APP_ID: '5011055',
+      CODEX_DELIVERY_APP_PRIVATE_KEY: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+      CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060',
+      SOURCE_ISSUE: '17',
+      GH_TOKEN: 'controller-token',
+      GITHUB_ACTOR: 'maintainer',
+      GITHUB_EVENT_NAME: 'workflow_dispatch',
+      PARTICIPANT_MODE: 'active',
+      READ_ONLY_RUN: 'true',
+      FORCE_READ_ONLY: 'true',
+      GITHUB_GRAPHQL: 'true',
+    },
+    event: { action: 'workflow_dispatch', issue: {}, repository: { full_name: origin } },
+    fetchImpl,
+    graphqlImpl: async (query, variables) => {
+      graphqlRequests.push({ query, variables });
+      return {};
+    },
+    controlPlaneReader: async () => ({
+      id: 'I_17', issueType: null, issueFieldValues: { nodes: [] },
+      organizationIssueTypes,
+      organizationIssueFields: organizationFields,
+      organizationPinnedIssueFields: organizationFields,
+    }),
+    config,
+    reasonRoute: async () => ({
+      route: 'plan', workType: 'task', state: 'ready-for-plan',
+      lifecycleStage: 'planning', readiness: 'ready', governance: [],
+      orchestrationPattern: 'implementation-fresh',
+      summary: 'Read the issue and organization catalog.',
+      message: 'This message must not be posted during a read-only run.',
+    }),
+  });
+
+  assert.equal(result.route, 'plan');
+  assert.equal(result.metadata.shadow, undefined, 'a run-level override does not change participant mode');
+  assert.equal(result.metadata.readOnlyRun, true);
+  assert.equal(result.fields.changed, false);
+  assert.equal(result.fields.readOnlyRun, true);
+  assert.deepEqual(tokenRequests[0], {
+    repository_ids: ['777777777'],
+    permissions: {
+      contents: 'read', issues: 'read', pull_requests: 'read', metadata: 'read',
+      issue_fields: 'read', issue_types: 'read',
+    },
+  });
+  assert.equal(fixture.calls.some((call) => call.method !== 'GET'), false);
+  assert.equal(graphqlRequests.length, 0, 'read-only routing must not invoke type or issue-field mutations');
 });
 
 test('classifies and hands off a ready issue only after metadata reconciliation and actor authorization', async () => {

@@ -85,10 +85,10 @@
             "profiles": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["invocationPreflight", "shadowIntake", "activeIntake", "delivery"],
+              "required": ["invocationPreflight", "readOnlyIntake", "activeIntake", "delivery"],
               "properties": {
                 "invocationPreflight": { "$ref": "#/$defs/originTokenProfile" },
-                "shadowIntake": { "$ref": "#/$defs/originTokenProfile" },
+                "readOnlyIntake": { "$ref": "#/$defs/originTokenProfile" },
                 "activeIntake": { "$ref": "#/$defs/originTokenProfile" },
                 "delivery": { "$ref": "#/$defs/originTokenProfile" }
               }

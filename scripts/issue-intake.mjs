@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
 import { appConfiguration, githubAppTokenPermissions, GithubAppTokenProvider } from './lib/github-app.mjs';
+import { resolveReadOnlyRun } from './lib/intake-policy.mjs';
 import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType, validateOrganizationIssueFields } from './lib/issue-field-api.mjs';
 import {
   classifyIssue,
@@ -233,7 +234,17 @@ export async function classifyAndRoute({
   controlPlaneReader = readIssueControlPlane,
 } = {}) {
   const repository = env.ORIGIN_REPOSITORY || env.GITHUB_REPOSITORY;
-  const shadowMode = env.CONTROL_PLANE_MODE === 'shadow';
+  const participantMode = env.PARTICIPANT_MODE ?? (env.GITHUB_ACTIONS === 'true' ? '' : 'active');
+  const resolvedPolicy = resolveReadOnlyRun({
+    eventName: env.GITHUB_EVENT_NAME ?? 'issues',
+    participantMode,
+    forceReadOnly: env.FORCE_READ_ONLY,
+  });
+  const shadowParticipant = participantMode === 'shadow';
+  const readOnlyRun = resolvedPolicy.readOnlyRun;
+  if (env.READ_ONLY_RUN !== undefined && env.READ_ONLY_RUN !== String(readOnlyRun)) {
+    throw new Error('The workflow read-only output does not match the controller policy.');
+  }
   const issueNumber = String(env.SOURCE_ISSUE ?? event?.issue?.number ?? '');
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !/^[1-9][0-9]*$/.test(issueNumber)) throw new Error('Invalid source repository or issue number.');
   if (event?.repository?.full_name && event.repository.full_name !== repository) throw new Error('Event repository does not match the originating repository.');
@@ -243,10 +254,10 @@ export async function classifyAndRoute({
     ? new GithubAppTokenProvider({
       repository: env.GITHUB_REPOSITORY,
       ...appConfig,
-      // Shadow execution evaluates the exact same route but must not request
-      // mutation capability. Active delivery gets issue write only when the
-      // participant mode has already passed the deterministic enrollment gate.
-      permissions: githubAppTokenPermissions(shadowMode ? 'shadowIntake' : 'activeIntake'),
+      // Read-only executions evaluate the exact same route without requesting
+      // repository mutation capability. Active intake gets issue write only
+      // when the policy resolver allows writes for this run.
+      permissions: githubAppTokenPermissions(readOnlyRun ? 'readOnlyIntake' : 'activeIntake'),
       fetchImpl,
     })
     : null;
@@ -257,6 +268,11 @@ export async function classifyAndRoute({
   const routingEventKind = env.INVOCATION_EVENT === 'true' ? 'agent-invocation' : env.GITHUB_EVENT_NAME;
   const effectiveConfig = bindIssueMetadataConfig(config, env.ISSUE_FIELD_BINDINGS_JSON || {});
   const available = runnerAvailability(env, effectiveConfig);
+  const annotateRunPolicy = (metadata) => ({
+    ...metadata,
+    ...(shadowParticipant ? { shadow: true } : {}),
+    ...(readOnlyRun ? { readOnlyRun: true } : {}),
+  });
   let issue = await api(`/issues/${issueNumber}`);
   if (issue.pull_request) throw new Error('A pull request cannot enter issue intake.');
   let graphql = graphqlImpl;
@@ -282,7 +298,7 @@ export async function classifyAndRoute({
       const metadata = classifyIssue({ issue, config: effectiveConfig, eventAction: event?.action, eventKind: routingEventKind, available });
       metadata.route = 'hold';
       metadata.reasons = [...metadata.reasons, reason];
-      const result = { issue: issueNumber, route: 'hold', state: metadata.state, metadata, labels: issue.labels ?? [] };
+      const result = { issue: issueNumber, route: 'hold', state: metadata.state, metadata: annotateRunPolicy(metadata), labels: issue.labels ?? [] };
       await writeOutputs(result, env);
       return result;
     }
@@ -294,7 +310,7 @@ export async function classifyAndRoute({
     const metadata = classifyIssue({ issue, config: effectiveConfig, eventAction: event?.action, eventKind: routingEventKind, available });
     metadata.route = 'hold';
     metadata.reasons = [...metadata.reasons, `Saved execution state could not be trusted; no orchestration route is authorized. ${String(error.message ?? error).slice(0, 400)}`];
-    const result = { issue: issueNumber, route: 'hold', state: metadata.state, metadata, labels: issue.labels ?? [] };
+    const result = { issue: issueNumber, route: 'hold', state: metadata.state, metadata: annotateRunPolicy(metadata), labels: issue.labels ?? [] };
     await writeOutputs(result, env);
     return result;
   }
@@ -312,7 +328,7 @@ export async function classifyAndRoute({
     issue: String(targetIssue.number ?? issueNumber),
     route: metadata.route,
     state: metadata.state,
-    metadata,
+    metadata: annotateRunPolicy(metadata),
     fields,
     labels: (targetIssue.labels ?? []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean),
   });
@@ -387,7 +403,7 @@ export async function classifyAndRoute({
     } catch (error) {
       const detail = String(error?.message ?? '').replace(/\s+/g, ' ').trim().slice(0, 500);
       const message = `Routing could not be decided. No issue fields changed. Next: rerun issue intake after Codex is available.${detail ? `\n\nReason: ${detail}` : ''}`;
-      if (!shadowMode) await api(`/issues/${issueNumber}/comments`, 'POST', { body: message });
+      if (!readOnlyRun) await api(`/issues/${issueNumber}/comments`, 'POST', { body: message });
       metadata.route = 'hold';
       metadata.reasons = [...metadata.reasons, message];
       const result = resultFor(issue, metadata);
@@ -409,7 +425,7 @@ export async function classifyAndRoute({
       return result;
     }
     try {
-      if (!shadowMode) await setIssueType({ graphql, issueId: issue.id, issueTypeId: nativeType.id });
+      if (!readOnlyRun) await setIssueType({ graphql, issueId: issue.id, issueTypeId: nativeType.id });
     } catch (error) {
       metadata.route = 'hold';
       metadata.reasons = [...metadata.reasons, `Native issue type assignment was rejected; no lifecycle field mutation is authorized. ${String(error.message ?? error).slice(0, 400)}`];
@@ -422,8 +438,8 @@ export async function classifyAndRoute({
   let fieldResult = null;
   if (graphql && issue.id && metadata.targetFields) {
     try {
-      fieldResult = shadowMode
-        ? { changed: false, fields: metadata.targetFields, shadow: true }
+      fieldResult = readOnlyRun
+        ? { changed: false, fields: metadata.targetFields, readOnlyRun: true }
         : await reconcileFields({ graphql, issue, config: effectiveConfig, classification: metadata });
     } catch (error) {
       metadata.route = 'hold';
@@ -435,8 +451,7 @@ export async function classifyAndRoute({
   } else {
     fieldResult = { changed: false, fields: metadata.targetFields, migrationRequired: true };
   }
-  if (metadata.message && !shadowMode) await api(`/issues/${issueNumber}/comments`, 'POST', { body: metadata.message });
-  if (shadowMode) metadata = { ...metadata, shadow: true };
+  if (metadata.message && !readOnlyRun) await api(`/issues/${issueNumber}/comments`, 'POST', { body: metadata.message });
   const result = resultFor(issue, metadata, fieldResult);
   await writeOutputs(result, env);
   return result;

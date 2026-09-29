@@ -123,10 +123,10 @@ The minimum organization permissions include `issue_fields: read` and
 `issue_types: read` so the controller can validate the live issue-field and
 native Issue Type catalogs. These catalogs are organization-wide resources:
 the two reads are not narrowed by `repository_ids`. Origin-scoped installation
-tokens request them only for shadow intake, active intake, and delivery. The
+tokens request them only for read-only intake, active intake, and delivery. The
 versioned App contract records the exact repository permissions for each
 operation: invocation preflight reads repository contents, issues, pull
-requests, and metadata; shadow intake uses read-only repository permissions;
+requests, and metadata; read-only intake uses read-only repository permissions;
 active intake adds issue write; and delivery adds contents, issue, and pull
 request write. `repository_ids` continues to restrict repository resources to
 the originating numeric repository. Controller dispatch tokens request only
@@ -152,11 +152,14 @@ entry does not activate delivery; a registry entry without App access fails
 closed. Enrollment and mode changes are reviewed pull requests in the Control
 Plane, not side effects of an arbitrary repository workflow or Project field.
 
-A manual `shadow_mode` input is a run-level safety override. It may force an
-active participant to run read-only, but it cannot change the participant
-registry or promote a shadow participant. Direct intake resolves the registered
-mode by repository ID and verifies the expected full name. Delivery requires
-an active registry entry and no shadow override.
+The `force_read_only` workflow input is a run-level read-only override. It can
+restrict one manual execution but cannot change the registered participant
+mode. Direct intake resolves the registered mode by repository ID and verifies
+the expected full name; conversation-driven intake uses the validated event
+envelope. The controller records those concepts separately: `participant_mode`
+comes from the registry or validated envelope, while `read_only_run` is true
+for a shadow participant or a manual execution that requests read-only behavior.
+Delivery requires an active participant and `read_only_run` to be false.
 
 ### Event and execution boundary
 

@@ -84,13 +84,10 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.ok(intakeWorkflow.jobs.classify.outputs.readiness);
   assert.ok(intakeWorkflow.jobs.classify.outputs.invocation_accepted);
   assert.ok(intakeWorkflow.jobs.classify.outputs.participant_mode);
+  assert.equal(intakeWorkflow.jobs.classify.outputs.participant_mode, '${{ steps.intake-policy.outputs.participant_mode }}');
   assert.equal(
-    intakeWorkflow.jobs.classify.outputs.participant_mode,
-    "${{ steps.invocation.outputs.participant_mode || steps.participant.outputs.participant_mode || '' }}",
-  );
-  assert.equal(
-    intakeWorkflow.jobs.classify.outputs.shadow_run,
-    "${{ (steps.invocation.outputs.participant_mode == 'shadow' || steps.participant.outputs.participant_mode == 'shadow' || (github.event_name == 'workflow_dispatch' && inputs.shadow_mode)) && 'true' || 'false' }}",
+    intakeWorkflow.jobs.classify.outputs.read_only_run,
+    '${{ steps.intake-policy.outputs.read_only_run }}',
   );
   assert.ok(intakeWorkflow.jobs.classify.outputs.controller_version);
   assert.ok(intakeWorkflow.jobs.classify.outputs.controller_commit);
@@ -108,7 +105,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.ok(intakeWorkflow.jobs.authorize);
   assert.equal(intakeWorkflow.jobs.authorize['runs-on'], 'ubuntu-latest');
   assert.equal(intakeWorkflow.jobs.authorize.permissions.issues, 'read');
-  assert.equal(intakeWorkflow.on.workflow_dispatch.inputs.shadow_mode.default, true);
+  assert.equal(intakeWorkflow.on.workflow_dispatch.inputs.force_read_only.default, true);
   assert.match(await text('.github/workflows/issue-intake.yml'), /authorize-issue-event\.mjs/);
   assert.match(await text('.github/workflows/issue-intake.yml'), /steps\.invocation\.outputs\.accepted == 'true'/);
   assert.doesNotMatch(await text('.github/workflows/issue-intake.yml'), /\n\s*issue_comment:\s*\n/);
@@ -117,6 +114,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   const install = intakeSteps.find((step) => step.name === 'Install intake dependencies');
   const invocation = intakeSteps.find((step) => step.name === 'Validate and normalize explicit agent invocation');
   const participant = intakeSteps.find((step) => step.name === 'Resolve participant mode for direct intake');
+  const intakePolicy = intakeSteps.find((step) => step.name === 'Resolve participant and read-only run policy');
   const routing = intakeSteps.find((step) => step.name === 'Reason about and validate issue routing');
   assert.ok(participant);
   assert.equal(participant.id, 'participant');
@@ -126,9 +124,20 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.match(participant.run, /participant\.expectedFullName !== process\.env\.ORIGIN_REPOSITORY/);
   assert.match(participant.run, /participant\.mode === 'disabled'/);
   assert.equal(participant['working-directory'], 'trusted-intake');
-  assert.match(routing.env.CONTROL_PLANE_MODE, /steps\.participant\.outputs\.participant_mode == 'shadow'/);
-  assert.match(routing.env.CONTROL_PLANE_MODE, /inputs\.shadow_mode/);
-  assert.notEqual(routing.env.CONTROL_PLANE_MODE, intakeWorkflow.jobs.classify.outputs.participant_mode);
+  assert.ok(intakePolicy);
+  assert.equal(intakePolicy.id, 'intake-policy');
+  assert.equal(intakePolicy.env.EVENT_NAME, '${{ github.event_name }}');
+  assert.equal(intakePolicy.env.AGENT_INVOCATION, '${{ inputs.agent_invocation || false }}');
+  assert.equal(intakePolicy.env.REGISTRY_PARTICIPANT_MODE, '${{ steps.participant.outputs.participant_mode }}');
+  assert.equal(intakePolicy.env.INVOCATION_PARTICIPANT_MODE, '${{ steps.invocation.outputs.participant_mode }}');
+  assert.equal(intakePolicy.env.FORCE_READ_ONLY, '${{ inputs.force_read_only || false }}');
+  assert.match(intakePolicy.run, /scripts\/lib\/intake-policy\.mjs/);
+  assert.equal(intakePolicy['working-directory'], 'trusted-intake');
+  assert.ok(intakeSteps.indexOf(participant) < intakeSteps.indexOf(intakePolicy));
+  assert.ok(intakeSteps.indexOf(invocation) < intakeSteps.indexOf(intakePolicy));
+  assert.equal(routing.env.PARTICIPANT_MODE, '${{ steps.intake-policy.outputs.participant_mode }}');
+  assert.equal(routing.env.READ_ONLY_RUN, '${{ steps.intake-policy.outputs.read_only_run }}');
+  assert.equal(routing.env.CONTROL_PLANE_MODE, undefined);
   const controllerCheckout = intakeSteps.find((step) => step.name === 'Check out the validated controller release');
   const controllerInstall = intakeSteps.find((step) => step.name === 'Install validated controller dependencies');
   assert.equal(trustedIntakeCheckout.with.path, 'trusted-intake');
@@ -143,7 +152,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(intakeWorkflow.jobs.deliver.permissions.issues, 'write');
   assert.equal(intakeWorkflow.jobs.deliver.permissions['pull-requests'], undefined);
   assert.match(intakeWorkflow.jobs.deliver.if, /needs\.classify\.outputs\.participant_mode == 'active'/);
-  assert.match(intakeWorkflow.jobs.deliver.if, /needs\.classify\.outputs\.shadow_run != 'true'/);
+  assert.match(intakeWorkflow.jobs.deliver.if, /needs\.classify\.outputs\.read_only_run != 'true'/);
   assert.equal(intakeWorkflow.jobs.deliver.with.participant_mode, '${{ needs.classify.outputs.participant_mode }}');
   assert.equal(intakeWorkflow.jobs.deliver.secrets.CODEX_DELIVERY_APP_PRIVATE_KEY, '${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}');
   assert.equal(intakeWorkflow.jobs.deliver.secrets.CODEX_DELIVERY_APP_ID, undefined);

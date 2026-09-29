@@ -26,7 +26,7 @@ test('organization GitHub App contract includes lifecycle events and central cre
   assert.deepEqual(githubAppTokenPermissions('invocationPreflight'), {
     contents: 'read', issues: 'read', pull_requests: 'read', metadata: 'read',
   });
-  assert.deepEqual(githubAppTokenPermissions('shadowIntake'), {
+  assert.deepEqual(githubAppTokenPermissions('readOnlyIntake'), {
     contents: 'read', issues: 'read', pull_requests: 'read', metadata: 'read',
     issue_fields: 'read', issue_types: 'read',
   });
@@ -48,7 +48,7 @@ test('runtime token requests use declared least-privilege profiles and origin re
   const intakeSource = await readFile(path.join(repositoryRoot, 'scripts/issue-intake.mjs'), 'utf8');
   const deliverySource = await readFile(path.join(repositoryRoot, 'scripts/codex-delivery.mjs'), 'utf8');
   const preflightSource = await readFile(path.join(repositoryRoot, 'scripts/prepare-agent-invocation.mjs'), 'utf8');
-  assert.match(intakeSource, /githubAppTokenPermissions\(shadowMode \? 'shadowIntake' : 'activeIntake'\)/);
+  assert.match(intakeSource, /githubAppTokenPermissions\(readOnlyRun \? 'readOnlyIntake' : 'activeIntake'\)/);
   assert.match(deliverySource, /githubAppTokenPermissions\('delivery'\)/);
   assert.match(preflightSource, /githubAppTokenPermissions\('invocationPreflight'\)/);
   assert.match(intakeSource, /repositoryIds:\s*\[env\.ORIGIN_REPOSITORY_ID\]/);

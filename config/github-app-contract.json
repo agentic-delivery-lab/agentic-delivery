@@ -48,7 +48,7 @@
           },
           "organizationPermissions": {}
         },
-        "shadowIntake": {
+        "readOnlyIntake": {
           "repositoryPermissions": {
             "contents": "read",
             "issues": "read",

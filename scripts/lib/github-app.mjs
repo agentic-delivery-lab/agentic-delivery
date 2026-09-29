@@ -16,7 +16,7 @@ export const GITHUB_APP_TOKEN_PERMISSION_PROFILES = Object.freeze({
     }),
     organizationPermissions: Object.freeze({}),
   }),
-  shadowIntake: Object.freeze({
+  readOnlyIntake: Object.freeze({
     repositoryPermissions: Object.freeze({
       contents: 'read',
       issues: 'read',

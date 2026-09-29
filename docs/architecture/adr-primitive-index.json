@@ -275,10 +275,13 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
+        "curated-changelog",
+        "delivery-state-domain-language",
         "event-catalog",
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
+        "intake-participation-policy",
         "issue-field-controller-boundary",
         "organization-metadata-runbook",
         "organization-webhook-ingress",
@@ -324,10 +327,13 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
+        "curated-changelog",
+        "delivery-state-domain-language",
         "event-catalog",
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
+        "intake-participation-policy",
         "issue-field-controller-boundary",
         "organization-metadata-runbook",
         "organization-webhook-ingress",
@@ -553,9 +559,11 @@
       "kind": "instruction",
       "enforcement": "instructional",
       "adrs": [
-        "ADR-0006"
+        "ADR-0006",
+        "ADR-0018"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },
@@ -566,9 +574,11 @@
       "kind": "customization",
       "enforcement": "semantic",
       "adrs": [
+        "ADR-0018",
         "ADR-0019"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },
@@ -653,6 +663,19 @@
       ],
       "domains": [
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "intake-participation-policy",
+      "path": "scripts/lib/intake-policy.mjs",
+      "location": "scripts/lib/intake-policy.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {

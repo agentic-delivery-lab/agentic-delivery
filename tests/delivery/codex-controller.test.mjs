@@ -361,7 +361,7 @@ test('requires the dedicated publication credential before model execution', asy
 
 test('rejects delivery execution for a shadow participant before model startup', async (t) => {
   const f = await fixture(t);
-  f.env.CONTROL_PLANE_MODE = 'shadow';
+  f.env.PARTICIPANT_MODE = 'shadow';
   await assert.rejects(f.run(), /Shadow participants are read-only/);
   assert.equal(f.calls.clients, 0);
 });

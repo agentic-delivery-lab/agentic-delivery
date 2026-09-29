@@ -49,7 +49,7 @@ and no organization permissions.
 The installation permission grant does not prove that a token can read the
 catalog. The versioned contract gives each App token request an explicit
 operation profile. Invocation preflight requests `Contents: read`, `Issues:
-read`, `Pull requests: read`, and `Metadata: read`. Shadow intake uses those
+read`, `Pull requests: read`, and `Metadata: read`. Read-only intake uses those
 repository reads plus `Issue Fields: read` and `Issue Types: read`; active
 intake requests `Issues: write` instead. Delivery requests `Contents: write`,
 `Issues: write`, and `Pull requests: write` plus the same two organization
@@ -58,14 +58,14 @@ repository resources. The organization catalog reads remain organization-wide.
 
 After the immutable controller pin is updated, run the read-only canary on
 issue #62 from **Actions → issue-intake → Run workflow**. Set `issue` to `62`,
-keep `force` set to `false`, and keep `shadow_mode` set to `true`. Leave
+keep `force` set to `false`, and keep `force_read_only` set to `true`. Leave
 `controller_commit` blank so the workflow uses the reviewed pin. The workflow
-reads the participant mode from the pinned registry; `shadow_mode` can force a
-run to be read-only, but setting it to `false` cannot promote a registered
-shadow participant. Confirm that the organization fields, Issue Types, pins,
-and issue values are readable without an App permission error, and that the
-run reports no issue-field changes. The route may remain held because the
-canary has no delivery work. Record the run link and result on issue #66.
+resolves `participant_mode` from the pinned registry; `force_read_only` applies
+only to this run and cannot promote a registered shadow participant. Confirm
+that the organization fields, Issue Types, pins, and issue values are readable
+without an App permission error, and that the run reports no issue-field
+changes. The route may remain held because the canary has no delivery work.
+Record the run link and result on issue #66.
 
 Run the dry-run manifest before changing organization settings:
 

@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- agentic-primitive: {"id":"curated-changelog","kind":"instruction","enforcement":"instructional","adrs":["ADR-0006"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"curated-changelog","kind":"instruction","enforcement":"instructional","adrs":["ADR-0006","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]} -->
 
 All notable changes to this repository are documented here.
 
@@ -42,16 +42,16 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
-- Origin-scoped App tokens now use explicit invocation-preflight, shadow
+- Origin-scoped App tokens now use explicit invocation-preflight, read-only
   intake, active intake, and delivery permission profiles. The versioned
   contract is checked against each runtime request; origin repository IDs
   still narrow repository resources, while the approved issue-field and issue
   type reads remain organization-wide.
 - Direct intake resolves the participant mode from the pinned registry by
-  repository ID and verifies the expected repository name. Manual shadow mode
-  can force read-only behavior but cannot promote a registered shadow
-  participant, and delivery requires an active participant with no shadow
-  override.
+  repository ID and verifies the expected repository name. A manual
+  `force_read_only` override applies only to that run and cannot change or
+  promote the registered participant mode; delivery requires an active
+  participant and a non-read-only run.
 
 - Issue intake, delivery, and metadata migration now verify that the live
   Lifecycle Stage and Delivery Readiness fields are pinned to every enabled
