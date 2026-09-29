@@ -100,8 +100,9 @@ Contents, Issues, and Pull requests boundary; Actions `workflows:write` is not
 required by the App contract. Origin intake and delivery tokens also request
 `issue_fields: read` and `issue_types: read` to validate organization
 metadata. These tokens remain narrowed to the originating repository ID; the
-controller dispatch token requests only `contents: write`. The Vercel ingress
-uses these Production environment variables:
+repository ID restriction applies to repository resources; organization
+catalog reads remain organization-wide. The controller dispatch token requests
+only `contents: write`. The Vercel ingress uses these Production environment variables:
 `AGENTIC_DELIVERY_WEBHOOK_SECRET`,
 `AGENTIC_DELIVERY_APP_ID`, `AGENTIC_DELIVERY_APP_PRIVATE_KEY`,
 `AGENTIC_DELIVERY_APP_INSTALLATION_ID`, `AGENTIC_DELIVERY_DISPATCH_SECRET`,

@@ -41,8 +41,10 @@ The central GitHub App installation needs the organization permissions
 options, and native types used by lifecycle validation. The versioned App
 contract lists both permissions. Intake and delivery request these two reads
 with their operation-specific repository permissions and narrow each token to
-the originating repository ID. The controller-only dispatch token requests
-`Contents: write` and no organization permissions.
+the originating repository ID for repository resources. The organization
+catalog reads themselves are organization-wide and are not narrowed by that
+repository ID. The controller-only dispatch token requests `Contents: write`
+and no organization permissions.
 
 The installation permission grant does not prove that a token can read the
 catalog. After the immutable controller pin is updated, run the read-only

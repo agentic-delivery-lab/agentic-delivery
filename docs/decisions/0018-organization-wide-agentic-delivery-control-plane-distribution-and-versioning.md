@@ -121,11 +121,13 @@ least-privilege permissions before activation.
 
 The minimum organization permissions include `issue_fields: read` and
 `issue_types: read` so the controller can validate the live issue-field and
-native Issue Type catalogs. Origin-scoped installation tokens request these
-reads alongside only the operation-specific repository permissions and remain
-narrowed to the originating numeric repository ID. Controller dispatch tokens
-request only `contents: write`; the App has no organization write or
-administration permission. [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
+native Issue Type catalogs. These catalogs are organization-wide resources:
+the two reads are not narrowed by `repository_ids`. Origin-scoped installation
+tokens request them alongside only the operation-specific repository
+permissions; `repository_ids` continues to restrict repository resources to
+the originating numeric repository. Controller dispatch tokens request only
+`contents: write`; the App has no organization write or administration
+permission. [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
 tracks this implementation and the read-only canary that must verify it after
 the immutable controller pin is active.
 
