@@ -46,8 +46,13 @@ the originating repository ID. The controller-only dispatch token requests
 
 The installation permission grant does not prove that a token can read the
 catalog. After the immutable controller pin is updated, run the read-only
-canary on issue #62 and confirm the catalog and issue values are readable with
-no field writes.
+canary on issue #62 from **Actions → issue-intake → Run workflow**. Set `issue`
+to `62`, keep `force` set to `false`, and keep `shadow_mode` set to `true`.
+Leave `controller_commit` blank so the workflow uses the reviewed pin. Confirm
+that the organization fields, Issue Types, pins, and issue values are readable
+without an App permission error, and that the run reports no issue-field
+changes. The route may remain held because the canary has no delivery work.
+Record the run link and result on issue #66.
 
 Run the dry-run manifest before changing organization settings:
 

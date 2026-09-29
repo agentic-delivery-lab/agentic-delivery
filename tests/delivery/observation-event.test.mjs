@@ -32,7 +32,7 @@ test('observation validator accepts an enrolled pull-request event without GitHu
     organizationId: '327861320',
     installationId: '163255060',
     repositoryFullName: 'agentic-delivery-lab/agentic-delivery',
-    controller: { version: '0.2.0-draft.37', commit: '7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b' },
+    controller: { version: '0.2.0-draft.38', commit: 'e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d' },
     dispatchSecret: 'dispatch-secret',
     dispatchTimestamp: 1789992000000,
   }));
@@ -53,7 +53,7 @@ test('observation validator rejects a tampered central dispatch envelope', async
     organizationId: '327861320',
     installationId: '163255060',
     repositoryFullName: 'agentic-delivery-lab/agentic-delivery',
-    controller: { version: '0.2.0-draft.37', commit: '7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b' },
+    controller: { version: '0.2.0-draft.38', commit: 'e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d' },
     dispatchSecret: 'dispatch-secret',
     dispatchTimestamp: 1789992000000,
   });
@@ -77,7 +77,7 @@ test('observation validator rejects an invocation event on the observation dispa
     actor: { login: 'sjefsharp', type: 'User' },
     body: '@agentic-delivery-lab-invoker-7f3a continue',
     repositoryFullName: 'agentic-delivery-lab/agentic-delivery',
-    controller: { version: '0.2.0-draft.37', commit: '7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b' },
+    controller: { version: '0.2.0-draft.38', commit: 'e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d' },
   }));
   await assert.rejects(
     validateObservationEvent({ eventPath, repositoryRoot }),

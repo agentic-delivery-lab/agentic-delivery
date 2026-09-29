@@ -92,7 +92,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   );
   const intakeSource = await text('.github/workflows/issue-intake.yml');
   assert.match(intakeSource, /Check out the validated controller release/);
-  assert.match(intakeSource, /ref: 03dc4071f29d3914479e9a0bd174759e79180f8c/);
+  assert.match(intakeSource, /ref: e73fdb3a1b5b2f1eb7c9d730847691d7b644b11d/);
   assert.doesNotMatch(intakeSource, /ref: main/);
   assert.ok(intakeSource.indexOf('Validate and normalize explicit agent invocation')
     < intakeSource.indexOf('Check out the validated controller release'));
@@ -100,6 +100,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.ok(intakeWorkflow.jobs.authorize);
   assert.equal(intakeWorkflow.jobs.authorize['runs-on'], 'ubuntu-latest');
   assert.equal(intakeWorkflow.jobs.authorize.permissions.issues, 'read');
+  assert.equal(intakeWorkflow.on.workflow_dispatch.inputs.shadow_mode.default, true);
   assert.match(await text('.github/workflows/issue-intake.yml'), /authorize-issue-event\.mjs/);
   assert.match(await text('.github/workflows/issue-intake.yml'), /steps\.invocation\.outputs\.accepted == 'true'/);
   assert.doesNotMatch(await text('.github/workflows/issue-intake.yml'), /\n\s*issue_comment:\s*\n/);
@@ -108,6 +109,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   const install = intakeSteps.find((step) => step.name === 'Install intake dependencies');
   const invocation = intakeSteps.find((step) => step.name === 'Validate and normalize explicit agent invocation');
   const routing = intakeSteps.find((step) => step.name === 'Reason about and validate issue routing');
+  assert.match(routing.env.CONTROL_PLANE_MODE, /inputs\.shadow_mode && 'shadow'/);
   const controllerCheckout = intakeSteps.find((step) => step.name === 'Check out the validated controller release');
   const controllerInstall = intakeSteps.find((step) => step.name === 'Install validated controller dependencies');
   assert.equal(trustedIntakeCheckout.with.path, 'trusted-intake');
