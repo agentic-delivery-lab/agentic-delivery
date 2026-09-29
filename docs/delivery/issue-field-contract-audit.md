@@ -131,8 +131,8 @@ publish those responses in this repository.
 
 The audit itself did not authorize changes to organization settings or issue
 values. No issue-field value was written, changed, or cleared during the audit.
-The organization later approved the two read permissions recorded in issue
-#66. Runtime verification with the updated immutable controller pin remains
+The organization later approved the two read permissions, tracked in issue #66.
+Runtime verification with the updated immutable controller pin remains
 outstanding. Controlled write and rollback evidence on test issues in two
 repositories is still outstanding as separate work.
 
