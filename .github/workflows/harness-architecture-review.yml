@@ -3,13 +3,14 @@ name: harness-architecture-review
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
 
 permissions:
   contents: read
   issues: read
   pull-requests: read
   actions: read
+  checks: read
 
 concurrency:
   group: harness-architecture-review-${{ github.event.pull_request.number }}

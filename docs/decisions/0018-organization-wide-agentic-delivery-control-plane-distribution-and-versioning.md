@@ -316,13 +316,24 @@ Deterministic tests and an operator smoke run must prove:
   `agentic-delivery`;
 - installation-token requests are narrowed to the origin repository and the
   App permissions are sufficient but minimal;
+- contract validation confirms every named token profile matches the
+  code-defined permission map, and token requests use the selected profile;
+- delivery resolution rejects untrusted callers, caller-supplied policy,
+  mismatched event identity and unregistered repositories before a delivery
+  token or model session is started;
+- an active participant resolves as writable, a manual read-only override can
+  restrict that run, and a false override cannot promote a shadow participant;
+- the issue-intake and Codex-delivery workflows both use the bootstrap commit
+  named by the controller release manifest;
 - a new repository can enroll with the documented two-part contract;
 - an older supported participant can remain pinned while another participant
   upgrades;
 - a deliberate upgrade and exact-commit rollback work without duplicate
   mutation;
 - `.github-private` events can participate without receiving the central App
-  private key; and
+  private key;
+- the post-merge canary reads the organization issue metadata and leaves the
+  pinned issue fields unchanged; and
 - participant-local CI/CD remains independently executable.
 
 ## Pros and Cons of the Options

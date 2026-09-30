@@ -72,9 +72,15 @@ they do not authorize migration, alter that issue's scope, or close it.
   rationale.
 - Origin-scoped App tokens now use explicit invocation-preflight, read-only
   intake, active intake, and delivery permission profiles. The versioned
-  contract is checked against each runtime request; origin repository IDs
-  still narrow repository resources, while the approved issue-field and issue
-  type reads remain organization-wide.
+  contract is validated against the code-defined permission profiles, and
+  token requests use the selected profile's map. Origin repository IDs still
+  narrow repository resources, while the approved issue-field and issue type
+  reads remain organization-wide.
+- The release-chain validator now requires both issue intake and Codex delivery
+  to check out the bootstrap commit named by the controller release manifest.
+- Harness review now includes the sanitized pull-request body and latest
+  check-run status for the reviewed head; editing a pull request reruns the
+  read-only review after its verification evidence is updated.
 - Direct intake resolves the participant mode from the pinned registry by
   repository ID and verifies the expected repository name. A manual
   `force_read_only` override applies only to that run and cannot change or

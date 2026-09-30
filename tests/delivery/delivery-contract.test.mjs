@@ -187,6 +187,9 @@ test('repository instructions and ADR-0007 point to pnpm commands', async () => 
 test('Codex delivery reserves time for a recoverable outer shutdown', async () => {
   const workflowDocument = parseRepositoryYaml(await text('.github/workflows/codex-delivery.yml'), 'Codex delivery workflow');
   assert.equal(workflowDocument.jobs.deliver['timeout-minutes'],350);
+  assert.equal(workflowDocument.on.workflow_dispatch.inputs.force_read_only.default, true);
+  assert.equal(workflowDocument.jobs.deliver.needs, 'resolve');
+  assert.match(workflowDocument.jobs.deliver.if, /needs\.resolve\.outputs\.read_only_run == 'false'/);
 
   const controller = await text('scripts/codex-delivery.mjs');
   assert.match(controller,/5\.5 \* 60 \* 60_000/);

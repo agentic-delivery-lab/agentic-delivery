@@ -5,7 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
-import { ReleaseChainValidationError, validateReleaseChain } from '../../scripts/validate-release-chain.mjs';
+import { ReleaseChainValidationError, validateBootstrapWorkflowPins, validateReleaseChain } from '../../scripts/validate-release-chain.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const execFileAsync = promisify(execFile);
@@ -30,6 +30,21 @@ test('release-chain validation requires explicit cross-repository inputs', async
     validateReleaseChain(),
     (error) => error instanceof ReleaseChainValidationError && error.exitCode === 2 && /architectureRoot/.test(error.message),
   );
+});
+
+test('release-chain validation requires intake and delivery to use the manifest bootstrap pin', () => {
+  const bootstrapCommit = 'a'.repeat(40);
+  assert.deepEqual(validateBootstrapWorkflowPins({
+    bootstrapCommit,
+    issueIntakeWorkflow: `jobs:\n  authorize:\n    steps:\n      - name: Check out trusted authorization\n        uses: actions/checkout@v5\n        with:\n          ref: ${bootstrapCommit}\n          path: trusted-intake\n  classify:\n    steps:\n      - name: Check out trusted intake\n        uses: actions/checkout@v5\n        with:\n          ref: ${bootstrapCommit}\n          path: trusted-intake\n`,
+    codexDeliveryWorkflow: `jobs:\n  resolve:\n    steps:\n      - name: Check out trusted participant registry bootstrap\n        uses: actions/checkout@v5\n        with:\n          ref: ${bootstrapCommit}\n          path: trusted-bootstrap\n`,
+  }), []);
+
+  assert.deepEqual(validateBootstrapWorkflowPins({
+    bootstrapCommit,
+    issueIntakeWorkflow: `jobs:\n  authorize:\n    steps:\n      - name: Check out trusted authorization\n        uses: actions/checkout@v5\n        with:\n          ref: ${bootstrapCommit}\n          path: trusted-intake\n`,
+    codexDeliveryWorkflow: `jobs:\n  resolve:\n    steps:\n      - name: Check out trusted participant registry bootstrap\n        uses: actions/checkout@v5\n        with:\n          ref: ${'b'.repeat(40)}\n          path: trusted-bootstrap\n`,
+  }), ['codex-delivery bootstrap must pin the release bootstrap commit']);
 });
 
 test('local release graph reproduces all pinned digests and publication refs', async (t) => {

@@ -42,6 +42,33 @@ test('delivery policy derives mode, controller pin, and read-only status from th
   });
 });
 
+test('an active registry participant resolves as writable and a manual override can only restrict the run', async () => {
+  const registry = await participantRegistry();
+  const repositoryId = '1358455028';
+  const participant = registry.participants.get(repositoryId);
+  registry.participants.set(repositoryId, { ...participant, mode: 'active' });
+  const event = { repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 } };
+
+  assert.deepEqual(resolveDeliveryParticipant(context(), registry, event), {
+    participantMode: 'active',
+    controllerCommit: participant.controller.commit,
+    readOnlyRun: false,
+  });
+
+  const manualContext = context({
+    eventName: 'workflow_dispatch',
+    route: '',
+    callerWorkflowRef: 'agentic-delivery-lab/agentic-delivery/.github/workflows/codex-delivery.yml@refs/heads/main',
+    forceReadOnly: true,
+  });
+  assert.deepEqual(resolveDeliveryParticipant(manualContext, registry, event), {
+    participantMode: 'active',
+    controllerCommit: participant.controller.commit,
+    readOnlyRun: true,
+  });
+  assert.equal(resolveDeliveryParticipant({ ...manualContext, forceReadOnly: false }, registry, event).readOnlyRun, false);
+});
+
 test('delivery policy rejects forged caller mode, controller pin, or read-only inputs', async () => {
   const registry = await participantRegistry();
   for (const forged of [

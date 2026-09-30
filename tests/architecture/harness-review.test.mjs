@@ -11,7 +11,7 @@ import {
   parseEvidenceMarker,
   validateEvidenceRecord,
 } from '../../scripts/lib/architecture-review.mjs';
-import { parseSemanticOutcome, runSemanticReview } from '../../scripts/lib/architecture-review-agent.mjs';
+import { parseSemanticOutcome, readHeadCheckRuns, runSemanticReview } from '../../scripts/lib/architecture-review-agent.mjs';
 import { runNodeScript } from '../helpers/process.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
@@ -120,6 +120,98 @@ test('semantic output requires cited findings and keeps model uncertainty adviso
   assert.equal(invalid.status, 'inconclusive');
 });
 
+test('head check snapshots are read-only, bounded to the reviewed SHA, and summarized by latest check name', async () => {
+  let requestUrl;
+  let authorization;
+  const snapshot = await readHeadCheckRuns('agentic-delivery-lab/agentic-delivery', 'a'.repeat(40), {
+    token: 'read-only-test-token',
+    fetchImpl: async (url, options) => {
+      requestUrl = url;
+      authorization = options.headers.Authorization;
+      return {
+        ok: true,
+        json: async () => ({ total_count: 3, check_runs: [
+          { name: 'quality', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure', html_url: 'https://example.invalid/old', started_at: '2026-09-30T09:00:00Z' },
+          { name: 'quality', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success', html_url: 'https://example.invalid/new', started_at: '2026-09-30T10:00:00Z' },
+          { name: 'review', app: { slug: 'github-actions' }, status: 'in_progress', conclusion: null, html_url: 'https://example.invalid/review', started_at: '2026-09-30T10:01:00Z' },
+        ] }),
+      };
+    },
+  });
+  assert.equal(requestUrl, `https://api.github.com/repos/agentic-delivery-lab/agentic-delivery/commits/${'a'.repeat(40)}/check-runs?per_page=100`);
+  assert.equal(authorization, 'Bearer read-only-test-token');
+  assert.equal(snapshot.available, true);
+  assert.equal(snapshot.headSha, 'a'.repeat(40));
+  assert.equal(snapshot.totalCount, 3);
+  assert.deepEqual(snapshot.latestByName.map(({ name, status, conclusion }) => ({ name, status, conclusion })), [
+    { name: 'quality', status: 'completed', conclusion: 'success' },
+    { name: 'review', status: 'in_progress', conclusion: null },
+  ]);
+  assert.equal(snapshot.latestByName.find((run) => run.name === 'quality').url, 'https://example.invalid/new');
+});
+
+test('semantic bundle includes the sanitized pull-request body and exact-head checks without its own not-run result', async (t) => {
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-review-evidence-'));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const { stdout } = await promisify(execFile)('git', ['-C', repositoryRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+  const revision = stdout.trim();
+  const eventPath = path.join(fixture, 'event.json');
+  await writeFile(eventPath, JSON.stringify({
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery' },
+    issue: { body: 'The source issue describes a permissions update.' },
+    pull_request: {
+      number: 67,
+      html_url: 'https://github.com/agentic-delivery-lab/agentic-delivery/pull/67',
+      body: '## Source\n\nRefs #66\n\n## Verification\n\nQuality passed. authorization=ghp_abcdefghijklmnopqrstuvwxyz0123456789',
+      head: { ref: 'fix/issue-66-review-evidence', sha: revision },
+    },
+  }));
+  const review = await deterministicReview({ repositoryRoot, base: revision, head: revision, eventPath });
+  let bundlePath;
+  let bundleText;
+  let promptText;
+  const result = await runSemanticReview({
+    repositoryRoot,
+    review,
+    eventPath,
+    githubToken: 'read-only-test-token',
+    fetchImpl: async (url) => {
+      assert.match(url, new RegExp(`/commits/${revision}/check-runs\\?per_page=100$`));
+      return { ok: true, json: async () => ({ total_count: 1, check_runs: [
+        { name: 'quality', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success', html_url: 'https://github.com/example/check/1', started_at: '2026-09-30T10:00:00Z' },
+      ] }) };
+    },
+    createClient: ({ readableFiles }) => {
+      [bundlePath] = readableFiles;
+      return {
+        initialize: async () => {},
+        capabilities: async () => ({}),
+        startThread: async () => ({ thread: { id: '019fb023-24b8-7881-9119-509f078b610e' } }),
+        close: async () => {},
+      };
+    },
+    runTurnImpl: async ({ prompt }) => {
+      promptText = prompt;
+      bundleText = await readFile(bundlePath, 'utf8');
+      return { status: 'completed', text: JSON.stringify({
+        status: 'aligned', summary: 'The available evidence is consistent.', affectedAdrs: [],
+        affectedContexts: [], findings: [], evidenceGaps: [],
+      }) };
+    },
+  });
+  assert.equal(result.status, 'aligned');
+  assert.match(bundleText, /## Pull-request body[\s\S]*Refs #66/);
+  assert.match(bundleText, /## Head check runs[\s\S]*"headSha":/);
+  assert.match(bundleText, /"conclusion": "success"/);
+  assert.doesNotMatch(bundleText, /ghp_abcdefghijklmnopqrstuvwxyz/);
+  assert.doesNotMatch(bundleText, /"semantic": \{\s+"status": "not-run"/);
+  assert.match(promptText, /Ignore the in-progress status of this Harness review itself/);
+  assert.match(promptText, /not-applicable for a human-created pull request/);
+  assert.match(promptText, /canary as pending evidence/);
+});
+
 test('semantic execution reports quota and structured findings without becoming deterministic proof', async () => {
   const revision = (await (async () => {
     const { execFile } = await import('node:child_process');
@@ -190,10 +282,10 @@ test('the baseline report contains one required matrix row for every official AD
 
 test('architecture-review workflow is pinned, read-only, and does not publish comments', async () => {
   const workflow = await readFile(path.join(repositoryRoot, '.github/workflows/harness-architecture-review.yml'), 'utf8');
-  for (const phrase of ['pull_request:', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
+  for (const phrase of ['pull_request:', 'edited', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'checks: read', 'cancel-in-progress: true', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
     assert.ok(workflow.includes(phrase), `missing workflow control: ${phrase}`);
   }
-  assert.doesNotMatch(workflow, /issues:\s*write|pull-requests:\s*write|contents:\s*write/);
+  assert.doesNotMatch(workflow, /issues:\s*write|pull-requests:\s*write|contents:\s*write|checks:\s*write/);
   assert.doesNotMatch(workflow, /gh issue comment|curl .*comments|pulls\/.*PATCH/);
 });
 
