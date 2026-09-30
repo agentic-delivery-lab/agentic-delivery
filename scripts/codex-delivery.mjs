@@ -364,6 +364,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   if (!env.GH_TOKEN || !env.GITHUB_EVENT_PATH || !env.RUNNER_WORKSPACE) throw new Error('Run this controller through GitHub Actions.');
   if (env.PARTICIPANT_MODE === 'shadow') throw new Error('Shadow participants are read-only and cannot start delivery execution.');
   if (env.PARTICIPANT_MODE !== 'active') throw new Error('Delivery execution requires an active participant mode resolved during intake.');
+  if (env.READ_ONLY_RUN !== 'false') throw new Error('Delivery execution requires an explicitly non-read-only run.');
   if (!env.PUBLISH_TOKEN && !(env.CODEX_DELIVERY_APP_ID && env.CODEX_DELIVERY_APP_PRIVATE_KEY)) throw new Error('Publication credential is missing. Configure the organization-installed GitHub App credentials or an approved publication token.');
   const rawEvent = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'));
   const event = normalizeOriginEvent(rawEvent, env);

@@ -27,6 +27,10 @@ on:
         description: Immutable controller commit resolved from the participant registry
         required: true
         type: string
+      read_only_run:
+        description: Effective read-only state resolved during intake
+        required: true
+        type: boolean
       route:
         description: Authorized orchestration route selected by the intake policy
         required: true
@@ -90,41 +94,126 @@ on:
         description: Open source issue number to start or resume
         required: true
         type: string
-      controller_commit:
-        description: Immutable controller commit for this manual recovery run
-        required: true
-        type: string
+      force_read_only:
+        description: Keep this recovery run read-only; the participant registry mode cannot be overridden
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    outputs:
+      participant_mode: ${{ steps.manual-policy.outputs.participant_mode || steps.called-policy.outputs.participant_mode }}
+      controller_commit: ${{ steps.manual-policy.outputs.controller_commit || steps.called-policy.outputs.controller_commit }}
+      read_only_run: ${{ steps.manual-policy.outputs.read_only_run || steps.called-policy.outputs.read_only_run }}
+    steps:
+      - name: Check out trusted participant registry bootstrap
+        if: ${{ inputs.route == '' }}
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # Bootstrap pin: config/controller-release.json bootstrapCommit.
+          ref: 23e4b46e1ddb142e0ddac18ac72144b8bb151db7
+          path: trusted-bootstrap
+          persist-credentials: false
+
+      - name: Set up Node.js and pnpm
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Resolve pinned participant and read-only policy for manual recovery
+        id: manual-policy
+        if: ${{ inputs.route == '' }}
+        working-directory: trusted-bootstrap
+        env:
+          ORIGIN_REPOSITORY: ${{ github.repository }}
+          ORIGIN_REPOSITORY_ID: ${{ github.event.repository.id }}
+          FORCE_READ_ONLY: ${{ inputs.force_read_only }}
+        run: |
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import { loadParticipantRegistry, participantForRepository } from './scripts/lib/participant-registry.mjs';
+
+          const registry = await loadParticipantRegistry();
+          if (!registry.valid) throw new Error(`The participant registry is invalid: ${registry.errors.join(' ')}`);
+          const participant = participantForRepository(registry, process.env.ORIGIN_REPOSITORY_ID);
+          if (!participant) throw new Error('The event repository is not enrolled in the participant registry.');
+          if (participant.expectedFullName !== process.env.ORIGIN_REPOSITORY) {
+            throw new Error('The event repository name does not match the participant registry.');
+          }
+          if (!['active', 'shadow'].includes(participant.mode)) throw new Error('The participant registry mode is disabled or invalid.');
+          if (!/^[0-9a-f]{40}$/i.test(participant.controller.commit)) {
+            throw new Error('The participant registry controller pin is invalid.');
+          }
+          if (!['true', 'false'].includes(process.env.FORCE_READ_ONLY)) {
+            throw new Error('The manual force_read_only input must be true or false.');
+          }
+          const readOnlyRun = participant.mode === 'shadow' || process.env.FORCE_READ_ONLY === 'true';
+          process.stdout.write(`participant_mode=${participant.mode}\n`);
+          process.stdout.write(`controller_commit=${participant.controller.commit}\n`);
+          process.stdout.write(`read_only_run=${readOnlyRun}\n`);
+          NODE
+
+      - name: Resolve read-only policy for reusable delivery
+        id: called-policy
+        if: ${{ inputs.route != '' }}
+        env:
+          PARTICIPANT_MODE: ${{ inputs.participant_mode }}
+          CONTROLLER_COMMIT: ${{ inputs.controller_commit }}
+          REQUESTED_READ_ONLY_RUN: ${{ inputs.read_only_run }}
+        run: |
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          const mode = process.env.PARTICIPANT_MODE;
+          const commit = process.env.CONTROLLER_COMMIT;
+          const requestedReadOnly = process.env.REQUESTED_READ_ONLY_RUN;
+          if (!['active', 'shadow'].includes(mode)) throw new Error('The resolved participant mode must be active or shadow.');
+          if (!/^[0-9a-f]{40}$/i.test(commit ?? '')) throw new Error('The resolved controller pin is invalid.');
+          if (!['true', 'false'].includes(requestedReadOnly)) throw new Error('The resolved read_only_run input must be true or false.');
+          const readOnlyRun = mode === 'shadow' || requestedReadOnly === 'true';
+          process.stdout.write(`participant_mode=${mode}\n`);
+          process.stdout.write(`controller_commit=${commit}\n`);
+          process.stdout.write(`read_only_run=${readOnlyRun}\n`);
+          NODE
+
   deliver:
+    needs: resolve
+    if: >-
+      needs.resolve.result == 'success' &&
+      needs.resolve.outputs.participant_mode == 'active' &&
+      needs.resolve.outputs.read_only_run == 'false'
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 350
+    permissions:
+      contents: read
+      issues: write
     env:
       CODEX_AUTH_HOME: /var/lib/github-runner/.codex
       ORIGIN_REPOSITORY: ${{ inputs.origin_repository || github.repository }}
       ORIGIN_REPOSITORY_ID: ${{ inputs.origin_repository_id || github.event.repository.id }}
-      PARTICIPANT_MODE: ${{ inputs.participant_mode || steps.manual-participant.outputs.participant_mode }}
-      CONTROL_PLANE_COMMIT: ${{ inputs.controller_commit }}
+      PARTICIPANT_MODE: ${{ needs.resolve.outputs.participant_mode }}
+      READ_ONLY_RUN: ${{ needs.resolve.outputs.read_only_run }}
+      CONTROL_PLANE_COMMIT: ${{ needs.resolve.outputs.controller_commit }}
       GITHUB_EVENT_NAME: ${{ inputs.invocation_event_name == 'issues' && 'issues' || (inputs.invocation_event_name != '' && 'issue_comment' || github.event_name) }}
       GITHUB_TRIGGERING_ACTOR: ${{ inputs.invocation_actor || github.triggering_actor || github.actor }}
-    permissions:
-      contents: read
-      issues: write
     steps:
-      - name: Validate the immutable controller commit
+      - name: Validate resolved controller pin
         env:
-          CONTROLLER_COMMIT: ${{ inputs.controller_commit }}
+          CONTROLLER_COMMIT: ${{ needs.resolve.outputs.controller_commit }}
         run: |
           set -euo pipefail
-          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]
 
-      - name: Check out trusted controller
+      - name: Check out pinned controller
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ inputs.controller_commit }}
+          ref: ${{ needs.resolve.outputs.controller_commit }}
           persist-credentials: false
 
       - name: Set up pnpm and Node.js
@@ -138,27 +227,6 @@ jobs:
 
       - name: Install trusted controller dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Resolve participant mode for manual recovery
-        id: manual-participant
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        env:
-          ORIGIN_REPOSITORY: ${{ github.repository }}
-          ORIGIN_REPOSITORY_ID: ${{ github.event.repository.id }}
-        run: |
-          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
-          import { loadParticipantRegistry, participantForRepository } from './scripts/lib/participant-registry.mjs';
-
-          const registry = await loadParticipantRegistry();
-          if (!registry.valid) throw new Error(`The participant registry is invalid: ${registry.errors.join(' ')}`);
-          const participant = participantForRepository(registry, process.env.ORIGIN_REPOSITORY_ID);
-          if (!participant) throw new Error('The event repository is not enrolled in the participant registry.');
-          if (participant.expectedFullName !== process.env.ORIGIN_REPOSITORY) {
-            throw new Error('The event repository name does not match the participant registry.');
-          }
-          if (participant.mode === 'disabled') throw new Error('The participant registry mode is disabled.');
-          process.stdout.write(`participant_mode=${participant.mode}\n`);
-          NODE
 
       - name: Run source issue delivery
         env:

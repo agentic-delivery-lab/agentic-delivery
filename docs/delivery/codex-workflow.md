@@ -88,9 +88,15 @@ participant's immutable controller commit from the signed event envelope before
 loading its registry and validator. It never follows a moving `main` ref for
 observation validation and it has no App private-key or webhook-secret input.
 The issue-intake bootstrap uses the `bootstrapCommit` in the controller release
-manifest for its trusted authorization and preflight checkout. The delivery
-checkout and manual recovery input both require a 40-character controller SHA;
-neither path falls back to `main`.
+manifest for its trusted authorization and preflight checkout. Reusable delivery
+checks out the immutable controller SHA resolved during intake. Direct manual
+recovery first loads the participant registry from the fixed bootstrap commit,
+checks the event repository ID and expected name, and takes the controller pin
+from that registry. Its `force_read_only` input defaults to `true`; it does not
+accept a caller-selected controller SHA. The resolution job has contents-read
+permission only, and the self-hosted delivery job runs only for an active
+participant with an effective non-read-only run. Neither path falls back to a
+moving `main` ref.
 
 The Vercel ingress mints a repository-scoped read token for origin actor and
 source checks, then a separate controller token narrowed to the controller

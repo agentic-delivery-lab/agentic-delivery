@@ -36,8 +36,9 @@ or Distribution repositories.
 The linked Issue #52 is the plan-persistence and intake record for this
 repository split. It is not implementation authorization, does not define the
 acceptance criteria for this ADR, and must not be closed as a side effect of
-this local extraction. The ADR becomes an official implementation decision only
-through a separately authorized successor issue and its review pull request.
+this local extraction. Issue #66 is the authorized successor tracking this
+implementation and the provisional amendment in PR #67. The amendment becomes
+official only when that pull request is merged into `main`.
 
 The GitHub platform supplies several separate mechanisms, and they must not be
 collapsed into one contract:
@@ -156,10 +157,20 @@ The `force_read_only` workflow input is a run-level read-only override. It can
 restrict one manual execution but cannot change the registered participant
 mode. Direct intake resolves the registered mode by repository ID and verifies
 the expected full name; conversation-driven intake uses the validated event
-envelope. The controller records those concepts separately: `participant_mode`
-comes from the registry or validated envelope, while `read_only_run` is true
-for a shadow participant or a manual execution that requests read-only behavior.
-Delivery requires an active participant and `read_only_run` to be false.
+envelope. Direct manual delivery recovery also resolves participant mode and
+controller pin from the registry loaded by the fixed bootstrap commit. It does
+not accept a caller-supplied controller commit. The manual input defaults to
+read-only, and its resolution job has contents-read permission only. The
+self-hosted delivery job, issue-write permission, and delivery credentials are
+available only when the participant is active and the run is not read-only.
+
+The controller records participant mode and effective run policy separately:
+`participant_mode` comes from the registry or validated envelope, while a
+`read-only run` has `read_only_run: true` because the participant is in shadow
+mode or the run-level read-only override is enabled. Missing or invalid policy
+is rejected before delivery token creation or model startup. Delivery requires
+an active participant and `read_only_run` to be false. This eligibility check
+does not select or alter the semantic route.
 
 ### Event and execution boundary
 

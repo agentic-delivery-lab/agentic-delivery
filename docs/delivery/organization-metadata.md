@@ -68,6 +68,12 @@ pins, and issue values are readable without an App permission error, and that
 the run reports no issue-field changes. The route may remain held because the
 canary has no delivery work. Record the event run link and result on issue #66.
 
+Direct manual recovery through `codex-delivery.yml` is a separate path from
+this intake canary. It loads the participant mode and controller pin from the
+fixed bootstrap registry. Its `force_read_only` input defaults to `true`; set
+it to `false` only to request delivery for a participant already registered as
+`active`. A `shadow` participant remains read-only regardless of that input.
+
 Run the dry-run manifest before changing organization settings:
 
 ```text

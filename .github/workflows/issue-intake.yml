@@ -247,7 +247,7 @@ jobs:
        needs.classify.outputs.route == 'validate' ||
        needs.classify.outputs.route == 'coordinate') &&
       needs.classify.outputs.participant_mode == 'active' &&
-      needs.classify.outputs.read_only_run != 'true'
+      needs.classify.outputs.read_only_run == 'false'
     permissions:
       contents: read
       issues: write
@@ -259,6 +259,7 @@ jobs:
       origin_repository_id: ${{ needs.classify.outputs.origin_repository_id }}
       participant_mode: ${{ needs.classify.outputs.participant_mode }}
       controller_commit: ${{ needs.classify.outputs.controller_commit }}
+      read_only_run: ${{ needs.classify.outputs.read_only_run == 'true' }}
       invocation_event_name: ${{ needs.classify.outputs.invocation_event_name }}
       invocation_source_kind: ${{ needs.classify.outputs.invocation_source_kind }}
       invocation_comment_id: ${{ needs.classify.outputs.invocation_comment_id }}

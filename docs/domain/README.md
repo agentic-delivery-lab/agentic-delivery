@@ -1,4 +1,4 @@
-<!-- agentic-primitive: {"id":"delivery-state-domain-language","kind":"customization","enforcement":"semantic","adrs":["ADR-0018","ADR-0019"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]} -->
+<!-- agentic-primitive: {"id":"delivery-state-domain-language","kind":"customization","enforcement":"semantic","adrs":["ADR-0003","ADR-0018","ADR-0019"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]} -->
 
 # Domain language
 

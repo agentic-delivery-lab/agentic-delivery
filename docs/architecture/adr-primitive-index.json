@@ -41,6 +41,7 @@
         "instructional"
       ],
       "primitives": [
+        "delivery-state-domain-language",
         "domain-language-validator",
         "repository-governance-instructions"
       ]
@@ -574,6 +575,7 @@
       "kind": "customization",
       "enforcement": "semantic",
       "adrs": [
+        "ADR-0003",
         "ADR-0018",
         "ADR-0019"
       ],

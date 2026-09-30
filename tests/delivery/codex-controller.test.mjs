@@ -36,7 +36,7 @@ async function fixture(t) {
   await writeFile(eventFile, JSON.stringify({repository:{id:101,full_name:'fixture/repo',owner:{login:'maintainer'}}}));
   const env = {...process.env, GH_TOKEN:'fixture-token', PUBLISH_TOKEN:'fixture-publish-token', GITHUB_EVENT_PATH:eventFile, RUNNER_WORKSPACE:root,
     CODEX_DELIVERY_STATE_DIR:stateRoot, GITHUB_REPOSITORY:'fixture/repo', GITHUB_ACTOR:'maintainer', PARTICIPANT_MODE:'active',
-    GITHUB_EVENT_NAME:'workflow_dispatch', GITHUB_RUN_ID:'1', SOURCE_ISSUE:'7'};
+    GITHUB_EVENT_NAME:'workflow_call', READ_ONLY_RUN:'false', GITHUB_RUN_ID:'1', SOURCE_ISSUE:'7'};
   const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], publishHeaders:[], pushHeaders:[], accessTokenRequests:[], clients:0, closes:0};
   const faults = {
     permission:'write', sourceState:'open', sourceTitle:'Add a file', sourceBody:'Create result.txt', sourceComments:[],
@@ -621,6 +621,7 @@ test('manual dispatch remains available for a waiting continuation', async (t) =
   assert.equal((await f.run()).status,'awaiting-human');
   f.faults.questions = false;
   f.env.GITHUB_EVENT_NAME = 'workflow_dispatch';
+  f.env.READ_ONLY_RUN = 'false';
   f.env.GITHUB_RUN_ID = '2';
   assert.equal((await f.run())?.status, undefined);
   assert.equal((await f.state()).status,'ready');

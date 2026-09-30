@@ -52,6 +52,10 @@ they do not authorize migration, alter that issue's scope, or close it.
   `force_read_only` override applies only to that run and cannot change or
   promote the registered participant mode; delivery requires an active
   participant and a non-read-only run.
+- Direct manual delivery recovery reads its controller pin and participant
+  mode from the fixed bootstrap registry. It defaults to read-only, and the
+  self-hosted delivery job receives write permissions only for an active,
+  explicitly non-read-only run.
 
 - Issue intake, delivery, and metadata migration now verify that the live
   Lifecycle Stage and Delivery Readiness fields are pinned to every enabled
