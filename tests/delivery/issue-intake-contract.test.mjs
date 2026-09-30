@@ -220,9 +220,9 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.match(resolver.outputs.controller_commit, /steps\.called-policy\.outputs\.controller_commit/);
   const installDelivery = deliveryWorkflow.jobs.deliver.steps.find((step) => step.name === 'Install trusted controller dependencies');
   const runDelivery = deliveryWorkflow.jobs.deliver.steps.find((step) => step.name === 'Run source issue delivery');
-  const controllerCheckout = deliveryWorkflow.jobs.deliver.steps.find((step) => step.name === 'Check out pinned controller');
-  assert.equal(controllerCheckout.with.ref, '${{ needs.resolve.outputs.controller_commit }}');
-  assert.ok(deliveryWorkflow.jobs.deliver.steps.indexOf(controllerCheckout) < deliveryWorkflow.jobs.deliver.steps.indexOf(installDelivery));
+  const pinnedDeliveryCheckout = deliveryWorkflow.jobs.deliver.steps.find((step) => step.name === 'Check out pinned controller');
+  assert.equal(pinnedDeliveryCheckout.with.ref, '${{ needs.resolve.outputs.controller_commit }}');
+  assert.ok(deliveryWorkflow.jobs.deliver.steps.indexOf(pinnedDeliveryCheckout) < deliveryWorkflow.jobs.deliver.steps.indexOf(installDelivery));
   assert.ok(deliveryWorkflow.jobs.deliver.steps.indexOf(installDelivery) < deliveryWorkflow.jobs.deliver.steps.indexOf(runDelivery));
   assert.ok(!deliveryWorkflow.on.issues);
   assert.ok(!deliveryWorkflow.on.issue_comment);
