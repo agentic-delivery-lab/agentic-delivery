@@ -321,6 +321,12 @@ Deterministic tests and an operator smoke run must prove:
 - delivery resolution rejects untrusted callers, caller-supplied policy,
   mismatched event identity and unregistered repositories before a delivery
   token or model session is started;
+- the hosted intake caller guard derives controller identity from the trusted
+  App contract and participant registry, accepts only the issue-intake and
+  agent-invocation event/workflow pairs on the controller's main branch, and
+  rejects mismatched repository names or IDs before actor authorization and
+  self-hosted classification; deterministic tests exercise accepted and
+  rejected caller combinations;
 - an active participant resolves as writable, a manual read-only override can
   restrict that run, and a false override cannot promote a shadow participant;
 - the issue-intake and Codex-delivery workflows both use the bootstrap commit

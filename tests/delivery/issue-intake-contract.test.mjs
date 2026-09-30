@@ -111,8 +111,28 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(intakeWorkflow.on.workflow_call.inputs.controller_commit, undefined);
   const intakeCallerCheck = intakeWorkflow.jobs.authorize.steps.find((step) => step.name === 'Validate intake caller provenance');
   assert.ok(intakeCallerCheck);
-  assert.match(intakeCallerCheck.run, /CALLER_WORKFLOW_REF/);
-  assert.match(intakeCallerCheck.run, /refs\/heads\/main/);
+  assert.equal(intakeCallerCheck.run, 'node scripts/validate-intake-caller.mjs');
+  assert.equal(intakeCallerCheck['working-directory'], 'trusted-intake');
+  assert.deepEqual(intakeCallerCheck.env, {
+    EVENT_NAME: '${{ github.event_name }}',
+    GIT_REF: '${{ github.ref }}',
+    CALLER_WORKFLOW_REF: '${{ github.workflow_ref }}',
+    AGENT_INVOCATION: '${{ inputs.agent_invocation || false }}',
+    CURRENT_REPOSITORY: '${{ github.repository }}',
+    CURRENT_REPOSITORY_ID: '${{ github.event.repository.id }}',
+  });
+  const authorizationSteps = intakeWorkflow.jobs.authorize.steps;
+  const trustedAuthorizationCheckout = authorizationSteps.find((step) => step.name === 'Check out trusted authorization');
+  const setupAuthorizationRuntime = authorizationSteps.find((step) => step.name === 'Set up pnpm and Node.js');
+  const installAuthorizationDependencies = authorizationSteps.find((step) => step.name === 'Install trusted authorization dependencies');
+  const actorAuthorization = authorizationSteps.find((step) => step.name === 'Authorize the issue event actor before self-hosted intake');
+  assert.ok(authorizationSteps.indexOf(trustedAuthorizationCheckout) < authorizationSteps.indexOf(setupAuthorizationRuntime));
+  assert.ok(authorizationSteps.indexOf(setupAuthorizationRuntime) < authorizationSteps.indexOf(installAuthorizationDependencies));
+  assert.ok(authorizationSteps.indexOf(installAuthorizationDependencies) < authorizationSteps.indexOf(intakeCallerCheck));
+  assert.ok(authorizationSteps.indexOf(intakeCallerCheck) < authorizationSteps.indexOf(actorAuthorization));
+  assert.equal(installAuthorizationDependencies.run, 'pnpm install --frozen-lockfile --ignore-scripts');
+  assert.equal(installAuthorizationDependencies['working-directory'], 'trusted-intake');
+  assert.doesNotMatch(intakeSource, /agentic-delivery-lab\/agentic-delivery/);
   assert.match(await text('.github/workflows/issue-intake.yml'), /authorize-issue-event\.mjs/);
   assert.match(await text('.github/workflows/issue-intake.yml'), /steps\.invocation\.outputs\.accepted == 'true'/);
   assert.doesNotMatch(await text('.github/workflows/issue-intake.yml'), /\n\s*issue_comment:\s*\n/);

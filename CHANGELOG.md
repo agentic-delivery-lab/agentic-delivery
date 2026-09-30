@@ -42,6 +42,10 @@ and releases use [Semantic Versioning](https://semver.org/).
 - Intake and delivery now use bootstrap commit
   `76ff0ff7bd35479251b9bfdf4bf420251d5738d5`, which contains the draft42
   central participant pin.
+- The hosted intake gate now validates caller repository identity against the
+  trusted App contract and participant registry before actor authorization or
+  self-hosted classification; accepted and rejected event/workflow pairs have
+  deterministic behavior coverage.
 - Private agent publication validation can now reproduce each projection from
   the exact Primitive source commit named by its provenance lock; the release
   chain checks the same byte-for-byte relationship.

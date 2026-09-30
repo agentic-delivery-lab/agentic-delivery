@@ -283,6 +283,7 @@
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
+        "intake-caller-provenance-guard",
         "intake-participation-policy",
         "issue-field-controller-boundary",
         "organization-metadata-runbook",
@@ -336,6 +337,7 @@
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
+        "intake-caller-provenance-guard",
         "intake-participation-policy",
         "issue-field-controller-boundary",
         "organization-metadata-runbook",
@@ -680,6 +682,19 @@
       ],
       "domains": [
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "intake-caller-provenance-guard",
+      "path": "scripts/lib/intake-caller-provenance.mjs",
+      "location": "scripts/lib/intake-caller-provenance.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {
