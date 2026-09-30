@@ -30,8 +30,8 @@ test('the checked-in controller release pins every enrolled participant', async 
   assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
   assert.equal(release.schemaVersion, 2);
   assert.equal(release.$schema, '../schemas/controller-release.v2.schema.json');
-  assert.equal(release.version, '0.2.0-draft.42');
-  assert.equal(release.commit, 'b17a2077b645e7eb861aeb75558d77fb1c46011c');
+  assert.equal(release.version, '0.2.0-draft.43');
+  assert.equal(release.commit, 'c4fcfdf58379af5a0df500af7e005388af93dfb9');
   assert.equal(release.bootstrapCommit, '76ff0ff7bd35479251b9bfdf4bf420251d5738d5');
   assert.equal(release.githubAppContractVersion, '2.0.0');
   assert.equal(release.compatibility.githubAppContractVersion, '2.0.0');
@@ -117,6 +117,10 @@ test('the current controller release pins immutable Architecture and Primitive c
 
 test('the release catalog retains an older immutable pin for intentional rollback', async () => {
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
+  assert.ok(release.compatibility.controllers.some((pin) => (
+    pin.version === '0.2.0-draft.42'
+    && pin.commit === 'b17a2077b645e7eb861aeb75558d77fb1c46011c'
+  )));
   assert.ok(release.compatibility.controllers.some((pin) => (
     pin.version === '0.2.0-draft.6'
     && pin.commit === '564a35fd798e75800a3bf15223afb8bd87d59581'

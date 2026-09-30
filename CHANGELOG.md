@@ -46,6 +46,10 @@ and releases use [Semantic Versioning](https://semver.org/).
   trusted App contract and participant registry before actor authorization or
   self-hosted classification; accepted and rejected event/workflow pairs have
   deterministic behavior coverage.
+- The controller release advances to `0.2.0-draft.43` at
+  `c4fcfdf58379af5a0df500af7e005388af93dfb9`; the central participant moves to
+  this immutable pin while draft42 and earlier releases remain available for
+  rollback.
 - Private agent publication validation can now reproduce each projection from
   the exact Primitive source commit named by its provenance lock; the release
   chain checks the same byte-for-byte relationship.
