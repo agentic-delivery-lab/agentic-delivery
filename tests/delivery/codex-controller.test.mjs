@@ -35,7 +35,7 @@ async function fixture(t) {
   const eventFile = path.join(root, 'event.json');
   await writeFile(eventFile, JSON.stringify({repository:{id:101,full_name:'fixture/repo',owner:{login:'maintainer'}}}));
   const env = {...process.env, GH_TOKEN:'fixture-token', PUBLISH_TOKEN:'fixture-publish-token', GITHUB_EVENT_PATH:eventFile, RUNNER_WORKSPACE:root,
-    CODEX_DELIVERY_STATE_DIR:stateRoot, GITHUB_REPOSITORY:'fixture/repo', GITHUB_ACTOR:'maintainer',
+    CODEX_DELIVERY_STATE_DIR:stateRoot, GITHUB_REPOSITORY:'fixture/repo', GITHUB_ACTOR:'maintainer', PARTICIPANT_MODE:'active',
     GITHUB_EVENT_NAME:'workflow_dispatch', GITHUB_RUN_ID:'1', SOURCE_ISSUE:'7'};
   const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], publishHeaders:[], pushHeaders:[], accessTokenRequests:[], clients:0, closes:0};
   const faults = {
@@ -388,6 +388,17 @@ test('rejects delivery execution for a shadow participant before model startup',
   f.env.PARTICIPANT_MODE = 'shadow';
   await assert.rejects(f.run(), /Shadow participants are read-only/);
   assert.equal(f.calls.clients, 0);
+});
+
+test('rejects missing or invalid participant mode before delivery startup', async (t) => {
+  for (const mode of [undefined, 'unknown']) {
+    const f = await fixture(t);
+    if (mode === undefined) delete f.env.PARTICIPANT_MODE;
+    else f.env.PARTICIPANT_MODE = mode;
+    await assert.rejects(f.run(), /requires an active participant mode resolved during intake/);
+    assert.equal(f.calls.accessTokenRequests.length, 0);
+    assert.equal(f.calls.clients, 0);
+  }
 });
 
 test('publication retry cannot push a clean but unverified replacement commit', async (t) => {

@@ -170,7 +170,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(routing.env.CODEX_DELIVERY_APP_PRIVATE_KEY, '${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}');
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.issue.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.route.required, true);
-  assert.equal(deliveryWorkflow.on.workflow_call.inputs.participant_mode.required, false);
+  assert.equal(deliveryWorkflow.on.workflow_call.inputs.participant_mode.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.controller_commit.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_APP_PRIVATE_KEY.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_APP_ID, undefined);

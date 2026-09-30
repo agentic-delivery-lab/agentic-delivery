@@ -21,8 +21,7 @@ on:
         type: string
       participant_mode:
         description: Central participant mode resolved during intake
-        required: false
-        default: ''
+        required: true
         type: string
       controller_commit:
         description: Immutable controller commit resolved from the participant registry
