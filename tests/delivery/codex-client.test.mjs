@@ -90,6 +90,23 @@ test('checks a distinct legacy quota window alongside the keyed map', () => {
   assert.equal(decision.diagnostics.triggeringWindows[0].usedPercent, 99);
 });
 
+test('checks divergent legacy quota data even when its limit ID matches the keyed map', () => {
+  const value = quota(99, 20);
+  value.rateLimitsByLimitId = {
+    codex: {
+      limitId: 'codex',
+      credits: { hasCredits: false, unlimited: false },
+      primary: window(20),
+      secondary: window(20, 10080),
+    },
+  };
+  const decision = quotaBoundary(value, now);
+  assert.equal(decision.stop, true);
+  assert.deepEqual(decision.diagnostics.triggeringWindows[0], {
+    bucket: 'bucket-2', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: now + 100, valid: true,
+  });
+});
+
 test('quota reason codes distinguish credit, server-rate, and spend-control stops', () => {
   const credit = quota();
   credit.rateLimits.credits.hasCredits = true;

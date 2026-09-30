@@ -374,11 +374,14 @@ does not comment, modify, merge or close anything.
 
 When quota telemetry stops semantic review, the Actions summary records whether
 the stop happened during preflight or an active review turn. It also lists the
-reported primary and secondary windows, usage, duration, reset times, server
-rate-limit flags, and the next eligible time when the exhausted windows make it
-possible to calculate one. Provider limit names, account identifiers, and raw
-error details are not published. An `inconclusive` result means no semantic
-conclusion was reached; it does not change the deterministic review result.
+triggering primary and secondary windows and server-block flags, plus up to 32
+additional windows and server-block records as context. Each trigger is
+retained even when it appears after the context limit. The summary includes
+usage, duration, reset times, and the next eligible time when the exhausted
+windows make it possible to calculate one. Provider limit names, account
+identifiers, and raw error details are not published. An `inconclusive` result
+means no semantic conclusion was reached; it does not change the deterministic
+review result.
 
 To retry after a quota stop, open the latest Harness Architecture Review run
 for the pull request head and inspect its Actions summary. Wait until the

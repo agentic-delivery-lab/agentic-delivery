@@ -4,6 +4,7 @@ import { createInterface } from 'node:readline';
 import { existsSync, realpathSync, mkdirSync, mkdtempSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
+import { isDeepStrictEqual } from 'node:util';
 
 export const MODELS = Object.freeze({
   route: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
@@ -67,7 +68,8 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
     const legacy = response.rateLimits;
     const legacyLimitId = typeof legacy.limitId === 'string' ? legacy.limitId : null;
     const mirrored = entries.some(({ limitId, value }) => value === legacy
-      || (legacyLimitId && (limitId === legacyLimitId || value?.limitId === legacyLimitId)));
+      || (legacyLimitId && (limitId === legacyLimitId || value?.limitId === legacyLimitId)
+        && isDeepStrictEqual(value, legacy)));
     if (!mirrored) entries.push({ limitId: legacyLimitId ?? 'legacy', value: legacy });
   }
   const buckets = entries.map(({ value }, index) => ({ name: `bucket-${index + 1}`, value }));
