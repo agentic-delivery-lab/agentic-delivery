@@ -56,16 +56,17 @@ intake requests `Issues: write` instead. Delivery requests `Contents: write`,
 reads. Every origin token is narrowed to the originating repository ID for
 repository resources. The organization catalog reads remain organization-wide.
 
-After the immutable controller pin is updated, run the read-only canary on
-issue #62 from **Actions → issue-intake → Run workflow**. Set `issue` to `62`,
-keep `force` set to `false`, and keep `force_read_only` set to `true`. Leave
-`controller_commit` blank so the workflow uses the reviewed pin. The workflow
-resolves `participant_mode` from the pinned registry; `force_read_only` applies
-only to this run and cannot promote a registered shadow participant. Confirm
-that the organization fields, Issue Types, pins, and issue values are readable
-without an App permission error, and that the run reports no issue-field
-changes. The route may remain held because the canary has no delivery work.
-Record the run link and result on issue #66.
+After the immutable controller pin is updated, trigger normal issue intake on
+canary issue #62. Add a dated `Canary run:` line to its description to emit an
+`issues.edited` event. Do not change its Issue Type, Lifecycle Stage, or
+Delivery Readiness fields. Leave `force` and all other workflow-dispatch inputs
+out of this probe; it must use the normal issue-event path. The workflow
+resolves `participant_mode` from the pinned registry. The central participant
+is registered as `shadow`, so intake requests the read-only App profile and
+does not start delivery. Confirm that the organization fields, Issue Types,
+pins, and issue values are readable without an App permission error, and that
+the run reports no issue-field changes. The route may remain held because the
+canary has no delivery work. Record the event run link and result on issue #66.
 
 Run the dry-run manifest before changing organization settings:
 

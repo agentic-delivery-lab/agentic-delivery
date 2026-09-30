@@ -249,7 +249,7 @@ test('shadow participant intake requests read-only origin App permissions', asyn
   assert.equal(tokenRequests[0].permissions.contents, 'read');
 });
 
-test('an active participant read-only override uses the read-only App profile and performs no issue writes', async () => {
+test('normal issue intake reads metadata with the registered shadow profile and performs no issue writes', async () => {
   const origin = 'agentic-delivery-lab/service-a';
   const fixture = apiFixture({
     state: 'open', title: 'Task: read-only intake', body: 'Check the organization metadata without changing this issue.',
@@ -308,13 +308,11 @@ test('an active participant read-only override uses the read-only App profile an
       SOURCE_ISSUE: '17',
       GH_TOKEN: 'controller-token',
       GITHUB_ACTOR: 'maintainer',
-      GITHUB_EVENT_NAME: 'workflow_dispatch',
-      PARTICIPANT_MODE: 'active',
-      READ_ONLY_RUN: 'true',
-      FORCE_READ_ONLY: 'true',
+      GITHUB_EVENT_NAME: 'issues',
+      PARTICIPANT_MODE: 'shadow',
       GITHUB_GRAPHQL: 'true',
     },
-    event: { action: 'workflow_dispatch', issue: {}, repository: { full_name: origin } },
+    event: { action: 'edited', issue: { number: 17 }, repository: { full_name: origin } },
     fetchImpl,
     config,
     reasonRoute: async () => ({
@@ -327,7 +325,7 @@ test('an active participant read-only override uses the read-only App profile an
   });
 
   assert.equal(result.route, 'plan');
-  assert.equal(result.metadata.shadow, undefined, 'a run-level override does not change participant mode');
+  assert.equal(result.metadata.shadow, true);
   assert.equal(result.metadata.readOnlyRun, true);
   assert.equal(result.fields.changed, false);
   assert.equal(result.fields.readOnlyRun, true);
