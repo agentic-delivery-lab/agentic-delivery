@@ -264,6 +264,30 @@ test('delivery mints an origin-scoped App token with the declared organization m
   }]);
 });
 
+test('delivery rejects read-only and missing run policy before token creation and model startup', async (t) => {
+  for (const scenario of [
+    { name: 'read-only run', value: 'true' },
+    { name: 'missing run policy', value: undefined },
+  ]) {
+    await t.test(scenario.name, async (subtest) => {
+      const f = await fixture(subtest);
+      const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+      f.env.CODEX_DELIVERY_APP_ID = '5011055';
+      f.env.CODEX_DELIVERY_APP_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' });
+      f.env.CODEX_DELIVERY_APP_INSTALLATION_ID = '163255060';
+      delete f.env.PUBLISH_TOKEN;
+      if (scenario.value === undefined) delete f.env.READ_ONLY_RUN;
+      else f.env.READ_ONLY_RUN = scenario.value;
+
+      await assert.rejects(f.run(), /explicitly non-read-only run/);
+      assert.equal(f.calls.accessTokenRequests.length, 0);
+      assert.equal(f.calls.clients, 0);
+      assert.equal(f.calls.turns.length, 0);
+      assert.equal(f.calls.prs.length, 0);
+    });
+  }
+});
+
 test('does not start a model turn when the source issue is not ready for planning', async (t) => {
   const f = await fixture(t);
   f.faults.sourceNativeType = 'Idea';
