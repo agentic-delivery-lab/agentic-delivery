@@ -302,10 +302,10 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     polling = true;
     try {
       budget = quotaBoundary(await client.request('account/rateLimits/read'));
-      if (budget.stop) stop(budget.reason, 'paused', [], 'active_turn');
+      if (budget.stop) stop(budget.reason, 'paused', [], turnId ? 'active_turn' : 'preflight');
     } catch {
       budget = quotaTelemetryUnavailable();
-      stop(budget.reason, 'paused', [], 'active_turn');
+      stop(budget.reason, 'paused', [], turnId ? 'active_turn' : 'preflight');
     }
     finally { polling = false; }
   };

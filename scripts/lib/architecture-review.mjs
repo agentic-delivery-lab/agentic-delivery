@@ -437,7 +437,9 @@ export function formatReviewMarkdown(review) {
 function formatQuotaDiagnostics(value) {
   const reasonLabels = {
     invalid_bucket: 'quota telemetry contained an invalid bucket',
-    credit_spillover: 'subscription-only credit telemetry was unavailable',
+    credit_spillover: 'spendable credits are available',
+    unlimited_credits: 'unlimited credits are available',
+    credit_telemetry_unavailable: 'credit telemetry was unavailable or incomplete',
     missing_or_invalid_window: 'a required quota window was missing, invalid, or expired',
     window_reserve: 'a quota window reached the 98% reserve',
     server_rate_limit: 'the server reported a rate limit',
@@ -445,6 +447,9 @@ function formatQuotaDiagnostics(value) {
     telemetry_unavailable: 'quota telemetry could not be read',
   };
   const triggerLabels = {
+    credit_spillover: 'spendable credits',
+    unlimited_credits: 'unlimited credits',
+    credit_telemetry_unavailable: 'incomplete credit telemetry',
     window_reserve: '98% usage reserve',
     server_rate_limit: 'server rate limit',
     spend_control: 'server spend control',

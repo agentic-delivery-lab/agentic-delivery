@@ -73,10 +73,35 @@ test('quota decisions identify triggering windows and expose only sanitized diag
   assert.doesNotMatch(JSON.stringify(decision), /provider-detail|fixture-secret|private-account-id/);
 });
 
+test('checks a distinct legacy quota window alongside the keyed map', () => {
+  const value = quota(99, 20);
+  value.rateLimits.limitId = 'legacy-extra';
+  value.rateLimitsByLimitId = {
+    mapped: {
+      limitId: 'mapped',
+      credits: { hasCredits: false, unlimited: false },
+      primary: window(20),
+      secondary: window(30, 10080),
+    },
+  };
+  const decision = quotaBoundary(value, now);
+  assert.equal(decision.stop, true);
+  assert.equal(decision.diagnostics.triggeringWindows[0].bucket, 'bucket-2');
+  assert.equal(decision.diagnostics.triggeringWindows[0].usedPercent, 99);
+});
+
 test('quota reason codes distinguish credit, server-rate, and spend-control stops', () => {
   const credit = quota();
   credit.rateLimits.credits.hasCredits = true;
   assert.equal(quotaBoundary(credit, now).reasonCode, 'credit_spillover');
+
+  const unlimited = quota();
+  unlimited.rateLimits.credits.unlimited = true;
+  assert.equal(quotaBoundary(unlimited, now).reasonCode, 'unlimited_credits');
+
+  const unknownCredits = quota();
+  unknownCredits.rateLimits.credits = {};
+  assert.equal(quotaBoundary(unknownCredits, now).reasonCode, 'credit_telemetry_unavailable');
 
   const rateLimited = quota(70, 80);
   rateLimited.rateLimits.rateLimitReachedType = 'private-provider-detail';

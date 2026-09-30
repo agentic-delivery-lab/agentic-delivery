@@ -143,10 +143,14 @@ function validFinding(finding) {
 }
 
 const QUOTA_REASON_CODES = new Set([
-  'invalid_bucket', 'credit_spillover', 'missing_or_invalid_window', 'window_reserve',
+  'invalid_bucket', 'credit_spillover', 'unlimited_credits', 'credit_telemetry_unavailable',
+  'missing_or_invalid_window', 'window_reserve',
   'server_rate_limit', 'spend_control', 'telemetry_unavailable',
 ]);
-const QUOTA_TRIGGER_CODES = new Set(['window_reserve', 'server_rate_limit', 'spend_control']);
+const QUOTA_TRIGGER_CODES = new Set([
+  'credit_spillover', 'unlimited_credits', 'credit_telemetry_unavailable',
+  'window_reserve', 'server_rate_limit', 'spend_control',
+]);
 
 export function projectQuotaDiagnostics(budget, stopPhase) {
   const diagnostics = budget?.diagnostics;

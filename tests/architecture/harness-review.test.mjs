@@ -224,7 +224,9 @@ test('semantic execution reports quota and structured findings without becoming 
 test('quota diagnostic projection and formatting cover each independent stop reason', () => {
   const cases = [
     ['invalid_bucket', { windows: [{ bucket: 'bucket-1', slot: 'secondary', usedPercent: null, windowDurationMins: null, resetsAt: null, valid: false }] }, /invalid bucket/],
-    ['credit_spillover', { windows: [], serverBlocks: [] }, /subscription-only credit telemetry was unavailable/],
+    ['credit_spillover', { windows: [], serverBlocks: [] }, /spendable credits are available/],
+    ['unlimited_credits', { windows: [], serverBlocks: [] }, /unlimited credits are available/],
+    ['credit_telemetry_unavailable', { windows: [], serverBlocks: [] }, /credit telemetry was unavailable/],
     ['server_rate_limit', { triggerReasons: ['server_rate_limit'], serverBlocks: [{ bucket: 'bucket-1', rateLimitReached: true, spendControlReached: false }] }, /server rate-limit flag set/],
     ['spend_control', { triggerReasons: ['spend_control'], serverBlocks: [{ bucket: 'bucket-1', rateLimitReached: false, spendControlReached: true }] }, /server spend-control flag set/],
   ];

@@ -108,6 +108,31 @@ test('quota telemetry failures have a stable safe reason at preflight and during
   assert.doesNotMatch(JSON.stringify(duringTurn),/fixture-secret|account token/);
 });
 
+test('quota stops before turn startup is acknowledged remain in preflight', async () => {
+  let reads = 0;
+  const client = new FakeCodex(() => {});
+  client.request = async (method, params) => {
+    client.calls.push({method,params});
+    if (method === 'account/rateLimits/read') return reads++ === 0 ? quota() : quota(98);
+    if (method === 'turn/start') {
+      setImmediate(() => client.emit('message',{method:'account/rateLimits/updated',params:{}}));
+      await new Promise((resolve) => setTimeout(resolve,20));
+      return {turn:{id:'turn-1'}};
+    }
+    if (method === 'turn/interrupt') {
+      client.emit('message',{method:'turn/completed',params:{threadId:'thread-1',turn:{id:'turn-1',status:'interrupted'}}});
+      return {};
+    }
+    return {};
+  };
+  const result = await runTurn({client,threadId:'thread-1',phase:'review',prompt:'review',onProgress:async()=>{}});
+  assert.equal(result.status,'paused');
+  assert.equal(result.stopPhase,'preflight');
+  assert.equal(result.budget.reasonCode,'window_reserve');
+  assert.equal(reads,2);
+  assert.equal(client.calls.filter((call)=>call.method==='turn/interrupt').length,1);
+});
+
 test('failure to publish progress stops model work', async () => {
   const client=new FakeCodex(c=>c.emit('message',{method:'item/completed',params:{threadId:'thread-1',item:{type:'agentMessage',text:'Progress'}}}));
   const result=await runTurn({client,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{throw Error('audit unavailable');}});
@@ -129,12 +154,12 @@ test('invalid structured plans cannot advance to implementation', () => {
 
 test('active turns can outlive the stall interval while inactive turns are interrupted', async () => {
   const active=new FakeCodex((client)=> {
-    setTimeout(()=>client.emit('message',{method:'thread/tokenUsage/updated',params:{threadId:'thread-1',turnId:'turn-1'}}),25);
-    setTimeout(()=>client.finish('{"status":"complete"}'),55);
+    const activity=setInterval(()=>client.emit('message',{method:'thread/tokenUsage/updated',params:{threadId:'thread-1',turnId:'turn-1'}}),100);
+    setTimeout(()=>{clearInterval(activity);client.finish('{"status":"complete"}');},5_500);
   });
   const completed=await runTurn({
     client:active,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{},
-    stallTimeoutMs:40,pollMs:1_000,
+    stallTimeoutMs:5_000,pollMs:10_000,
   });
   assert.equal(completed.status,'completed');
   assert.equal(active.calls.filter(c=>c.method==='turn/interrupt').length,0);

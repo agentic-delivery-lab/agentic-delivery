@@ -60,11 +60,17 @@ export function appServerFailure(code, signal, stderr = '') {
 export function quotaBoundary(response, now = Date.now() / 1000) {
   const mapped = response?.rateLimitsByLimitId;
   const mappedIsRecord = mapped == null || (typeof mapped === 'object' && !Array.isArray(mapped));
-  const entries = mappedIsRecord && mapped ? Object.values(mapped) : [];
-  // The keyed map is the complete multi-bucket view. The legacy field mirrors
-  // one bucket, so use it only when the map is absent or empty.
-  if (mappedIsRecord && !entries.length && response?.rateLimits) entries.push(response.rateLimits);
-  const buckets = entries.map((value, index) => ({ name: `bucket-${index + 1}`, value }));
+  const entries = mappedIsRecord && mapped
+    ? Object.entries(mapped).map(([limitId, value]) => ({ limitId, value }))
+    : [];
+  if (mappedIsRecord && response?.rateLimits) {
+    const legacy = response.rateLimits;
+    const legacyLimitId = typeof legacy.limitId === 'string' ? legacy.limitId : null;
+    const mirrored = entries.some(({ limitId, value }) => value === legacy
+      || (legacyLimitId && (limitId === legacyLimitId || value?.limitId === legacyLimitId)));
+    if (!mirrored) entries.push({ limitId: legacyLimitId ?? 'legacy', value: legacy });
+  }
+  const buckets = entries.map(({ value }, index) => ({ name: `bucket-${index + 1}`, value }));
   const windows = buckets.flatMap(({ name, value }) => ['primary', 'secondary'].flatMap((slot) => {
     const window = value && typeof value === 'object' ? value[slot] : null;
     if (!window || typeof window !== 'object' || Array.isArray(window)) {
@@ -97,20 +103,35 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
     serverBlocks,
     nextEligibleAt,
   });
-  const decision = (reasonCode, reason, extras = {}) => ({
+  const decision = (reasonCode, reason, triggerReasons = [reasonCode]) => ({
     stop: true,
     reasonCode,
     reason,
-    diagnostics: diagnostics(reasonCode, [reasonCode]),
-    ...extras,
+    diagnostics: diagnostics(reasonCode, triggerReasons),
   });
 
   if (!mappedIsRecord || buckets.some(({ value }) => !value || typeof value !== 'object' || Array.isArray(value) || !value.primary
     || (Boolean(value.secondary) && (typeof value.secondary !== 'object' || Array.isArray(value.secondary))))) {
     return decision('invalid_bucket', 'Quota telemetry contains an invalid bucket.');
   }
-  if (buckets.some(({ value }) => value.credits?.hasCredits !== false || value.credits?.unlimited !== false)) {
-    return decision('credit_spillover', 'Credit spillover is possible or credit telemetry is unavailable; subscription-only execution is required.');
+  const creditReasons = new Set();
+  for (const { value } of buckets) {
+    const credits = value.credits;
+    if (credits?.hasCredits === true) creditReasons.add('credit_spillover');
+    else if (credits?.hasCredits !== false) creditReasons.add('credit_telemetry_unavailable');
+    if (credits?.unlimited === true) creditReasons.add('unlimited_credits');
+    else if (credits?.unlimited !== false) creditReasons.add('credit_telemetry_unavailable');
+  }
+  if (creditReasons.size) {
+    const triggerReasons = ['credit_spillover', 'unlimited_credits', 'credit_telemetry_unavailable']
+      .filter((reasonCode) => creditReasons.has(reasonCode));
+    const reasonCode = triggerReasons[0];
+    const reasons = {
+      credit_spillover: 'Spendable credits are available; subscription-only execution is required.',
+      unlimited_credits: 'Unlimited credits are available; subscription-only execution is required.',
+      credit_telemetry_unavailable: 'Credit telemetry is missing or incomplete; subscription-only execution is required.',
+    };
+    return decision(reasonCode, reasons[reasonCode], triggerReasons);
   }
   if (!windows.some((window) => window.windowDurationMins === 300) || windows.some((window) => !window.valid)) {
     return decision('missing_or_invalid_window', 'Quota telemetry is missing, invalid, or expired.');
