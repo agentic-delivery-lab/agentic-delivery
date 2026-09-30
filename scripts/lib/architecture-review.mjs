@@ -428,8 +428,76 @@ export function formatReviewMarkdown(review) {
     if (review.semantic.evidenceGaps?.length) {
       lines.push('', '**Evidence gaps**', '', ...review.semantic.evidenceGaps.map((gap) => `- ${gap}`));
     }
+    const quota = formatQuotaDiagnostics(review.semantic.quotaDiagnostics);
+    if (quota.length) lines.push('', ...quota);
   }
   return `${lines.join('\n')}\n`;
+}
+
+function formatQuotaDiagnostics(value) {
+  const reasonLabels = {
+    invalid_bucket: 'quota telemetry contained an invalid bucket',
+    credit_spillover: 'subscription-only credit telemetry was unavailable',
+    missing_or_invalid_window: 'a required quota window was missing, invalid, or expired',
+    window_reserve: 'a quota window reached the 98% reserve',
+    server_rate_limit: 'the server reported a rate limit',
+    spend_control: 'the server reported a spend control',
+    telemetry_unavailable: 'quota telemetry could not be read',
+  };
+  const triggerLabels = {
+    window_reserve: '98% usage reserve',
+    server_rate_limit: 'server rate limit',
+    spend_control: 'server spend control',
+  };
+  if (!value || typeof value !== 'object' || !reasonLabels[value.reasonCode]) return [];
+  const stage = { preflight: 'preflight', active_turn: 'active turn', unknown: 'unknown' }[value.stopStage] ?? 'unknown';
+  const timestamp = (seconds) => {
+    if (!Number.isFinite(seconds)) return null;
+    try { return new Date(seconds * 1000).toISOString(); } catch { return null; }
+  };
+  const displayBucket = (bucket) => {
+    const match = /^bucket-([1-9]\d{0,3})$/.exec(bucket ?? '');
+    return match ? `Bucket ${match[1]}` : null;
+  };
+  const windows = Array.isArray(value.windows) ? value.windows.slice(0, 32) : [];
+  const triggering = new Set((Array.isArray(value.triggeringWindows) ? value.triggeringWindows : [])
+    .filter((window) => displayBucket(window?.bucket) && ['primary', 'secondary'].includes(window.slot))
+    .map((window) => `${window.bucket}:${window.slot}`));
+  const lines = [
+    '#### Quota diagnostics',
+    '',
+    `- Stop stage: ${stage}`,
+    `- Reason: ${reasonLabels[value.reasonCode]}`,
+  ];
+  const triggers = Array.isArray(value.triggerReasons) ? value.triggerReasons.map((code) => triggerLabels[code]).filter(Boolean) : [];
+  if (triggers.length) lines.push(`- Trigger signals: ${[...new Set(triggers)].join(', ')}`);
+  const next = timestamp(value.nextEligibleAt);
+  lines.push(`- Next eligible time: ${next ?? 'not derivable from quota telemetry'}`);
+  lines.push('', '**Quota windows**');
+  if (!windows.length) lines.push('- No quota windows were available.');
+  for (const window of windows) {
+    const bucket = displayBucket(window?.bucket);
+    if (!bucket || !['primary', 'secondary'].includes(window.slot)) continue;
+    const usage = Number.isFinite(window.usedPercent) && window.usedPercent >= 0 && window.usedPercent <= 100
+      ? `${Number.isInteger(window.usedPercent) ? window.usedPercent : window.usedPercent.toFixed(1)}%`
+      : 'usage unavailable';
+    const duration = Number.isFinite(window.windowDurationMins) && window.windowDurationMins > 0
+      ? `${window.windowDurationMins}-minute window`
+      : 'duration unavailable';
+    const reset = timestamp(window.resetsAt);
+    const resetText = reset ? `; resets at ${reset}` : '';
+    const invalidText = window.valid === true ? '' : ' (telemetry invalid or expired)';
+    const causedStop = triggering.has(`${window.bucket}:${window.slot}`) ? '; triggered the stop' : '';
+    lines.push(`- ${bucket} ${window.slot}: ${usage} of the ${duration}${resetText}${causedStop}${invalidText}`);
+  }
+  const serverBlocks = Array.isArray(value.serverBlocks) ? value.serverBlocks.slice(0, 32) : [];
+  for (const block of serverBlocks) {
+    const bucket = displayBucket(block?.bucket);
+    if (!bucket) continue;
+    if (block.rateLimitReached === true) lines.push(`- ${bucket}: server rate-limit flag set`);
+    if (block.spendControlReached === true) lines.push(`- ${bucket}: server spend-control flag set`);
+  }
+  return lines;
 }
 
 export { EVIDENCE_MARKER };

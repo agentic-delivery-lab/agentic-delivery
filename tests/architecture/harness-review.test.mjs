@@ -148,6 +148,51 @@ test('semantic execution reports quota and structured findings without becoming 
   });
   assert.equal(findings.status, 'findings');
   assert.equal(findings.findings[0].severity, 'advisory');
+
+  const quotaPaused = await runSemanticReview({
+    repositoryRoot,
+    review,
+    createClient: () => ({
+      initialize: async () => {}, capabilities: async () => ({}),
+      startThread: async () => ({ thread: { id: '019fb023-24b8-7881-9119-509f078b610e' } }), close: async () => {},
+    }),
+    runTurnImpl: async () => ({
+      status: 'paused', reason: 'Codex allowance reached the finalization reserve.', stopStage: 'active_turn',
+      budget: {
+        reasonCode: 'window_reserve',
+        diagnostics: {
+          reasonCode: 'window_reserve',
+          triggerReasons: ['window_reserve', 'server_rate_limit', 'access_token=fixture-secret'],
+          windows: [
+            { bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true },
+            { bucket: 'access_token=fixture-secret', slot: 'secondary', usedPercent: 2, windowDurationMins: 10080, resetsAt: 1_800_000_100, valid: true },
+          ],
+          triggeringWindows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true }],
+          serverBlocks: [{ bucket: 'bucket-1', rateLimitReached: true, spendControlReached: false, providerMessage: 'fixture-secret' }],
+          nextEligibleAt: 1_800_000_100,
+          accountId: 'private-account-id',
+        },
+      },
+    }),
+  });
+  assert.equal(quotaPaused.status, 'inconclusive');
+  assert.deepEqual(quotaPaused.quotaDiagnostics, {
+    reasonCode: 'window_reserve',
+    stopStage: 'active_turn',
+    triggerReasons: ['window_reserve', 'server_rate_limit'],
+    windows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true }],
+    triggeringWindows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true }],
+    serverBlocks: [{ bucket: 'bucket-1', rateLimitReached: true, spendControlReached: false }],
+    nextEligibleAt: 1_800_000_100,
+  });
+  assert.doesNotMatch(JSON.stringify(quotaPaused), /fixture-secret|private-account-id|providerMessage/);
+
+  const markdown = formatReviewMarkdown({ ...review, semantic: quotaPaused });
+  assert.match(markdown, /#### Quota diagnostics/);
+  assert.match(markdown, /Stop stage: active turn/);
+  assert.match(markdown, /99% of the 300-minute window/);
+  assert.match(markdown, /2027-01-15T08:01:40\.000Z/);
+  assert.doesNotMatch(markdown, /fixture-secret|private-account-id/);
 });
 
 test('the evidence contract validates the complete projection and rejects mismatches', async () => {

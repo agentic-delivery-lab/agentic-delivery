@@ -32,6 +32,34 @@ test('checks every returned bucket and explicit server limits', () => {
   assert.equal(quotaBoundary({rateLimits:{...quota().rateLimits, spendControlReached:true}}, now).stop, true);
 });
 
+test('quota decisions identify triggering windows and expose only sanitized diagnostics', () => {
+  const value = quota();
+  value.rateLimitsByLimitId = {
+    codex: value.rateLimits,
+    other: {
+      credits: { hasCredits: false, unlimited: false },
+      primary: window(99, 60),
+      rateLimitReachedType: 'provider-detail-must-not-be-published',
+    },
+    'refresh-token.fixture-secret': {
+      credits: { hasCredits: false, unlimited: false },
+      primary: window(12, 300),
+    },
+  };
+  value.accountId = 'private-account-id';
+
+  const decision = quotaBoundary(value, now);
+
+  assert.equal(decision.reasonCode, 'window_reserve');
+  assert.deepEqual(decision.diagnostics.triggerReasons, ['window_reserve', 'server_rate_limit']);
+  assert.deepEqual(decision.diagnostics.triggeringWindows, [{
+    bucket: 'bucket-2', slot: 'primary', usedPercent: 99, windowDurationMins: 60, resetsAt: now + 100, valid: true,
+  }]);
+  assert.equal(decision.diagnostics.nextEligibleAt, now + 100);
+  assert.equal(decision.diagnostics.serverBlocks[1].rateLimitReached, true);
+  assert.doesNotMatch(JSON.stringify(decision), /provider-detail|fixture-secret|private-account-id/);
+});
+
 test('refuses model execution when credit spillover is possible or unknown', () => {
   for (const credits of [undefined, null, {}, {hasCredits:true,unlimited:false}, {hasCredits:false,unlimited:true}]) {
     const value = quota(); value.rateLimits.credits = credits;

@@ -65,9 +65,47 @@ test('interrupts near exhaustion and refuses to start when quota is unavailable'
   assert.match(result.reason,/allowance/i);
   assert.equal(reads,2,'a sparse notification triggers a full quota read');
   assert.equal(client.calls.filter(c=>c.method==='turn/interrupt').length,1);
+  assert.equal(result.stopStage,'active_turn');
+  assert.equal(result.budget.reasonCode,'window_reserve');
+  assert.equal(result.budget.diagnostics.triggeringWindows[0].slot,'primary');
   const unavailable=new FakeCodex(()=>assert.fail('must not generate'));
   unavailable.request=async (method)=> {assert.equal(method,'account/rateLimits/read');return {};};
-  assert.equal((await runTurn({client:unavailable,threadId:'thread-1',phase:'plan',prompt:'work',onProgress:async()=>{}})).status,'paused');
+  const preflight=await runTurn({client:unavailable,threadId:'thread-1',phase:'plan',prompt:'work',onProgress:async()=>{}});
+  assert.equal(preflight.status,'paused');
+  assert.equal(preflight.stopStage,'preflight');
+  assert.equal(preflight.budget.reasonCode,'missing_or_invalid_window');
+  assert.equal(unavailable.calls.filter(c=>c.method==='turn/start').length,0);
+});
+
+test('quota telemetry failures have a stable safe reason at preflight and during an active turn', async () => {
+  const preflight = new FakeCodex(() => assert.fail('must not generate'));
+  preflight.request = async () => { throw new Error('account token fixture-secret'); };
+  const beforeStart = await runTurn({client:preflight,threadId:'thread-1',phase:'review',prompt:'review',onProgress:async()=>{}});
+  assert.equal(beforeStart.stopStage,'preflight');
+  assert.equal(beforeStart.budget.reasonCode,'telemetry_unavailable');
+  assert.doesNotMatch(JSON.stringify(beforeStart),/fixture-secret|account token/);
+  assert.equal(preflight.calls.filter(c=>c.method==='turn/start').length,0);
+
+  let reads = 0;
+  const active = new FakeCodex(() => {});
+  active.request = async (method,params) => {
+    active.calls.push({method,params});
+    if (method === 'account/rateLimits/read' && reads++ === 0) return quota();
+    if (method === 'account/rateLimits/read') throw new Error('account token fixture-secret');
+    if (method === 'turn/start') {
+      setImmediate(() => active.emit('message',{method:'account/rateLimits/updated',params:{}}));
+      return {turn:{id:'turn-1'}};
+    }
+    if (method === 'turn/interrupt') {
+      active.emit('message',{method:'turn/completed',params:{threadId:'thread-1',turn:{id:'turn-1',status:'interrupted'}}});
+      return {};
+    }
+    return {};
+  };
+  const duringTurn = await runTurn({client:active,threadId:'thread-1',phase:'review',prompt:'review',onProgress:async()=>{}});
+  assert.equal(duringTurn.stopStage,'active_turn');
+  assert.equal(duringTurn.budget.reasonCode,'telemetry_unavailable');
+  assert.doesNotMatch(JSON.stringify(duringTurn),/fixture-secret|account token/);
 });
 
 test('failure to publish progress stops model work', async () => {

@@ -142,6 +142,51 @@ function validFinding(finding) {
     && typeof finding.recommendedAction === 'string' && finding.recommendedAction.trim();
 }
 
+const QUOTA_REASON_CODES = new Set([
+  'invalid_bucket', 'credit_spillover', 'missing_or_invalid_window', 'window_reserve',
+  'server_rate_limit', 'spend_control', 'telemetry_unavailable',
+]);
+const QUOTA_TRIGGER_CODES = new Set(['window_reserve', 'server_rate_limit', 'spend_control']);
+
+function projectQuotaDiagnostics(budget, stopStage) {
+  const diagnostics = budget?.diagnostics;
+  const reasonCode = QUOTA_REASON_CODES.has(budget?.reasonCode) ? budget.reasonCode
+    : QUOTA_REASON_CODES.has(diagnostics?.reasonCode) ? diagnostics.reasonCode : null;
+  if (!reasonCode) return null;
+  const bucketName = (value) => typeof value === 'string' && /^bucket-[1-9]\d{0,3}$/.test(value);
+  const projectWindow = (window) => {
+    if (!window || !bucketName(window.bucket) || !['primary', 'secondary'].includes(window.slot)) return null;
+    return {
+      bucket: window.bucket,
+      slot: window.slot,
+      usedPercent: Number.isFinite(window.usedPercent) ? window.usedPercent : null,
+      windowDurationMins: Number.isFinite(window.windowDurationMins) ? window.windowDurationMins : null,
+      resetsAt: Number.isFinite(window.resetsAt) ? window.resetsAt : null,
+      valid: window.valid === true,
+    };
+  };
+  const projectWindows = (items) => Array.isArray(items) ? items.slice(0, 32).map(projectWindow).filter(Boolean) : [];
+  const serverBlocks = Array.isArray(diagnostics?.serverBlocks) ? diagnostics.serverBlocks.slice(0, 32)
+    .filter((block) => block && bucketName(block.bucket))
+    .map((block) => ({
+      bucket: block.bucket,
+      rateLimitReached: block.rateLimitReached === true,
+      spendControlReached: block.spendControlReached === true,
+    })) : [];
+  const stage = ['preflight', 'active_turn'].includes(stopStage) ? stopStage : 'unknown';
+  return {
+    reasonCode,
+    stopStage: stage,
+    triggerReasons: Array.isArray(diagnostics?.triggerReasons)
+      ? [...new Set(diagnostics.triggerReasons.filter((code) => QUOTA_TRIGGER_CODES.has(code)))].slice(0, 3)
+      : [],
+    windows: projectWindows(diagnostics?.windows),
+    triggeringWindows: projectWindows(diagnostics?.triggeringWindows),
+    serverBlocks,
+    nextEligibleAt: Number.isFinite(diagnostics?.nextEligibleAt) ? diagnostics.nextEligibleAt : null,
+  };
+}
+
 export function parseSemanticOutcome(text) {
   let value;
   try { value = JSON.parse(text); } catch { return { status: 'inconclusive', summary: 'The semantic reviewer did not return JSON.', findings: [], evidenceGaps: ['The review output was not structured JSON.'] }; }
@@ -238,11 +283,15 @@ export async function runSemanticReview({ repositoryRoot, review, eventPath, cre
       onProgress: async () => {},
     });
     if (result.status !== 'completed') {
+      const quotaDiagnostics = projectQuotaDiagnostics(result.budget, result.stopStage);
       return {
         status: 'inconclusive',
         summary: 'Semantic architecture review was not completed.',
         findings: [],
-        evidenceGaps: [result.reason ?? 'The review turn did not complete.'],
+        evidenceGaps: [quotaDiagnostics
+          ? `Quota telemetry stopped the review (${quotaDiagnostics.reasonCode}, ${quotaDiagnostics.stopStage}).`
+          : result.reason ?? 'The review turn did not complete.'],
+        ...(quotaDiagnostics ? { quotaDiagnostics } : {}),
         sessionId: thread.thread.id,
         model: MODELS.review,
       };
