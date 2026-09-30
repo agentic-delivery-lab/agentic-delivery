@@ -36,6 +36,9 @@ and releases use [Semantic Versioning](https://semver.org/).
 - Intake and delivery now use bootstrap commit
   `286db47f1686becbe91e6339d90e7033015e21fa`, which contains the draft41
   central participant pin.
+- The controller release advances to `0.2.0-draft.42` at
+  `b17a2077b645e7eb861aeb75558d77fb1c46011c`; the central participant moves to this pin
+  while draft41 and earlier remain available for rollback.
 - Private agent publication validation can now reproduce each projection from
   the exact Primitive source commit named by its provenance lock; the release
   chain checks the same byte-for-byte relationship.
