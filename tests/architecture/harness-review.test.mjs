@@ -251,6 +251,58 @@ test('quota diagnostic projection and formatting cover each independent stop rea
   }
 });
 
+test('quota diagnostics preserve triggering windows and server blocks after bounded context', () => {
+  const windows = Array.from({ length: 40 }, (_, index) => ({
+    bucket: `bucket-${index + 1}`,
+    slot: 'primary',
+    usedPercent: index === 39 ? 99 : 20,
+    windowDurationMins: 300,
+    resetsAt: 1_800_000_100,
+    valid: true,
+  }));
+  const serverBlocks = Array.from({ length: 40 }, (_, index) => ({
+    bucket: `bucket-${index + 1}`,
+    rateLimitReached: index === 39,
+    spendControlReached: false,
+  }));
+  const quotaDiagnostics = projectQuotaDiagnostics({
+    reasonCode: 'window_reserve',
+    diagnostics: {
+      reasonCode: 'window_reserve',
+      triggerReasons: ['window_reserve', 'server_rate_limit'],
+      windows,
+      triggeringWindows: [windows[39]],
+      serverBlocks,
+      nextEligibleAt: null,
+    },
+  }, 'active_turn');
+
+  assert.equal(quotaDiagnostics.windows.length, 33, 'all trigger windows plus 32 context windows are retained');
+  assert.equal(quotaDiagnostics.windows.some((window) => window.bucket === 'bucket-40'), true);
+  assert.equal(quotaDiagnostics.serverBlocks.length, 33, 'all server blocks plus 32 context blocks are retained');
+  assert.equal(quotaDiagnostics.serverBlocks.some((block) => block.bucket === 'bucket-40' && block.rateLimitReached), true);
+  const markdown = formatReviewMarkdown({
+    status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [],
+    semantic: { status: 'inconclusive', summary: 'Review stopped.', findings: [], evidenceGaps: [], quotaDiagnostics },
+  });
+  assert.match(markdown, /Bucket 40 primary: 99% .*triggered the stop/);
+  assert.match(markdown, /Bucket 40: server rate-limit flag set/);
+
+  const invalidWindow = { ...windows[39], valid: false, usedPercent: null };
+  const invalidQuotaDiagnostics = projectQuotaDiagnostics({
+    reasonCode: 'missing_or_invalid_window',
+    diagnostics: {
+      reasonCode: 'missing_or_invalid_window',
+      triggerReasons: [],
+      windows: [...windows.slice(0, 39), invalidWindow],
+      triggeringWindows: [],
+      serverBlocks: [],
+      nextEligibleAt: null,
+    },
+  }, 'preflight');
+  assert.equal(invalidQuotaDiagnostics.triggeringWindows.some((window) => window.bucket === 'bucket-40'), true);
+});
+
 test('the evidence contract validates the complete projection and rejects mismatches', async () => {
   const { execFile } = await import('node:child_process');
   const { promisify } = await import('node:util');

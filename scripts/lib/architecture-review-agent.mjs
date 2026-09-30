@@ -169,14 +169,30 @@ export function projectQuotaDiagnostics(budget, stopPhase) {
       valid: window.valid === true,
     };
   };
-  const projectWindows = (items) => Array.isArray(items) ? items.slice(0, 32).map(projectWindow).filter(Boolean) : [];
-  const serverBlocks = Array.isArray(diagnostics?.serverBlocks) ? diagnostics.serverBlocks.slice(0, 32)
+  const projectWindows = (items) => Array.isArray(items) ? items.map(projectWindow).filter(Boolean) : [];
+  const allWindows = projectWindows(diagnostics?.windows);
+  const requestedTriggers = projectWindows(diagnostics?.triggeringWindows);
+  const invalidStopWindows = ['invalid_bucket', 'missing_or_invalid_window'].includes(reasonCode)
+    ? allWindows.filter((window) => !window.valid)
+    : [];
+  const triggeringWindows = [...new Map([...requestedTriggers, ...invalidStopWindows]
+    .map((window) => [`${window.bucket}:${window.slot}`, window])).values()];
+  const triggeringKeys = new Set(triggeringWindows.map((window) => `${window.bucket}:${window.slot}`));
+  const windows = [
+    ...triggeringWindows,
+    ...allWindows.filter((window) => !triggeringKeys.has(`${window.bucket}:${window.slot}`)).slice(0, 32),
+  ];
+  const allServerBlocks = Array.isArray(diagnostics?.serverBlocks) ? diagnostics.serverBlocks
     .filter((block) => block && bucketName(block.bucket))
     .map((block) => ({
       bucket: block.bucket,
       rateLimitReached: block.rateLimitReached === true,
       spendControlReached: block.spendControlReached === true,
     })) : [];
+  const serverBlocks = [
+    ...allServerBlocks.filter((block) => block.rateLimitReached || block.spendControlReached),
+    ...allServerBlocks.filter((block) => !block.rateLimitReached && !block.spendControlReached).slice(0, 32),
+  ];
   const phase = ['preflight', 'active_turn'].includes(stopPhase) ? stopPhase : 'unknown';
   return {
     reasonCode,
@@ -184,8 +200,8 @@ export function projectQuotaDiagnostics(budget, stopPhase) {
     triggerReasons: Array.isArray(diagnostics?.triggerReasons)
       ? [...new Set(diagnostics.triggerReasons.filter((code) => QUOTA_TRIGGER_CODES.has(code)))].slice(0, 3)
       : [],
-    windows: projectWindows(diagnostics?.windows),
-    triggeringWindows: projectWindows(diagnostics?.triggeringWindows),
+    windows,
+    triggeringWindows,
     serverBlocks,
     nextEligibleAt: Number.isFinite(diagnostics?.nextEligibleAt) ? diagnostics.nextEligibleAt : null,
   };

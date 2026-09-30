@@ -464,7 +464,7 @@ function formatQuotaDiagnostics(value) {
     const match = /^bucket-([1-9]\d{0,3})$/.exec(bucket ?? '');
     return match ? `Bucket ${match[1]}` : null;
   };
-  const windows = Array.isArray(value.windows) ? value.windows.slice(0, 32) : [];
+  const windows = Array.isArray(value.windows) ? value.windows : [];
   const triggering = new Set((Array.isArray(value.triggeringWindows) ? value.triggeringWindows : [])
     .filter((window) => displayBucket(window?.bucket) && ['primary', 'secondary'].includes(window.slot))
     .map((window) => `${window.bucket}:${window.slot}`));
@@ -495,7 +495,7 @@ function formatQuotaDiagnostics(value) {
     const causedStop = triggering.has(`${window.bucket}:${window.slot}`) ? '; triggered the stop' : '';
     lines.push(`- ${bucket} ${window.slot}: ${usage} of the ${duration}${resetText}${causedStop}${invalidText}`);
   }
-  const serverBlocks = Array.isArray(value.serverBlocks) ? value.serverBlocks.slice(0, 32) : [];
+  const serverBlocks = Array.isArray(value.serverBlocks) ? value.serverBlocks : [];
   for (const block of serverBlocks) {
     const bucket = displayBucket(block?.bucket);
     if (!bucket) continue;
