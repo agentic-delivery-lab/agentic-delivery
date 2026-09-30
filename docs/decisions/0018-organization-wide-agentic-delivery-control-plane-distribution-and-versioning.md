@@ -157,12 +157,13 @@ The `force_read_only` workflow input is a run-level read-only override. It can
 restrict one manual execution but cannot change the registered participant
 mode. Direct intake resolves the registered mode by repository ID and verifies
 the expected full name; conversation-driven intake uses the validated event
-envelope. Direct manual delivery recovery also resolves participant mode and
-controller pin from the registry loaded by the fixed bootstrap commit. It does
-not accept a caller-supplied controller commit. The manual input defaults to
-read-only, and its resolution job has contents-read permission only. The
-self-hosted delivery job, issue-write permission, and delivery credentials are
-available only when the participant is active and the run is not read-only.
+envelope. Direct manual intake and delivery recovery also resolve participant
+mode and controller pin from the registry loaded by the fixed bootstrap commit.
+They do not accept a caller-supplied controller commit. The manual input
+defaults to read-only. In the standalone delivery workflow, a hosted resolver
+job has contents-read permission only. The self-hosted delivery job,
+issue-write permission, and delivery credentials are available only when the
+participant is active and the run is not read-only.
 
 The controller records participant mode and effective run policy separately:
 `participant_mode` comes from the registry or validated envelope, while a

@@ -36,11 +36,6 @@ on:
         required: false
         default: true
         type: boolean
-      controller_commit:
-        description: Immutable controller commit for this manual run
-        required: false
-        default: '9367c5a1c58eb6215b92d34fbe5490cd85fb061f'
-        type: string
 
 permissions:
   contents: read
@@ -100,7 +95,7 @@ jobs:
       participant_mode: ${{ steps.intake-policy.outputs.participant_mode }}
       read_only_run: ${{ steps.intake-policy.outputs.read_only_run }}
       controller_version: ${{ steps.invocation.outputs.controller_version || github.event.client_payload.controller.version }}
-      controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '9367c5a1c58eb6215b92d34fbe5490cd85fb061f' }}
+      controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || steps.participant.outputs.controller_commit || inputs.controller_commit || '9367c5a1c58eb6215b92d34fbe5490cd85fb061f' }}
       invocation_event_name: ${{ steps.invocation.outputs.invocation_event_name }}
       invocation_source_kind: ${{ steps.invocation.outputs.invocation_source_kind }}
       invocation_comment_id: ${{ steps.invocation.outputs.invocation_comment_id }}
@@ -149,6 +144,7 @@ jobs:
           }
           if (participant.mode === 'disabled') throw new Error('The participant registry mode is disabled.');
           process.stdout.write(`participant_mode=${participant.mode}\n`);
+          process.stdout.write(`controller_commit=${participant.controller.commit}\n`);
           NODE
         working-directory: trusted-intake
 
@@ -183,7 +179,7 @@ jobs:
       - name: Validate the selected controller commit
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
         env:
-          CONTROLLER_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '9367c5a1c58eb6215b92d34fbe5490cd85fb061f' }}
+          CONTROLLER_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || steps.participant.outputs.controller_commit || inputs.controller_commit || '9367c5a1c58eb6215b92d34fbe5490cd85fb061f' }}
         run: |
           set -euo pipefail
           [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
@@ -192,7 +188,7 @@ jobs:
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '9367c5a1c58eb6215b92d34fbe5490cd85fb061f' }}
+          ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || steps.participant.outputs.controller_commit || inputs.controller_commit || '9367c5a1c58eb6215b92d34fbe5490cd85fb061f' }}
           persist-credentials: false
 
       - name: Install validated controller dependencies
@@ -229,7 +225,7 @@ jobs:
           PARTICIPANT_MODE: ${{ steps.intake-policy.outputs.participant_mode }}
           READ_ONLY_RUN: ${{ steps.intake-policy.outputs.read_only_run }}
           FORCE_READ_ONLY: ${{ inputs.force_read_only || false }}
-          CONTROL_PLANE_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '9367c5a1c58eb6215b92d34fbe5490cd85fb061f' }}
+          CONTROL_PLANE_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || steps.participant.outputs.controller_commit || inputs.controller_commit || '9367c5a1c58eb6215b92d34fbe5490cd85fb061f' }}
         run: node scripts/issue-intake.mjs
 
   deliver:

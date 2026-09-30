@@ -106,6 +106,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(intakeWorkflow.jobs.authorize['runs-on'], 'ubuntu-latest');
   assert.equal(intakeWorkflow.jobs.authorize.permissions.issues, 'read');
   assert.equal(intakeWorkflow.on.workflow_dispatch.inputs.force_read_only.default, true);
+  assert.equal(intakeWorkflow.on.workflow_dispatch.inputs.controller_commit, undefined);
   assert.match(await text('.github/workflows/issue-intake.yml'), /authorize-issue-event\.mjs/);
   assert.match(await text('.github/workflows/issue-intake.yml'), /steps\.invocation\.outputs\.accepted == 'true'/);
   assert.doesNotMatch(await text('.github/workflows/issue-intake.yml'), /\n\s*issue_comment:\s*\n/);
@@ -123,6 +124,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.match(participant.run, /participantForRepository\(registry, process\.env\.ORIGIN_REPOSITORY_ID\)/);
   assert.match(participant.run, /participant\.expectedFullName !== process\.env\.ORIGIN_REPOSITORY/);
   assert.match(participant.run, /participant\.mode === 'disabled'/);
+  assert.match(participant.run, /controller_commit=\$\{participant\.controller\.commit\}/);
   assert.equal(participant['working-directory'], 'trusted-intake');
   assert.ok(intakePolicy);
   assert.equal(intakePolicy.id, 'intake-policy');
