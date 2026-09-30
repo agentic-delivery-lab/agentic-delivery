@@ -5,12 +5,6 @@ import { fileURLToPath } from 'node:url';
 
 import { loadParticipantRegistry, participantForRepository } from './participant-registry.mjs';
 
-const CENTRAL = 'agentic-delivery-lab/agentic-delivery/.github/workflows/';
-const DIRECT_WORKFLOW = `${CENTRAL}codex-delivery.yml@refs/heads/main`;
-const CALLER_WORKFLOWS = new Set([
-  `${CENTRAL}issue-intake.yml@refs/heads/main`,
-  `${CENTRAL}agent-invocation.yml@refs/heads/main`,
-]);
 const ALLOWED_ROUTES = new Set([
   'plan', 'implement', 'resume', 'refine', 'research', 'requirements',
   'architecture', 'validate', 'coordinate',
@@ -35,22 +29,31 @@ function rejectCallerPolicyFields(context) {
   }
 }
 
+function workflowRef(controllerRepository, workflow) {
+  return `${controllerRepository}/.github/workflows/${workflow}.yml@refs/heads/main`;
+}
+
 function validateCaller(context) {
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(asString(context.controllerRepository))) {
+    throw new Error('The trusted controller repository is missing or invalid.');
+  }
   if (context.githubRef !== 'refs/heads/main') {
     throw new Error('Delivery may run only from refs/heads/main.');
   }
   if (context.route === '') {
-    if (context.eventName !== 'workflow_dispatch' || context.callerWorkflowRef !== DIRECT_WORKFLOW) {
+    if (context.eventName !== 'workflow_dispatch'
+      || context.callerWorkflowRef !== workflowRef(context.controllerRepository, 'codex-delivery')) {
       throw new Error('Direct delivery recovery must use codex-delivery.yml on main.');
     }
     return;
   }
   if (!ALLOWED_ROUTES.has(context.route)) throw new Error(`The delivery route is unsupported: ${context.route}`);
-  if (!CALLER_WORKFLOWS.has(context.callerWorkflowRef)) {
+  const intakeWorkflow = workflowRef(context.controllerRepository, 'issue-intake');
+  const invocationWorkflow = workflowRef(context.controllerRepository, 'agent-invocation');
+  if (context.callerWorkflowRef !== intakeWorkflow && context.callerWorkflowRef !== invocationWorkflow) {
     throw new Error('Reusable delivery may be called only by the central issue-intake or agent-invocation workflow on main.');
   }
-  if (context.callerWorkflowRef.endsWith('/agent-invocation.yml@refs/heads/main')
-    && context.eventName !== 'repository_dispatch') {
+  if (context.callerWorkflowRef === invocationWorkflow && context.eventName !== 'repository_dispatch') {
     throw new Error('The agent-invocation workflow may call delivery only for repository_dispatch events.');
   }
 }
@@ -62,7 +65,7 @@ function validateOrigin(context, event) {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) throw new Error('The origin repository name is missing or invalid.');
 
   if (context.eventName === 'repository_dispatch') {
-    if (asString(event.repository?.full_name) !== 'agentic-delivery-lab/agentic-delivery') {
+    if (asString(event.repository?.full_name) !== context.controllerRepository) {
       throw new Error('The repository-dispatch event did not target the central controller.');
     }
     const envelope = event.client_payload;
@@ -119,8 +122,10 @@ export function resolveDeliveryParticipant(context, registry, event) {
 export async function resolveDeliveryParticipantFromEnvironment(env = process.env) {
   if (!env.EVENT_PAYLOAD_PATH) throw new Error('Delivery policy requires the GitHub event payload.');
   const event = JSON.parse(await readFile(env.EVENT_PAYLOAD_PATH, 'utf8'));
+  const appContract = JSON.parse(await readFile(path.join(process.cwd(), 'config', 'github-app-contract.json'), 'utf8'));
   const registry = await loadParticipantRegistry();
   return resolveDeliveryParticipant({
+    controllerRepository: appContract.controller?.repository,
     eventName: env.EVENT_NAME,
     githubRef: env.GIT_REF,
     callerWorkflowRef: env.CALLER_WORKFLOW_REF,

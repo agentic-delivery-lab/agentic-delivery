@@ -16,6 +16,7 @@ async function participantRegistry() {
 
 function context(overrides = {}) {
   return {
+    controllerRepository: 'agentic-delivery-lab/agentic-delivery',
     eventName: 'issues',
     githubRef: 'refs/heads/main',
     callerWorkflowRef: 'agentic-delivery-lab/agentic-delivery/.github/workflows/issue-intake.yml@refs/heads/main',
