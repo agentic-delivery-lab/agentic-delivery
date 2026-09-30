@@ -307,6 +307,8 @@ export async function validateReleaseChain({
   for (const relativePath of [
     'scripts/authorize-issue-event.mjs',
     'scripts/prepare-agent-invocation.mjs',
+    'scripts/validate-intake-caller.mjs',
+    'scripts/lib/intake-caller-provenance.mjs',
     'scripts/lib/participant-registry.mjs',
     'config/participants.yml',
     'package.json',

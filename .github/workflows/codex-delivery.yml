@@ -106,7 +106,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           # Bootstrap pin: config/controller-release.json bootstrapCommit.
-          ref: 76ff0ff7bd35479251b9bfdf4bf420251d5738d5
+          ref: a8f11cc70fbd16e4f31498fb68bf7a9a24841cac
           path: trusted-bootstrap
           persist-credentials: false
 

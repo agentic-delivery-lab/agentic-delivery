@@ -326,7 +326,8 @@ Deterministic tests and an operator smoke run must prove:
   agent-invocation event/workflow pairs on the controller's main branch, and
   rejects mismatched repository names or IDs before actor authorization and
   self-hosted classification; deterministic tests exercise accepted and
-  rejected caller combinations;
+  rejected caller combinations, and release-chain validation confirms the
+  guard and provenance validator are present at the immutable bootstrap pin;
 - an active participant resolves as writable, a manual read-only override can
   restrict that run, and a false override cannot promote a shadow participant;
 - the issue-intake and Codex-delivery workflows both use the bootstrap commit

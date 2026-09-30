@@ -98,7 +98,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.match(intakeSource, /steps\.invocation\.outputs\.controller_commit \|\| steps\.participant\.outputs\.controller_commit/);
   assert.doesNotMatch(intakeSource, /inputs\.controller_commit|github\.event\.client_payload\.controller/);
   assert.match(intakeSource, /Check out the validated controller release/);
-  assert.match(intakeSource, /ref: 76ff0ff7bd35479251b9bfdf4bf420251d5738d5/);
+  assert.match(intakeSource, /ref: a8f11cc70fbd16e4f31498fb68bf7a9a24841cac/);
   assert.doesNotMatch(intakeSource, /ref: main/);
   assert.ok(intakeSource.indexOf('Validate and normalize explicit agent invocation')
     < intakeSource.indexOf('Check out the validated controller release'));
@@ -230,7 +230,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   const manualBootstrap = resolver.steps.find((step) => step.name === 'Check out trusted participant registry bootstrap');
   assert.equal(manualBootstrap.if, undefined);
   assert.equal(manualBootstrap.with.path, 'trusted-bootstrap');
-  assert.equal(manualBootstrap.with.ref, '76ff0ff7bd35479251b9bfdf4bf420251d5738d5');
+  assert.equal(manualBootstrap.with.ref, 'a8f11cc70fbd16e4f31498fb68bf7a9a24841cac');
   const participantPolicy = resolver.steps.find((step) => step.name === 'Resolve caller and participant policy from trusted inputs');
   assert.equal(participantPolicy.id, 'participant-policy');
   assert.equal(participantPolicy.env.CALLER_WORKFLOW_REF, '${{ github.workflow_ref }}');
