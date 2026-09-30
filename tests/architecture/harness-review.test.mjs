@@ -121,7 +121,7 @@ test('semantic output requires cited findings and keeps model uncertainty adviso
   assert.equal(invalid.status, 'inconclusive');
 });
 
-test('semantic execution reports quota and structured findings without becoming deterministic proof', async () => {
+test('semantic execution reports quota and structured findings without becoming deterministic proof', async (t) => {
   const revision = (await (async () => {
     const { execFile } = await import('node:child_process');
     const { promisify } = await import('node:util');
@@ -129,26 +129,53 @@ test('semantic execution reports quota and structured findings without becoming 
     return stdout.trim();
   })());
   const review = await deterministicReview({ repositoryRoot, base: revision, head: revision });
+  const eventDirectory = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-review-event-'));
+  t.after(() => rm(eventDirectory, { recursive: true, force: true }));
+  const eventPath = path.join(eventDirectory, 'event.json');
+  await writeFile(eventPath, JSON.stringify({
+    issue: { body: 'Source issue evidence.' },
+    pull_request: {
+      title: 'fix(review): preserve evidence',
+      body: `## Plan\nKeep the review read-only.\n\nAuthorization=fixture-secret\n${'x'.repeat(10_050)}`,
+    },
+  }));
   const unavailable = await runSemanticReview({
     repositoryRoot,
     review,
     createClient: () => ({ initialize: async () => {}, capabilities: async () => { throw new Error('quota'); }, close: async () => {} }),
   });
   assert.equal(unavailable.status, 'inconclusive');
+  let bundlePath;
+  let bundleText = '';
   const findings = await runSemanticReview({
     repositoryRoot,
     review,
-    createClient: () => ({
-      initialize: async () => {}, capabilities: async () => ({}),
-      startThread: async () => ({ thread: { id: '019fb023-24b8-7881-9119-509f078b610e' } }), close: async () => {},
-    }),
-    runTurnImpl: async () => ({ status: 'completed', text: JSON.stringify({
-      status: 'findings', summary: 'A cited concern remains.', affectedAdrs: ['ADR-0009'], affectedContexts: ['agentic-delivery-governance'],
-      findings: [{ category: 'observability', severity: 'advisory', statement: 'Runtime evidence is unavailable.', evidence: ['Safe runner-state summary'], recommendedAction: 'Record the gap.' }], evidenceGaps: [],
-    }) }),
+    eventPath,
+    createClient: ({ readableFiles }) => {
+      [bundlePath] = readableFiles;
+      return {
+        initialize: async () => {}, capabilities: async () => ({}),
+        startThread: async () => ({ thread: { id: '019fb023-24b8-7881-9119-509f078b610e' } }), close: async () => {},
+      };
+    },
+    runTurnImpl: async () => {
+      bundleText = await readFile(bundlePath, 'utf8');
+      return { status: 'completed', text: JSON.stringify({
+        status: 'findings', summary: 'A cited concern remains.', affectedAdrs: ['ADR-0009'], affectedContexts: ['agentic-delivery-governance'],
+        findings: [{ category: 'observability', severity: 'advisory', statement: 'Runtime evidence is unavailable.', evidence: ['Safe runner-state summary'], recommendedAction: 'Record the gap.' }], evidenceGaps: [],
+      }) };
+    },
   });
   assert.equal(findings.status, 'findings');
   assert.equal(findings.findings[0].severity, 'advisory');
+  const pullRequestDescription = bundleText.split('## Pull-request description\n\n')[1]?.split('\n\n## Pull-request evidence marker')[0];
+  assert.ok(pullRequestDescription);
+  const projectedDescription = JSON.parse(pullRequestDescription);
+  assert.equal(projectedDescription.title, 'fix(review): preserve evidence');
+  assert.match(projectedDescription.body, /Keep the review read-only\./);
+  assert.match(projectedDescription.body, /Authorization: \[redacted\]/);
+  assert.equal(projectedDescription.body.length, 10_000);
+  assert.equal(projectedDescription.bodyTruncated, true);
 
   const quotaPaused = await runSemanticReview({
     repositoryRoot,
@@ -256,10 +283,27 @@ test('quota diagnostic projection and formatting cover each independent stop rea
     status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [],
     semantic: {
       status: 'inconclusive', summary: 'Review stopped.', findings: [], evidenceGaps: [],
-      quotaDiagnostics: { schemaVersion: QUOTA_DIAGNOSTICS_SCHEMA_VERSION + 1, reasonCode: 'window_reserve' },
+      quotaDiagnostics: { schemaVersion: '2.0.0', reasonCode: 'window_reserve' },
     },
   });
   assert.doesNotMatch(unsupported, /#### Quota diagnostics/, 'unknown diagnostic schema versions are not interpreted as v1');
+
+  const compatibleUnknownCode = formatReviewMarkdown({
+    status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [],
+    semantic: {
+      status: 'inconclusive', summary: 'Review stopped.', findings: [], evidenceGaps: [],
+      quotaDiagnostics: {
+        schemaVersion: '1.2.0-beta.1+build.6', reasonCode: 'future_reason', stopPhase: 'preflight',
+        triggerReasons: ['future_trigger', 'window_reserve'],
+        windows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 98, windowDurationMins: 300, valid: true }],
+      },
+    },
+  });
+  assert.match(compatibleUnknownCode, /Contract version: 1\.2\.0-beta\.1\+build\.6/);
+  assert.match(compatibleUnknownCode, /Reason: unrecognized by this consumer/);
+  assert.match(compatibleUnknownCode, /Trigger signals: 98% usage reserve/);
+  assert.match(compatibleUnknownCode, /98% of the 300-minute window/);
+  assert.doesNotMatch(compatibleUnknownCode, /future_reason|future_trigger/);
 });
 
 test('quota diagnostics preserve triggering windows and server blocks after bounded context', () => {

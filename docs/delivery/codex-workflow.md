@@ -372,6 +372,11 @@ evidence are available. Deterministic violations fail; semantic concerns and
 inconclusive runtime evidence remain cited review findings. The review workflow
 does not comment, modify, merge or close anything.
 
+When present in the GitHub event, the semantic evidence bundle includes the
+pull-request title and up to 10,000 characters of its body after the repository's
+common credential-pattern filter. The description is untrusted input and may be
+truncated.
+
 When quota telemetry stops semantic review, the Actions summary records whether
 the stop happened during preflight or an active review turn. It also lists the
 triggering primary and secondary windows and server-block flags, plus up to 32
@@ -383,13 +388,15 @@ identifiers, and raw error details are not published. An `inconclusive` result
 means no semantic conclusion was reached; it does not change the deterministic
 review result.
 
-The optional `semantic.quotaDiagnostics` object has its own `schemaVersion`.
-Version 1 codes, stop phases, and display labels are registered in
-`scripts/lib/quota-diagnostics.mjs`; producer, projection, and summary formatter
-use that shared contract. Additive fields and codes may remain in version 1.
-Removing fields or changing their meaning requires a new schema version.
-Consumers must ignore unknown fields and codes and must not interpret an
-unsupported schema version as version 1.
+The optional `semantic.quotaDiagnostics` object has its own SemVer
+`schemaVersion`, initially `1.0.0`. Version 1 codes, stop phases, and display
+labels are registered in `scripts/lib/quota-diagnostics.mjs`; producer,
+projection, and summary formatter use that shared contract. Additive fields and
+codes increment the minor version. Corrections that do not change the contract
+increment the patch version. Removing fields or changing their meaning
+increments the major version. Consumers must ignore unknown fields and codes,
+support compatible versions with major version 1, and must not interpret an
+unsupported major version as version 1.
 
 To retry after a quota stop, open the latest Harness Architecture Review run
 for the pull request head and inspect its Actions summary. Wait until the

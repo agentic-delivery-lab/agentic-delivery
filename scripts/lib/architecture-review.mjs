@@ -6,11 +6,11 @@ import { promisify } from 'node:util';
 
 import { parseRepositoryYaml } from './yaml.mjs';
 import {
-  QUOTA_DIAGNOSTICS_SCHEMA_VERSION,
   QUOTA_REASON_LABELS,
   QUOTA_STOP_PHASE_LABELS,
   QUOTA_STOP_PHASE,
   QUOTA_TRIGGER_LABELS,
+  supportsQuotaDiagnosticsSchemaVersion,
 } from './quota-diagnostics.mjs';
 import { buildTraceability, collectAdrsFromSources, collectPrimitivesFromSources, PRIMITIVE_MARKER } from './adr-traceability.mjs';
 import { validateArchitecturePin } from '../validate-architecture-pin.mjs';
@@ -442,9 +442,9 @@ export function formatReviewMarkdown(review) {
 }
 
 function formatQuotaDiagnostics(value) {
-  if (!value || typeof value !== 'object' || value.schemaVersion !== QUOTA_DIAGNOSTICS_SCHEMA_VERSION
-    || !QUOTA_REASON_LABELS[value.reasonCode]) return [];
+  if (!value || typeof value !== 'object' || !supportsQuotaDiagnosticsSchemaVersion(value.schemaVersion)) return [];
   const phase = QUOTA_STOP_PHASE_LABELS[value.stopPhase] ?? QUOTA_STOP_PHASE_LABELS[QUOTA_STOP_PHASE.unknown];
+  const reason = QUOTA_REASON_LABELS[value.reasonCode] ?? 'unrecognized by this consumer';
   const timestamp = (seconds) => {
     if (!Number.isFinite(seconds)) return null;
     try { return new Date(seconds * 1000).toISOString(); } catch { return null; }
@@ -460,8 +460,9 @@ function formatQuotaDiagnostics(value) {
   const lines = [
     '#### Quota diagnostics',
     '',
+    `- Contract version: ${value.schemaVersion}`,
     `- Stop phase: ${phase}`,
-    `- Reason: ${QUOTA_REASON_LABELS[value.reasonCode]}`,
+    `- Reason: ${reason}`,
   ];
   const triggers = Array.isArray(value.triggerReasons) ? value.triggerReasons.map((code) => QUOTA_TRIGGER_LABELS[code]).filter(Boolean) : [];
   if (triggers.length) lines.push(`- Trigger signals: ${[...new Set(triggers)].join(', ')}`);

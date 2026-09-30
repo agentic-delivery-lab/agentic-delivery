@@ -1,5 +1,15 @@
+// agentic-primitive: {"id":"quota-diagnostics-contract","kind":"script","enforcement":"deterministic","adrs":["ADR-0009","ADR-0011","ADR-0018"],"domains":["agentic-delivery-control-plane","agentic-delivery-governance"]}
 // Shared contract for quota stop diagnostics emitted in review reports.
-export const QUOTA_DIAGNOSTICS_SCHEMA_VERSION = 1;
+export const QUOTA_DIAGNOSTICS_SCHEMA_VERSION = '1.0.0';
+
+const QUOTA_DIAGNOSTICS_SCHEMA_MAJOR = QUOTA_DIAGNOSTICS_SCHEMA_VERSION.split('.')[0];
+const SEMVER_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+
+export function supportsQuotaDiagnosticsSchemaVersion(value) {
+  if (typeof value !== 'string') return false;
+  const match = SEMVER_VERSION.exec(value);
+  return match?.[1] === QUOTA_DIAGNOSTICS_SCHEMA_MAJOR;
+}
 
 export const QUOTA_REASON = Object.freeze({
   available: 'available',

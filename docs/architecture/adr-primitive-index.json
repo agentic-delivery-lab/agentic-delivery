@@ -129,6 +129,7 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "harness-architecture-review",
+        "quota-diagnostics-contract",
         "semantic-architecture-review"
       ]
     },
@@ -144,6 +145,7 @@
       ],
       "primitives": [
         "harness-architecture-review",
+        "quota-diagnostics-contract",
         "semantic-architecture-review"
       ]
     },
@@ -287,6 +289,7 @@
         "participant-registry-validator",
         "primitive-selection-contract",
         "primitive-selection-validator",
+        "quota-diagnostics-contract",
         "repository-governance-instructions",
         "semantic-architecture-review"
       ]
@@ -335,6 +338,7 @@
         "participant-registry-validator",
         "primitive-selection-contract",
         "primitive-selection-validator",
+        "quota-diagnostics-contract",
         "repository-governance-instructions",
         "semantic-architecture-review"
       ]
@@ -392,6 +396,7 @@
         "organization-webhook-ingress",
         "pull-request-body-check",
         "pull-request-body-validator",
+        "quota-diagnostics-contract",
         "repository-governance-instructions",
         "semantic-architecture-review",
         "semantic-issue-router",
@@ -934,6 +939,22 @@
         "ADR-0016"
       ],
       "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "quota-diagnostics-contract",
+      "path": "scripts/lib/quota-diagnostics.mjs",
+      "location": "scripts/lib/quota-diagnostics.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011",
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },
