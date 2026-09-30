@@ -11,7 +11,7 @@ import {
   parseEvidenceMarker,
   validateEvidenceRecord,
 } from '../../scripts/lib/architecture-review.mjs';
-import { parseSemanticOutcome, runSemanticReview } from '../../scripts/lib/architecture-review-agent.mjs';
+import { parseSemanticOutcome, projectQuotaDiagnostics, runSemanticReview } from '../../scripts/lib/architecture-review-agent.mjs';
 import { runNodeScript } from '../helpers/process.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
@@ -157,7 +157,7 @@ test('semantic execution reports quota and structured findings without becoming 
       startThread: async () => ({ thread: { id: '019fb023-24b8-7881-9119-509f078b610e' } }), close: async () => {},
     }),
     runTurnImpl: async () => ({
-      status: 'paused', reason: 'Codex allowance reached the finalization reserve.', stopStage: 'active_turn',
+      status: 'paused', reason: 'Codex allowance reached the finalization reserve.', stopPhase: 'active_turn',
       budget: {
         reasonCode: 'window_reserve',
         diagnostics: {
@@ -178,7 +178,7 @@ test('semantic execution reports quota and structured findings without becoming 
   assert.equal(quotaPaused.status, 'inconclusive');
   assert.deepEqual(quotaPaused.quotaDiagnostics, {
     reasonCode: 'window_reserve',
-    stopStage: 'active_turn',
+    stopPhase: 'active_turn',
     triggerReasons: ['window_reserve', 'server_rate_limit'],
     windows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true }],
     triggeringWindows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true }],
@@ -189,10 +189,64 @@ test('semantic execution reports quota and structured findings without becoming 
 
   const markdown = formatReviewMarkdown({ ...review, semantic: quotaPaused });
   assert.match(markdown, /#### Quota diagnostics/);
-  assert.match(markdown, /Stop stage: active turn/);
+  assert.match(markdown, /Stop phase: active turn/);
   assert.match(markdown, /99% of the 300-minute window/);
   assert.match(markdown, /2027-01-15T08:01:40\.000Z/);
   assert.doesNotMatch(markdown, /fixture-secret|private-account-id/);
+
+  let startedThread = false;
+  let startedTurn = false;
+  const preflight = await runSemanticReview({
+    repositoryRoot,
+    review,
+    createClient: () => ({
+      initialize: async () => {},
+      capabilities: async () => ({
+        stop: true,
+        reasonCode: 'telemetry_unavailable',
+        diagnostics: {
+          reasonCode: 'telemetry_unavailable', triggerReasons: ['telemetry_unavailable'],
+          windows: [], triggeringWindows: [], serverBlocks: [], nextEligibleAt: null,
+        },
+      }),
+      startThread: async () => { startedThread = true; throw new Error('must not start'); },
+      close: async () => {},
+    }),
+    runTurnImpl: async () => { startedTurn = true; throw new Error('must not start'); },
+  });
+  assert.equal(preflight.status, 'inconclusive');
+  assert.equal(preflight.quotaDiagnostics.stopPhase, 'preflight');
+  assert.equal(preflight.quotaDiagnostics.reasonCode, 'telemetry_unavailable');
+  assert.equal(startedThread, false);
+  assert.equal(startedTurn, false);
+});
+
+test('quota diagnostic projection and formatting cover each independent stop reason', () => {
+  const cases = [
+    ['invalid_bucket', { windows: [{ bucket: 'bucket-1', slot: 'secondary', usedPercent: null, windowDurationMins: null, resetsAt: null, valid: false }] }, /invalid bucket/],
+    ['credit_spillover', { windows: [], serverBlocks: [] }, /subscription-only credit telemetry was unavailable/],
+    ['server_rate_limit', { triggerReasons: ['server_rate_limit'], serverBlocks: [{ bucket: 'bucket-1', rateLimitReached: true, spendControlReached: false }] }, /server rate-limit flag set/],
+    ['spend_control', { triggerReasons: ['spend_control'], serverBlocks: [{ bucket: 'bucket-1', rateLimitReached: false, spendControlReached: true }] }, /server spend-control flag set/],
+  ];
+  for (const [reasonCode, extra, expected] of cases) {
+    const quotaDiagnostics = projectQuotaDiagnostics({
+      reasonCode,
+      diagnostics: {
+        reasonCode,
+        triggerReasons: [reasonCode],
+        windows: [], triggeringWindows: [], serverBlocks: [], nextEligibleAt: null,
+        ...extra,
+      },
+    }, 'preflight');
+    assert.equal(quotaDiagnostics.reasonCode, reasonCode);
+    assert.equal(quotaDiagnostics.stopPhase, 'preflight');
+    const markdown = formatReviewMarkdown({
+      status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [],
+      semantic: { status: 'inconclusive', summary: 'Review stopped.', findings: [], evidenceGaps: [], quotaDiagnostics },
+    });
+    assert.match(markdown, expected, reasonCode);
+    assert.match(markdown, /Stop phase: preflight/);
+  }
 });
 
 test('the evidence contract validates the complete projection and rejects mismatches', async () => {

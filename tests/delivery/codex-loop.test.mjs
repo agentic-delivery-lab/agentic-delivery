@@ -65,14 +65,14 @@ test('interrupts near exhaustion and refuses to start when quota is unavailable'
   assert.match(result.reason,/allowance/i);
   assert.equal(reads,2,'a sparse notification triggers a full quota read');
   assert.equal(client.calls.filter(c=>c.method==='turn/interrupt').length,1);
-  assert.equal(result.stopStage,'active_turn');
+  assert.equal(result.stopPhase,'active_turn');
   assert.equal(result.budget.reasonCode,'window_reserve');
   assert.equal(result.budget.diagnostics.triggeringWindows[0].slot,'primary');
   const unavailable=new FakeCodex(()=>assert.fail('must not generate'));
   unavailable.request=async (method)=> {assert.equal(method,'account/rateLimits/read');return {};};
   const preflight=await runTurn({client:unavailable,threadId:'thread-1',phase:'plan',prompt:'work',onProgress:async()=>{}});
   assert.equal(preflight.status,'paused');
-  assert.equal(preflight.stopStage,'preflight');
+  assert.equal(preflight.stopPhase,'preflight');
   assert.equal(preflight.budget.reasonCode,'missing_or_invalid_window');
   assert.equal(unavailable.calls.filter(c=>c.method==='turn/start').length,0);
 });
@@ -81,7 +81,7 @@ test('quota telemetry failures have a stable safe reason at preflight and during
   const preflight = new FakeCodex(() => assert.fail('must not generate'));
   preflight.request = async () => { throw new Error('account token fixture-secret'); };
   const beforeStart = await runTurn({client:preflight,threadId:'thread-1',phase:'review',prompt:'review',onProgress:async()=>{}});
-  assert.equal(beforeStart.stopStage,'preflight');
+  assert.equal(beforeStart.stopPhase,'preflight');
   assert.equal(beforeStart.budget.reasonCode,'telemetry_unavailable');
   assert.doesNotMatch(JSON.stringify(beforeStart),/fixture-secret|account token/);
   assert.equal(preflight.calls.filter(c=>c.method==='turn/start').length,0);
@@ -103,7 +103,7 @@ test('quota telemetry failures have a stable safe reason at preflight and during
     return {};
   };
   const duringTurn = await runTurn({client:active,threadId:'thread-1',phase:'review',prompt:'review',onProgress:async()=>{}});
-  assert.equal(duringTurn.stopStage,'active_turn');
+  assert.equal(duringTurn.stopPhase,'active_turn');
   assert.equal(duringTurn.budget.reasonCode,'telemetry_unavailable');
   assert.doesNotMatch(JSON.stringify(duringTurn),/fixture-secret|account token/);
 });

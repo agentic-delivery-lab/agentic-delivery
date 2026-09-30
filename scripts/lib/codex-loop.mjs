@@ -1,4 +1,4 @@
-import { MODELS, quotaBoundary } from './codex-client.mjs';
+import { MODELS, quotaBoundary, quotaTelemetryUnavailable } from './codex-client.mjs';
 
 const strings = { type: 'array', items: { type: 'string' } };
 const REFINEMENT_WORK_TYPES = ['bug', 'feature', 'task', 'architecture', 'implementation', 'validation'];
@@ -257,28 +257,11 @@ export function formatRefinementComment(outcome) {
   return lines.join('\n');
 }
 
-function unavailableQuotaTelemetry() {
-  const diagnostics = {
-    reasonCode: 'telemetry_unavailable',
-    triggerReasons: ['telemetry_unavailable'],
-    windows: [],
-    triggeringWindows: [],
-    serverBlocks: [],
-    nextEligibleAt: null,
-  };
-  return {
-    stop: true,
-    reasonCode: 'telemetry_unavailable',
-    reason: 'Quota telemetry is unavailable.',
-    diagnostics,
-  };
-}
-
 export async function runTurn({ client, threadId, phase, prompt, onProgress, signal, schema = outcomeSchema(phase), stallTimeoutMs = 20 * 60_000, pollMs = 15_000 }) {
   let budget;
   try { budget = quotaBoundary(await client.request('account/rateLimits/read')); }
-  catch { budget = unavailableQuotaTelemetry(); }
-  if (budget.stop) return { status: 'paused', reason: budget.reason, budget, stopStage: 'preflight' };
+  catch { budget = quotaTelemetryUnavailable(); }
+  if (budget.stop) return { status: 'paused', reason: budget.reason, budget, stopPhase: 'preflight' };
   if (signal?.aborted) return { status: 'paused', reason: 'Workflow cancelled.' };
 
   let turnId;
@@ -303,9 +286,9 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     signal?.removeEventListener('abort', onAbort);
     progress.then(() => resolveResult(value));
   };
-  const stop = (reason, status = 'paused', questions = [], stopStage) => {
+  const stop = (reason, status = 'paused', questions = [], stopPhase) => {
     if (stopped || settled) return;
-    stopped = { status, reason, budget, questions, ...(stopStage ? { stopStage } : {}) };
+    stopped = { status, reason, budget, questions, ...(stopPhase ? { stopPhase } : {}) };
     interruptTimer = setTimeout(() => { closeClient(); finish(stopped); }, 5000);
     if (turnId) client.request('turn/interrupt', { threadId, turnId }).catch(() => { closeClient(); finish(stopped); });
   };
@@ -321,7 +304,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
       budget = quotaBoundary(await client.request('account/rateLimits/read'));
       if (budget.stop) stop(budget.reason, 'paused', [], 'active_turn');
     } catch {
-      budget = unavailableQuotaTelemetry();
+      budget = quotaTelemetryUnavailable();
       stop(budget.reason, 'paused', [], 'active_turn');
     }
     finally { polling = false; }

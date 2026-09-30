@@ -37,7 +37,7 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
-- Harness quota stops now report a sanitized reason, stop stage, affected quota
+- Harness quota stops now report a sanitized reason, stop phase, affected quota
   windows, server block flags, and a calculated retry time when the telemetry
   supports one. The operator guide explains how to rerun a fresh review on the
   same pull-request head after the quota windows reset.

@@ -383,12 +383,12 @@ conclusion was reached; it does not change the deterministic review result.
 To retry after a quota stop, open the latest Harness Architecture Review run
 for the pull request head and inspect its Actions summary. Wait until the
 reported next eligible UTC time. If no time can be derived, check the current
-subscription quota for the same account and wait until all exhausted windows
-have reset below the 98% reserve. Then use **Re-run all jobs** on that run. The
-retry starts a fresh read-only semantic review on the same pull-request head; it
-does not resume a saved model session. If it stops again, use the new sanitized
-summary to identify the window or server flag before deciding whether further
-recovery is needed.
+subscription quota for the same account, confirm any reported server block has
+cleared, and wait until all exhausted windows have reset below the 98% reserve.
+Then use **Re-run all jobs** on that run. The retry starts a fresh read-only
+semantic review on the same pull-request head; it does not resume a saved model
+session. If it stops again, use the new sanitized summary to identify the
+window or server flag before deciding whether further recovery is needed.
 
 Review generated workflow and test changes before approving their execution.
 Review PR CI runs repository code directly as the runner service account; it

@@ -148,7 +148,7 @@ const QUOTA_REASON_CODES = new Set([
 ]);
 const QUOTA_TRIGGER_CODES = new Set(['window_reserve', 'server_rate_limit', 'spend_control']);
 
-function projectQuotaDiagnostics(budget, stopStage) {
+export function projectQuotaDiagnostics(budget, stopPhase) {
   const diagnostics = budget?.diagnostics;
   const reasonCode = QUOTA_REASON_CODES.has(budget?.reasonCode) ? budget.reasonCode
     : QUOTA_REASON_CODES.has(diagnostics?.reasonCode) ? diagnostics.reasonCode : null;
@@ -173,10 +173,10 @@ function projectQuotaDiagnostics(budget, stopStage) {
       rateLimitReached: block.rateLimitReached === true,
       spendControlReached: block.spendControlReached === true,
     })) : [];
-  const stage = ['preflight', 'active_turn'].includes(stopStage) ? stopStage : 'unknown';
+  const phase = ['preflight', 'active_turn'].includes(stopPhase) ? stopPhase : 'unknown';
   return {
     reasonCode,
-    stopStage: stage,
+    stopPhase: phase,
     triggerReasons: Array.isArray(diagnostics?.triggerReasons)
       ? [...new Set(diagnostics.triggerReasons.filter((code) => QUOTA_TRIGGER_CODES.has(code)))].slice(0, 3)
       : [],
@@ -265,7 +265,21 @@ export async function runSemanticReview({ repositoryRoot, review, eventPath, cre
       runtime,
     });
     await client.initialize();
-    await client.capabilities();
+    const capabilityBudget = await client.capabilities();
+    if (capabilityBudget?.stop) {
+      const quotaDiagnostics = projectQuotaDiagnostics(capabilityBudget, 'preflight');
+      return {
+        status: 'inconclusive',
+        summary: 'Semantic architecture review was not completed.',
+        findings: [],
+        evidenceGaps: [quotaDiagnostics
+          ? `Quota telemetry stopped the review (${quotaDiagnostics.reasonCode}, ${quotaDiagnostics.stopPhase}).`
+          : 'Quota telemetry stopped the review during preflight.'],
+        ...(quotaDiagnostics ? { quotaDiagnostics } : {}),
+        sessionId: null,
+        model: MODELS.review,
+      };
+    }
     const thread = await client.startThread(repositoryRoot, 'You are a read-only architecture reviewer. Cite evidence and never modify files, contact GitHub, merge, close issues, or treat model judgment as deterministic validation.');
     const prompt = [
       'Review the evidence bundle at the explicitly provided path.',
@@ -283,13 +297,13 @@ export async function runSemanticReview({ repositoryRoot, review, eventPath, cre
       onProgress: async () => {},
     });
     if (result.status !== 'completed') {
-      const quotaDiagnostics = projectQuotaDiagnostics(result.budget, result.stopStage);
+      const quotaDiagnostics = projectQuotaDiagnostics(result.budget, result.stopPhase);
       return {
         status: 'inconclusive',
         summary: 'Semantic architecture review was not completed.',
         findings: [],
         evidenceGaps: [quotaDiagnostics
-          ? `Quota telemetry stopped the review (${quotaDiagnostics.reasonCode}, ${quotaDiagnostics.stopStage}).`
+          ? `Quota telemetry stopped the review (${quotaDiagnostics.reasonCode}, ${quotaDiagnostics.stopPhase}).`
           : result.reason ?? 'The review turn did not complete.'],
         ...(quotaDiagnostics ? { quotaDiagnostics } : {}),
         sessionId: thread.thread.id,

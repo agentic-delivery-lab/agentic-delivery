@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import path from 'node:path';
 import { rm } from 'node:fs/promises';
-import { CodexClient, quotaBoundary, verifyModels, modelEnvironment, deliveryPermissions, checkConfiguration, AUTH_STORAGE_CONFIG, DEFAULT_PERMISSION_CONFIG, appServerFailure } from '../../scripts/lib/codex-client.mjs';
+import { CodexClient, quotaBoundary, quotaTelemetryUnavailable, verifyModels, modelEnvironment, deliveryPermissions, checkConfiguration, AUTH_STORAGE_CONFIG, DEFAULT_PERMISSION_CONFIG, appServerFailure } from '../../scripts/lib/codex-client.mjs';
 
 const now = 1_800_000_000;
 const window = (usedPercent, windowDurationMins = 300) => ({ usedPercent, windowDurationMins, resetsAt: now + 100 });
@@ -13,6 +13,7 @@ test('leaves a small finalization reserve in both usage windows', () => {
   assert.equal(quotaBoundary(quota(98), now).stop, true);
   assert.equal(quotaBoundary(quota(20, 98), now).stop, true);
   assert.equal(quotaBoundary(quota(100), now).resetsAt, now + 100);
+  assert.equal(quotaBoundary(quota(98, 20), now).diagnostics.nextEligibleAt, now + 100);
 });
 
 test('quota telemetry fails closed on missing, invalid, or expired windows', () => {
@@ -25,6 +26,17 @@ test('quota telemetry fails closed on missing, invalid, or expired windows', () 
   assert.equal(quotaBoundary(value, now).stop, true);
 });
 
+test('fails closed when a returned secondary quota window is malformed', () => {
+  const value = quota();
+  value.rateLimits.secondary = 'malformed-window';
+  const decision = quotaBoundary(value, now);
+  assert.equal(decision.stop, true);
+  assert.equal(decision.reasonCode, 'invalid_bucket');
+  assert.deepEqual(decision.diagnostics.windows.find((item) => item.slot === 'secondary'), {
+    bucket: 'bucket-1', slot: 'secondary', usedPercent: null, windowDurationMins: null, resetsAt: null, valid: false,
+  });
+});
+
 test('checks every returned bucket and explicit server limits', () => {
   const value = quota();
   value.rateLimitsByLimitId = { codex: value.rateLimits, other: { credits:{hasCredits:false,unlimited:false}, primary: window(99, 60) } };
@@ -35,7 +47,7 @@ test('checks every returned bucket and explicit server limits', () => {
 test('quota decisions identify triggering windows and expose only sanitized diagnostics', () => {
   const value = quota();
   value.rateLimitsByLimitId = {
-    codex: value.rateLimits,
+    codex: JSON.parse(JSON.stringify(value.rateLimits)),
     other: {
       credits: { hasCredits: false, unlimited: false },
       primary: window(99, 60),
@@ -55,9 +67,46 @@ test('quota decisions identify triggering windows and expose only sanitized diag
   assert.deepEqual(decision.diagnostics.triggeringWindows, [{
     bucket: 'bucket-2', slot: 'primary', usedPercent: 99, windowDurationMins: 60, resetsAt: now + 100, valid: true,
   }]);
-  assert.equal(decision.diagnostics.nextEligibleAt, now + 100);
+  assert.equal(decision.diagnostics.nextEligibleAt, null, 'a server block has no known reset time');
+  assert.equal(decision.diagnostics.windows.length, 4, 'the legacy mirror is not reported as a duplicate bucket');
   assert.equal(decision.diagnostics.serverBlocks[1].rateLimitReached, true);
   assert.doesNotMatch(JSON.stringify(decision), /provider-detail|fixture-secret|private-account-id/);
+});
+
+test('quota reason codes distinguish credit, server-rate, and spend-control stops', () => {
+  const credit = quota();
+  credit.rateLimits.credits.hasCredits = true;
+  assert.equal(quotaBoundary(credit, now).reasonCode, 'credit_spillover');
+
+  const rateLimited = quota(70, 80);
+  rateLimited.rateLimits.rateLimitReachedType = 'private-provider-detail';
+  const rateLimitDecision = quotaBoundary(rateLimited, now);
+  assert.equal(rateLimitDecision.reasonCode, 'server_rate_limit');
+  assert.deepEqual(rateLimitDecision.diagnostics.triggerReasons, ['server_rate_limit']);
+  assert.equal(rateLimitDecision.diagnostics.nextEligibleAt, null);
+
+  const spendControlled = quota(70, 80);
+  spendControlled.rateLimits.spendControlReached = true;
+  const spendDecision = quotaBoundary(spendControlled, now);
+  assert.equal(spendDecision.reasonCode, 'spend_control');
+  assert.deepEqual(spendDecision.diagnostics.triggerReasons, ['spend_control']);
+});
+
+test('capability preflight converts quota-read failures to a safe pause', async () => {
+  const client = Object.create(CodexClient.prototype);
+  client.request = async (method) => {
+    if (method === 'account/read') return {account:{type:'chatgpt'}};
+    if (method === 'model/list') return {data:[
+      {id:'gpt-5.6-sol',supportedReasoningEfforts:[{reasoningEffort:'high'}]},
+      {id:'gpt-5.6-luna',supportedReasoningEfforts:[{reasoningEffort:'max'}]},
+    ]};
+    if (method === 'collaborationMode/list') return {data:[{mode:'plan'}]};
+    if (method === 'account/rateLimits/read') throw new Error('account token fixture-secret');
+    assert.fail(`unexpected request: ${method}`);
+  };
+  const result = await client.capabilities();
+  assert.deepEqual(result, quotaTelemetryUnavailable());
+  assert.doesNotMatch(JSON.stringify(result), /fixture-secret|account token/);
 });
 
 test('refuses model execution when credit spillover is possible or unknown', () => {

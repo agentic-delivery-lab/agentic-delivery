@@ -450,7 +450,7 @@ function formatQuotaDiagnostics(value) {
     spend_control: 'server spend control',
   };
   if (!value || typeof value !== 'object' || !reasonLabels[value.reasonCode]) return [];
-  const stage = { preflight: 'preflight', active_turn: 'active turn', unknown: 'unknown' }[value.stopStage] ?? 'unknown';
+  const phase = { preflight: 'preflight', active_turn: 'active turn', unknown: 'unknown' }[value.stopPhase] ?? 'unknown';
   const timestamp = (seconds) => {
     if (!Number.isFinite(seconds)) return null;
     try { return new Date(seconds * 1000).toISOString(); } catch { return null; }
@@ -466,7 +466,7 @@ function formatQuotaDiagnostics(value) {
   const lines = [
     '#### Quota diagnostics',
     '',
-    `- Stop stage: ${stage}`,
+    `- Stop phase: ${phase}`,
     `- Reason: ${reasonLabels[value.reasonCode]}`,
   ];
   const triggers = Array.isArray(value.triggerReasons) ? value.triggerReasons.map((code) => triggerLabels[code]).filter(Boolean) : [];

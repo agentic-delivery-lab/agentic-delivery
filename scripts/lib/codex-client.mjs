@@ -60,14 +60,18 @@ export function appServerFailure(code, signal, stderr = '') {
 export function quotaBoundary(response, now = Date.now() / 1000) {
   const mapped = response?.rateLimitsByLimitId;
   const mappedIsRecord = mapped == null || (typeof mapped === 'object' && !Array.isArray(mapped));
-  const entries = mappedIsRecord && mapped
-    ? Object.entries(mapped).map(([, bucket]) => bucket)
-    : [];
-  if (response?.rateLimits && !entries.includes(response.rateLimits)) entries.push(response.rateLimits);
+  const entries = mappedIsRecord && mapped ? Object.values(mapped) : [];
+  // The keyed map is the complete multi-bucket view. The legacy field mirrors
+  // one bucket, so use it only when the map is absent or empty.
+  if (mappedIsRecord && !entries.length && response?.rateLimits) entries.push(response.rateLimits);
   const buckets = entries.map((value, index) => ({ name: `bucket-${index + 1}`, value }));
   const windows = buckets.flatMap(({ name, value }) => ['primary', 'secondary'].flatMap((slot) => {
     const window = value && typeof value === 'object' ? value[slot] : null;
-    if (!window || typeof window !== 'object') return [];
+    if (!window || typeof window !== 'object' || Array.isArray(window)) {
+      return slot === 'primary' || Boolean(window)
+        ? [{ bucket: name, slot, usedPercent: null, windowDurationMins: null, resetsAt: null, valid: false }]
+        : [];
+    }
     const valid = Number.isFinite(window.usedPercent) && window.usedPercent >= 0 && window.usedPercent <= 100
       && Number.isFinite(window.windowDurationMins) && window.windowDurationMins > 0
       && Number.isFinite(window.resetsAt) && window.resetsAt > now;
@@ -101,7 +105,8 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
     ...extras,
   });
 
-  if (!mappedIsRecord || buckets.some(({ value }) => !value || typeof value !== 'object' || Array.isArray(value) || !value.primary)) {
+  if (!mappedIsRecord || buckets.some(({ value }) => !value || typeof value !== 'object' || Array.isArray(value) || !value.primary
+    || (Boolean(value.secondary) && (typeof value.secondary !== 'object' || Array.isArray(value.secondary))))) {
     return decision('invalid_bucket', 'Quota telemetry contains an invalid bucket.');
   }
   if (buckets.some(({ value }) => value.credits?.hasCredits !== false || value.credits?.unlimited !== false)) {
@@ -121,7 +126,9 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
   ];
   const blocked = triggerReasons.length > 0;
   const reasonCode = exhausted.length ? 'window_reserve' : rateLimited ? 'server_rate_limit' : spendControlled ? 'spend_control' : 'available';
-  const nextEligibleAt = exhausted.length ? Math.max(...exhausted.map((window) => window.resetsAt)) : null;
+  const nextEligibleAt = exhausted.length && !rateLimited && !spendControlled
+    ? Math.max(...exhausted.map((window) => window.resetsAt))
+    : null;
   return {
     stop: blocked,
     reasonCode,
@@ -129,6 +136,23 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
     usedPercent: Math.max(...windows.map((window) => window.usedPercent)),
     resetsAt: Math.max(...(exhausted.length ? exhausted : windows).map((window) => window.resetsAt)),
     diagnostics: diagnostics(reasonCode, triggerReasons, exhausted, nextEligibleAt),
+  };
+}
+
+export function quotaTelemetryUnavailable() {
+  const diagnostics = {
+    reasonCode: 'telemetry_unavailable',
+    triggerReasons: ['telemetry_unavailable'],
+    windows: [],
+    triggeringWindows: [],
+    serverBlocks: [],
+    nextEligibleAt: null,
+  };
+  return {
+    stop: true,
+    reasonCode: 'telemetry_unavailable',
+    reason: 'Quota telemetry is unavailable.',
+    diagnostics,
   };
 }
 
@@ -302,7 +326,11 @@ export class CodexClient extends EventEmitter {
     verifyModels(models);
     const modes = await this.request('collaborationMode/list');
     if (!modes.data.some((item) => item.mode === 'plan')) throw new Error('Runner Codex must support actual Plan mode.');
-    return quotaBoundary(await this.request('account/rateLimits/read'));
+    try {
+      return quotaBoundary(await this.request('account/rateLimits/read'));
+    } catch {
+      return quotaTelemetryUnavailable();
+    }
   }
 
   async threadConfig(cwd, developerInstructions = '', profile = 'planner') {
