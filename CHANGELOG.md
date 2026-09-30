@@ -10,11 +10,12 @@ and releases use [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) pins the central intake bootstrap and manual recovery paths to the controller release `bootstrapCommit`; normal and recovery execution no longer fall back to a moving `main` ref.
-- The controller release advances to `0.2.0-draft.38` at
-  `9367c5a1c58eb6215b92d34fbe5490cd85fb061f`; the central participant moves
-  to that immutable pin while draft37 remains in the compatibility list. The
-  bootstrap uses commit `23e4b46e1ddb142e0ddac18ac72144b8bb151db7`, which
-  contains the draft38 participant registry.
+- The controller release advances to `0.2.0-draft.39` at
+  `53c76a68cf1a7cab2141034bd477d8cb761bf4c6`; the central participant moves
+  to that immutable pin while draft38 and draft37 remain supported for
+  rollback. The bootstrap uses commit
+  `c83fb414a0b5637bf8b8ba3d3539a7e669958512`, which contains the draft39
+  participant registry.
 - Private agent publication validation can now reproduce each projection from
   the exact Primitive source commit named by its provenance lock; the release
   chain checks the same byte-for-byte relationship.

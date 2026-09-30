@@ -97,7 +97,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   );
   const intakeSource = await text('.github/workflows/issue-intake.yml');
   assert.match(intakeSource, /Check out the validated controller release/);
-  assert.match(intakeSource, /ref: 23e4b46e1ddb142e0ddac18ac72144b8bb151db7/);
+  assert.match(intakeSource, /ref: c83fb414a0b5637bf8b8ba3d3539a7e669958512/);
   assert.doesNotMatch(intakeSource, /ref: main/);
   assert.ok(intakeSource.indexOf('Validate and normalize explicit agent invocation')
     < intakeSource.indexOf('Check out the validated controller release'));
@@ -203,7 +203,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   const manualBootstrap = resolver.steps.find((step) => step.name === 'Check out trusted participant registry bootstrap');
   assert.equal(manualBootstrap.if, "${{ inputs.route == '' }}");
   assert.equal(manualBootstrap.with.path, 'trusted-bootstrap');
-  assert.equal(manualBootstrap.with.ref, '23e4b46e1ddb142e0ddac18ac72144b8bb151db7');
+  assert.equal(manualBootstrap.with.ref, 'c83fb414a0b5637bf8b8ba3d3539a7e669958512');
   const manualParticipant = resolver.steps.find((step) => step.name === 'Resolve pinned participant and read-only policy for manual recovery');
   assert.equal(manualParticipant.id, 'manual-policy');
   assert.equal(manualParticipant.if, "${{ inputs.route == '' }}");
