@@ -14,6 +14,7 @@ test('organization GitHub App contract includes lifecycle events and central cre
   const contract = JSON.parse(await readFile(path.join(repositoryRoot, 'config/github-app-contract.json'), 'utf8'));
   const schemaV1 = JSON.parse(await readFile(path.join(repositoryRoot, 'schemas/github-app-contract.v1.schema.json'), 'utf8'));
   const schemaV2 = JSON.parse(await readFile(path.join(repositoryRoot, 'schemas/github-app-contract.v2.schema.json'), 'utf8'));
+  const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   const eventCatalog = parseRepositoryYaml(await readFile(path.join(repositoryRoot, 'config/event-catalog.yml'), 'utf8'), 'event catalog');
   const deliverySource = await readFile(path.join(repositoryRoot, 'scripts/codex-delivery.mjs'), 'utf8');
   assert.deepEqual(validateEventCatalog(eventCatalog), { valid: true, errors: [] });
@@ -21,6 +22,7 @@ test('organization GitHub App contract includes lifecycle events and central cre
   assert.equal(contract.schemaVersion, 2);
   assert.equal(contract.contractVersion, '2.0.0');
   assert.equal(contract.$schema, '../schemas/github-app-contract.v2.schema.json');
+  assert.equal(release.githubAppContractVersion, contract.contractVersion);
   assert.equal(schemaV1.properties.schemaVersion.const, 1);
   assert.equal(schemaV1.properties.contractVersion, undefined);
   assert.equal(schemaV2.properties.schemaVersion.const, 2);
