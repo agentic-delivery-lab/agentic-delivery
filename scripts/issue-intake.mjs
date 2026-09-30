@@ -261,9 +261,14 @@ export async function classifyAndRoute({
       fetchImpl,
     })
     : null;
-  const originToken = appProvider
-    ? await appProvider.token({ repositoryIds: [env.ORIGIN_REPOSITORY_ID] })
-    : env.PUBLISH_TOKEN || env.GH_TOKEN;
+  let originToken;
+  if (appProvider) {
+    originToken = await appProvider.token({ repositoryIds: [env.ORIGIN_REPOSITORY_ID] });
+  } else if (readOnlyRun) {
+    throw new Error('Read-only intake requires a GitHub App token from the readOnlyIntake profile; refusing PUBLISH_TOKEN or GH_TOKEN fallback.');
+  } else {
+    originToken = env.PUBLISH_TOKEN || env.GH_TOKEN;
+  }
   const api = githubApi({ repository, token: originToken, fetchImpl });
   const routingEventKind = env.INVOCATION_EVENT === 'true' ? 'agent-invocation' : env.GITHUB_EVENT_NAME;
   const effectiveConfig = bindIssueMetadataConfig(config, env.ISSUE_FIELD_BINDINGS_JSON || {});

@@ -5,8 +5,8 @@ versions. A merge to the controller's `main` branch is not an implicit
 participant upgrade.
 
 1. Publish a draft controller release manifest with SemVer, immutable commit,
-   supported event/lifecycle/state-machine/evidence versions, and pinned
-   Architecture and Primitive releases.
+   supported event/lifecycle/state-machine/evidence versions, the GitHub App
+   contract version, and pinned Architecture and Primitive releases.
 2. Run all deterministic checks and evaluate every active participant against
    the new release.
 3. Run the new controller in shadow mode and compare routing proposals,

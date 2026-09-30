@@ -4,12 +4,14 @@ This directory is the canonical configuration boundary for the executable
 Delivery Control Plane.
 
 - `agent-actors.json` defines the explicit conversation-invocation boundary.
-- `participants.yml` defines repository enrollment, controller pins, contract
-  versions, and local integration profiles.
+- `participants.yml` defines repository enrollment, controller pins,
+  participant-specific contract versions, and local integration profiles.
 - `controller-release.json` defines the immutable controller release, its
-  dependency pins, and the exact bootstrap commit used before a participant
-  pin is trusted. Release schema v2 also records the GitHub App contract
-  version independently from participant-facing contract versions.
+  dependency pins, the exact bootstrap commit used before a participant pin is
+  trusted, and controller-wide interface versions. Release schema v2 records
+  the GitHub App contract version; the participant registry records the
+  event-envelope, lifecycle, state-machine, and evidence versions for each
+  participant.
 - `issue-metadata.yml` defines the native issue type, lifecycle stage, delivery
   state/readiness compatibility contract, governance metadata, and field
   transitions.

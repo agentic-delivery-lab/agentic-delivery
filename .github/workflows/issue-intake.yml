@@ -101,6 +101,10 @@ jobs:
       (github.event_name != 'repository_dispatch' || inputs.agent_invocation)
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
     outputs:
       issue: ${{ steps.intake.outputs.issue }}
       route: ${{ steps.intake.outputs.route }}

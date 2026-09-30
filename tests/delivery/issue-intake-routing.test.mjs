@@ -186,18 +186,20 @@ test('central intake mints an origin-scoped App token instead of using the contr
   assert.ok(apiCalls.length > 0 && apiCalls.every((authorization) => authorization === 'Bearer origin-scoped-token'));
 });
 
-test('shadow participant intake evaluates routing without mutating origin issue state', async () => {
+test('shadow intake fails closed instead of using write-capable token fallbacks when App credentials are missing', async () => {
   const origin = 'agentic-delivery-lab/service-a';
   const fixture = apiFixture({
     state: 'open', title: 'Task: shadow routing', body: 'Evaluate this route.',
     labels: [{ name: 'type:task' }, { name: 'state:requirements' }],
   }, 'write', [], origin);
-  const result = await classifyAndRoute({
+  await assert.rejects(classifyAndRoute({
     env: {
+      GITHUB_ACTIONS: 'true',
       GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
       ORIGIN_REPOSITORY: origin,
       SOURCE_ISSUE: '17',
-      GH_TOKEN: 'token',
+      PUBLISH_TOKEN: 'write-capable-publish-token',
+      GH_TOKEN: 'write-capable-workflow-token',
       GITHUB_ACTOR: 'maintainer',
       PARTICIPANT_MODE: 'shadow',
     },
@@ -205,10 +207,8 @@ test('shadow participant intake evaluates routing without mutating origin issue 
     fetchImpl: fixture.fetchImpl,
     config,
     reasonRoute: modelRoute('plan', 'task', 'ready-for-plan'),
-  });
-  assert.equal(result.route, 'plan');
-  assert.equal(result.metadata.shadow, true);
-  assert.equal(fixture.calls.some((call) => call.method === 'POST'), false);
+  }), /requires a GitHub App token from the readOnlyIntake profile; refusing PUBLISH_TOKEN or GH_TOKEN fallback/);
+  assert.equal(fixture.calls.length, 0);
 });
 
 test('shadow participant intake requests read-only origin App permissions', async () => {

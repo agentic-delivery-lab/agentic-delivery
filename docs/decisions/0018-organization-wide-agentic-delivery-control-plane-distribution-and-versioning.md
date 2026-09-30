@@ -90,6 +90,28 @@ and [webhook events and payloads](https://docs.github.com/en/webhooks/webhook-ev
 - Use App installation access alone as implicit enrollment.
 - Use `.github` or `.github-private` as the runtime repository.
 
+The amendment also considered choices for organization metadata access,
+read-only token selection, and compatibility tracking:
+
+- For organization catalogs, request only `issue_fields: read` and
+  `issue_types: read` in the intake and delivery profiles; copy catalog values
+  into each repository; or grant the organization reads to every App token
+  profile. The selected profiles keep preflight access narrow and read live
+  organization values without maintaining copies.
+- For read-only intake, require the `readOnlyIntake` App profile and stop when
+  App credentials are unavailable; fall back to `PUBLISH_TOKEN` or the workflow
+  token; or split classification into separate read-only and active jobs. A
+  fallback can inherit issue-write permission from a workflow job, while two
+  jobs duplicate routing boundaries that must stay aligned.
+- For the App interface, advance only the schema number; or advance a SemVer
+  contract version and pin that version from the immutable controller release.
+  A schema number alone does not state compatibility across deployed controller
+  releases.
+- For read-only policy, accept caller-supplied mode and write intent; omit a
+  per-run override; or derive participant mode from the registry and allow a
+  run-level override to restrict mutation. Caller-supplied policy can be
+  forged, and omitting a restrictive override blocks safe manual recovery.
+
 ## Decision Outcome
 
 Chosen option: **A central App webhook and Delivery Control Plane with a
@@ -130,9 +152,12 @@ operation: invocation preflight reads repository contents, issues, pull
 requests, and metadata; read-only intake uses read-only repository permissions;
 active intake adds issue write; and delivery adds contents, issue, and pull
 request write. `repository_ids` continues to restrict repository resources to
-the originating numeric repository. Controller dispatch tokens request only
-`contents: write`; the App has no organization write or administration
-permission. [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
+the originating numeric repository. The classify job's workflow token is
+limited to repository reads. A read-only execution requires the
+`readOnlyIntake` App profile; if App credentials are unavailable, intake stops
+without falling back to `PUBLISH_TOKEN` or the workflow token. Controller
+dispatch tokens request only `contents: write`; the App has no organization
+write or administration permission. [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
 tracks this implementation and the read-only canary that must verify it after
 the immutable controller pin is active.
 
@@ -151,7 +176,9 @@ Participation is the conjunction of two independently auditable conditions:
 2. the central `participants.yml` registry contains that repository ID with
    `mode: shadow` or `mode: active`, an expected full name, a controller
    release commit, supported event/lifecycle/state-machine/evidence contract
-   versions, and a declared local integration profile.
+   versions, and a declared local integration profile. Controller-wide
+   interface versions, including the GitHub App contract, are published by
+   the pinned controller release manifest.
 
 The repository ID is the primary identity and survives a rename. The full name
 is a verification value, not an identity key. App access without a registry
@@ -228,12 +255,15 @@ workflow files.
 ### Versioning and compatibility
 
 The controller release is SemVer plus an immutable Git commit. Each participant
-stores the exact controller commit and compatible contract versions in the
-registry. Event envelopes use an integer major with additive changes within a
-major. Lifecycle, state-machine and evidence contracts use SemVer. Reusable
-workflow callers and bootstrap bundles use SemVer plus an exact source SHA.
-Primitive and Architecture dependencies use a release version, source commit
-and content digest.
+stores the exact controller commit and participant-specific contract versions
+in the registry: event envelope, lifecycle, state machine, and evidence. The
+pinned controller release manifest publishes controller-wide interface
+versions, including the exact GitHub App contract version and supported
+bootstrap, Primitive, and Architecture versions. Event envelopes use an
+integer major with additive changes within a major. Lifecycle, state-machine
+and evidence contracts use SemVer. Reusable workflow callers and bootstrap
+bundles use SemVer plus an exact source SHA. Primitive and Architecture
+dependencies use a release version, source commit and content digest.
 
 The controller publishes a release manifest containing supported event,
 lifecycle, state-machine, evidence, primitive, Architecture and minimum
@@ -267,6 +297,9 @@ until its intentional upgrade window or the support policy's end date.
   shadow execution, App operations and cross-repository contract tests.
 - Bad, because App permissions and central credential storage become shared
   infrastructure that requires careful operational ownership.
+- Bad, because read-only intake stops when its scoped App credentials are
+  unavailable instead of continuing with a token whose permissions may allow
+  issue writes.
 - Neutral, because a small thin bootstrap may still be present in a consumer,
   but it is an adapter rather than a second control plane.
 

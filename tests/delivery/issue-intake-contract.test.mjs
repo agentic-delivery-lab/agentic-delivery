@@ -79,6 +79,9 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.ok(intakeWorkflow.on.issues.types.includes('opened'));
   assert.ok(intakeWorkflow.on.issues.types.includes('closed'));
   assert.ok(intakeWorkflow.jobs.classify);
+  assert.equal(intakeWorkflow.jobs.classify.permissions.contents, 'read');
+  assert.equal(intakeWorkflow.jobs.classify.permissions.issues, 'read');
+  assert.equal(intakeWorkflow.jobs.classify.permissions['pull-requests'], 'read');
   assert.ok(intakeWorkflow.jobs.deliver.uses?.includes('codex-delivery.yml'));
   assert.ok(intakeWorkflow.jobs.classify.outputs.lifecycle_stage);
   assert.ok(intakeWorkflow.jobs.classify.outputs.readiness);
