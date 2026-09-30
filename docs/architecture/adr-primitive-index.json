@@ -277,6 +277,7 @@
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
         "curated-changelog",
+        "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
         "event-catalog",
         "event-catalog-validator",
@@ -329,6 +330,7 @@
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
         "curated-changelog",
+        "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
         "event-catalog",
         "event-catalog-validator",
@@ -566,6 +568,19 @@
       "domains": [
         "agentic-delivery-control-plane",
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "delivery-participant-policy-resolver",
+      "path": "scripts/lib/resolve-delivery-participant.mjs",
+      "location": "scripts/lib/resolve-delivery-participant.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {

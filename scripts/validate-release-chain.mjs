@@ -173,6 +173,18 @@ export async function validateReleaseChain({
   const controllerRepository = appContract.controller?.repository;
   const organization = appContract.organization?.login;
   const controller = await readJson(path.join(controlPlaneRoot, 'config/controller-release.json'));
+  if (controller.schemaVersion === 2 && SHA1.test(controller.commit ?? '')) {
+    try {
+      const releaseAppContract = await readJsonAtCommit(
+        controlPlaneRoot,
+        controller.commit,
+        'config/github-app-contract.json',
+      );
+      equal(errors, 'Controller release GitHub App contract version', controller.githubAppContractVersion, releaseAppContract.contractVersion);
+    } catch (error) {
+      errors.push(`Controller release GitHub App contract could not be read at the pinned controller commit: ${error.message}`);
+    }
+  }
   const architectureDependency = controller.dependencies?.architecture;
   const primitiveDependency = controller.dependencies?.primitives;
   if (!architectureDependency || !primitiveDependency) errors.push('controller release must declare Architecture and Primitive dependencies');
@@ -286,7 +298,9 @@ export async function validateReleaseChain({
   for (const relativePath of [
     'config/event-catalog.yml',
     'config/github-app-contract.json',
+    'schemas/github-app-contract.v2.schema.json',
     'scripts/lib/event-catalog.mjs',
+    'scripts/lib/resolve-delivery-participant.mjs',
   ]) {
     await assertPathAtCommit(
       controlPlaneRoot,

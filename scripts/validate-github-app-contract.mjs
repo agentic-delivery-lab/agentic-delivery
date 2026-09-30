@@ -44,7 +44,9 @@ export function validateGithubAppContract(contract, catalog = actorCatalog, even
     const catalogResult = validateEventCatalog(eventCatalog);
     if (!catalogResult.valid) errors.push(...catalogResult.errors.map((error) => `event catalog: ${error}`));
   }
-  if (contract.schemaVersion !== 1) errors.push('schemaVersion must be 1');
+  if (contract.schemaVersion !== 2) errors.push('schemaVersion must be 2');
+  if (contract.contractVersion !== '2.0.0') errors.push('contractVersion must be 2.0.0');
+  if (contract.$schema !== '../schemas/github-app-contract.v2.schema.json') errors.push('$schema must reference github-app-contract.v2.schema.json');
   if (contract.organization?.login !== 'agentic-delivery-lab') errors.push('organization.login must be agentic-delivery-lab');
   if (!numericIdentity.test(String(contract.organization?.id ?? ''))) errors.push('organization.id must be a positive numeric identity');
   if (contract.installation?.access !== 'selected-repositories') errors.push('installation.access must be selected-repositories');

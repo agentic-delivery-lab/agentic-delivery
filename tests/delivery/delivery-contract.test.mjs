@@ -27,7 +27,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     '.github/workflows/agent-observation.yml',
     'api/github/webhook.mjs', 'scripts/issue-intake.mjs', 'scripts/lib/agent-invocation.mjs', 'scripts/prepare-agent-invocation.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
     'scripts/lib/orchestration-policy.mjs', 'scripts/lib/primitive-selection.mjs', 'scripts/validate-automation-templates.mjs', 'automations/AGENTS.md', 'automations/templates/manifest.json', 'automations/templates/manifest.v1.schema.json', 'automations/templates/review-delivery-queue.automation.md', 'automations/templates/prepare-validation-evidence.automation.md', 'tests/helpers/organization-issue-forms.mjs',
-    'config/github-app-contract.json', 'config/event-catalog.yml', 'config/primitive-selection.yml', 'schemas/event-catalog.v1.schema.json', 'schemas/github-app-contract.v1.schema.json', 'schemas/primitive-selection.v1.schema.json', 'schemas/github-inventory.v1.schema.json', 'scripts/lib/event-catalog.mjs', 'scripts/validate-github-app-contract.mjs',
+    'config/github-app-contract.json', 'config/event-catalog.yml', 'config/primitive-selection.yml', 'schemas/event-catalog.v1.schema.json', 'schemas/github-app-contract.v1.schema.json', 'schemas/github-app-contract.v2.schema.json', 'schemas/primitive-selection.v1.schema.json', 'schemas/github-inventory.v1.schema.json', 'scripts/lib/event-catalog.mjs', 'scripts/lib/resolve-delivery-participant.mjs', 'scripts/validate-github-app-contract.mjs',
     '.github/workflows/agentic-delivery-quality.yml',
     '.github/workflows/agentic-delivery-architecture-review.yml',
     'docs/delivery/operations/onboarding.md',
@@ -74,10 +74,11 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.ok(delivery.includes('workflow_call:'));
   assert.ok(delivery.includes('ref: ${{ needs.resolve.outputs.controller_commit }}'));
   assert.ok(delivery.includes('required: true'));
-  assert.ok(intake.includes("controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || steps.participant.outputs.controller_commit || inputs.controller_commit || '53c76a68cf1a7cab2141034bd477d8cb761bf4c6' }}"));
+  assert.ok(intake.includes('controller_commit: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}'));
+  assert.ok(!intake.includes('inputs.controller_commit'));
   assert.equal((intake.match(/ref: main/g) ?? []).length, 0);
   assert.ok(intake.includes('ref: c83fb414a0b5637bf8b8ba3d3539a7e669958512'));
-  assert.ok(intake.includes("ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || steps.participant.outputs.controller_commit || inputs.controller_commit || '53c76a68cf1a7cab2141034bd477d8cb761bf4c6' }}"));
+  assert.ok(intake.includes('ref: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}'));
   assert.ok(intake.includes('Validate the selected controller commit'));
   const release = JSON.parse(await text('config/controller-release.json'));
   assert.equal(release.version, '0.2.0-draft.39');

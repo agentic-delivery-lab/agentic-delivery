@@ -16,6 +16,13 @@ and releases use [Semantic Versioning](https://semver.org/).
   rollback. The bootstrap uses commit
   `c83fb414a0b5637bf8b8ba3d3539a7e669958512`, which contains the draft39
   participant registry.
+- [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
+  now keeps reusable delivery policy at the workflow boundary:
+  callers cannot supply participant mode, controller pin, or read-only state;
+  a hosted resolver checks the main-branch caller and source identity, then
+  derives those values from the fixed participant-registry bootstrap.
+- The GitHub App contract advances to version `2.0.0` with a version-2 schema;
+  the draft40 controller release pins that contract version.
 - Private agent publication validation can now reproduce each projection from
   the exact Primitive source commit named by its provenance lock; the release
   chain checks the same byte-for-byte relationship.

@@ -8,7 +8,8 @@ Delivery Control Plane.
   versions, and local integration profiles.
 - `controller-release.json` defines the immutable controller release, its
   dependency pins, and the exact bootstrap commit used before a participant
-  pin is trusted.
+  pin is trusted. Release schema v2 also records the GitHub App contract
+  version independently from participant-facing contract versions.
 - `issue-metadata.yml` defines the native issue type, lifecycle stage, delivery
   state/readiness compatibility contract, governance metadata, and field
   transitions.
@@ -23,8 +24,9 @@ Delivery Control Plane.
   manifest remains authoritative for content, version, commit, digest, and
   capability policy.
 - `github-app-contract.json` defines the organization App and credential
-  boundary, including separate webhook and repository-dispatch signing
-  secrets; pull-request lifecycle events are signed observations and are not
+  boundary as contract version 2.0.0, including operation-specific token
+  profiles and separate webhook and repository-dispatch signing secrets;
+  pull-request lifecycle events are signed observations and are not
   invocation or lifecycle-transition events.
 - `controller-release.json` is checked against the explicitly supplied
   Architecture, Primitives, Distribution, and `.github-private` checkouts by

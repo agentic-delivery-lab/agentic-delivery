@@ -1,6 +1,7 @@
 {
-  "$schema": "../schemas/github-app-contract.v1.schema.json",
-  "schemaVersion": 1,
+  "$schema": "../schemas/github-app-contract.v2.schema.json",
+  "schemaVersion": 2,
+  "contractVersion": "2.0.0",
   "organization": {
     "login": "agentic-delivery-lab",
     "id": "327861320"

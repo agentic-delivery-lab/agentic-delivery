@@ -178,7 +178,13 @@ export function assertEventEnvelope(envelope) {
 export function validateControllerRelease(release) {
   const errors = [];
   if (!release || typeof release !== 'object' || Array.isArray(release)) return { valid: false, errors: ['release must be an object'] };
-  if (release.schemaVersion !== 1) addError(errors, 'schemaVersion', 'must be 1');
+  if (![1, 2].includes(release.schemaVersion)) addError(errors, 'schemaVersion', 'must be 1 or 2');
+  if (release.schemaVersion === 2 && release.$schema !== '../schemas/controller-release.v2.schema.json') {
+    addError(errors, '$schema', 'must reference controller-release.v2.schema.json');
+  }
+  if (release.schemaVersion === 2 && (typeof release.githubAppContractVersion !== 'string' || !SEMVER.test(release.githubAppContractVersion))) {
+    addError(errors, 'githubAppContractVersion', 'must use SemVer');
+  }
   if (release.controllerId !== 'agentic-delivery') addError(errors, 'controllerId', 'must be agentic-delivery');
   if (typeof release.version !== 'string' || !SEMVER.test(release.version)) addError(errors, 'version', 'must use SemVer');
   if (typeof release.commit !== 'string' || !SHA1.test(release.commit)) addError(errors, 'commit', 'must be a 40-character hexadecimal SHA');
@@ -204,6 +210,11 @@ export function validateControllerRelease(release) {
         addError(errors, `support.${name}`, 'must contain SemVer versions');
       }
     }
+    if (release.schemaVersion === 2
+      && (!Array.isArray(support.githubAppContractVersions) || support.githubAppContractVersions.length === 0
+        || support.githubAppContractVersions.some((version) => typeof version !== 'string' || !SEMVER.test(version)))) {
+      addError(errors, 'support.githubAppContractVersions', 'must contain SemVer versions');
+    }
     for (const name of ['primitiveCompatibility', 'architectureCompatibility']) {
       if (!Array.isArray(support[name]) || support[name].length === 0 || support[name].some((range) => typeof range !== 'string' || !/^\d+\.x$/.test(range))) {
         addError(errors, `support.${name}`, 'must contain major compatibility ranges such as 0.x');
@@ -227,6 +238,10 @@ export function validateControllerRelease(release) {
         if (Array.isArray(support[`${name}Versions`]) && !support[`${name}Versions`].includes(contracts[name])) {
           addError(errors, `support.${name}Versions`, `must include contracts.${name}`);
         }
+      }
+      if (release.schemaVersion === 2 && Array.isArray(support.githubAppContractVersions)
+        && !support.githubAppContractVersions.includes(release.githubAppContractVersion)) {
+        addError(errors, 'support.githubAppContractVersions', 'must include githubAppContractVersion');
       }
     }
   }
@@ -258,6 +273,14 @@ export function validateControllerRelease(release) {
       if (contracts && typeof contracts === 'object' && !Array.isArray(contracts)
         && release.compatibility[name] !== contracts[name]) {
         addError(errors, `compatibility.${name}`, `must match contracts.${name}`);
+      }
+    }
+    if (release.schemaVersion === 2) {
+      if (typeof release.compatibility.githubAppContractVersion !== 'string' || !SEMVER.test(release.compatibility.githubAppContractVersion)) {
+        addError(errors, 'compatibility.githubAppContractVersion', 'must use SemVer');
+      }
+      if (release.compatibility.githubAppContractVersion !== release.githubAppContractVersion) {
+        addError(errors, 'compatibility.githubAppContractVersion', 'must match githubAppContractVersion');
       }
     }
     if (!Array.isArray(release.compatibility.controllers) || release.compatibility.controllers.length === 0) {

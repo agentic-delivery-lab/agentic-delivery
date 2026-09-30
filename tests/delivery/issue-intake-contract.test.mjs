@@ -91,11 +91,9 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   );
   assert.ok(intakeWorkflow.jobs.classify.outputs.controller_version);
   assert.ok(intakeWorkflow.jobs.classify.outputs.controller_commit);
-  assert.match(
-    await text('.github/workflows/issue-intake.yml'),
-    /steps\.invocation\.outputs\.controller_commit \|\| github\.event\.client_payload\.controller\.commit/,
-  );
   const intakeSource = await text('.github/workflows/issue-intake.yml');
+  assert.match(intakeSource, /steps\.invocation\.outputs\.controller_commit \|\| steps\.participant\.outputs\.controller_commit/);
+  assert.doesNotMatch(intakeSource, /inputs\.controller_commit|github\.event\.client_payload\.controller/);
   assert.match(intakeSource, /Check out the validated controller release/);
   assert.match(intakeSource, /ref: c83fb414a0b5637bf8b8ba3d3539a7e669958512/);
   assert.doesNotMatch(intakeSource, /ref: main/);
@@ -107,6 +105,11 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(intakeWorkflow.jobs.authorize.permissions.issues, 'read');
   assert.equal(intakeWorkflow.on.workflow_dispatch.inputs.force_read_only.default, true);
   assert.equal(intakeWorkflow.on.workflow_dispatch.inputs.controller_commit, undefined);
+  assert.equal(intakeWorkflow.on.workflow_call.inputs.controller_commit, undefined);
+  const intakeCallerCheck = intakeWorkflow.jobs.authorize.steps.find((step) => step.name === 'Validate intake caller provenance');
+  assert.ok(intakeCallerCheck);
+  assert.match(intakeCallerCheck.run, /CALLER_WORKFLOW_REF/);
+  assert.match(intakeCallerCheck.run, /refs\/heads\/main/);
   assert.match(await text('.github/workflows/issue-intake.yml'), /authorize-issue-event\.mjs/);
   assert.match(await text('.github/workflows/issue-intake.yml'), /steps\.invocation\.outputs\.accepted == 'true'/);
   assert.doesNotMatch(await text('.github/workflows/issue-intake.yml'), /\n\s*issue_comment:\s*\n/);
@@ -124,6 +127,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.match(participant.run, /participantForRepository\(registry, process\.env\.ORIGIN_REPOSITORY_ID\)/);
   assert.match(participant.run, /participant\.expectedFullName !== process\.env\.ORIGIN_REPOSITORY/);
   assert.match(participant.run, /participant\.mode === 'disabled'/);
+  assert.match(participant.run, /controller_version=\$\{participant\.controller\.version\}/);
   assert.match(participant.run, /controller_commit=\$\{participant\.controller\.commit\}/);
   assert.equal(participant['working-directory'], 'trusted-intake');
   assert.ok(intakePolicy);
@@ -155,8 +159,9 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(intakeWorkflow.jobs.deliver.permissions['pull-requests'], undefined);
   assert.match(intakeWorkflow.jobs.deliver.if, /needs\.classify\.outputs\.participant_mode == 'active'/);
   assert.match(intakeWorkflow.jobs.deliver.if, /needs\.classify\.outputs\.read_only_run == 'false'/);
-  assert.equal(intakeWorkflow.jobs.deliver.with.participant_mode, '${{ needs.classify.outputs.participant_mode }}');
-  assert.equal(intakeWorkflow.jobs.deliver.with.read_only_run, "${{ needs.classify.outputs.read_only_run == 'true' }}");
+  assert.equal(intakeWorkflow.jobs.deliver.with.participant_mode, undefined);
+  assert.equal(intakeWorkflow.jobs.deliver.with.controller_commit, undefined);
+  assert.equal(intakeWorkflow.jobs.deliver.with.read_only_run, undefined);
   assert.equal(intakeWorkflow.jobs.deliver.secrets.CODEX_DELIVERY_APP_PRIVATE_KEY, '${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}');
   assert.equal(intakeWorkflow.jobs.deliver.secrets.CODEX_DELIVERY_APP_ID, undefined);
   assert.equal(intakeWorkflow.jobs.deliver.secrets.CODEX_DELIVERY_APP_INSTALLATION_ID, undefined);
@@ -173,10 +178,9 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(routing.env.CODEX_DELIVERY_APP_PRIVATE_KEY, '${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}');
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.issue.required, true);
   assert.equal(deliveryWorkflow.on.workflow_call.inputs.route.required, true);
-  assert.equal(deliveryWorkflow.on.workflow_call.inputs.participant_mode.required, true);
-  assert.equal(deliveryWorkflow.on.workflow_call.inputs.controller_commit.required, true);
-  assert.equal(deliveryWorkflow.on.workflow_call.inputs.read_only_run.required, true);
-  assert.equal(deliveryWorkflow.on.workflow_call.inputs.read_only_run.type, 'boolean');
+  assert.equal(deliveryWorkflow.on.workflow_call.inputs.participant_mode, undefined);
+  assert.equal(deliveryWorkflow.on.workflow_call.inputs.controller_commit, undefined);
+  assert.equal(deliveryWorkflow.on.workflow_call.inputs.read_only_run, undefined);
   assert.equal(deliveryWorkflow.on.workflow_dispatch.inputs.force_read_only.default, true);
   assert.equal(deliveryWorkflow.on.workflow_dispatch.inputs.controller_commit, undefined);
   assert.equal(deliveryWorkflow.on.workflow_call.secrets.CODEX_DELIVERY_APP_PRIVATE_KEY.required, true);
@@ -201,23 +205,16 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(resolver.permissions.contents, 'read');
   assert.equal(resolver.permissions.issues, undefined);
   const manualBootstrap = resolver.steps.find((step) => step.name === 'Check out trusted participant registry bootstrap');
-  assert.equal(manualBootstrap.if, "${{ inputs.route == '' }}");
+  assert.equal(manualBootstrap.if, undefined);
   assert.equal(manualBootstrap.with.path, 'trusted-bootstrap');
   assert.equal(manualBootstrap.with.ref, 'c83fb414a0b5637bf8b8ba3d3539a7e669958512');
-  const manualParticipant = resolver.steps.find((step) => step.name === 'Resolve pinned participant and read-only policy for manual recovery');
-  assert.equal(manualParticipant.id, 'manual-policy');
-  assert.equal(manualParticipant.if, "${{ inputs.route == '' }}");
-  assert.match(manualParticipant.run, /loadParticipantRegistry\(\)/);
-  assert.match(manualParticipant.run, /participantForRepository\(registry, process\.env\.ORIGIN_REPOSITORY_ID\)/);
-  assert.match(manualParticipant.run, /participant\.expectedFullName !== process\.env\.ORIGIN_REPOSITORY/);
-  assert.match(manualParticipant.run, /participant\.controller\.commit/);
-  assert.match(manualParticipant.run, /force_read_only input must be true or false/);
-  const calledPolicy = resolver.steps.find((step) => step.name === 'Resolve read-only policy for reusable delivery');
-  assert.equal(calledPolicy.id, 'called-policy');
-  assert.equal(calledPolicy.if, "${{ inputs.route != '' }}");
-  assert.match(calledPolicy.run, /REQUESTED_READ_ONLY_RUN/);
-  assert.match(resolver.outputs.controller_commit, /steps\.manual-policy\.outputs\.controller_commit/);
-  assert.match(resolver.outputs.controller_commit, /steps\.called-policy\.outputs\.controller_commit/);
+  const participantPolicy = resolver.steps.find((step) => step.name === 'Resolve caller and participant policy from trusted inputs');
+  assert.equal(participantPolicy.id, 'participant-policy');
+  assert.equal(participantPolicy.env.CALLER_WORKFLOW_REF, '${{ github.workflow_ref }}');
+  assert.equal(participantPolicy.env.EVENT_PAYLOAD_PATH, '${{ github.event_path }}');
+  assert.equal(participantPolicy.env.FORCE_READ_ONLY, "${{ github.event_name == 'workflow_dispatch' && format('{0}', github.event.inputs.force_read_only) || 'unset' }}");
+  assert.match(participantPolicy.run, /resolve-delivery-participant\.mjs/);
+  assert.equal(resolver.outputs.controller_commit, '${{ steps.participant-policy.outputs.controller_commit }}');
   const installDelivery = deliveryWorkflow.jobs.deliver.steps.find((step) => step.name === 'Install trusted controller dependencies');
   const runDelivery = deliveryWorkflow.jobs.deliver.steps.find((step) => step.name === 'Run source issue delivery');
   const pinnedDeliveryCheckout = deliveryWorkflow.jobs.deliver.steps.find((step) => step.name === 'Check out pinned controller');

@@ -38,8 +38,9 @@ content pull request.
 
 The central GitHub App installation needs the organization permissions
 `Issue Fields: read` and `Issue Types: read` to read the definitions, pins,
-options, and native types used by lifecycle validation. The versioned App
-contract lists both permissions. Intake and delivery request these two reads
+options, and native types used by lifecycle validation. GitHub App contract
+version 2.0.0 lists both permissions and the operation-specific token
+profiles. Intake and delivery request these two reads
 with their operation-specific repository permissions and narrow each token to
 the originating repository ID for repository resources. The organization
 catalog reads themselves are organization-wide and are not narrowed by that

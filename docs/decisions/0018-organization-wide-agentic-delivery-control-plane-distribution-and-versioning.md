@@ -136,6 +136,12 @@ permission. [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery
 tracks this implementation and the read-only canary that must verify it after
 the immutable controller pin is active.
 
+The organization App contract has a SemVer `contractVersion` as well as a
+schema version. A required-shape change advances the contract's major version
+and uses a new schema file; the controller release pins the exact App contract
+version implemented by its immutable commit. This permission-profile change
+uses App contract `2.0.0` and controller release schema v2.
+
 ### Participation contract
 
 Participation is the conjunction of two independently auditable conditions:
@@ -172,6 +178,16 @@ mode or the run-level read-only override is enabled. Missing or invalid policy
 is rejected before delivery token creation or model startup. Delivery requires
 an active participant and `read_only_run` to be false. This eligibility check
 does not select or alter the semantic route.
+
+Reusable workflow inputs do not establish participant mode, controller pin, or
+read-only state. The delivery resolver checks out the fixed bootstrap commit,
+restricts callers to the central `issue-intake` or `agent-invocation` workflow
+on `main`, and resolves those values again from the participant registry. It
+also compares the origin identity with the triggering event or validated
+dispatch envelope. Direct manual recovery is accepted only from
+`codex-delivery.yml` on `main`; its read-only input can restrict a run but
+cannot promote a shadow participant. These checks remain in place at the
+reusable workflow boundary even when its caller has already applied them.
 
 ### Event and execution boundary
 

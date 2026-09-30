@@ -1,12 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/schemas/github-app-contract.v1.schema.json",
-  "title": "Agentic Delivery organization GitHub App contract v1",
+  "$id": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/schemas/github-app-contract.v2.schema.json",
+  "title": "Agentic Delivery organization GitHub App contract v2",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "organization", "installation", "controller", "events", "permissions", "credentials", "tokenScopes"],
+  "required": ["schemaVersion", "contractVersion", "organization", "installation", "controller", "events", "permissions", "credentials", "tokenScopes"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
+    "contractVersion": { "const": "2.0.0" },
     "organization": {
       "type": "object",
       "additionalProperties": false,
@@ -49,11 +50,13 @@
     "permissions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["metadata", "contents", "issues", "pull_requests", "workflows"],
+      "required": ["metadata", "contents", "issues", "issue_fields", "issue_types", "pull_requests", "workflows"],
       "properties": {
         "metadata": { "const": "read" },
         "contents": { "const": "write" },
         "issues": { "const": "write" },
+        "issue_fields": { "const": "read" },
+        "issue_types": { "const": "read" },
         "pull_requests": { "const": "write" },
         "workflows": { "const": "none" }
       }
@@ -77,10 +80,20 @@
         "origin": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["repositoryIds", "permissions"],
+          "required": ["repositoryIds", "profiles"],
           "properties": {
             "repositoryIds": { "const": "origin-event-repository" },
-            "permissions": { "const": "read-minimum" }
+            "profiles": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["invocationPreflight", "readOnlyIntake", "activeIntake", "delivery"],
+              "properties": {
+                "invocationPreflight": { "$ref": "#/$defs/originTokenProfile" },
+                "readOnlyIntake": { "$ref": "#/$defs/originTokenProfile" },
+                "activeIntake": { "$ref": "#/$defs/originTokenProfile" },
+                "delivery": { "$ref": "#/$defs/originTokenProfile" }
+              }
+            }
           }
         },
         "controller": {
@@ -90,6 +103,34 @@
           "properties": {
             "repositoryIds": { "const": "controller-repository" },
             "permissions": { "const": "contents-write-dispatch-only" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "originTokenProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryPermissions", "organizationPermissions"],
+      "properties": {
+        "repositoryPermissions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["contents", "issues", "pull_requests"],
+          "properties": {
+            "contents": { "enum": ["read", "write"] },
+            "issues": { "enum": ["read", "write"] },
+            "pull_requests": { "enum": ["read", "write"] },
+            "metadata": { "const": "read" }
+          }
+        },
+        "organizationPermissions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "issue_fields": { "const": "read" },
+            "issue_types": { "const": "read" }
           }
         }
       }

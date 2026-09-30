@@ -96,8 +96,11 @@ controller SHA. `force_read_only` defaults to `true`. The standalone delivery
 workflow resolves policy in a hosted job with contents-read permission only;
 its self-hosted delivery job runs only for an active participant with an
 effective non-read-only run. Reusable delivery checks out the immutable
-controller SHA resolved during intake. Neither path falls back to a moving
-`main` ref.
+controller SHA selected from the registry. Its hosted resolver also verifies
+the main-branch caller and source repository, then re-reads participant mode
+and the controller pin from the fixed bootstrap registry. The reusable workflow
+does not accept those policy values from its caller. Neither path falls back
+to a moving `main` ref.
 
 The Vercel ingress mints a repository-scoped read token for origin actor and
 source checks, then a separate controller token narrowed to the controller

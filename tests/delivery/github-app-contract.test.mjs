@@ -12,10 +12,19 @@ const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 
 test('organization GitHub App contract includes lifecycle events and central credential boundaries', async () => {
   const contract = JSON.parse(await readFile(path.join(repositoryRoot, 'config/github-app-contract.json'), 'utf8'));
+  const schemaV1 = JSON.parse(await readFile(path.join(repositoryRoot, 'schemas/github-app-contract.v1.schema.json'), 'utf8'));
+  const schemaV2 = JSON.parse(await readFile(path.join(repositoryRoot, 'schemas/github-app-contract.v2.schema.json'), 'utf8'));
   const eventCatalog = parseRepositoryYaml(await readFile(path.join(repositoryRoot, 'config/event-catalog.yml'), 'utf8'), 'event catalog');
   const deliverySource = await readFile(path.join(repositoryRoot, 'scripts/codex-delivery.mjs'), 'utf8');
   assert.deepEqual(validateEventCatalog(eventCatalog), { valid: true, errors: [] });
   assert.deepEqual(validateGithubAppContract(contract, undefined, eventCatalog), { valid: true, errors: [] });
+  assert.equal(contract.schemaVersion, 2);
+  assert.equal(contract.contractVersion, '2.0.0');
+  assert.equal(contract.$schema, '../schemas/github-app-contract.v2.schema.json');
+  assert.equal(schemaV1.properties.schemaVersion.const, 1);
+  assert.equal(schemaV1.properties.contractVersion, undefined);
+  assert.equal(schemaV2.properties.schemaVersion.const, 2);
+  assert.deepEqual(schemaV2.properties.contractVersion, { const: '2.0.0' });
   assert.equal(contract.installation.access, 'selected-repositories');
   assert.equal(contract.credentials.privateKey, 'central-deployment-only');
   assert.equal(contract.credentials.dispatchSecret, 'central-gateway-and-controller-only');
@@ -42,6 +51,17 @@ test('organization GitHub App contract includes lifecycle events and central cre
   assert.equal(contract.tokenScopes.controller.organizationPermissions, undefined);
   assert.equal(contract.permissions.workflows, 'none');
   assert.doesNotMatch(deliverySource, /workflows\s*:\s*['"]write['"]/);
+});
+
+test('the expanded GitHub App contract cannot retain a version-1 identity', async () => {
+  const contract = JSON.parse(await readFile(path.join(repositoryRoot, 'config/github-app-contract.json'), 'utf8'));
+  const invalid = structuredClone(contract);
+  invalid.schemaVersion = 1;
+  invalid.contractVersion = '1.0.0';
+  const result = validateGithubAppContract(invalid);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => error.includes('schemaVersion must be 2')));
+  assert.ok(result.errors.some((error) => error.includes('contractVersion must be 2.0.0')));
 });
 
 test('runtime token requests use declared least-privilege profiles and origin repository narrowing', async () => {

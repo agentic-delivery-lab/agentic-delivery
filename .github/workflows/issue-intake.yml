@@ -10,11 +10,6 @@ on:
         required: false
         default: false
         type: boolean
-      controller_commit:
-        description: Immutable controller commit used when the event has no participant envelope
-        required: false
-        default: '53c76a68cf1a7cab2141034bd477d8cb761bf4c6'
-        type: string
     secrets:
       CODEX_DELIVERY_APP_PRIVATE_KEY:
         required: true
@@ -55,6 +50,31 @@ jobs:
     outputs:
       authorized: ${{ steps.authorize.outputs.authorized }}
     steps:
+      - name: Validate intake caller provenance
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GIT_REF: ${{ github.ref }}
+          CALLER_WORKFLOW_REF: ${{ github.workflow_ref }}
+          AGENT_INVOCATION: ${{ inputs.agent_invocation || false }}
+        run: |
+          node --input-type=module <<'NODE'
+          const eventName = process.env.EVENT_NAME;
+          const caller = process.env.CALLER_WORKFLOW_REF;
+          const ref = process.env.GIT_REF;
+          const agentInvocation = process.env.AGENT_INVOCATION === 'true';
+          const central = 'agentic-delivery-lab/agentic-delivery/.github/workflows/';
+          const intake = `${central}issue-intake.yml@refs/heads/main`;
+          const invocation = `${central}agent-invocation.yml@refs/heads/main`;
+          if (ref !== 'refs/heads/main') throw new Error('Issue intake is only authorized from refs/heads/main.');
+          if (agentInvocation) {
+            if (caller !== invocation || eventName !== 'repository_dispatch') {
+              throw new Error('Agent invocation must come from the central agent-invocation workflow on main.');
+            }
+          } else if (caller !== intake || !['issues', 'workflow_dispatch'].includes(eventName)) {
+            throw new Error('Issue intake must run from its central main-branch issue or manual workflow.');
+          }
+          NODE
+
       - name: Check out trusted authorization
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -94,8 +114,8 @@ jobs:
       origin_repository_id: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
       participant_mode: ${{ steps.intake-policy.outputs.participant_mode }}
       read_only_run: ${{ steps.intake-policy.outputs.read_only_run }}
-      controller_version: ${{ steps.invocation.outputs.controller_version || github.event.client_payload.controller.version }}
-      controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || steps.participant.outputs.controller_commit || inputs.controller_commit || '53c76a68cf1a7cab2141034bd477d8cb761bf4c6' }}
+      controller_version: ${{ steps.invocation.outputs.controller_version || steps.participant.outputs.controller_version }}
+      controller_commit: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}
       invocation_event_name: ${{ steps.invocation.outputs.invocation_event_name }}
       invocation_source_kind: ${{ steps.invocation.outputs.invocation_source_kind }}
       invocation_comment_id: ${{ steps.invocation.outputs.invocation_comment_id }}
@@ -144,6 +164,7 @@ jobs:
           }
           if (participant.mode === 'disabled') throw new Error('The participant registry mode is disabled.');
           process.stdout.write(`participant_mode=${participant.mode}\n`);
+          process.stdout.write(`controller_version=${participant.controller.version}\n`);
           process.stdout.write(`controller_commit=${participant.controller.commit}\n`);
           NODE
         working-directory: trusted-intake
@@ -179,7 +200,7 @@ jobs:
       - name: Validate the selected controller commit
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
         env:
-          CONTROLLER_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || steps.participant.outputs.controller_commit || inputs.controller_commit || '53c76a68cf1a7cab2141034bd477d8cb761bf4c6' }}
+          CONTROLLER_COMMIT: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}
         run: |
           set -euo pipefail
           [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
@@ -188,7 +209,7 @@ jobs:
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || steps.participant.outputs.controller_commit || inputs.controller_commit || '53c76a68cf1a7cab2141034bd477d8cb761bf4c6' }}
+          ref: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}
           persist-credentials: false
 
       - name: Install validated controller dependencies
@@ -225,7 +246,7 @@ jobs:
           PARTICIPANT_MODE: ${{ steps.intake-policy.outputs.participant_mode }}
           READ_ONLY_RUN: ${{ steps.intake-policy.outputs.read_only_run }}
           FORCE_READ_ONLY: ${{ inputs.force_read_only || false }}
-          CONTROL_PLANE_COMMIT: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || steps.participant.outputs.controller_commit || inputs.controller_commit || '53c76a68cf1a7cab2141034bd477d8cb761bf4c6' }}
+          CONTROL_PLANE_COMMIT: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}
         run: node scripts/issue-intake.mjs
 
   deliver:
@@ -253,9 +274,6 @@ jobs:
       route: ${{ needs.classify.outputs.route }}
       origin_repository: ${{ needs.classify.outputs.origin_repository }}
       origin_repository_id: ${{ needs.classify.outputs.origin_repository_id }}
-      participant_mode: ${{ needs.classify.outputs.participant_mode }}
-      controller_commit: ${{ needs.classify.outputs.controller_commit }}
-      read_only_run: ${{ needs.classify.outputs.read_only_run == 'true' }}
       invocation_event_name: ${{ needs.classify.outputs.invocation_event_name }}
       invocation_source_kind: ${{ needs.classify.outputs.invocation_source_kind }}
       invocation_comment_id: ${{ needs.classify.outputs.invocation_comment_id }}
