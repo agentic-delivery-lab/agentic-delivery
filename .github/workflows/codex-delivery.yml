@@ -104,9 +104,9 @@ jobs:
     timeout-minutes: 350
     env:
       CODEX_AUTH_HOME: /var/lib/github-runner/.codex
-      ORIGIN_REPOSITORY: ${{ inputs.origin_repository }}
-      ORIGIN_REPOSITORY_ID: ${{ inputs.origin_repository_id }}
-      PARTICIPANT_MODE: ${{ inputs.participant_mode }}
+      ORIGIN_REPOSITORY: ${{ inputs.origin_repository || github.repository }}
+      ORIGIN_REPOSITORY_ID: ${{ inputs.origin_repository_id || github.event.repository.id }}
+      PARTICIPANT_MODE: ${{ inputs.participant_mode || steps.manual-participant.outputs.participant_mode }}
       CONTROL_PLANE_COMMIT: ${{ inputs.controller_commit }}
       GITHUB_EVENT_NAME: ${{ inputs.invocation_event_name == 'issues' && 'issues' || (inputs.invocation_event_name != '' && 'issue_comment' || github.event_name) }}
       GITHUB_TRIGGERING_ACTOR: ${{ inputs.invocation_actor || github.triggering_actor || github.actor }}
@@ -138,6 +138,27 @@ jobs:
 
       - name: Install trusted controller dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Resolve participant mode for manual recovery
+        id: manual-participant
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          ORIGIN_REPOSITORY: ${{ github.repository }}
+          ORIGIN_REPOSITORY_ID: ${{ github.event.repository.id }}
+        run: |
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import { loadParticipantRegistry, participantForRepository } from './scripts/lib/participant-registry.mjs';
+
+          const registry = await loadParticipantRegistry();
+          if (!registry.valid) throw new Error(`The participant registry is invalid: ${registry.errors.join(' ')}`);
+          const participant = participantForRepository(registry, process.env.ORIGIN_REPOSITORY_ID);
+          if (!participant) throw new Error('The event repository is not enrolled in the participant registry.');
+          if (participant.expectedFullName !== process.env.ORIGIN_REPOSITORY) {
+            throw new Error('The event repository name does not match the participant registry.');
+          }
+          if (participant.mode === 'disabled') throw new Error('The participant registry mode is disabled.');
+          process.stdout.write(`participant_mode=${participant.mode}\n`);
+          NODE
 
       - name: Run source issue delivery
         env:
