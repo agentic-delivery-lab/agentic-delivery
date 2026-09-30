@@ -23,6 +23,10 @@ and releases use [Semantic Versioning](https://semver.org/).
   derives those values from the fixed participant-registry bootstrap.
 - The GitHub App contract advances to version `2.0.0` with a version-2 schema;
   the draft40 controller release pins that contract version.
+- The controller release advances to `0.2.0-draft.40` at
+  `27eafd8003c4657742205e77739b4ee261482db4`; the central participant moves
+  to this immutable pin while draft39 and earlier releases remain available
+  for rollback.
 - Private agent publication validation can now reproduce each projection from
   the exact Primitive source commit named by its provenance lock; the release
   chain checks the same byte-for-byte relationship.

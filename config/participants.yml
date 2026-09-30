@@ -7,8 +7,8 @@ repositories:
     expectedFullName: agentic-delivery-lab/agentic-delivery
     mode: shadow
     controller:
-      version: 0.2.0-draft.39
-      commit: 53c76a68cf1a7cab2141034bd477d8cb761bf4c6
+      version: 0.2.0-draft.40
+      commit: 27eafd8003c4657742205e77739b4ee261482db4
     contracts:
       eventEnvelope: 1
       lifecycle: 1.0.0
