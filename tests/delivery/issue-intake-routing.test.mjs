@@ -271,6 +271,26 @@ test('an active participant read-only override uses the read-only App profile an
     pinnedFields: organizationFields,
   }));
   const fetchImpl = async (url, options) => {
+    if (url === 'https://api.github.com/graphql') {
+      const request = JSON.parse(options.body);
+      graphqlRequests.push({ ...request, headers: options.headers, method: options.method });
+      return new Response(JSON.stringify({
+        data: {
+          repository: {
+            issue: {
+              id: 'I_17', number: 17, state: 'OPEN', title: 'Task: read-only intake',
+              body: 'Check the organization metadata without changing this issue.',
+              issueType: null, issueFieldValues: { nodes: [] }, parent: null, subIssues: { nodes: [] },
+            },
+          },
+          organization: {
+            issueTypes: { nodes: organizationIssueTypes },
+            issueFields: { nodes: organizationFields },
+            pinnedIssueFields: { nodes: organizationFields },
+          },
+        },
+      }), { status: 200 });
+    }
     if (url.endsWith('/access_tokens')) {
       tokenRequests.push(JSON.parse(options.body));
       return new Response(JSON.stringify({ token: 'read-only-origin-token', expires_at: '2099-01-01T00:00:00Z' }), { status: 201 });
@@ -296,16 +316,6 @@ test('an active participant read-only override uses the read-only App profile an
     },
     event: { action: 'workflow_dispatch', issue: {}, repository: { full_name: origin } },
     fetchImpl,
-    graphqlImpl: async (query, variables) => {
-      graphqlRequests.push({ query, variables });
-      return {};
-    },
-    controlPlaneReader: async () => ({
-      id: 'I_17', issueType: null, issueFieldValues: { nodes: [] },
-      organizationIssueTypes,
-      organizationIssueFields: organizationFields,
-      organizationPinnedIssueFields: organizationFields,
-    }),
     config,
     reasonRoute: async () => ({
       route: 'plan', workType: 'task', state: 'ready-for-plan',
@@ -329,7 +339,18 @@ test('an active participant read-only override uses the read-only App profile an
     },
   });
   assert.equal(fixture.calls.some((call) => call.method !== 'GET'), false);
-  assert.equal(graphqlRequests.length, 0, 'read-only routing must not invoke type or issue-field mutations');
+  assert.equal(graphqlRequests.length, 1);
+  assert.equal(graphqlRequests[0].method, 'POST');
+  assert.equal(graphqlRequests[0].headers.Authorization, 'Bearer read-only-origin-token');
+  assert.equal(graphqlRequests[0].headers['X-GitHub-Api-Version'], '2026-03-10');
+  assert.deepEqual(graphqlRequests[0].variables, {
+    owner: 'agentic-delivery-lab', name: 'service-a', number: 17, organization: 'agentic-delivery-lab',
+  });
+  assert.match(graphqlRequests[0].query, /issueFieldValues\(first: 100\)/);
+  assert.match(graphqlRequests[0].query, /issueTypes\(first: 100\)/);
+  assert.match(graphqlRequests[0].query, /pinnedIssueFields\(first: 100\)/);
+  assert.match(graphqlRequests[0].query, /issueFields\(first: 100\)/);
+  assert.doesNotMatch(graphqlRequests[0].query, /mutation\s/);
 });
 
 test('classifies and hands off a ready issue only after metadata reconciliation and actor authorization', async () => {

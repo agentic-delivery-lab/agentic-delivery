@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -36,7 +37,7 @@ async function fixture(t) {
   const env = {...process.env, GH_TOKEN:'fixture-token', PUBLISH_TOKEN:'fixture-publish-token', GITHUB_EVENT_PATH:eventFile, RUNNER_WORKSPACE:root,
     CODEX_DELIVERY_STATE_DIR:stateRoot, GITHUB_REPOSITORY:'fixture/repo', GITHUB_ACTOR:'maintainer',
     GITHUB_EVENT_NAME:'workflow_dispatch', GITHUB_RUN_ID:'1', SOURCE_ISSUE:'7'};
-  const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], publishHeaders:[], pushHeaders:[], clients:0, closes:0};
+  const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], publishHeaders:[], pushHeaders:[], accessTokenRequests:[], clients:0, closes:0};
   const faults = {
     permission:'write', sourceState:'open', sourceTitle:'Add a file', sourceBody:'Create result.txt', sourceComments:[],
     sourceLabels:['type:task', 'state:ready-for-plan'], sourceNativeType:'Task',
@@ -81,6 +82,10 @@ async function fixture(t) {
   });
   const dependencies = {
     fetch:async (url, options) => {
+      if (url.endsWith('/access_tokens')) {
+        calls.accessTokenRequests.push(JSON.parse(options.body));
+        return new Response(JSON.stringify({token:'fixture-installation-token', expires_at:'2099-01-01T00:00:00Z'}), {status:201});
+      }
       const route = url.replace('https://api.github.com/repos/fixture/repo', '');
       const body = options.body ? JSON.parse(options.body) : undefined;
       if (route.startsWith('/pulls')) calls.publishHeaders.push(options.headers.Authorization);
@@ -238,6 +243,25 @@ test('rejects an origin repository ID that differs from the authenticated event 
   await assert.rejects(f.run(), /Origin repository ID does not match the authenticated event repository/);
   assert.equal(f.calls.clients, 0);
   assert.equal(f.calls.prs.length, 0);
+});
+
+test('delivery mints an origin-scoped App token with the declared organization metadata reads', async (t) => {
+  const f = await fixture(t);
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  f.env.CODEX_DELIVERY_APP_ID = '5011055';
+  f.env.CODEX_DELIVERY_APP_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' });
+  f.env.CODEX_DELIVERY_APP_INSTALLATION_ID = '163255060';
+  delete f.env.PUBLISH_TOKEN;
+
+  await f.run();
+
+  assert.deepEqual(f.calls.accessTokenRequests, [{
+    permissions: {
+      contents: 'write', issues: 'write', pull_requests: 'write',
+      issue_fields: 'read', issue_types: 'read',
+    },
+    repository_ids: ['101'],
+  }]);
 });
 
 test('does not start a model turn when the source issue is not ready for planning', async (t) => {

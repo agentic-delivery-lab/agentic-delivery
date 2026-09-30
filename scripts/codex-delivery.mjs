@@ -383,6 +383,7 @@ export async function deliver(env = process.env, dependencies = {}) {
       // installation token aligned with the explicit delivery profile in the
       // versioned GitHub App contract.
       permissions: githubAppTokenPermissions('delivery'),
+      fetchImpl: fetchApi,
     })
     : null;
   const originToken = appProvider
