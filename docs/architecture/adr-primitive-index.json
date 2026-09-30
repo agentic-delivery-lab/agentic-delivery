@@ -127,7 +127,9 @@
       ],
       "primitives": [
         "codex-delivery-controller",
-        "codex-delivery-workflow-guide"
+        "codex-delivery-workflow-guide",
+        "harness-architecture-review",
+        "semantic-architecture-review"
       ]
     },
     {
@@ -646,6 +648,7 @@
       "kind": "validator",
       "enforcement": "deterministic",
       "adrs": [
+        "ADR-0009",
         "ADR-0011",
         "ADR-0013"
       ],
@@ -966,6 +969,7 @@
       "kind": "customization",
       "enforcement": "semantic",
       "adrs": [
+        "ADR-0009",
         "ADR-0011",
         "ADR-0018"
       ],

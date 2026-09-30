@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"semantic-architecture-review","kind":"customization","enforcement":"semantic","adrs":["ADR-0011","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
+// agentic-primitive: {"id":"semantic-architecture-review","kind":"customization","enforcement":"semantic","adrs":["ADR-0009","ADR-0011","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -6,6 +6,14 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { CodexClient, MODELS } from './codex-client.mjs';
+import {
+  QUOTA_DIAGNOSTICS_SCHEMA_VERSION,
+  QUOTA_REASON,
+  QUOTA_REASON_CODES,
+  QUOTA_STOP_PHASE,
+  QUOTA_STOP_PHASES,
+  QUOTA_TRIGGER_CODES,
+} from './quota-diagnostics.mjs';
 import { outcomeSchema, runTurn } from './codex-loop.mjs';
 import { gitFiles, gitShow, parseEvidenceMarker } from './architecture-review.mjs';
 
@@ -142,20 +150,13 @@ function validFinding(finding) {
     && typeof finding.recommendedAction === 'string' && finding.recommendedAction.trim();
 }
 
-const QUOTA_REASON_CODES = new Set([
-  'invalid_bucket', 'credit_spillover', 'unlimited_credits', 'credit_telemetry_unavailable',
-  'missing_or_invalid_window', 'window_reserve',
-  'server_rate_limit', 'spend_control', 'telemetry_unavailable',
-]);
-const QUOTA_TRIGGER_CODES = new Set([
-  'credit_spillover', 'unlimited_credits', 'credit_telemetry_unavailable',
-  'window_reserve', 'server_rate_limit', 'spend_control',
-]);
+const QUOTA_REASON_CODE_SET = new Set(QUOTA_REASON_CODES);
+const QUOTA_TRIGGER_CODE_SET = new Set(QUOTA_TRIGGER_CODES);
 
 export function projectQuotaDiagnostics(budget, stopPhase) {
   const diagnostics = budget?.diagnostics;
-  const reasonCode = QUOTA_REASON_CODES.has(budget?.reasonCode) ? budget.reasonCode
-    : QUOTA_REASON_CODES.has(diagnostics?.reasonCode) ? diagnostics.reasonCode : null;
+  const reasonCode = QUOTA_REASON_CODE_SET.has(budget?.reasonCode) ? budget.reasonCode
+    : QUOTA_REASON_CODE_SET.has(diagnostics?.reasonCode) ? diagnostics.reasonCode : null;
   if (!reasonCode) return null;
   const bucketName = (value) => typeof value === 'string' && /^bucket-[1-9]\d{0,3}$/.test(value);
   const projectWindow = (window) => {
@@ -172,7 +173,7 @@ export function projectQuotaDiagnostics(budget, stopPhase) {
   const projectWindows = (items) => Array.isArray(items) ? items.map(projectWindow).filter(Boolean) : [];
   const allWindows = projectWindows(diagnostics?.windows);
   const requestedTriggers = projectWindows(diagnostics?.triggeringWindows);
-  const invalidStopWindows = ['invalid_bucket', 'missing_or_invalid_window'].includes(reasonCode)
+  const invalidStopWindows = [QUOTA_REASON.invalidBucket, QUOTA_REASON.missingOrInvalidWindow].includes(reasonCode)
     ? allWindows.filter((window) => !window.valid)
     : [];
   const triggeringWindows = [...new Map([...requestedTriggers, ...invalidStopWindows]
@@ -193,12 +194,13 @@ export function projectQuotaDiagnostics(budget, stopPhase) {
     ...allServerBlocks.filter((block) => block.rateLimitReached || block.spendControlReached),
     ...allServerBlocks.filter((block) => !block.rateLimitReached && !block.spendControlReached).slice(0, 32),
   ];
-  const phase = ['preflight', 'active_turn'].includes(stopPhase) ? stopPhase : 'unknown';
+  const phase = QUOTA_STOP_PHASES.includes(stopPhase) ? stopPhase : QUOTA_STOP_PHASE.unknown;
   return {
+    schemaVersion: QUOTA_DIAGNOSTICS_SCHEMA_VERSION,
     reasonCode,
     stopPhase: phase,
     triggerReasons: Array.isArray(diagnostics?.triggerReasons)
-      ? [...new Set(diagnostics.triggerReasons.filter((code) => QUOTA_TRIGGER_CODES.has(code)))].slice(0, 3)
+      ? [...new Set(diagnostics.triggerReasons.filter((code) => QUOTA_TRIGGER_CODE_SET.has(code)))].slice(0, 3)
       : [],
     windows,
     triggeringWindows,
@@ -287,7 +289,7 @@ export async function runSemanticReview({ repositoryRoot, review, eventPath, cre
     await client.initialize();
     const capabilityBudget = await client.capabilities();
     if (capabilityBudget?.stop) {
-      const quotaDiagnostics = projectQuotaDiagnostics(capabilityBudget, 'preflight');
+      const quotaDiagnostics = projectQuotaDiagnostics(capabilityBudget, QUOTA_STOP_PHASE.preflight);
       return {
         status: 'inconclusive',
         summary: 'Semantic architecture review was not completed.',

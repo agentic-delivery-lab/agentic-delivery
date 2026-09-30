@@ -5,6 +5,7 @@ import { existsSync, realpathSync, mkdirSync, mkdtempSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { isDeepStrictEqual } from 'node:util';
+import { QUOTA_REASON } from './quota-diagnostics.mjs';
 
 export const MODELS = Object.freeze({
   route: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
@@ -75,10 +76,13 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
   const buckets = entries.map(({ value }, index) => ({ name: `bucket-${index + 1}`, value }));
   const windows = buckets.flatMap(({ name, value }) => ['primary', 'secondary'].flatMap((slot) => {
     const window = value && typeof value === 'object' ? value[slot] : null;
-    if (!window || typeof window !== 'object' || Array.isArray(window)) {
-      return slot === 'primary' || Boolean(window)
+    if (window == null) {
+      return slot === 'primary'
         ? [{ bucket: name, slot, usedPercent: null, windowDurationMins: null, resetsAt: null, valid: false }]
         : [];
+    }
+    if (typeof window !== 'object' || Array.isArray(window)) {
+      return [{ bucket: name, slot, usedPercent: null, windowDurationMins: null, resetsAt: null, valid: false }];
     }
     const valid = Number.isFinite(window.usedPercent) && window.usedPercent >= 0 && window.usedPercent <= 100
       && Number.isFinite(window.windowDurationMins) && window.windowDurationMins > 0
@@ -113,42 +117,43 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
   });
 
   if (!mappedIsRecord || buckets.some(({ value }) => !value || typeof value !== 'object' || Array.isArray(value) || !value.primary
-    || (Boolean(value.secondary) && (typeof value.secondary !== 'object' || Array.isArray(value.secondary))))) {
-    return decision('invalid_bucket', 'Quota telemetry contains an invalid bucket.');
+    || (value.secondary != null && (typeof value.secondary !== 'object' || Array.isArray(value.secondary))))) {
+    return decision(QUOTA_REASON.invalidBucket, 'Quota telemetry contains an invalid bucket.');
   }
   const creditReasons = new Set();
   for (const { value } of buckets) {
     const credits = value.credits;
-    if (credits?.hasCredits === true) creditReasons.add('credit_spillover');
-    else if (credits?.hasCredits !== false) creditReasons.add('credit_telemetry_unavailable');
-    if (credits?.unlimited === true) creditReasons.add('unlimited_credits');
-    else if (credits?.unlimited !== false) creditReasons.add('credit_telemetry_unavailable');
+    if (credits?.hasCredits === true) creditReasons.add(QUOTA_REASON.creditSpillover);
+    else if (credits?.hasCredits !== false) creditReasons.add(QUOTA_REASON.creditTelemetryUnavailable);
+    if (credits?.unlimited === true) creditReasons.add(QUOTA_REASON.unlimitedCredits);
+    else if (credits?.unlimited !== false) creditReasons.add(QUOTA_REASON.creditTelemetryUnavailable);
   }
   if (creditReasons.size) {
-    const triggerReasons = ['credit_spillover', 'unlimited_credits', 'credit_telemetry_unavailable']
+    const triggerReasons = [QUOTA_REASON.creditSpillover, QUOTA_REASON.unlimitedCredits, QUOTA_REASON.creditTelemetryUnavailable]
       .filter((reasonCode) => creditReasons.has(reasonCode));
     const reasonCode = triggerReasons[0];
     const reasons = {
-      credit_spillover: 'Spendable credits are available; subscription-only execution is required.',
-      unlimited_credits: 'Unlimited credits are available; subscription-only execution is required.',
-      credit_telemetry_unavailable: 'Credit telemetry is missing or incomplete; subscription-only execution is required.',
+      [QUOTA_REASON.creditSpillover]: 'Spendable credits are available; subscription-only execution is required.',
+      [QUOTA_REASON.unlimitedCredits]: 'Unlimited credits are available; subscription-only execution is required.',
+      [QUOTA_REASON.creditTelemetryUnavailable]: 'Credit telemetry is missing or incomplete; subscription-only execution is required.',
     };
     return decision(reasonCode, reasons[reasonCode], triggerReasons);
   }
   if (!windows.some((window) => window.windowDurationMins === 300) || windows.some((window) => !window.valid)) {
-    return decision('missing_or_invalid_window', 'Quota telemetry is missing, invalid, or expired.');
+    return decision(QUOTA_REASON.missingOrInvalidWindow, 'Quota telemetry is missing, invalid, or expired.');
   }
 
   const exhausted = windows.filter((window) => window.usedPercent >= 98);
   const rateLimited = serverBlocks.some((bucket) => bucket.rateLimitReached);
   const spendControlled = serverBlocks.some((bucket) => bucket.spendControlReached);
   const triggerReasons = [
-    ...(exhausted.length ? ['window_reserve'] : []),
-    ...(rateLimited ? ['server_rate_limit'] : []),
-    ...(spendControlled ? ['spend_control'] : []),
+    ...(exhausted.length ? [QUOTA_REASON.windowReserve] : []),
+    ...(rateLimited ? [QUOTA_REASON.serverRateLimit] : []),
+    ...(spendControlled ? [QUOTA_REASON.spendControl] : []),
   ];
   const blocked = triggerReasons.length > 0;
-  const reasonCode = exhausted.length ? 'window_reserve' : rateLimited ? 'server_rate_limit' : spendControlled ? 'spend_control' : 'available';
+  const reasonCode = exhausted.length ? QUOTA_REASON.windowReserve : rateLimited ? QUOTA_REASON.serverRateLimit
+    : spendControlled ? QUOTA_REASON.spendControl : QUOTA_REASON.available;
   const nextEligibleAt = exhausted.length && !rateLimited && !spendControlled
     ? Math.max(...exhausted.map((window) => window.resetsAt))
     : null;
@@ -164,8 +169,8 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
 
 export function quotaTelemetryUnavailable() {
   const diagnostics = {
-    reasonCode: 'telemetry_unavailable',
-    triggerReasons: ['telemetry_unavailable'],
+    reasonCode: QUOTA_REASON.telemetryUnavailable,
+    triggerReasons: [QUOTA_REASON.telemetryUnavailable],
     windows: [],
     triggeringWindows: [],
     serverBlocks: [],
@@ -173,7 +178,7 @@ export function quotaTelemetryUnavailable() {
   };
   return {
     stop: true,
-    reasonCode: 'telemetry_unavailable',
+    reasonCode: QUOTA_REASON.telemetryUnavailable,
     reason: 'Quota telemetry is unavailable.',
     diagnostics,
   };

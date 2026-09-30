@@ -1,4 +1,5 @@
 import { MODELS, quotaBoundary, quotaTelemetryUnavailable } from './codex-client.mjs';
+import { QUOTA_STOP_PHASE } from './quota-diagnostics.mjs';
 
 const strings = { type: 'array', items: { type: 'string' } };
 const REFINEMENT_WORK_TYPES = ['bug', 'feature', 'task', 'architecture', 'implementation', 'validation'];
@@ -261,7 +262,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
   let budget;
   try { budget = quotaBoundary(await client.request('account/rateLimits/read')); }
   catch { budget = quotaTelemetryUnavailable(); }
-  if (budget.stop) return { status: 'paused', reason: budget.reason, budget, stopPhase: 'preflight' };
+  if (budget.stop) return { status: 'paused', reason: budget.reason, budget, stopPhase: QUOTA_STOP_PHASE.preflight };
   if (signal?.aborted) return { status: 'paused', reason: 'Workflow cancelled.' };
 
   let turnId;
@@ -302,10 +303,10 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     polling = true;
     try {
       budget = quotaBoundary(await client.request('account/rateLimits/read'));
-      if (budget.stop) stop(budget.reason, 'paused', [], turnId ? 'active_turn' : 'preflight');
+      if (budget.stop) stop(budget.reason, 'paused', [], turnId ? QUOTA_STOP_PHASE.activeTurn : QUOTA_STOP_PHASE.preflight);
     } catch {
       budget = quotaTelemetryUnavailable();
-      stop(budget.reason, 'paused', [], turnId ? 'active_turn' : 'preflight');
+      stop(budget.reason, 'paused', [], turnId ? QUOTA_STOP_PHASE.activeTurn : QUOTA_STOP_PHASE.preflight);
     }
     finally { polling = false; }
   };

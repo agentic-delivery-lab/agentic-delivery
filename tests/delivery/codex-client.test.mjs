@@ -27,14 +27,21 @@ test('quota telemetry fails closed on missing, invalid, or expired windows', () 
 });
 
 test('fails closed when a returned secondary quota window is malformed', () => {
-  const value = quota();
-  value.rateLimits.secondary = 'malformed-window';
-  const decision = quotaBoundary(value, now);
-  assert.equal(decision.stop, true);
-  assert.equal(decision.reasonCode, 'invalid_bucket');
-  assert.deepEqual(decision.diagnostics.windows.find((item) => item.slot === 'secondary'), {
-    bucket: 'bucket-1', slot: 'secondary', usedPercent: null, windowDurationMins: null, resetsAt: null, valid: false,
-  });
+  for (const malformed of ['malformed-window', false, 0, '']) {
+    const value = quota();
+    value.rateLimits.secondary = malformed;
+    const decision = quotaBoundary(value, now);
+    assert.equal(decision.stop, true, `secondary=${JSON.stringify(malformed)}`);
+    assert.equal(decision.reasonCode, 'invalid_bucket');
+    assert.deepEqual(decision.diagnostics.windows.find((item) => item.slot === 'secondary'), {
+      bucket: 'bucket-1', slot: 'secondary', usedPercent: null, windowDurationMins: null, resetsAt: null, valid: false,
+    });
+  }
+  const optional = quota();
+  optional.rateLimits.secondary = null;
+  assert.equal(quotaBoundary(optional, now).stop, false, 'the protocol declares secondary nullable');
+  delete optional.rateLimits.secondary;
+  assert.equal(quotaBoundary(optional, now).stop, false, 'secondary may also be absent');
 });
 
 test('checks every returned bucket and explicit server limits', () => {

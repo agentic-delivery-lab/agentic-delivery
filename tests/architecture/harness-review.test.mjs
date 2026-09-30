@@ -12,6 +12,7 @@ import {
   validateEvidenceRecord,
 } from '../../scripts/lib/architecture-review.mjs';
 import { parseSemanticOutcome, projectQuotaDiagnostics, runSemanticReview } from '../../scripts/lib/architecture-review-agent.mjs';
+import { QUOTA_DIAGNOSTICS_SCHEMA_VERSION } from '../../scripts/lib/quota-diagnostics.mjs';
 import { runNodeScript } from '../helpers/process.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
@@ -177,6 +178,7 @@ test('semantic execution reports quota and structured findings without becoming 
   });
   assert.equal(quotaPaused.status, 'inconclusive');
   assert.deepEqual(quotaPaused.quotaDiagnostics, {
+    schemaVersion: QUOTA_DIAGNOSTICS_SCHEMA_VERSION,
     reasonCode: 'window_reserve',
     stopPhase: 'active_turn',
     triggerReasons: ['window_reserve', 'server_rate_limit'],
@@ -241,6 +243,7 @@ test('quota diagnostic projection and formatting cover each independent stop rea
       },
     }, 'preflight');
     assert.equal(quotaDiagnostics.reasonCode, reasonCode);
+    assert.equal(quotaDiagnostics.schemaVersion, QUOTA_DIAGNOSTICS_SCHEMA_VERSION);
     assert.equal(quotaDiagnostics.stopPhase, 'preflight');
     const markdown = formatReviewMarkdown({
       status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [],
@@ -249,6 +252,14 @@ test('quota diagnostic projection and formatting cover each independent stop rea
     assert.match(markdown, expected, reasonCode);
     assert.match(markdown, /Stop phase: preflight/);
   }
+  const unsupported = formatReviewMarkdown({
+    status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [],
+    semantic: {
+      status: 'inconclusive', summary: 'Review stopped.', findings: [], evidenceGaps: [],
+      quotaDiagnostics: { schemaVersion: QUOTA_DIAGNOSTICS_SCHEMA_VERSION + 1, reasonCode: 'window_reserve' },
+    },
+  });
+  assert.doesNotMatch(unsupported, /#### Quota diagnostics/, 'unknown diagnostic schema versions are not interpreted as v1');
 });
 
 test('quota diagnostics preserve triggering windows and server blocks after bounded context', () => {

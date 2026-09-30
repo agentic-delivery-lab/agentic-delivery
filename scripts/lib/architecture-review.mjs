@@ -1,10 +1,17 @@
-// agentic-primitive: {"id":"harness-architecture-review","kind":"validator","enforcement":"deterministic","adrs":["ADR-0011","ADR-0013"],"domains":["agentic-delivery-governance"]}
+// agentic-primitive: {"id":"harness-architecture-review","kind":"validator","enforcement":"deterministic","adrs":["ADR-0009","ADR-0011","ADR-0013"],"domains":["agentic-delivery-governance"]}
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { parseRepositoryYaml } from './yaml.mjs';
+import {
+  QUOTA_DIAGNOSTICS_SCHEMA_VERSION,
+  QUOTA_REASON_LABELS,
+  QUOTA_STOP_PHASE_LABELS,
+  QUOTA_STOP_PHASE,
+  QUOTA_TRIGGER_LABELS,
+} from './quota-diagnostics.mjs';
 import { buildTraceability, collectAdrsFromSources, collectPrimitivesFromSources, PRIMITIVE_MARKER } from './adr-traceability.mjs';
 import { validateArchitecturePin } from '../validate-architecture-pin.mjs';
 
@@ -435,27 +442,9 @@ export function formatReviewMarkdown(review) {
 }
 
 function formatQuotaDiagnostics(value) {
-  const reasonLabels = {
-    invalid_bucket: 'quota telemetry contained an invalid bucket',
-    credit_spillover: 'spendable credits are available',
-    unlimited_credits: 'unlimited credits are available',
-    credit_telemetry_unavailable: 'credit telemetry was unavailable or incomplete',
-    missing_or_invalid_window: 'a required quota window was missing, invalid, or expired',
-    window_reserve: 'a quota window reached the 98% reserve',
-    server_rate_limit: 'the server reported a rate limit',
-    spend_control: 'the server reported a spend control',
-    telemetry_unavailable: 'quota telemetry could not be read',
-  };
-  const triggerLabels = {
-    credit_spillover: 'spendable credits',
-    unlimited_credits: 'unlimited credits',
-    credit_telemetry_unavailable: 'incomplete credit telemetry',
-    window_reserve: '98% usage reserve',
-    server_rate_limit: 'server rate limit',
-    spend_control: 'server spend control',
-  };
-  if (!value || typeof value !== 'object' || !reasonLabels[value.reasonCode]) return [];
-  const phase = { preflight: 'preflight', active_turn: 'active turn', unknown: 'unknown' }[value.stopPhase] ?? 'unknown';
+  if (!value || typeof value !== 'object' || value.schemaVersion !== QUOTA_DIAGNOSTICS_SCHEMA_VERSION
+    || !QUOTA_REASON_LABELS[value.reasonCode]) return [];
+  const phase = QUOTA_STOP_PHASE_LABELS[value.stopPhase] ?? QUOTA_STOP_PHASE_LABELS[QUOTA_STOP_PHASE.unknown];
   const timestamp = (seconds) => {
     if (!Number.isFinite(seconds)) return null;
     try { return new Date(seconds * 1000).toISOString(); } catch { return null; }
@@ -472,9 +461,9 @@ function formatQuotaDiagnostics(value) {
     '#### Quota diagnostics',
     '',
     `- Stop phase: ${phase}`,
-    `- Reason: ${reasonLabels[value.reasonCode]}`,
+    `- Reason: ${QUOTA_REASON_LABELS[value.reasonCode]}`,
   ];
-  const triggers = Array.isArray(value.triggerReasons) ? value.triggerReasons.map((code) => triggerLabels[code]).filter(Boolean) : [];
+  const triggers = Array.isArray(value.triggerReasons) ? value.triggerReasons.map((code) => QUOTA_TRIGGER_LABELS[code]).filter(Boolean) : [];
   if (triggers.length) lines.push(`- Trigger signals: ${[...new Set(triggers)].join(', ')}`);
   const next = timestamp(value.nextEligibleAt);
   lines.push(`- Next eligible time: ${next ?? 'not derivable from quota telemetry'}`);
