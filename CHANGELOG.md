@@ -40,7 +40,7 @@ and releases use [Semantic Versioning](https://semver.org/).
   `b17a2077b645e7eb861aeb75558d77fb1c46011c`; the central participant
   moves to this pin while draft41 and earlier remain available for rollback.
 - Intake and delivery now use bootstrap commit
-  `8b25e330705eb432e5d4504d0b8d1976a29f5f86`, which contains the draft42
+  `76ff0ff7bd35479251b9bfdf4bf420251d5738d5`, which contains the draft42
   central participant pin.
 - Private agent publication validation can now reproduce each projection from
   the exact Primitive source commit named by its provenance lock; the release
