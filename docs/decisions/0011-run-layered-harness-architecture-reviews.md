@@ -124,6 +124,13 @@ evidence starts a new thread. Deterministic violations also skip the semantic
 turn. Quota snapshots remain in the Actions report and runner log, outside the
 semantic model context.
 
+The repository has one persistent self-hosted runner for Codex and Harness.
+The delivery-quality `quality` job and portability matrix run on ephemeral
+GitHub-hosted runners, with read-only workflow permissions and the existing
+same-repository pull-request boundary. This lets those exact-head checks finish
+while Harness occupies the persistent runner and waits for their result; running
+both on that single runner would leave `quality` queued behind the waiting review.
+
 This storage choice assumes the single persistent self-hosted runner remains
 available across workflow jobs. It avoids publishing raw thread material to
 Actions artifacts or mixing semantic-review transcripts with webhook replay
@@ -142,6 +149,8 @@ approved shared-store decision before resumable reviews can span hosts.
 - Good, because an exact completed review can be reused without another model
   turn, and an interrupted semantic review can resume from its saved Codex
   thread. Incomplete or failed exact-head checks stop before model execution.
+- Good, because required deterministic checks can complete independently of
+  the persistent Codex runner, avoiding a queue dependency cycle during review.
 - Bad, because raw review thread material remains on the dedicated runner and
   cannot be resumed after its disk is replaced or lost.
 - Bad, because the runtime-surface impact map must be maintained when

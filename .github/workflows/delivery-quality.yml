@@ -19,12 +19,14 @@ permissions:
 
 jobs:
   quality:
-    # This private repository executes checked-in validation on the dedicated
-    # runner. Fork PRs do not run repository code on that runner.
+    # Run deterministic validation on an ephemeral hosted runner so it can
+    # finish while Harness occupies the single persistent Codex runner.
+    # Fork PRs do not execute repository code until their trust boundary is
+    # explicitly supported.
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64, omarchy]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
