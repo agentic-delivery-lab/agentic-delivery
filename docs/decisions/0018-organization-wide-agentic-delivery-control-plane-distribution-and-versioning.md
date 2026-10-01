@@ -182,6 +182,12 @@ workflow callers and bootstrap bundles use SemVer plus an exact source SHA.
 Primitive and Architecture dependencies use a release version, source commit
 and content digest.
 
+The SemVer evidence-contract version declared in the participant registry and
+controller release is separate from the integer `schemaVersion` stored in a
+delivery evidence record. The current participant record uses integer `1` as
+its record-format major; it does not replace the declared SemVer compatibility
+version.
+
 Schemas for controller-owned Harness review artifacts use a local SemVer
 version while the data stays inside the control plane. They do not become
 participant evidence contracts or release-manifest entries solely because a

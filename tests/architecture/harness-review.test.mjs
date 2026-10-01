@@ -185,15 +185,26 @@ test('quota diagnostics schema documents the internal SemVer projection', async 
 
   assert.deepEqual(schema.required, Object.keys(projected));
   assert.deepEqual(Object.keys(projected), Object.keys(schema.properties));
-  assert.equal(schema.additionalProperties, false);
+  assert.equal(schema.additionalProperties, true);
+  assert.equal(schema.$defs.window.additionalProperties, true);
+  assert.equal(schema.$defs.serverBlock.additionalProperties, true);
   assert.match(schema.$id, /quota-diagnostics\.schema\.json$/);
   assert.match(schema.description, /not a participant contract/);
   assert.equal(schema.properties.triggerReasons.maxItems, 9);
+  assert.equal(schema.properties.windows.maxItems, 64);
+  assert.equal(schema.properties.triggeringWindows.maxItems, 32);
+  assert.equal(schema.properties.serverBlocks.maxItems, 32);
+  assert.equal(schema.properties.truncated.type, 'boolean');
   const schemaVersionPattern = new RegExp(schema.properties.schemaVersion.pattern);
   assert.equal(schemaVersionPattern.test('1.2.3-beta.1+build.6'), true);
+  assert.equal(schemaVersionPattern.test('1.1.0'), true);
   assert.equal(schemaVersionPattern.test('1.2.3-01'), false);
+  const futureMinorPayload = { ...projected, schemaVersion: '1.1.0', optionalFutureField: true };
+  assert.equal(schemaVersionPattern.test(futureMinorPayload.schemaVersion), true);
+  assert.equal(schema.additionalProperties, true, 'minor-version optional fields are permitted');
   assert.deepEqual(projected.triggerReasons, ['credit_spillover', 'missing_or_invalid_window', 'window_reserve', 'server_rate_limit', 'spend_control']);
   assert.equal(projected.triggeringWindows.some((window) => !window.valid), true);
+  assert.equal(projected.truncated, false);
   assert.equal(supportsQuotaDiagnosticsSchemaVersion(projected.schemaVersion), true);
   assert.equal(supportsQuotaDiagnosticsSchemaVersion('2.0.0'), false);
 });
@@ -212,7 +223,6 @@ test('semantic execution reports quota and structured findings without becoming 
   const currentPullRequestBody = `## Plan\nKeep the review read-only.\n\nAuthorization=fixture-secret\n\n<!-- codex-delivery-evidence:v1\n{\n  "access_token":\n    "fixture marker secret with spaces"\n}\n-->\n${'x'.repeat(10_050)}`;
   await writeFile(eventPath, JSON.stringify({
     repository: { full_name: 'agentic-delivery-lab/agentic-delivery' },
-    issue: { body: 'Source issue evidence.' },
     pull_request: {
       number: 25,
       title: 'stale event title',
@@ -235,17 +245,35 @@ test('semantic execution reports quota and structured findings without becoming 
   let bundleText = '';
   const findings = await runSemanticReview({
     repositoryRoot,
-    review,
+    review: { ...review, sourceIssue: { number: 68 } },
     eventPath,
     fetchImpl: async (url, options) => {
-      assert.equal(url, 'https://api.github.com/repos/agentic-delivery-lab/agentic-delivery/pulls/25');
       assert.equal(options.headers.Authorization, 'Bearer fixture-github-token');
       assert.equal(options.headers.Accept, 'application/vnd.github+json');
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ number: 25, title: 'fix(review): preserve evidence', body: currentPullRequestBody }),
-      };
+      if (url === 'https://api.github.com/repos/agentic-delivery-lab/agentic-delivery/pulls/25') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ number: 25, title: 'fix(review): preserve evidence', body: currentPullRequestBody }),
+        };
+      }
+      if (url === 'https://api.github.com/repos/agentic-delivery-lab/agentic-delivery/issues/68') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            number: 68,
+            title: 'Clarify quota review evidence boundary',
+            body: 'Source issue evidence.',
+            state: 'open',
+            labels: [{ name: 'adr:proposed' }],
+          }),
+        };
+      }
+      if (url === 'https://api.github.com/repos/agentic-delivery-lab/agentic-delivery/issues/68/comments?per_page=100') {
+        return { ok: true, status: 200, json: async () => [] };
+      }
+      throw new Error(`Unexpected GitHub evidence URL: ${url}`);
     },
     createClient: ({ readableFiles }) => {
       [bundlePath] = readableFiles;
@@ -274,6 +302,11 @@ test('semantic execution reports quota and structured findings without becoming 
   assert.equal(projectedDescription.body.length, 10_000);
   assert.equal(projectedDescription.bodyTruncated, true);
   assert.doesNotMatch(bundleText, /stale event title|stale event body/);
+  const sourceIssueText = bundleText.split('## Source issue intent\n\n')[1]?.split('\n\n## Pull-request description')[0];
+  assert.ok(sourceIssueText);
+  const sourceIssueProjection = JSON.parse(sourceIssueText);
+  assert.deepEqual(sourceIssueProjection.labels, ['adr:proposed']);
+  assert.equal(sourceIssueProjection.body, 'Source issue evidence.');
   assert.doesNotMatch(bundleText, /fixture secret with spaces|fixture marker secret with spaces/);
   assert.match(bundleText, /Head internal quota diagnostics schema/);
 
@@ -312,6 +345,7 @@ test('semantic execution reports quota and structured findings without becoming 
     windows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true }],
     triggeringWindows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true }],
     serverBlocks: [{ bucket: 'bucket-1', rateLimitReached: true, spendControlReached: false }],
+    truncated: true,
     nextEligibleAt: 1_800_000_100,
   });
   assert.doesNotMatch(JSON.stringify(quotaPaused), /fixture-secret|private-account-id|providerMessage/);
@@ -419,7 +453,7 @@ test('quota diagnostic projection and formatting cover each independent stop rea
   assert.doesNotMatch(compatibleUnknownCode, /future_reason|future_trigger/);
 });
 
-test('quota diagnostics preserve triggering windows and server blocks after bounded context', () => {
+test('quota diagnostics cap bucket details, prioritize triggers, and mark omitted records', () => {
   const windows = Array.from({ length: 40 }, (_, index) => ({
     bucket: `bucket-${index + 1}`,
     slot: 'primary',
@@ -447,14 +481,46 @@ test('quota diagnostics preserve triggering windows and server blocks after boun
 
   assert.equal(quotaDiagnostics.windows.length, 33, 'all trigger windows plus 32 context windows are retained');
   assert.equal(quotaDiagnostics.windows.some((window) => window.bucket === 'bucket-40'), true);
-  assert.equal(quotaDiagnostics.serverBlocks.length, 33, 'all server blocks plus 32 context blocks are retained');
+  assert.equal(quotaDiagnostics.serverBlocks.length, 32, 'server-block output has an absolute limit');
   assert.equal(quotaDiagnostics.serverBlocks.some((block) => block.bucket === 'bucket-40' && block.rateLimitReached), true);
+  assert.equal(quotaDiagnostics.truncated, true);
   const markdown = formatReviewMarkdown({
     status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [],
     semantic: { status: 'inconclusive', summary: 'Review stopped.', findings: [], evidenceGaps: [], quotaDiagnostics },
   });
   assert.match(markdown, /Bucket 40 primary: 99% .*triggered the stop/);
   assert.match(markdown, /Bucket 40: server rate-limit flag set/);
+  assert.match(markdown, /Some bucket details were omitted/);
+
+  const manyTriggerWindows = Array.from({ length: 80 }, (_, index) => ({
+    bucket: `bucket-${index + 1}`,
+    slot: 'primary',
+    usedPercent: 99,
+    windowDurationMins: 300,
+    resetsAt: 1_800_000_100,
+    valid: true,
+  }));
+  const manyServerBlocks = manyTriggerWindows.map((window) => ({
+    bucket: window.bucket,
+    rateLimitReached: true,
+    spendControlReached: false,
+  }));
+  const heavilyTruncated = projectQuotaDiagnostics({
+    reasonCode: 'window_reserve',
+    diagnostics: {
+      reasonCode: 'window_reserve',
+      triggerReasons: ['window_reserve', 'server_rate_limit'],
+      windows: manyTriggerWindows,
+      triggeringWindows: manyTriggerWindows,
+      serverBlocks: manyServerBlocks,
+      nextEligibleAt: null,
+    },
+  }, 'active_turn');
+  assert.equal(heavilyTruncated.windows.length, 32);
+  assert.equal(heavilyTruncated.triggeringWindows.length, 32);
+  assert.equal(heavilyTruncated.serverBlocks.length, 32);
+  assert.equal(heavilyTruncated.truncated, true);
+  assert.deepEqual(heavilyTruncated.triggerReasons, ['window_reserve', 'server_rate_limit']);
 
   const invalidWindow = { ...windows[39], valid: false, usedPercent: null };
   const invalidQuotaDiagnostics = projectQuotaDiagnostics({

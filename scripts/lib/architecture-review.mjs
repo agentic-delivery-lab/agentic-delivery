@@ -504,6 +504,7 @@ function formatQuotaDiagnostics(value) {
   ];
   const triggers = Array.isArray(value.triggerReasons) ? value.triggerReasons.map((code) => QUOTA_TRIGGER_LABELS[code]).filter(Boolean) : [];
   if (triggers.length) lines.push(`- Trigger signals: ${[...new Set(triggers)].join(', ')}`);
+  if (value.truncated === true) lines.push('- Some bucket details were omitted to keep quota diagnostics within fixed size limits.');
   const next = timestamp(value.nextEligibleAt);
   lines.push(`- Next eligible time: ${next ?? 'not derivable from quota telemetry'}`);
   lines.push('', '**Quota windows**');

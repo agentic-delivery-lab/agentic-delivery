@@ -372,31 +372,38 @@ evidence are available. Deterministic violations fail; semantic concerns and
 inconclusive runtime evidence remain cited review findings. The review workflow
 does not comment, modify, merge or close anything.
 
-When present in the GitHub event, the semantic evidence bundle includes the
-pull-request title and up to 10,000 characters of its body after the repository's
-common credential-pattern filter. The description is untrusted input and may be
-truncated.
+For each semantic run, the evidence bundle fetches the current pull-request
+title and body through the workflow's read-only pull-request permission. The
+event supplies the repository and pull-request number; its title and body are
+not reused because a rerun can carry an older event snapshot. If GitHub cannot
+return the current description, the bundle marks it unavailable instead of
+falling back to stale text. The description is untrusted input, is filtered for
+known credentials, and includes at most 10,000 body characters.
+
+The linked source issue is fetched with the read-only issue permission. Its
+sanitized projection includes current labels so the reviewer can verify ADR
+governance metadata instead of relying on an incomplete event snapshot.
 
 When quota telemetry stops semantic review, the Actions summary records whether
-the stop happened during preflight or an active review turn. It also lists the
-triggering primary and secondary windows and server-block flags, plus up to 32
-additional windows and server-block records as context. Each trigger is
-retained even when it appears after the context limit. The summary includes
-usage, duration, reset times, and the next eligible time when the exhausted
-windows make it possible to calculate one. Provider limit names, account
-identifiers, and raw error details are not published. An `inconclusive` result
-means no semantic conclusion was reached; it does not change the deterministic
-review result.
+the stop happened during preflight or an active review turn. It retains every
+known safe cause category and reports at most 32 triggering windows, 32 context
+windows, and 32 server-block records, prioritizing active server blocks. The
+projection sets `truncated` when these limits or safety filters omit bucket
+details. The summary includes usage, duration, reset times, and the next eligible
+time only when the exhausted windows make it possible to calculate one.
+Provider limit names, account identifiers, and raw error details are not
+published. An `inconclusive` result means no semantic conclusion was reached;
+it does not change the deterministic review result.
 
 The optional `semantic.quotaDiagnostics` object has its own SemVer
 `schemaVersion`, initially `1.0.0`. Version 1 codes, stop phases, and display
 labels are registered in `scripts/lib/quota-diagnostics.mjs`; producer,
-projection, and summary formatter use that shared contract. Additive fields and
-codes increment the minor version. Corrections that do not change the contract
+projection, schema, and summary formatter use that shared contract. A minor
+version may add optional fields or codes; the schema permits unknown properties
+and consumers ignore them. Corrections that do not change the contract
 increment the patch version. Removing fields or changing their meaning
-increments the major version. Consumers must ignore unknown fields and codes,
-support compatible versions with major version 1, and must not interpret an
-unsupported major version as version 1.
+increments the major version. Consumers support compatible versions with major
+version 1 and must not interpret an unsupported major version as version 1.
 
 To retry after a quota stop, open the latest Harness Architecture Review run
 for the pull request head and inspect its Actions summary. Wait until the

@@ -43,10 +43,12 @@ they do not authorize migration, alter that issue's scope, or close it.
   a same-major report contains a reason code this consumer does not recognize.
   The assembled model evidence and structured review result redact known
   credentials; the Actions summary renders reviewer text as escaped plain
-  text. Simultaneous credit, window, and server causes remain visible. The
-  internal Harness schema is not a participant contract. The operator guide
-  explains how to rerun a fresh review on the same pull-request head after the
-  quota windows reset.
+  text. Semantic reruns fetch the current pull-request description and linked
+  source-issue labels instead of relying on stale or incomplete event data.
+  Simultaneous cause categories remain visible; bucket details have fixed
+  array limits and an explicit truncation flag. The internal Harness schema is
+  not a participant contract. The operator guide explains how to rerun a fresh
+  review on the same pull-request head after the quota windows reset.
 
 - Issue intake, delivery, and metadata migration now verify that the live
   Lifecycle Stage and Delivery Readiness fields are pinned to every enabled

@@ -23,6 +23,9 @@ const MAX_FINDINGS = 30;
 const MAX_EVIDENCE_ITEMS = 20;
 const MAX_EVIDENCE_GAPS = 50;
 const MAX_MODEL_STRING_LENGTH = 4_000;
+const MAX_TRIGGERING_QUOTA_WINDOWS = 32;
+const MAX_CONTEXT_QUOTA_WINDOWS = 32;
+const MAX_QUOTA_SERVER_BLOCKS = 32;
 
 function childEnvironment() {
   const { GH_TOKEN: _ghToken, GITHUB_TOKEN: _githubToken, PUBLISH_TOKEN: _publishToken,
@@ -110,12 +113,12 @@ function safeDiffText(value) {
   return redactSensitiveText(value).slice(0, 500_000);
 }
 
-async function sourceIssueEvidence(repository, issue) {
+async function sourceIssueEvidence(repository, issue, fetchImpl = fetch) {
   if (!repository || !issue) return '(unavailable: the pull-request branch is not issue-linked)';
   const token = process.env.GH_TOKEN;
   if (!token) return '(unavailable: no read-only GitHub token was provided)';
   try {
-    const response = await fetch(`https://api.github.com/repos/${repository}/issues/${issue}`, {
+    const response = await fetchImpl(`https://api.github.com/repos/${repository}/issues/${issue}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10' },
       signal: AbortSignal.timeout(15_000),
     });
@@ -123,7 +126,7 @@ async function sourceIssueEvidence(repository, issue) {
     const value = await response.json();
     let comments = [];
     try {
-      const commentResponse = await fetch(`https://api.github.com/repos/${repository}/issues/${issue}/comments?per_page=100`, {
+      const commentResponse = await fetchImpl(`https://api.github.com/repos/${repository}/issues/${issue}/comments?per_page=100`, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10' },
         signal: AbortSignal.timeout(15_000),
       });
@@ -132,7 +135,10 @@ async function sourceIssueEvidence(repository, issue) {
         comments = Array.isArray(values) ? values.slice(0, 100).map((comment) => ({ id: comment.id, author: comment.user?.login, body: safeIssueText(comment.body).slice(0, 4_000) })) : [];
       }
     } catch {}
-    return JSON.stringify({ number: value.number, title: safeIssueText(value.title), body: safeIssueText(value.body), state: value.state, comments }, null, 2);
+    const labels = Array.isArray(value.labels)
+      ? [...new Set(value.labels.map((label) => safeIssueText(label?.name).trim().slice(0, 100)).filter(Boolean))].slice(0, 100)
+      : [];
+    return JSON.stringify({ number: value.number, title: safeIssueText(value.title), body: safeIssueText(value.body), state: value.state, labels, comments }, null, 2);
   } catch {
     return '(unavailable: the source issue could not be read with the configured read-only evidence access)';
   }
@@ -203,32 +209,56 @@ export function projectQuotaDiagnostics(budget, stopPhase) {
       valid: window.valid === true,
     };
   };
-  const projectWindows = (items) => Array.isArray(items) ? items.map(projectWindow).filter(Boolean) : [];
-  const allWindows = projectWindows(diagnostics?.windows);
-  const requestedTriggers = projectWindows(diagnostics?.triggeringWindows);
+  const rawWindows = Array.isArray(diagnostics?.windows) ? diagnostics.windows : [];
+  const rawTriggeringWindows = Array.isArray(diagnostics?.triggeringWindows) ? diagnostics.triggeringWindows : [];
+  const projectWindows = (items, limit) => items.slice(0, limit).map(projectWindow).filter(Boolean);
+  const allWindows = projectWindows(rawWindows, MAX_TRIGGERING_QUOTA_WINDOWS + MAX_CONTEXT_QUOTA_WINDOWS);
+  const requestedTriggers = projectWindows(rawTriggeringWindows, MAX_TRIGGERING_QUOTA_WINDOWS);
   const triggerReasons = Array.isArray(diagnostics?.triggerReasons) ? diagnostics.triggerReasons : [];
   const invalidStopWindows = [QUOTA_REASON.invalidBucket, QUOTA_REASON.missingOrInvalidWindow].includes(reasonCode)
     || triggerReasons.includes(QUOTA_REASON.missingOrInvalidWindow)
     ? allWindows.filter((window) => !window.valid)
     : [];
-  const triggeringWindows = [...new Map([...requestedTriggers, ...invalidStopWindows]
+  const reserveWindows = allWindows.filter((window) => Number.isFinite(window.usedPercent) && window.usedPercent >= 98);
+  const triggerCandidates = [...new Map([...requestedTriggers, ...invalidStopWindows, ...reserveWindows]
     .map((window) => [`${window.bucket}:${window.slot}`, window])).values()];
-  const triggeringKeys = new Set(triggeringWindows.map((window) => `${window.bucket}:${window.slot}`));
-  const windows = [
-    ...triggeringWindows,
-    ...allWindows.filter((window) => !triggeringKeys.has(`${window.bucket}:${window.slot}`)).slice(0, 32),
-  ];
-  const allServerBlocks = Array.isArray(diagnostics?.serverBlocks) ? diagnostics.serverBlocks
-    .filter((block) => block && bucketName(block.bucket))
-    .map((block) => ({
+  const triggeringWindows = triggerCandidates.slice(0, MAX_TRIGGERING_QUOTA_WINDOWS);
+  const triggeringKeys = new Set(triggerCandidates.map((window) => `${window.bucket}:${window.slot}`));
+  const contextCandidates = [...new Map(allWindows
+    .filter((window) => window.valid && (!Number.isFinite(window.usedPercent) || window.usedPercent < 98)
+      && !triggeringKeys.has(`${window.bucket}:${window.slot}`))
+    .map((window) => [`${window.bucket}:${window.slot}`, window])).values()];
+  const windows = [...triggeringWindows, ...contextCandidates.slice(0, MAX_CONTEXT_QUOTA_WINDOWS)];
+
+  const activeServerBlocks = [];
+  const contextServerBlocks = [];
+  let truncated = rawWindows.length > MAX_TRIGGERING_QUOTA_WINDOWS + MAX_CONTEXT_QUOTA_WINDOWS
+    || rawTriggeringWindows.length > MAX_TRIGGERING_QUOTA_WINDOWS
+    || allWindows.length < Math.min(rawWindows.length, MAX_TRIGGERING_QUOTA_WINDOWS + MAX_CONTEXT_QUOTA_WINDOWS)
+    || requestedTriggers.length < Math.min(rawTriggeringWindows.length, MAX_TRIGGERING_QUOTA_WINDOWS)
+    || triggerCandidates.length > MAX_TRIGGERING_QUOTA_WINDOWS
+    || contextCandidates.length > MAX_CONTEXT_QUOTA_WINDOWS;
+  const rawServerBlocks = Array.isArray(diagnostics?.serverBlocks) ? diagnostics.serverBlocks : [];
+  for (const block of rawServerBlocks) {
+    if (!block || !bucketName(block.bucket)) {
+      truncated = true;
+      continue;
+    }
+    const projected = {
       bucket: block.bucket,
       rateLimitReached: block.rateLimitReached === true,
       spendControlReached: block.spendControlReached === true,
-    })) : [];
+    };
+    const active = projected.rateLimitReached || projected.spendControlReached;
+    const target = active ? activeServerBlocks : contextServerBlocks;
+    if (target.length < MAX_QUOTA_SERVER_BLOCKS) target.push(projected);
+    else truncated = true;
+  }
   const serverBlocks = [
-    ...allServerBlocks.filter((block) => block.rateLimitReached || block.spendControlReached),
-    ...allServerBlocks.filter((block) => !block.rateLimitReached && !block.spendControlReached).slice(0, 32),
+    ...activeServerBlocks,
+    ...contextServerBlocks.slice(0, Math.max(0, MAX_QUOTA_SERVER_BLOCKS - activeServerBlocks.length)),
   ];
+  if (activeServerBlocks.length + contextServerBlocks.length > serverBlocks.length) truncated = true;
   const phase = QUOTA_STOP_PHASES.includes(stopPhase) ? stopPhase : QUOTA_STOP_PHASE.unknown;
   return {
     schemaVersion: QUOTA_DIAGNOSTICS_SCHEMA_VERSION,
@@ -240,6 +270,7 @@ export function projectQuotaDiagnostics(budget, stopPhase) {
     windows,
     triggeringWindows,
     serverBlocks,
+    truncated,
     nextEligibleAt: Number.isFinite(diagnostics?.nextEligibleAt) ? diagnostics.nextEligibleAt : null,
   };
 }
@@ -314,9 +345,11 @@ export async function runSemanticReview({ repositoryRoot, review, eventPath, cre
       safeState(review, event),
       revisionFile(repositoryRoot, review.head, 'docs/architecture/adr-primitive-index.json'),
     ]);
-    const sourceIssue = event.issue?.body
-      ? safeIssueText(event.issue.body)
-      : await sourceIssueEvidence(review.repository, review.sourceIssue?.number);
+    const sourceIssue = await sourceIssueEvidence(
+      event.repository?.full_name ?? review.repository,
+      review.sourceIssue?.number ?? event.issue?.number,
+      fetchImpl,
+    );
     const content = redactSensitiveText([
       '# Harness Architecture Review evidence bundle',
       '',

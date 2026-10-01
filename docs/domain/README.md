@@ -44,6 +44,13 @@ That evidence explains why semantic review could not conclude; it is not a
 semantic conclusion, deterministic validation, or participant evidence
 contract.
 
+Participant compatibility with the delivery evidence contract is declared as
+SemVer in release and participant metadata. The integer `schemaVersion` inside
+each current delivery evidence record identifies its record format major; it
+is separate from the SemVer compatibility value. Controller-local Harness
+schemas can use their own SemVer field while they remain inside the control
+plane.
+
 Do not assume that a registered meaning applies outside its bounded context. Add another bounded context only when a model has a distinct purpose or a term needs a meaning that would conflict with the existing context. Describe translations at the boundary when two contexts must interact.
 
 ## Changing the model
