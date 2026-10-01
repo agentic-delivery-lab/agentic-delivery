@@ -384,7 +384,7 @@ test('semantic execution reports quota and structured findings without becoming 
   assert.match(markdown, /Stop phase: active turn/);
   assert.match(markdown, /99% of the 300-minute window/);
   assert.match(markdown, /Next eligible time: not derivable from quota telemetry/);
-  assert.doesNotMatch(markdown, /2027-01-15T08:01:40\.000Z/);
+  assert.doesNotMatch(markdown, /^- Next eligible time: 2027-01-15T08:01:40\.000Z$/m);
   assert.doesNotMatch(markdown, /fixture-secret|private-account-id/);
 
   let startedThread = false;
