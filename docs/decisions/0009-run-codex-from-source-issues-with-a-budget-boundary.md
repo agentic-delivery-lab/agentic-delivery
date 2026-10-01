@@ -116,12 +116,21 @@ opening a release-specific Task issue and an issue-linked review pull request.
 The issue records that release's exact version and digest; the pull request
 closes it when merged and references issue #70 as the ongoing maintenance
 policy. This keeps each upgrade traceable without requiring the broader issue
-to remain open forever. The updater reuses an existing open issue or pull
-request for the same release and stops if it finds duplicates or an unresolved
+to remain open forever. Reusing an open release Task requires its native
+`Task` type, exact official release URL and SHA-256 to match the verified
+candidate; a matching title or version marker alone is insufficient. The
+updater reuses an existing open issue or pull request for the same release
+and stops if it finds duplicates or an unresolved
 update for another release. A closed, unmerged update PR blocks later releases
 while its linked release Task remains open or cannot be verified. Closing that
 Task resolves the candidate: the updater does not recreate the same rejected
-version, while a later stable release can still be evaluated.
+version, while a later stable release can still be evaluated. Reuse of an
+open PR requires its registered App author, exact title, release marker,
+issue-linked branch and source line. The PR's official release URL and
+SHA-256 must match both the newly verified candidate and its linked native
+`Task`. The updater refetches and verifies that exact PR and Task before
+reusing it or dispatching runner smoke. A branch-pattern match alone never
+permits runner smoke.
 The updater paginates the repository pull-request list and exact-head check-run
 evidence. It also paginates all matching open release Tasks before creating a
 new source issue. The Search API reports incomplete searches and limits a
@@ -172,8 +181,9 @@ producer evidence stops before runner smoke or a semantic model turn. This
 prevents an unrelated workflow with a copied check name from satisfying the
 gate.
 
-The generated pull-request description records the release digest as complete
-and identifies checks as pending until their exact-head results appear. This
+The generated pull-request description records the release digest and
+verification sequence without claiming that a check remains pending. GitHub's
+pull-request checks page is authoritative for current check status. This
 two-token sequence preserves `GITHUB_TOKEN` event suppression for issue and
 branch creation while using the App token only for the action that needs
 ordinary pull-request events.

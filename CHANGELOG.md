@@ -53,11 +53,14 @@ they do not authorize migration, alter that issue's scope, or close it.
   pull-request list and exact-head check-run evidence and stops on incomplete
   or mismatched provenance. It paginates the release Task
   search and refuses to create an issue when search results are incomplete or
-  exceed the GitHub Search API limit. Only an internal bot-authored update PR
-  with the expected branch, title, and marker can delay automatic Harness
-  review until runner smoke; a PR author cannot suppress review by copying the
-  marker. A closed update PR no longer blocks later releases after its linked
-  Task issue is resolved.
+  exceed the GitHub Search API limit. Reusing an open updater PR or dispatching
+  its runner smoke requires refetching the exact PR and verifying its
+  registered App author, branch, title, marker, source line, release URL, and
+  digest against the verified candidate and linked native Task. The GitHub-hosted
+  classifier applies the same URL and digest match before delaying automatic
+  Harness review; a copied marker or same-looking branch cannot suppress it.
+  A closed update PR no longer blocks later releases after its linked Task
+  issue is resolved.
 - Codex delivery and Harness review now use phase-specific GPT-6 Luna
   Low/Medium/Max and GPT-6 Sol High profiles, with runner-catalog preflight,
   complete matching-entry capability checks, safe reporting for unsupported

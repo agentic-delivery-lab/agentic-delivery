@@ -147,6 +147,8 @@
         "semantic"
       ],
       "primitives": [
+        "codex-cli-release-update-workflow",
+        "codex-cli-release-updater",
         "codex-cli-updater-review-classifier",
         "github-native-issue-type",
         "harness-architecture-review",
@@ -505,7 +507,8 @@
       "kind": "workflow",
       "enforcement": "deterministic",
       "adrs": [
-        "ADR-0009"
+        "ADR-0009",
+        "ADR-0011"
       ],
       "domains": [
         "agentic-delivery-governance"
@@ -518,7 +521,8 @@
       "kind": "script",
       "enforcement": "deterministic",
       "adrs": [
-        "ADR-0009"
+        "ADR-0009",
+        "ADR-0011"
       ],
       "domains": [
         "agentic-delivery-governance"

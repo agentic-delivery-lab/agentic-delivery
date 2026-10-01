@@ -35,24 +35,44 @@ export function updaterReviewCandidate({ event, repository }) {
   const expectedMarker = `<!-- codex-cli-release-update:v1:${version} -->`;
   if (markerCount(body) !== 1 || !body.includes(expectedMarker)) return null;
 
+  const releaseUrl = `https://github.com/openai/codex/releases/tag/rust-v${version}`;
+  const releaseLines = body.split(/\r?\n/).filter((line) => line.startsWith('- Official release: '));
+  if (releaseLines.length !== 1 || releaseLines[0] !== `- Official release: [${version}](${releaseUrl})`) return null;
+  const digestLines = body.split(/\r?\n/).filter((line) => line.startsWith('- Official Linux x64 asset SHA-256: '));
+  const digestMatch = digestLines[0]?.match(/^- Official Linux x64 asset SHA-256: `([a-f0-9]{64})`$/);
+  if (digestLines.length !== 1 || !digestMatch) return null;
+
   const expectedSourceLine = `- Source issue: Closes #${issueNumber} — [Task: Update pinned Codex CLI to ${version}](https://github.com/${repository}/issues/${issueNumber})`;
   const sourceLines = body.split(/\r?\n/).filter((line) => line.startsWith('- Source issue:'));
   if (sourceLines.length !== 1 || sourceLines[0] !== expectedSourceLine) return null;
 
-  return { issueNumber, version };
+  return { issueNumber, version, releaseUrl, sha256: digestMatch[1] };
 }
 
-export function releaseTaskMatches({ issue, nativeIssueType, issueNumber, repository, version }) {
+export function releaseTaskDetailsMatch({ issue, issueNumber, repository, version, releaseUrl, sha256 }) {
   if (!issue || issue.number !== issueNumber || issue.pull_request
-    || nativeIssueType !== 'Task'
     || issue.html_url !== `https://github.com/${repository}/issues/${issueNumber}`
-    || issue.state !== 'open'
     || issue.title !== `Task: Update pinned Codex CLI to ${version}`) return false;
-
   const body = String(issue.body ?? '');
   const expectedMarker = `<!-- codex-cli-release-update:v1:${version} -->`;
-  const releaseLine = `- Official Codex release: [${version}](https://github.com/openai/codex/releases/tag/rust-v${version}).`;
-  return markerCount(body) === 1 && body.includes(expectedMarker) && body.includes(releaseLine);
+  const officialReleaseUrl = releaseUrl ?? `https://github.com/openai/codex/releases/tag/rust-v${version}`;
+  const releaseLines = body.split(/\r?\n/).filter((line) => line.startsWith('- Official Codex release: '));
+  const expectedReleaseLine = `- Official Codex release: [${version}](${officialReleaseUrl}).`;
+  const digestLines = body.split(/\r?\n/).filter((line) => line.startsWith('- Verified Linux x64 asset SHA-256: '));
+  const digestMatch = digestLines[0]?.match(/^- Verified Linux x64 asset SHA-256: `([a-f0-9]{64})`\.$/);
+  return markerCount(body) === 1
+    && body.includes(expectedMarker)
+    && releaseLines.length === 1
+    && releaseLines[0] === expectedReleaseLine
+    && digestLines.length === 1
+    && Boolean(digestMatch)
+    && (sha256 === undefined || digestMatch[1] === sha256);
+}
+
+export function releaseTaskMatches({ issue, nativeIssueType, issueNumber, repository, version, releaseUrl, sha256 }) {
+  return nativeIssueType === 'Task'
+    && issue?.state === 'open'
+    && releaseTaskDetailsMatch({ issue, issueNumber, repository, version, releaseUrl, sha256 });
 }
 
 export async function classifyUpdaterReview({ event, repository, token, fetchImpl = globalThis.fetch } = {}) {

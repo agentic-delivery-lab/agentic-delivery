@@ -162,7 +162,10 @@ checks out only the pull request's trusted base revision and verifies the
 internal registered App author, `main` base, issue-linked CLI update branch,
 exact conventional title, matching version marker, exact `Closes #N` source
 line, and the linked repository issue's native `Task` type, title, marker,
-release URL, and repository URL. It suppresses the automatic Harness event
+release URL, SHA-256 digest, and repository URL; the PR's release URL and digest
+must match the same Task. The weekly updater applies the same exact registered
+App, PR, Task, release URL, and digest checks before it reuses an open update PR
+or dispatches runner smoke. It suppresses the automatic Harness event
 only when all values identify the same release Task and version. Any mismatch,
 lookup failure, or classifier failure runs normal Harness review; forks remain
 outside the self-hosted runner boundary. Manual Harness dispatch always runs

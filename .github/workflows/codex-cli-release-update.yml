@@ -1,6 +1,6 @@
 name: codex-cli-release-update
 
-# agentic-primitive: {"id":"codex-cli-release-update-workflow","kind":"workflow","enforcement":"deterministic","adrs":["ADR-0009"],"domains":["agentic-delivery-governance"]}
+# agentic-primitive: {"id":"codex-cli-release-update-workflow","kind":"workflow","enforcement":"deterministic","adrs":["ADR-0009","ADR-0011"],"domains":["agentic-delivery-governance"]}
 
 on:
   schedule:
@@ -55,6 +55,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CODEX_RELEASE_SLUG: ${{ steps.release.outputs.slug }}
+          CODEX_RELEASE_CANDIDATE_PATH: ${{ runner.temp }}/codex-release-candidate.json
         run: node scripts/codex-cli-release-update.mjs --pending-pr
 
       - name: Create or reuse a release-specific source issue
@@ -151,8 +152,8 @@ jobs:
           ## Verification
 
           - Before opening this PR, the updater downloaded the official release asset and reproduced its published size and SHA-256 digest. This verifies the release artifact only; it does not verify the candidate on the Actions runner.
-          - At PR creation, pull-request body, delivery-quality, and ADR-quality checks start from the App-created PR event and are pending until their results appear on this exact head.
-          - The updater waits for the exact-head body, delivery-quality, portability, and applicable ADR checks to pass before it dispatches the no-generation runner smoke. Harness semantic review starts only after that smoke passes. A failed deterministic check prevents both runner dispatches.
+          - The updater waits for exact-head body, delivery-quality, portability, and applicable ADR checks before it dispatches the no-generation runner smoke. Harness semantic review starts only after that smoke passes. A failed deterministic check prevents both runner dispatches.
+          - GitHub's pull-request checks page is the source for current check status; this description records the verification sequence without claiming a check is still pending.
 
           ## Evidence
 
@@ -178,7 +179,7 @@ jobs:
 
           - [x] The official release metadata, asset URL, size, and SHA-256 digest were verified before this PR was opened.
           - [x] The release-specific source issue and ongoing policy issue are linked above.
-          - [x] Verification distinguishes checks that passed before PR creation from checks that are still pending.
+          - [x] Verification distinguishes the release-artifact digest check from candidate runner and pull-request checks; GitHub shows current check status.
           - [x] Security, compatibility, deployment, and rollback effects are documented for review.
           EOF
           gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$PR_BRANCH" --title "$PR_TITLE" --body-file "$RUNNER_TEMP/codex-cli-update-pr.md"

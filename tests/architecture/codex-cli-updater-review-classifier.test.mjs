@@ -9,6 +9,7 @@ import {
 
 const repository = 'agentic-delivery-lab/agentic-delivery';
 const version = '0.159.4';
+const sha256 = 'a'.repeat(64);
 const issueNumber = 742;
 
 function graphQlIssueType(name = 'Task') {
@@ -18,6 +19,8 @@ function graphQlIssueType(name = 'Task') {
 function pullRequestEvent(overrides = {}) {
   const marker = `<!-- codex-cli-release-update:v1:${version} -->`;
   const sourceLine = `- Source issue: Closes #${issueNumber} — [Task: Update pinned Codex CLI to ${version}](https://github.com/${repository}/issues/${issueNumber})`;
+  const releaseLine = `- Official release: [${version}](https://github.com/openai/codex/releases/tag/rust-v${version})`;
+  const digestLine = `- Official Linux x64 asset SHA-256: \`${sha256}\``;
   const pullRequest = {
     state: 'open',
     user: { login: 'agentic-delivery-lab-invoker-7f3a[bot]' },
@@ -27,7 +30,7 @@ function pullRequestEvent(overrides = {}) {
       repo: { full_name: repository },
     },
     title: `chore(delivery): 🔧 update pinned Codex CLI to ${version}`,
-    body: `# Pull request\n\n${marker}\n\n## Source\n\n${sourceLine}\n`,
+    body: `# Pull request\n\n${marker}\n\n## Source\n\n${sourceLine}\n\n## Evidence\n\n${releaseLine}\n${digestLine}\n`,
   };
   return {
     action: 'opened',
@@ -52,6 +55,7 @@ function releaseTask(overrides = {}) {
       '## Related work',
       '',
       `- Official Codex release: [${version}](https://github.com/openai/codex/releases/tag/rust-v${version}).`,
+      `- Verified Linux x64 asset SHA-256: \`${sha256}\`.`,
     ].join('\n'),
     ...overrides,
   };
@@ -90,6 +94,8 @@ test('any PR identity, branch, title, marker, source-reference, or base mismatch
     { ...original, pull_request: { ...original.pull_request, title: `chore(delivery): 🔧 update pinned Codex CLI to 0.159.5` } },
     { ...original, pull_request: { ...original.pull_request, body: original.pull_request.body.replace(version, '0.159.5') } },
     { ...original, pull_request: { ...original.pull_request, body: original.pull_request.body.replace(`#${issueNumber}`, '#743') } },
+    { ...original, pull_request: { ...original.pull_request, body: original.pull_request.body.replace(sha256, 'b'.repeat(64)) } },
+    { ...original, pull_request: { ...original.pull_request, body: original.pull_request.body.replace('openai/codex/releases/tag/rust-v0.159.4', 'openai/codex/releases/tag/rust-v0.159.5') } },
     { ...original, pull_request: { ...original.pull_request, head: { ...original.pull_request.head, repo: { full_name: 'someone/fork' } } } },
   ];
   let issueLookups = 0;
@@ -103,21 +109,25 @@ test('any PR identity, branch, title, marker, source-reference, or base mismatch
     });
     assert.equal(result.suppressReview, false);
   }
-  assert.equal(issueLookups, 0);
+  // A structurally valid PR with a different digest still needs the linked
+  // Task lookup before normal review can be selected.
+  assert.equal(issueLookups, 2);
   assert.equal(updaterReviewCandidate({ event: { action: 'workflow_dispatch' }, repository }), null);
 });
 
-test('a source Task must match issue URL, exact title, state, release marker, and release URL', async () => {
+test('a source Task must match issue URL, exact title, state, release marker, release URL, and asset digest', async () => {
   const invalidIssues = [
     { ...releaseTask(), title: 'Task: Update pinned Codex CLI to 0.159.5' },
     { ...releaseTask(), state: 'closed' },
     { ...releaseTask(), html_url: 'https://github.com/another/repo/issues/742' },
     { ...releaseTask(), body: releaseTask().body.replace(version, '0.159.5') },
     { ...releaseTask(), body: releaseTask().body.replace('openai/codex/releases/tag/rust-v0.159.4', 'openai/codex/releases/tag/rust-v0.159.5') },
+    { ...releaseTask(), body: releaseTask().body.replace(sha256, 'b'.repeat(64)) },
+    { ...releaseTask(), body: releaseTask().body.replace(`- Verified Linux x64 asset SHA-256: \`${sha256}\`.`, '') },
     { ...releaseTask(), pull_request: { url: 'https://api.github.com/repos/agentic-delivery-lab/agentic-delivery/pulls/742' } },
   ];
   for (const issue of invalidIssues) {
-    assert.equal(releaseTaskMatches({ issue, nativeIssueType: 'Task', issueNumber, repository, version }), false);
+    assert.equal(releaseTaskMatches({ issue, nativeIssueType: 'Task', issueNumber, repository, version, sha256 }), false);
     const result = await classifyUpdaterReview({
       event: pullRequestEvent(),
       repository,
@@ -128,7 +138,7 @@ test('a source Task must match issue URL, exact title, state, release marker, an
     });
     assert.equal(result.suppressReview, false);
   }
-  assert.equal(releaseTaskMatches({ issue: releaseTask(), nativeIssueType: null, issueNumber, repository, version }), false);
+  assert.equal(releaseTaskMatches({ issue: releaseTask(), nativeIssueType: null, issueNumber, repository, version, sha256 }), false);
 });
 
 test('a same-looking release issue without native Task type does not suppress semantic review', async () => {

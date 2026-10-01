@@ -15,6 +15,7 @@ import {
   resolveSourceIssue,
   selectPendingUpdatePullRequest,
   verifyDownload,
+  verifyReusableUpdatePullRequest,
 } from '../../scripts/codex-cli-release-update.mjs';
 import { RELEASE } from '../../scripts/setup-runner-codex.mjs';
 import { reviewCheckWorkflowPath, verifyReviewCheckRunProducers } from '../../scripts/lib/pull-request-check-readiness.mjs';
@@ -44,6 +45,45 @@ function release(version, { prerelease = false, digest = 'a'.repeat(64), size = 
       digest: `sha256:${digest}`,
       size,
     }],
+  };
+}
+
+function sourceTaskBody(version, digest = 'a'.repeat(64)) {
+  return [
+    `<!-- codex-cli-release-update:v1:${version} -->`,
+    `- Official Codex release: [${version}](https://github.com/openai/codex/releases/tag/rust-v${version}).`,
+    `- Verified Linux x64 asset SHA-256: \`${digest}\`.`,
+  ].join('\n');
+}
+
+function updatePullRequest({ version, issueNumber = 742, number = 815, sha = 'a'.repeat(40), overrides = {} }) {
+  const releaseUrl = `https://github.com/openai/codex/releases/tag/rust-v${version}`;
+  const digest = 'a'.repeat(64);
+  const sourceLine = `- Source issue: Closes #${issueNumber} — [Task: Update pinned Codex CLI to ${version}](https://github.com/${repository}/issues/${issueNumber})`;
+  return {
+    number,
+    state: 'open',
+    user: { login: 'agentic-delivery-lab-invoker-7f3a[bot]' },
+    title: `chore(delivery): 🔧 update pinned Codex CLI to ${version}`,
+    base: { ref: 'main', repo: { full_name: repository } },
+    head: {
+      ref: `chore/issue-${issueNumber}-update-codex-cli-${version.replaceAll('.', '-')}`,
+      sha,
+      repo: { full_name: repository },
+    },
+    body: [
+      `<!-- codex-cli-release-update:v1:${version} -->`,
+      '',
+      '## Source',
+      '',
+      sourceLine,
+      '',
+      '## Evidence',
+      '',
+      `- Official release: [${version}](${releaseUrl})`,
+      `- Official Linux x64 asset SHA-256: \`${digest}\``,
+    ].join('\n'),
+    ...overrides,
   };
 }
 
@@ -87,6 +127,89 @@ test('reuses one open update pull request and blocks unresolved duplicate decisi
   assert.equal(selectPendingUpdatePullRequest([], repository, '9-9-9'), null);
   assert.throws(() => selectPendingUpdatePullRequest([pullRequest, { ...pullRequest, number: 816 }], repository, '9-9-9'), /More than one open/);
   assert.throws(() => selectPendingUpdatePullRequest([{ ...pullRequest, state: 'closed', merged_at: null }], repository, version.replaceAll('.', '-')), /verified release source issue/);
+});
+
+test('reuses an open update PR only after its registered identity and exact release Task are verified', async () => {
+  const version = nextPatchVersion(RELEASE.version);
+  const candidate = checkedRelease(release(version), RELEASE.version);
+  const pullRequest = updatePullRequest({ version, sha: 'a'.repeat(40) });
+  const pending = selectPendingUpdatePullRequest([pullRequest], repository, version.replaceAll('.', '-'));
+  const sourceIssue = {
+    number: 742,
+    state: 'open',
+    title: `Task: Update pinned Codex CLI to ${version}`,
+    html_url: `https://github.com/${repository}/issues/742`,
+    body: sourceTaskBody(version, candidate.sha256),
+  };
+  const calls = [];
+  const valid = await verifyReusableUpdatePullRequest({
+    pending,
+    candidate,
+    repository,
+    token: 'test-token',
+    fetchImpl: async (url) => {
+      const address = String(url);
+      calls.push(address);
+      if (address.endsWith('/pulls/815')) return { ok: true, json: async () => pullRequest };
+      if (address.endsWith('/issues/742')) return { ok: true, json: async () => sourceIssue };
+      if (address === 'https://api.github.com/graphql') return graphqlIssueType();
+      throw new Error(`Unexpected validation request: ${address}`);
+    },
+  });
+  assert.equal(valid.pullRequest.number, 815);
+  assert.equal(valid.issueNumber, 742);
+  assert.deepEqual(calls, [
+    `https://api.github.com/repos/${repository}/pulls/815`,
+    `https://api.github.com/repos/${repository}/issues/742`,
+    'https://api.github.com/graphql',
+  ]);
+
+  await assert.rejects(verifyReusableUpdatePullRequest({
+    pending,
+    candidate,
+    repository,
+    token: 'test-token',
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ ...pullRequest, user: { login: 'other[bot]' } }),
+    }),
+    }), /does not match the registered updater/);
+
+  await assert.rejects(verifyReusableUpdatePullRequest({
+    pending,
+    candidate,
+    repository,
+    token: 'test-token',
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        ...pullRequest,
+        body: pullRequest.body.replace('a'.repeat(64), 'b'.repeat(64)),
+      }),
+    }),
+  }), /does not match the registered updater, candidate release, or source issue/);
+
+  await assert.rejects(verifyReusableUpdatePullRequest({
+    pending,
+    candidate,
+    repository,
+    token: 'test-token',
+    fetchImpl: async (url) => String(url).endsWith('/pulls/815')
+      ? { ok: true, json: async () => pullRequest }
+      : String(url).endsWith('/issues/742')
+        ? { ok: true, json: async () => ({ ...sourceIssue, body: sourceTaskBody(version, 'b'.repeat(64)) }) }
+        : graphqlIssueType(),
+  }), /does not link to its verified release Task/);
+
+  await assert.rejects(verifyReusableUpdatePullRequest({
+    pending,
+    candidate,
+    repository,
+    token: 'test-token',
+    fetchImpl: async (url) => String(url).endsWith('/pulls/815')
+      ? { ok: true, json: async () => ({ ...pullRequest, head: { ...pullRequest.head, sha: 'b'.repeat(40) } }) }
+      : { ok: true, json: async () => sourceIssue },
+  }), /changed after discovery/);
 });
 
 test('paginates repository pull requests before deciding whether an update is pending', async () => {
@@ -138,7 +261,7 @@ test('a closed release Task resolves its old PR without blocking later releases'
       json: async () => ({
         number: issueNumber,
         title: `Task: Update pinned Codex CLI to ${version}`,
-        body: `<!-- codex-cli-release-update:v1:${version} -->\nRelease task`,
+        body: sourceTaskBody(version),
         state,
         html_url: `https://github.com/${repository}/issues/${issueNumber}`,
       }),
@@ -351,7 +474,7 @@ test('reuses a matching open release issue and creates a typed task when no issu
       json: async () => ({ total_count: 1, incomplete_results: false, items: [{
         number: 742,
         title,
-        body: `${marker}\nRelease task`,
+        body: sourceTaskBody(version, candidate.sha256),
         state: 'open',
         html_url: `https://github.com/${repository}/issues/742`,
       }] }),
@@ -359,6 +482,25 @@ test('reuses a matching open release issue and creates a typed task when no issu
   };
   const reused = await resolveSourceIssue({ candidate, repository, token: 'test-token', fetchImpl, createIssue: async () => { createCount += 1; } });
   assert.deepEqual(reused, { number: 742, url: `https://github.com/${repository}/issues/742`, title, created: false });
+  assert.equal(createCount, 0);
+
+  for (const body of [sourceTaskBody(version, 'b'.repeat(64)), sourceTaskBody(version).replace('openai/codex/releases/tag/rust-v', 'openai/codex/releases/tag/rust-v0.0.0-'), sourceTaskBody(version).replace(/- Verified Linux x64 asset SHA-256: .*/, '')]) {
+    await assert.rejects(resolveSourceIssue({
+      candidate,
+      repository,
+      token: 'test-token',
+      fetchImpl: async (url) => String(url) === 'https://api.github.com/graphql'
+        ? graphqlIssueType()
+        : { ok: true, json: async () => ({ total_count: 1, incomplete_results: false, items: [{
+          number: 742,
+          title,
+          body,
+          state: 'open',
+          html_url: `https://github.com/${repository}/issues/742`,
+        }] }) },
+      createIssue: async () => { createCount += 1; },
+    }), /does not record the verified release URL and SHA-256 digest/);
+  }
   assert.equal(createCount, 0);
 
   await assert.rejects(resolveSourceIssue({
@@ -370,7 +512,7 @@ test('reuses a matching open release issue and creates a typed task when no issu
       : { ok: true, json: async () => ({ total_count: 1, incomplete_results: false, items: [{
         number: 742,
         title,
-        body: `${marker}\nRelease task`,
+        body: sourceTaskBody(version, candidate.sha256),
         state: 'open',
         html_url: `https://github.com/${repository}/issues/742`,
       }] }) },
@@ -385,7 +527,7 @@ test('reuses a matching open release issue and creates a typed task when no issu
     fetchImpl: async () => ({ ok: true, json: async () => ({ total_count: 1, incomplete_results: false, items: [{
       number: 741,
       title: `Task: Update pinned Codex CLI to ${RELEASE.version}`,
-      body: `<!-- codex-cli-release-update:v1:${RELEASE.version} -->`,
+      body: sourceTaskBody(RELEASE.version),
       state: 'open',
       html_url: `https://github.com/${repository}/issues/741`,
     }] }) }),
@@ -415,7 +557,6 @@ test('release source issue discovery paginates and fails closed on incomplete or
   const version = nextPatchVersion(RELEASE.version);
   const candidate = checkedRelease(release(version), RELEASE.version);
   const title = `Task: Update pinned Codex CLI to ${version}`;
-  const marker = `<!-- codex-cli-release-update:v1:${version} -->`;
   const pages = [];
   const fetchImpl = async (url) => {
     if (String(url) === 'https://api.github.com/graphql') return graphqlIssueType();
@@ -431,7 +572,7 @@ test('release source issue discovery paginates and fails closed on incomplete or
       : [{
         number: 742,
         title,
-        body: `${marker}\nRelease task`,
+        body: sourceTaskBody(version, candidate.sha256),
         state: 'open',
         html_url: `https://github.com/${repository}/issues/742`,
       }];
@@ -554,6 +695,7 @@ test('the updater uses a restricted App token for PR events and dispatches runne
   assert.match(workflow, /checks: read/);
   assert.match(workflow, /--ensure-source-issue/);
   assert.match(workflow, /CODEX_RELEASE_SLUG: \$\{\{ steps\.release\.outputs\.slug \}\}/);
+  assert.match(workflow, /CODEX_RELEASE_CANDIDATE_PATH: \$\{\{ runner\.temp \}\}\/codex-release-candidate\.json/);
   assert.match(workflow, /CODEX_VERSION: \$\{\{ steps\.release\.outputs\.version \}\}/);
   assert.match(workflow, /PR_TITLE: "chore\(delivery\): 🔧 update pinned Codex CLI to \$\{\{ steps\.release\.outputs\.version \}\}"/);
   assert.match(workflow, /pnpm branch:start chore "\$SOURCE_ISSUE"/);
@@ -562,6 +704,8 @@ test('the updater uses a restricted App token for PR events and dispatches runne
   assert.match(workflow, /pull-request-body\.yml --repo "\$GITHUB_REPOSITORY" --ref "\$PR_BRANCH"/);
   assert.match(workflow, /<!-- codex-cli-release-update:v1:\$CODEX_VERSION -->/);
   assert.match(workflow, /Harness semantic review starts only after that smoke passes/);
+  assert.match(workflow, /pull-request checks page is the source for current check status/);
+  assert.doesNotMatch(workflow, /are pending until their results appear/);
   assert.match(workflow, /Wait for exact-head deterministic checks/);
   assert.match(workflow, /steps\.static\.outputs\.checks_ready == 'true'/);
   assert.match(workflow, /--smoke-preflight/);
@@ -569,4 +713,7 @@ test('the updater uses a restricted App token for PR events and dispatches runne
   assert.match(smokeWorkflow, /run-name: Self-hosted runner smoke \(codex=\$\{\{ inputs\.codex \}\}\)/);
   assert.doesNotMatch(workflow, /Repository Actions setting must permit this workflow token/);
   assert.doesNotMatch(workflow, /branch:start chore 70/);
+  const updaterScript = await readFile(new URL('../../scripts/codex-cli-release-update.mjs', import.meta.url), 'utf8');
+  assert.match(updaterScript, /"adrs":\["ADR-0009","ADR-0011"\]/);
+  assert.match(workflow, /"adrs":\["ADR-0009","ADR-0011"\]/);
 });
