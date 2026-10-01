@@ -458,6 +458,8 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
   assert.equal(result.reviewSession.disposition, 'completed');
   assert.equal(checkFetches, 2, 'Harness waits for required exact-head checks before the model turn.');
   assert.match(bundleText, /Runner and semantic checks are pending at PR creation\./);
+  assert.match(bundleText, /assembled immediately before the semantic review turn/);
+  assert.doesNotMatch(bundleText, /"semantic":/);
   assert.match(bundleText, /"id": 654321/);
   assert.match(bundleText, /"conclusion": "success"/);
   assert.match(bundleText, /"codexCliVersion": "0\.159\.3"/);
@@ -645,7 +647,7 @@ test('architecture-review workflow is pinned, read-only, resumable, and does not
   for (const phrase of ['pull_request:', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', 'CODEX_REVIEW_STATE_DIR: /var/lib/github-runner/.codex/harness-reviews', 'codex-cli-release-update:v1:', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
     assert.ok(workflow.includes(phrase), `missing workflow control: ${phrase}`);
   }
-  assert.match(workflow, /pull_request\.user\.type != 'Bot'/);
+  assert.match(workflow, /pull_request\.user\.login != 'agentic-delivery-lab-invoker-7f3a\[bot\]'/);
   assert.match(workflow, /head\.ref, 'chore\/issue-'/);
   assert.match(workflow, /pull_request\.title/);
   assert.doesNotMatch(workflow, /issues:\s*write|pull-requests:\s*write|contents:\s*write/);

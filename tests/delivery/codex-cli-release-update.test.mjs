@@ -354,6 +354,9 @@ test('the updater uses a restricted App token for PR events and dispatches runne
   assert.match(workflow, /pull-requests: read/);
   assert.match(workflow, /checks: read/);
   assert.match(workflow, /--ensure-source-issue/);
+  assert.match(workflow, /CODEX_RELEASE_SLUG: \$\{\{ steps\.release\.outputs\.slug \}\}/);
+  assert.match(workflow, /CODEX_VERSION: \$\{\{ steps\.release\.outputs\.version \}\}/);
+  assert.match(workflow, /PR_TITLE: "chore\(delivery\): 🔧 update pinned Codex CLI to \$\{\{ steps\.release\.outputs\.version \}\}"/);
   assert.match(workflow, /pnpm branch:start chore "\$SOURCE_ISSUE"/);
   assert.match(workflow, /Source issue: Closes #\$PR_SOURCE_ISSUE/);
   assert.match(workflow, /Ongoing policy: Refs #70/);

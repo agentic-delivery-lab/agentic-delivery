@@ -285,6 +285,12 @@ issue edits.
   checks are complete. Session files are restricted to `github-runner` and
   become eligible for pruning after 30 days. This state survives workflow jobs
   on the same persistent runner, not replacement of that runner.
+- Automatic Harness suppression for a CLI update PR requires the exact
+  registered delivery App bot login, the issue-linked updater branch and
+  expected title, and the versioned marker. Other bot-authored PRs still run
+  Harness. The semantic evidence bundle omits its expected pre-turn
+  `not-run` placeholder so the current review does not mistake its own pending
+  result for missing evidence.
 - ChatGPT login for the installed `codex` executable under that user,
   `github-runner`. Another user's installation/login is not sufficient. For a
   headless runner, use the file-backed credential store so the service does not

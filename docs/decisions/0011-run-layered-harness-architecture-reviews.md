@@ -127,6 +127,11 @@ evidence starts a new thread. Deterministic violations also skip the semantic
 turn. Quota snapshots remain in the Actions report and runner log, outside the
 semantic model context.
 
+The evidence bundle omits the deterministic review's `not-run` semantic
+placeholder and identifies that the bundle is assembled before the current
+semantic turn. The current turn produces the semantic result, so its expected
+absence from its own input is not an evidence gap.
+
 The ADR-quality `validate` check is required whenever changed paths match the
 workflow's pull-request path filter. Harness and the CLI release updater use
 the same matcher, including `CHANGELOG.md`, so a dependent runner operation
@@ -135,9 +140,11 @@ cannot start before an applicable ADR check finishes.
 The weekly CLI updater uses a versioned PR-body marker to delay its semantic
 review until the candidate runner smoke passes. That marker does not authorize
 the skip: the automatic Harness event is suppressed only when the pull request
-is internal, bot-authored, and has the expected issue-linked CLI update branch
-and title as well as the marker. A human-authored PR cannot suppress the
-review by copying the marker into its body.
+is internal, authored by the registered delivery App bot
+`agentic-delivery-lab-invoker-7f3a[bot]`, and has the expected issue-linked CLI
+update branch and title as well as the marker. Other bot-authored PRs still run
+Harness, and a human-authored PR cannot suppress review by copying the marker
+into its body.
 
 The repository has one persistent self-hosted runner for Codex and Harness.
 The delivery-quality `quality` job, ADR validation, and portability matrix run
