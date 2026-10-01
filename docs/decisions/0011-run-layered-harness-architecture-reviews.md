@@ -47,7 +47,8 @@ cannot be treated as deterministic proof.
   safety-sensitive merge gate dependent on quota, model availability and
   non-deterministic judgment.
 - **Layered read-only review.** Deterministic checks fail only on objective
-  violations; a bounded Sol High reviewer returns cited advisory findings.
+  violations; a bounded GPT-6 Sol Medium reviewer returns cited advisory
+  findings.
 
 ## Decision Outcome
 
@@ -77,12 +78,13 @@ ADR/primitive relationships, domain applicability, required deterministic
 enforcement, source-issue and branch correlation, required durable-artifact
 relationships, deletion outcomes, supersession, and permission/state
 invariants. It fails the check only for a clear violation. The semantic layer
-uses GPT-5.6 Sol with
-high reasoning effort, read-only `delivery-review` permissions, the existing
+uses GPT-6 Sol with
+medium reasoning effort, read-only `delivery-review` permissions, the existing
 subscription-only budget boundary and no external network. It must cite exact
 repository, issue, run or session evidence. Findings, invalid semantic output,
 unavailable evidence and unavailable quota are reported as advisory or
-inconclusive results.
+inconclusive results. The profile change may affect review quality; maintainers
+inspect the first completed result alongside its quota evidence.
 
 Agent-created pull requests carry a versioned evidence projection derived from
 persisted delivery state. The projection contains source issue, workflow run,
@@ -109,11 +111,12 @@ reference and is replaced idempotently on publication retry.
 ### Confirmation
 
 Tests must cover impact-map coverage, evidence-schema validation, redaction,
-publication retry idempotency, deterministic failure codes, exact Sol High
-review settings, denied model network, cited semantic findings, inconclusive
-quota/evidence handling, workflow permissions and no-comment behavior. A
-human reviewer must inspect whether the baseline and semantic findings cite
-evidence rather than treating tests or documentation as runtime proof.
+publication retry idempotency, deterministic failure codes, exact GPT-6 Sol
+Medium review settings, denied model network, cited semantic findings,
+inconclusive quota/evidence handling, workflow permissions and no-comment
+behavior. A human reviewer must inspect whether the baseline and semantic
+findings cite evidence rather than treating tests or documentation as runtime
+proof.
 
 ## Pros and Cons of the Options
 
@@ -149,5 +152,6 @@ evidence rather than treating tests or documentation as runtime proof.
 - Domain register: [`ubiquitous-language.yml`](../domain/ubiquitous-language.yml)
 - Related decisions: [ADR-0001](0001-use-madr-for-architecture-decisions.md), [ADR-0003](0003-use-context-scoped-ubiquitous-language.md), [ADR-0009](0009-run-codex-from-source-issues-with-a-budget-boundary.md), [ADR-0012](0012-use-github-as-the-lifecycle-control-plane.md), and [ADR-0013](0013-derive-adr-traceability-from-agentic-primitives.md)
 - Amendment source: [issue #32](https://github.com/agentic-delivery-lab/agentic-delivery/issues/32)
+- Model profile amendment: [issue #70](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70)
 - This decision is provisional on its feature branch and becomes official only
   after its review pull request is merged into `main`.

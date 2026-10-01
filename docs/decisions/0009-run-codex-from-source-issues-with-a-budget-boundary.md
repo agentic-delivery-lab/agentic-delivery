@@ -24,9 +24,9 @@ which amended the workflow originally tracked by
 later clarified that people must be able to continue a saved run with natural
 language instead of a required slash command.
 It requests reliable continuation of the current source-issue workflow on the
-existing self-hosted runner,
-planning with GPT-5.6 Sol High, implementation with GPT-5.6 Luna Max, and a
-review pull request. Issues may contain ideas, requirements, or decisions.
+existing self-hosted runner, planning and implementation with the approved
+phase-specific model profiles, and a review pull request. Issues may contain
+ideas, requirements, or decisions.
 The source issue must explain how the final change came about.
 
 Historical issue #17 runs showed that an absolute 20-minute model-turn deadline
@@ -73,6 +73,30 @@ delivery run, budget boundary, and continuation prompt.
 Chosen option: **A small Node.js controller using `codex app-server`**, because
 its protocol exposes actual collaboration modes, per-turn model settings,
 clarification requests, interruption, and subscription quota telemetry.
+
+### Quota-aware model profile amendment (Issue #70)
+
+Automatic delivery uses GPT-6 Luna Low for routing; GPT-6 Luna Medium for
+refinement, discovery, research, requirements, and coordination; and GPT-6 Sol
+Medium for planning, architecture decisions, implementation, validation, and
+review. The runner checks the exact model and effort combinations advertised
+by its Codex `model/list` before any model turn. Missing support stops preflight;
+model fallback is disabled. GPT-6 Astra and High, Max, and Ultra reasoning are
+not selected by automatic profiles.
+
+This replaces Sol High planning/review and Luna Max implementation with a
+low-effort Luna router, medium-effort Luna for issue maturation, and
+medium-effort Sol for planning, implementation, architecture, validation, and
+review. Keeping the previous profiles would retain their reasoning effort. No
+usage evidence supports Astra or higher effort for this quota-reduction goal,
+so automatic profiles exclude them.
+
+The assignment is a usage-reduction hypothesis, not a guarantee: the other
+Codex clients share the allowance, and the model catalog does not establish
+quota weighting. Lower reasoning effort may also change route and review
+quality. Inspect actual quota evidence and semantic findings from the first
+completed runs. The 98% finalization reserve, subscription-only execution, and
+no-credit, no-account-switch, and no-fallback rules remain unchanged.
 
 An issue or newly created comment can enter semantic routing only after
 deterministic repository, issue, event, bot, and repository-writer checks pass.
@@ -251,6 +275,7 @@ Amendment source: [issue #32](https://github.com/agentic-delivery-lab/agentic-de
 - [GitHub branch protection availability](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
 - [Issue #18: Restore exact Codex issue continuation](https://github.com/agentic-delivery-lab/agentic-delivery/issues/18)
 - [Issue #21: Replace the fixed Codex turn deadline with quota-led execution](https://github.com/agentic-delivery-lab/agentic-delivery/issues/21)
+- [Issue #70: Reduce Codex allowance use with phase-specific GPT-6 profiles](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70)
 - [Issue #17: Introduce an issue-driven intake and routing harness](https://github.com/agentic-delivery-lab/agentic-delivery/issues/17)
 - [PR #20: Make Codex issue comments actionable](https://github.com/agentic-delivery-lab/agentic-delivery/pull/20)
 - [Operation and continuation](../delivery/codex-workflow.md)

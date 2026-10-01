@@ -42,13 +42,13 @@ test('refuses model execution when credit spillover is possible or unknown', () 
 
 test('requires the exact requested models and reasoning efforts', () => {
   const models = [
-    {id:'gpt-5.6-sol', supportedReasoningEfforts:[{reasoningEffort:'high'}]},
-    {id:'gpt-5.6-luna', supportedReasoningEfforts:[{reasoningEffort:'max'}]},
+    {id:'gpt-6-sol', supportedReasoningEfforts:[{reasoningEffort:'medium'}]},
+    {id:'gpt-6-luna', supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'medium'}]},
   ];
   verifyModels(models);
-  assert.throws(() => verifyModels(models.slice(0, 1)), /gpt-5.6-luna/);
+  assert.throws(() => verifyModels(models.slice(0, 1)), /gpt-6-luna/);
   models[1].supportedReasoningEfforts = [{reasoningEffort:'high'}];
-  assert.throws(() => verifyModels(models), /max/);
+  assert.throws(() => verifyModels(models), /low/);
 });
 
 test('model processes do not inherit publishing, API, or Actions credentials', () => {

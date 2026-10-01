@@ -24,7 +24,8 @@ advance or corrupt the work item.
 
 After the workflow is merged and prerequisites are verified, open an issue
 through an intake form or the blank-issue fallback. The intake workflow
-uses a read-only Sol High routing turn to interpret the issue and conversation.
+uses a read-only GPT-6 Luna Low routing turn to interpret the issue and
+conversation.
 It proposes the native issue type, Lifecycle Stage, Delivery Readiness,
 governance labels, and an allowed orchestration pattern. Deterministic code
 validates that proposal against the two versioned catalogs and transition table
@@ -45,11 +46,19 @@ on the coordinating parent.
 
 People do not set lifecycle fields during normal work. The routing model
 proposes a stage and readiness value, and the deterministic readiness gate must
-pass before GPT-5.6 Sol High starts Plan mode. After a successful plan, the
+pass before GPT-6 Sol Medium starts Plan mode. After a successful plan, the
 controller advances the issue fields through Planning and Execution and
-automatically invokes GPT-5.6 Luna Max for Implement. Research, requirements,
-architecture, validation, and coordination routes can stop or complete without
-invoking an implementer.
+automatically invokes GPT-6 Sol Medium for Implement. Refinement, discovery,
+research, requirements, architecture, validation, and coordination routes can
+stop or complete without invoking an implementer.
+
+The remaining profiles use GPT-6 Luna Medium for refinement, discovery,
+research, requirements, and coordination. Planning, architecture decisions,
+implementation, validation, and review use GPT-6 Sol Medium. Preflight checks
+these exact model and effort combinations against the runner's Codex catalog
+and stops before a model turn if one is unavailable. Automatic profiles do not
+use GPT-6 Astra, High, Max, or Ultra reasoning, and do not fall back to another
+model.
 
 The direct `issue_comment` workflow trigger is removed. A supported issue or
 pull-request comment/review can enter through the explicit
@@ -284,7 +293,9 @@ namespace, so local test servers work without access to runner-host services.
 
 `node scripts/codex-handoff-check.mjs` is an opt-in local check that consumes
 subscription allowance. It makes two bounded real model turns, verifies that
-Sol High does not write during planning, and checks Luna Max's resulting file.
+GPT-6 Sol Medium planning remains read-only. Implementation uses the same
+model and effort with the workspace-write profile; deterministic controller
+checks verify the resulting tree.
 Do not add it to ordinary CI. An empty app-server environment list disables
 filesystem tools; the controller deliberately retains the default local
 environment with its named permissions.
@@ -367,7 +378,7 @@ verification.
 Internal pull requests also run the read-only Harness Architecture Review. The
 deterministic layer compares the merge-base-to-head diff with the official base
 ADRs, provisional head changes, the domain register, and the evidence contract.
-The semantic layer uses a bounded Sol High review turn when quota and runner
+The semantic layer uses a bounded GPT-6 Sol Medium review turn when quota and runner
 evidence are available. Deterministic violations fail; semantic concerns and
 inconclusive runtime evidence remain cited review findings. The review workflow
 does not comment, modify, merge or close anything.

@@ -163,7 +163,7 @@ test('the evidence contract validates the complete projection and rejects mismat
     deliveryRun: { id: '123', attempt: '1', url: 'https://github.com/agentic-delivery-lab/agentic-delivery/actions/runs/123' },
     revision: { branch: 'feat/issue-25-review', commit: revision, tree: revision },
     codexSession: { id: '019fb023-24b8-7881-9119-509f078b610e' },
-    modelTurns: [{ phase: 'plan', model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' }],
+    modelTurns: [{ phase: 'plan', model: 'gpt-6-sol', effort: 'medium', mode: 'plan' }],
     architectureContext: { officialAdrs: ['ADR-0001'], provisionalAdrs: ['ADR-0011'], affectedAdrs: ['ADR-0011'], boundedContexts: ['agentic-delivery-governance'] },
     validation: { status: 'passed', summary: 'Focused validation passed.' },
     telemetry: { maxUsedPercent: 42, subscriptionOnly: true, capturedAt: '2026-09-10T10:00:00.000Z' },

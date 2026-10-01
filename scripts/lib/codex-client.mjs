@@ -6,16 +6,16 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 
 export const MODELS = Object.freeze({
-  route: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  refine: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  discovery: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  research: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  requirements: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  architecture: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  plan: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  implement: { model: 'gpt-5.6-luna', effort: 'max', mode: 'default' },
-  validate: { model: 'gpt-5.6-sol', effort: 'high', mode: 'default' },
-  review: { model: 'gpt-5.6-sol', effort: 'high', mode: 'default' },
+  route: { model: 'gpt-6-luna', effort: 'low', mode: 'plan' },
+  refine: { model: 'gpt-6-luna', effort: 'medium', mode: 'plan' },
+  discovery: { model: 'gpt-6-luna', effort: 'medium', mode: 'plan' },
+  research: { model: 'gpt-6-luna', effort: 'medium', mode: 'plan' },
+  requirements: { model: 'gpt-6-luna', effort: 'medium', mode: 'plan' },
+  architecture: { model: 'gpt-6-sol', effort: 'medium', mode: 'plan' },
+  plan: { model: 'gpt-6-sol', effort: 'medium', mode: 'plan' },
+  implement: { model: 'gpt-6-sol', effort: 'medium', mode: 'default' },
+  validate: { model: 'gpt-6-sol', effort: 'medium', mode: 'default' },
+  review: { model: 'gpt-6-sol', effort: 'medium', mode: 'default' },
 });
 
 export const AUTH_STORAGE_CONFIG = 'cli_auth_credentials_store="file"';

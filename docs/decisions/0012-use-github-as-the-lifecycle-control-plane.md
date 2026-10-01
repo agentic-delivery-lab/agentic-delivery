@@ -114,8 +114,9 @@ The versioned orchestration policy selects composable patterns from issue type,
 lifecycle stage, trigger, governance, lineage, plan validity, saved session,
 execution state, and explicitly observed capabilities. Research may use an
 approved web capability; implementation profiles receive no MCP access. A
-valid unchanged plan can invoke only the Luna Max implementer and resume the
-exact saved session. Validation and coordination can complete without
+valid unchanged plan can invoke only the configured implementer and resume the
+exact saved session. ADR-0009 records the current phase-specific model and
+effort assignment. Validation and coordination can complete without
 implementation.
 
 An atomic refined request selects a delivery-capable parent work type and
@@ -185,6 +186,7 @@ operator bindings are installed.
   `main`.
 - Amendment source: [issue #32](https://github.com/agentic-delivery-lab/agentic-delivery/issues/32)
   and [issue #35](https://github.com/agentic-delivery-lab/agentic-delivery/issues/35).
+- Model-profile amendment: [issue #70](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70).
 - The active metadata contract is `config/issue-metadata.yml`; the active
   orchestration contract is `config/orchestration-policy.yml`. The former
   repository-local lifecycle file is migration history and is not loaded.

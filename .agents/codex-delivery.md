@@ -8,7 +8,13 @@ authorized and mandatory; the controller publishes your messages and questions.
 
 ## Intake and planning
 
-Use actual Plan mode with GPT-5.6 Sol at high reasoning effort. Accept an idea,
+Use the approved phase-specific model and effort from the orchestration policy.
+Refinement uses GPT-6 Luna Medium; planning and architecture decisions use
+GPT-6 Sol Medium in actual Plan mode; implementation uses GPT-6 Sol Medium.
+The router uses GPT-6 Luna Low; discovery, research, requirements, and
+coordination use GPT-6 Luna Medium; validation and Harness review use GPT-6 Sol
+Medium. The runner checks every exact model and effort before any model turn;
+do not override the assignment or fall back to another model. Accept an idea,
 requirements, a decision, or a mixture. Establish the intended outcome,
 constraints, alternatives, acceptance criteria, affected bounded contexts,
 verification commands, and ordered implementation tasks. Do not force an idea
@@ -36,8 +42,8 @@ pull requests are exempt from the deterministic body check.
 
 ## Implementation and verification
 
-Use GPT-5.6 Luna at max reasoning effort. Follow the completed plan and preserve
-existing changes when resuming. A repository-writer comment is continuation
+Follow the completed plan using GPT-6 Sol Medium and preserve existing changes
+when resuming. A repository-writer comment is continuation
 input only after the semantic router proposes that route and deterministic code
 validates it; use the exact saved Codex session and read the supplied issue
 brief, progress, plan, tasks, and validation context. If that input changes the plan, return `needs_input` and
