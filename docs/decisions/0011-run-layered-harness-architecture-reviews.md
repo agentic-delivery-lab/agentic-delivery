@@ -124,6 +124,11 @@ evidence starts a new thread. Deterministic violations also skip the semantic
 turn. Quota snapshots remain in the Actions report and runner log, outside the
 semantic model context.
 
+The ADR-quality `validate` check is required whenever changed paths match the
+workflow's pull-request path filter. Harness and the CLI release updater use
+the same matcher, including `CHANGELOG.md`, so a dependent runner operation
+cannot start before an applicable ADR check finishes.
+
 The repository has one persistent self-hosted runner for Codex and Harness.
 The delivery-quality `quality` job, ADR validation, and portability matrix run
 on ephemeral GitHub-hosted runners, with read-only workflow permissions and the

@@ -8,6 +8,39 @@ export const REQUIRED_REVIEW_CHECKS = Object.freeze([
   'portability (windows-latest)',
 ]);
 
+// Keep these path rules aligned with `adr-quality.yml`'s pull_request.paths.
+const ADR_QUALITY_EXACT_FILES = new Set([
+  'AGENTS.md',
+  '.github/workflows/adr-quality.yml',
+  '.markdownlint-cli2.jsonc',
+  'CHANGELOG.md',
+  '.node-version',
+  'commitlint.config.mjs',
+  'package.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+]);
+const ADR_QUALITY_PREFIXES = Object.freeze([
+  '.agents/skills/',
+  'docs/decisions/',
+  'docs/architecture/',
+  'docs/delivery/',
+  'docs/domain/',
+  'tests/adr/',
+  'tests/communication/',
+  'tests/delivery/',
+  'tests/domain/',
+]);
+
+export function adrQualityWorkflowAppliesToFiles(files) {
+  return Array.isArray(files) && files.some((entry) => {
+    const file = String(entry ?? '');
+    return ADR_QUALITY_EXACT_FILES.has(file)
+      || ADR_QUALITY_PREFIXES.some((prefix) => file.startsWith(prefix))
+      || (file.startsWith('scripts/') && file.endsWith('.mjs'));
+  });
+}
+
 export function reviewCheckReadiness(checkRuns, expectedSha, requireAdrValidation = false) {
   const required = requireAdrValidation ? [...REQUIRED_REVIEW_CHECKS, 'validate'] : REQUIRED_REVIEW_CHECKS;
   const latestByName = new Map();

@@ -5,6 +5,7 @@ import { test } from 'node:test';
 
 import {
   checkedRelease,
+  adrQualityWorkflowAppliesToFiles,
   reviewCheckReadiness,
   resolveClosedUpdateIssueStates,
   resolveSourceIssue,
@@ -132,6 +133,20 @@ test('semantic review readiness requires exact-head deterministic checks and ign
   assert.deepEqual(reviewCheckReadiness(checkRuns.map((run) => ({ ...run, head_sha: 'b'.repeat(40) })), sha).missing, names);
   const failed = checkRuns.map((run) => run.name === 'quality' ? { ...run, conclusion: 'failure' } : run);
   assert.deepEqual(reviewCheckReadiness(failed, sha).failed, ['quality']);
+});
+
+test('requires ADR validation whenever changed files trigger the ADR-quality workflow', () => {
+  for (const file of [
+    'CHANGELOG.md',
+    '.github/workflows/adr-quality.yml',
+    'docs/delivery/codex-workflow.md',
+    'docs/decisions/0011-example.md',
+    'scripts/codex-cli-release-update.mjs',
+    'tests/domain/validate-domain-language.test.mjs',
+  ]) assert.equal(adrQualityWorkflowAppliesToFiles([file]), true, file);
+  for (const file of ['README.md', 'src/app.ts', 'docs/other.md', 'scripts/example.txt']) {
+    assert.equal(adrQualityWorkflowAppliesToFiles([file]), false, file);
+  }
 });
 
 test('reuses a matching open release issue and creates a typed task when no issue exists', async () => {

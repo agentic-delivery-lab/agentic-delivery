@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { CodexClient, MODELS } from './codex-client.mjs';
 import { outcomeSchema, runTurn } from './codex-loop.mjs';
 import { gitFiles, gitShow, parseEvidenceMarker } from './architecture-review.mjs';
-import { reviewCheckReadiness } from './pull-request-check-readiness.mjs';
+import { adrQualityWorkflowAppliesToFiles, reviewCheckReadiness } from './pull-request-check-readiness.mjs';
 
 const execFileAsync = promisify(execFile);
 const SEMANTIC_REVIEW_PROMPT_VERSION = 'harness-review-v3';
@@ -253,7 +253,7 @@ async function pullRequestEvidence(review, event, {
 
     try {
       const checkUrl = `https://api.github.com/repos/${repository}/commits/${review.head}/check-runs?filter=latest&per_page=100`;
-      const requireAdrValidation = (review.changedFiles ?? []).some((file) => file.startsWith('docs/decisions/'));
+      const requireAdrValidation = adrQualityWorkflowAppliesToFiles(review.changedFiles);
       const fetchCheckEvidence = async () => {
         const result = await githubJson(checkUrl, token);
         const exactRuns = (Array.isArray(result.check_runs) ? result.check_runs : [])
@@ -626,7 +626,7 @@ function checksAreComplete(github, review) {
     ...run,
     head_sha: run.headSha,
     started_at: run.startedAt,
-  })), review.head, (review.changedFiles ?? []).some((file) => file.startsWith('docs/decisions/')));
+  })), review.head, adrQualityWorkflowAppliesToFiles(review.changedFiles));
   return readiness.requiredReady && readiness.allRunsComplete;
 }
 

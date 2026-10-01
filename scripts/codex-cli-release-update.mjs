@@ -6,10 +6,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { reviewCheckReadiness } from './lib/pull-request-check-readiness.mjs';
+import { adrQualityWorkflowAppliesToFiles, reviewCheckReadiness } from './lib/pull-request-check-readiness.mjs';
 import { RELEASE } from './setup-runner-codex.mjs';
 
-export { reviewCheckReadiness } from './lib/pull-request-check-readiness.mjs';
+export { adrQualityWorkflowAppliesToFiles, reviewCheckReadiness } from './lib/pull-request-check-readiness.mjs';
 
 const execFileAsync = promisify(execFile);
 const API_URL = 'https://api.github.com/repos/openai/codex/releases/latest';
@@ -364,7 +364,7 @@ async function waitForPullRequestChecks() {
     if (batch.length < 100) break;
     if (page === 30) throw new Error('The release pull request changed-file list exceeds the supported review bound.');
   }
-  const requireAdrValidation = files.some((file) => String(file.filename ?? '').startsWith('docs/decisions/'));
+  const requireAdrValidation = adrQualityWorkflowAppliesToFiles(files.map((file) => file.filename));
   const checkUrl = `https://api.github.com/repos/${repository}/commits/${expectedSha}/check-runs?filter=latest&per_page=100`;
   for (let attempt = 0; attempt < 120; attempt += 1) {
     const currentPullRequest = await fetchJson(pullUrl, token, globalThis.fetch);
