@@ -125,11 +125,12 @@ turn. Quota snapshots remain in the Actions report and runner log, outside the
 semantic model context.
 
 The repository has one persistent self-hosted runner for Codex and Harness.
-The delivery-quality `quality` job and portability matrix run on ephemeral
-GitHub-hosted runners, with read-only workflow permissions and the existing
-same-repository pull-request boundary. This lets those exact-head checks finish
-while Harness occupies the persistent runner and waits for their result; running
-both on that single runner would leave `quality` queued behind the waiting review.
+The delivery-quality `quality` job, ADR validation, and portability matrix run
+on ephemeral GitHub-hosted runners, with read-only workflow permissions and the
+existing same-repository pull-request boundary. This lets those exact-head
+checks finish while Harness occupies the persistent runner and waits for their
+result; running any of them on that single runner would leave the check queued
+behind the waiting review.
 
 This storage choice assumes the single persistent self-hosted runner remains
 available across workflow jobs. It avoids publishing raw thread material to

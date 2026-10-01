@@ -52,13 +52,13 @@ permissions:
 
 jobs:
   validate:
-    # This private repository runs checked-in validation code on a dedicated
-    # runner. Fork PRs stay outside this trust boundary until a hosted-runner
-    # fallback is available.
+    # Run ADR validation on an ephemeral hosted runner so it can finish while
+    # Harness occupies the single persistent Codex runner. Fork PRs remain
+    # outside this trust boundary until explicitly supported.
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64, omarchy]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Check out the repository

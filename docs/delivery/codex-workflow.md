@@ -241,9 +241,10 @@ issue edits.
   smoke passes; a deterministic failure prevents both runner dispatches. The
   generated PR description separates verified release metadata from checks
   that are pending at creation.
-  The delivery-quality `quality` job and its portability matrix use ephemeral
-  GitHub-hosted runners. This lets their exact-head checks finish while Harness
-  uses the single persistent self-hosted Codex runner to wait for readiness.
+  The delivery-quality `quality` job, ADR validation and portability matrix use
+  ephemeral GitHub-hosted runners. This lets their exact-head checks finish
+  while Harness uses the single persistent self-hosted Codex runner to wait for
+  readiness.
   The runner verifies every configured model/effort pair, ChatGPT login, Plan
   mode, and quota telemetry before a model turn.
   The no-generation smoke check also probes persistent thread start and exact

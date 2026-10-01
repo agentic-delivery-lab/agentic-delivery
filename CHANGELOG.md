@@ -57,8 +57,8 @@ they do not authorize migration, alter that issue's scope, or close it.
   do not invalidate that fingerprint. Protected runner-local session data is
   pruned after 30 days. A failed preflight still writes sanitized per-window
   usage and guard signals to the Actions summary and runner log. Deterministic
-  quality checks run on ephemeral hosted runners so they can finish while
-  Harness waits on the single persistent Codex runner.
+  quality and ADR checks run on ephemeral hosted runners so they can finish
+  while Harness waits on the single persistent Codex runner.
 - Issue intake, delivery, and metadata migration now verify that the live
   Lifecycle Stage and Delivery Readiness fields are pinned to every enabled
   issue type and to issues without a type before authorizing field changes.
