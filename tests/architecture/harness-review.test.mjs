@@ -648,7 +648,9 @@ test('architecture-review workflow is pinned, read-only, resumable, and does not
   for (const phrase of ['pull_request:', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', 'CODEX_REVIEW_STATE_DIR: /var/lib/github-runner/.codex/harness-reviews', 'classify-codex-cli-updater-review.mjs', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
     assert.ok(workflow.includes(phrase), `missing workflow control: ${phrase}`);
   }
-  assert.match(workflow, /classify_updater:\n\s+if: >-\n\s+github\.event_name == 'pull_request' &&\n\s+github\.event\.pull_request\.user\.login == 'agentic-delivery-lab-invoker-7f3a\[bot\]'/);
+  const classifierGate = /classify_updater:\r?\n\s+if: >-\r?\n\s+github\.event_name == 'pull_request' &&\r?\n\s+github\.event\.pull_request\.user\.login == 'agentic-delivery-lab-invoker-7f3a\[bot\]'/;
+  assert.match(workflow, classifierGate);
+  assert.match(workflow.replace(/\r?\n/g, '\r\n'), classifierGate);
   assert.match(workflow, /needs: classify_updater/);
   assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
   assert.match(workflow, /needs\.classify_updater\.result != 'success'/);
