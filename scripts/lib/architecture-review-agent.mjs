@@ -160,7 +160,7 @@ export function parseSemanticOutcome(text) {
 
 function safeRunnerFailure(error) {
   const message = typeof error?.message === 'string' ? error.message : '';
-  const unsupportedModel = message.match(/^Codex must support (gpt-6-(?:luna|sol)) with (low|medium) effort; no fallback is allowed\.$/);
+  const unsupportedModel = message.match(/^Codex must support (gpt-6-(?:luna|sol)) with (low|medium|high|max) effort; no fallback is allowed\.$/);
   if (unsupportedModel) {
     return `The runner's Codex model catalog does not advertise ${unsupportedModel[1]} with ${unsupportedModel[2]} reasoning effort; no model turn was started.`;
   }

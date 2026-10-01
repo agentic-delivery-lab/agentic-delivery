@@ -30,13 +30,13 @@ try {
   const plan = validateOutcome('plan',planned.text);
   assert.equal(plan.status,'ready');
   await assert.rejects(readFile(path.join(workspace,'result.txt')));
-  console.log('GPT-6 Sol Medium completed actual Plan mode without writing the target file.');
+  console.log('GPT-6 Sol High completed actual Plan mode without writing the target file.');
   const implemented = await runTurn({client,threadId:thread.id,phase:'implement',onProgress:progress,stallTimeoutMs:120_000,
     prompt:`Implement this completed plan: ${JSON.stringify(plan)}. Create only result.txt containing verified followed by a newline. Read it back. Return complete in the output schema with no remaining tasks or questions.`});
   assert.equal(implemented.status,'completed',implemented.reason);
   assert.equal(validateOutcome('implement',implemented.text).status,'complete');
   assert.equal(await readFile(path.join(workspace,'result.txt'),'utf8'),'verified\n');
-  console.log('GPT-6 Sol Medium implemented and verified the saved plan.');
+  console.log('GPT-6 Luna Max implemented and verified the saved plan.');
 } finally {
   await client.close();
   await trace;

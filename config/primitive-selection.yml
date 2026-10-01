@@ -50,7 +50,7 @@ profiles:
     primitiveIds: [architecture-decision, ubiquitous-language, plain-language-communication, delivery-workflow]
     capabilities: [repository-read, deterministic-validation]
     model: gpt-6-sol
-    reasoning: medium
+    reasoning: high
     tools: []
     mcp: []
     fallback: hold
@@ -58,23 +58,23 @@ profiles:
     primitiveIds: [delivery-workflow, ubiquitous-language]
     capabilities: [repository-read]
     model: gpt-6-sol
-    reasoning: medium
+    reasoning: high
     tools: []
     mcp: []
     fallback: hold
   implementer:
     primitiveIds: [codex-delivery, delivery-workflow, ubiquitous-language]
     capabilities: [repository-read, repository-write, deterministic-validation]
-    model: gpt-6-sol
-    reasoning: medium
+    model: gpt-6-luna
+    reasoning: max
     tools: []
     mcp: []
     fallback: hold
   validator:
     primitiveIds: [delivery-workflow, ubiquitous-language, plain-language-communication]
     capabilities: [repository-read, deterministic-validation]
-    model: gpt-6-sol
-    reasoning: medium
+    model: gpt-6-luna
+    reasoning: max
     tools: []
     mcp: []
     fallback: hold
@@ -90,7 +90,7 @@ profiles:
     primitiveIds: [architecture-decision, ubiquitous-language, delivery-workflow]
     capabilities: [repository-read, deterministic-validation]
     model: gpt-6-sol
-    reasoning: medium
+    reasoning: high
     tools: []
     mcp: []
     fallback: hold

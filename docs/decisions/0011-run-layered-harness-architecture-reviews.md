@@ -47,7 +47,7 @@ cannot be treated as deterministic proof.
   safety-sensitive merge gate dependent on quota, model availability and
   non-deterministic judgment.
 - **Layered read-only review.** Deterministic checks fail only on objective
-  violations; a bounded GPT-6 Sol Medium reviewer returns cited advisory
+  violations; a bounded GPT-6 Sol High reviewer returns cited advisory
   findings.
 
 ## Decision Outcome
@@ -79,7 +79,7 @@ enforcement, source-issue and branch correlation, required durable-artifact
 relationships, deletion outcomes, supersession, and permission/state
 invariants. It fails the check only for a clear violation. The semantic layer
 uses GPT-6 Sol with
-medium reasoning effort, read-only `delivery-review` permissions, the existing
+high reasoning effort, read-only `delivery-review` permissions, the existing
 subscription-only budget boundary and no external network. It must cite exact
 repository, issue, run or session evidence. Findings, invalid semantic output,
 unavailable evidence and unavailable quota are reported as advisory or
@@ -115,7 +115,7 @@ reference and is replaced idempotently on publication retry.
 
 Tests must cover impact-map coverage, evidence-schema validation, redaction,
 publication retry idempotency, deterministic failure codes, exact GPT-6 Sol
-Medium review settings, denied model network, cited semantic findings,
+High review settings, denied model network, cited semantic findings,
 inconclusive quota/evidence handling, workflow permissions and no-comment
 behavior. A human reviewer must inspect whether the baseline and semantic
 findings cite evidence rather than treating tests or documentation as runtime

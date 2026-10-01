@@ -77,26 +77,29 @@ clarification requests, interruption, and subscription quota telemetry.
 ### Quota-aware model profile amendment (Issue #70)
 
 Automatic delivery uses GPT-6 Luna Low for routing; GPT-6 Luna Medium for
-refinement, discovery, research, requirements, and coordination; and GPT-6 Sol
-Medium for planning, architecture decisions, implementation, validation, and
-review. The runner checks the exact model and effort combinations advertised
-by its Codex `model/list` before any model turn. Missing support stops preflight;
-model fallback is disabled. GPT-6 Astra and High, Max, and Ultra reasoning are
-not selected by automatic profiles.
-
-This replaces Sol High planning/review and Luna Max implementation with a
-low-effort Luna router, medium-effort Luna for issue maturation, and
-medium-effort Sol for planning, implementation, architecture, validation, and
-review. Keeping the previous profiles would retain their reasoning effort. No
-usage evidence supports Astra or higher effort for this quota-reduction goal,
-so automatic profiles exclude them.
+refinement, discovery, research, requirements, and coordination; GPT-6 Sol High
+for planning, architecture decisions, and semantic review; and GPT-6 Luna Max
+for implementation and its first verification pass. The runner checks the
+exact model and effort combinations advertised by its Codex `model/list` before
+any model turn. Missing support stops preflight; model fallback is disabled.
+GPT-6 Astra is not selected by automatic profiles.
 
 The assignment is a usage-reduction hypothesis, not a guarantee: the other
 Codex clients share the allowance, and the model catalog does not establish
-quota weighting. Lower reasoning effort may also change route and review
-quality. Inspect actual quota evidence and semantic findings from the first
-completed runs. The 98% finalization reserve, subscription-only execution, and
-no-credit, no-account-switch, and no-fallback rules remain unchanged.
+quota weighting. Luna Low and Luna Medium reduce reasoning effort for routing
+and refinement; Sol High and Luna Max reserve higher-effort profiles for
+architecture, semantic review, and implementation. Inspect actual quota
+evidence and semantic findings from the first completed runs. The 98%
+finalization reserve, subscription-only execution, and no-credit,
+no-account-switch, and no-fallback rules remain unchanged.
+
+DeepSWE provides context for long-horizon software-engineering work, but its
+published leaderboard does not report GPT-6 Luna or GPT-6 Sol results. Its
+benchmark cost per trial also does not measure the shared Codex subscription
+allowance. Use it as a role-allocation reference only; do not treat it as
+evidence that these profiles will reduce allowance use. See the
+[DeepSWE leaderboard](https://deepswe.datacurve.ai/) and
+[methodology](https://deepswe.datacurve.ai/blog/deepswe).
 
 An issue or newly created comment can enter semantic routing only after
 deterministic repository, issue, event, bot, and repository-writer checks pass.

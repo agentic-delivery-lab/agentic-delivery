@@ -55,7 +55,7 @@ try {
   const sessionProbe = resumed
     ? 'persistent thread start/resume'
     : 'persistent thread start; exact resume requires a first model rollout in this pinned CLI';
-  console.log(`Codex preflight passed: GPT-6 Luna Low/Medium, GPT-6 Sol Medium, Plan mode, permission profiles, ChatGPT authentication, and ${sessionProbe}; highest window usage ${quota.usedPercent}%. No model turn was started.`);
+  console.log(`Codex preflight passed: GPT-6 Luna Low/Medium/Max, GPT-6 Sol High, Plan mode, permission profiles, ChatGPT authentication, and ${sessionProbe}; highest window usage ${quota.usedPercent}%. No model turn was started.`);
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

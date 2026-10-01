@@ -37,10 +37,9 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
-- Codex delivery and Harness review now use phase-specific GPT-6 Luna Low/Medium
-  and GPT-6 Sol Medium profiles, with runner-catalog preflight, safe reporting
-  for unsupported profile pairs, and no automatic higher-effort profile or
-  model fallback.
+- Codex delivery and Harness review now use phase-specific GPT-6 Luna
+  Low/Medium/Max and GPT-6 Sol High profiles, with runner-catalog preflight,
+  safe reporting for unsupported profile pairs, and no model fallback.
 - Issue intake, delivery, and metadata migration now verify that the live
   Lifecycle Stage and Delivery Readiness fields are pinned to every enabled
   issue type and to issues without a type before authorizing field changes.

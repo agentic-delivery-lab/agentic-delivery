@@ -11,11 +11,11 @@ export const MODELS = Object.freeze({
   discovery: { model: 'gpt-6-luna', effort: 'medium', mode: 'plan' },
   research: { model: 'gpt-6-luna', effort: 'medium', mode: 'plan' },
   requirements: { model: 'gpt-6-luna', effort: 'medium', mode: 'plan' },
-  architecture: { model: 'gpt-6-sol', effort: 'medium', mode: 'plan' },
-  plan: { model: 'gpt-6-sol', effort: 'medium', mode: 'plan' },
-  implement: { model: 'gpt-6-sol', effort: 'medium', mode: 'default' },
-  validate: { model: 'gpt-6-sol', effort: 'medium', mode: 'default' },
-  review: { model: 'gpt-6-sol', effort: 'medium', mode: 'default' },
+  architecture: { model: 'gpt-6-sol', effort: 'high', mode: 'plan' },
+  plan: { model: 'gpt-6-sol', effort: 'high', mode: 'plan' },
+  implement: { model: 'gpt-6-luna', effort: 'max', mode: 'default' },
+  validate: { model: 'gpt-6-luna', effort: 'max', mode: 'default' },
+  review: { model: 'gpt-6-sol', effort: 'high', mode: 'default' },
 });
 
 export const AUTH_STORAGE_CONFIG = 'cli_auth_credentials_store="file"';

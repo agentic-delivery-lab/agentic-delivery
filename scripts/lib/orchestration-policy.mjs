@@ -4,20 +4,20 @@ const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const TRIGGERS = new Set(['issue', 'comment', 'agent-invocation', 'child-event', 'manual']);
 const REQUIREMENTS = new Set(['valid-plan', 'resumable-session', 'unchanged-scope', 'lineage-root']);
 const APPROVED_MODELS = Object.freeze({
-  'gpt-6-luna': ['low', 'medium'],
-  'gpt-6-sol': ['medium'],
+  'gpt-6-luna': ['low', 'medium', 'max'],
+  'gpt-6-sol': ['high'],
 });
 const PROFILE_MODELS = Object.freeze({
   router: ['gpt-6-luna', 'low'],
   discovery: ['gpt-6-luna', 'medium'],
   research: ['gpt-6-luna', 'medium'],
   requirements: ['gpt-6-luna', 'medium'],
-  'architecture-decision': ['gpt-6-sol', 'medium'],
-  planner: ['gpt-6-sol', 'medium'],
-  implementer: ['gpt-6-sol', 'medium'],
-  validator: ['gpt-6-sol', 'medium'],
+  'architecture-decision': ['gpt-6-sol', 'high'],
+  planner: ['gpt-6-sol', 'high'],
+  implementer: ['gpt-6-luna', 'max'],
+  validator: ['gpt-6-luna', 'max'],
   coordinator: ['gpt-6-luna', 'medium'],
-  'harness-reviewer': ['gpt-6-sol', 'medium'],
+  'harness-reviewer': ['gpt-6-sol', 'high'],
 });
 
 function list(value) {

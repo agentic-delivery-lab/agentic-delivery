@@ -7,8 +7,8 @@ authority:
   unknown: hold
 
 models:
-  gpt-6-luna: [low, medium]
-  gpt-6-sol: [medium]
+  gpt-6-luna: [low, medium, max]
+  gpt-6-sol: [high]
 
 permissions:
   - delivery-plan
@@ -101,7 +101,7 @@ profiles:
   architecture-decision:
     purpose: Compare significant choices and prepare a provisional ADR.
     model: gpt-6-sol
-    reasoning: medium
+    reasoning: high
     mode: plan
     permissions: delivery-plan
     skills: [architecture-decision, ubiquitous-language, plain-language-communication, delivery-workflow]
@@ -111,7 +111,7 @@ profiles:
   planner:
     purpose: Produce a decision-complete implementation plan when needed.
     model: gpt-6-sol
-    reasoning: medium
+    reasoning: high
     mode: plan
     permissions: delivery-plan
     skills: [delivery-workflow, ubiquitous-language]
@@ -120,8 +120,8 @@ profiles:
     mutates_repository: false
   implementer:
     purpose: Execute an authorized plan and preserve existing implementation work.
-    model: gpt-6-sol
-    reasoning: medium
+    model: gpt-6-luna
+    reasoning: max
     mode: default
     permissions: delivery-edit
     skills: [delivery-workflow, ubiquitous-language]
@@ -129,9 +129,9 @@ profiles:
     mcp: []
     mutates_repository: true
   validator:
-    purpose: Independently validate deterministic evidence and acceptance criteria.
-    model: gpt-6-sol
-    reasoning: medium
+    purpose: Run a read-only first pass over verification evidence and acceptance criteria.
+    model: gpt-6-luna
+    reasoning: max
     mode: default
     permissions: delivery-review
     skills: [delivery-workflow, ubiquitous-language, plain-language-communication]
@@ -151,7 +151,7 @@ profiles:
   harness-reviewer:
     purpose: Review architecture conformance independently of implementation.
     model: gpt-6-sol
-    reasoning: medium
+    reasoning: high
     mode: default
     permissions: delivery-review
     skills: [architecture-decision, ubiquitous-language, delivery-workflow]

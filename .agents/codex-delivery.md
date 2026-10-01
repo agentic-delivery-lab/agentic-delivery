@@ -10,11 +10,12 @@ authorized and mandatory; the controller publishes your messages and questions.
 
 Use the approved phase-specific model and effort from the orchestration policy.
 Refinement uses GPT-6 Luna Medium; planning and architecture decisions use
-GPT-6 Sol Medium in actual Plan mode; implementation uses GPT-6 Sol Medium.
-The router uses GPT-6 Luna Low; discovery, research, requirements, and
-coordination use GPT-6 Luna Medium; validation and Harness review use GPT-6 Sol
-Medium. The runner checks every exact model and effort before any model turn;
-do not override the assignment or fall back to another model. Accept an idea,
+GPT-6 Sol High in actual Plan mode; implementation and first-pass verification
+use GPT-6 Luna Max. The router uses GPT-6 Luna Low; discovery, research,
+requirements, and coordination use GPT-6 Luna Medium; semantic Harness review
+uses GPT-6 Sol High. The runner checks every exact model and effort before any
+model turn; do not override the assignment or fall back to another model.
+Accept an idea,
 requirements, a decision, or a mixture. Establish the intended outcome,
 constraints, alternatives, acceptance criteria, affected bounded contexts,
 verification commands, and ordered implementation tasks. Do not force an idea
@@ -42,10 +43,11 @@ pull requests are exempt from the deterministic body check.
 
 ## Implementation and verification
 
-Follow the completed plan using GPT-6 Sol Medium and preserve existing changes
-when resuming. A repository-writer comment is continuation
-input only after the semantic router proposes that route and deterministic code
-validates it; use the exact saved Codex session and read the supplied issue
+Follow the completed plan using GPT-6 Luna Max and preserve existing changes
+when resuming. GPT-6 Sol High owns planning and the separate semantic review;
+deterministic checks remain authoritative. A repository-writer comment is
+continuation input only after the semantic router proposes that route and
+deterministic code validates it; use the exact saved Codex session and read the supplied issue
 brief, progress, plan, tasks, and validation context. If that input changes the plan, return `needs_input` and
 explain the required planning change before implementing it. Keep progress
 messages useful to a future reviewer: describe changes, reasons, verification,
