@@ -49,7 +49,7 @@ test('requires the exact requested models and reasoning efforts', () => {
   verifyModels(models);
   assert.throws(() => verifyModels(models.slice(0, 1)), /gpt-6-luna/);
   models[2].supportedReasoningEfforts = [{reasoningEffort:'low'}];
-  assert.throws(() => verifyModels(models), /max/);
+  assert.throws(() => verifyModels(models), /gpt-6-luna\/max/);
 });
 
 test('model processes do not inherit publishing, API, or Actions credentials', () => {

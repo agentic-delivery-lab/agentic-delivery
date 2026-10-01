@@ -20,6 +20,7 @@ export const MODELS = Object.freeze({
 
 export const AUTH_STORAGE_CONFIG = 'cli_auth_credentials_store="file"';
 export const DEFAULT_PERMISSION_CONFIG = 'default_permissions="delivery-plan"';
+const SAFE_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
 
 export function modelForProfile(profile = 'planner') {
   const phase = {
@@ -85,15 +86,31 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
 }
 
 export function verifyModels(models) {
-  for (const { model, effort } of Object.values(MODELS)) {
+  const requiredPairs = [...new Map(Object.values(MODELS).map(({ model, effort }) => [
+    `${model}/${effort}`,
+    { model, effort },
+  ])).values()];
+  const requiredModels = [...new Set(requiredPairs.map(({ model }) => model))];
+  const catalogProfiles = requiredModels.map((model) => {
     // Check every exact model-list identifier; a first match may not carry all advertised efforts.
     const matchingEntries = models.filter((item) => item.model === model || item.id === model);
-    const effortAvailable = matchingEntries.some((entry) => (
-      entry.supportedReasoningEfforts?.some((option) => option.reasoningEffort === effort)
-    ));
-    if (!effortAvailable) {
-      throw new Error(`Codex must support ${model} with ${effort} effort; no fallback is allowed.`);
-    }
+    const efforts = [...new Set(matchingEntries.flatMap((entry) => (
+      entry.supportedReasoningEfforts
+        ?.map((option) => option.reasoningEffort)
+        .filter((effort) => SAFE_REASONING_EFFORTS.has(effort)) ?? []
+    )))].sort();
+    return { model, entries: matchingEntries.length, efforts };
+  });
+  const missingPairs = requiredPairs.filter(({ model, effort }) => (
+    !catalogProfiles.find((profile) => profile.model === model)?.efforts.includes(effort)
+  ));
+  if (missingPairs.length > 0) {
+    const summary = catalogProfiles.map(({ model, entries, efforts }) => (
+      `${model}[entries=${entries},efforts=${efforts.join(',') || 'unlisted'}]`
+    )).join(' | ');
+    throw new Error(
+      `Codex model catalog is missing selected model-effort pairs: ${missingPairs.map(({ model, effort }) => `${model}/${effort}`).join(', ')}; catalog profiles: ${summary}; no fallback is allowed.`,
+    );
   }
 }
 

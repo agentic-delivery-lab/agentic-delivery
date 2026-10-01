@@ -160,6 +160,29 @@ export function parseSemanticOutcome(text) {
 
 function safeRunnerFailure(error) {
   const message = typeof error?.message === 'string' ? error.message : '';
+  const catalogFailure = message.match(/^Codex model catalog is missing selected model-effort pairs: (.+); catalog profiles: (.+); no fallback is allowed\.$/);
+  if (catalogFailure) {
+    const selectedPairs = new Set([
+      'gpt-6-luna/low', 'gpt-6-luna/medium', 'gpt-6-luna/max', 'gpt-6-sol/high',
+    ]);
+    const knownEfforts = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+    const missingPairs = catalogFailure[1].split(', ');
+    const profiles = catalogFailure[2].split(' | ').map((entry) => {
+      const match = entry.match(/^(gpt-6-(?:luna|sol))\[entries=(\d+),efforts=(unlisted|[a-z]+(?:,[a-z]+)*)\]$/);
+      if (!match) return null;
+      const efforts = match[3] === 'unlisted' ? [] : match[3].split(',');
+      if (efforts.some((effort) => !knownEfforts.has(effort))) return null;
+      return { model: match[1], entries: Number(match[2]), efforts };
+    });
+    if (missingPairs.length > 0 && missingPairs.every((pair) => selectedPairs.has(pair))
+        && profiles.length === 2 && profiles.every(Boolean)
+        && profiles.every((profile) => Number.isSafeInteger(profile.entries) && profile.entries >= 0)) {
+      const summary = profiles.map(({ model, entries, efforts }) => (
+        `${model}: ${entries} matching entr${entries === 1 ? 'y' : 'ies'}, efforts ${efforts.join(', ') || 'none listed'}`
+      )).join('; ');
+      return `The runner catalog did not advertise ${missingPairs.join(', ')}. Catalog response: ${summary}. No model turn was started.`;
+    }
+  }
   const unsupportedModel = message.match(/^Codex must support (gpt-6-(?:luna|sol)) with (low|medium|high|max) effort; no fallback is allowed\.$/);
   if (unsupportedModel) {
     return `The runner's Codex model catalog does not advertise ${unsupportedModel[1]} with ${unsupportedModel[2]} reasoning effort; no model turn was started.`;
