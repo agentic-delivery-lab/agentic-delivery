@@ -45,6 +45,9 @@ they do not authorize migration, alter that issue's scope, or close it.
   credentials; the Actions summary renders reviewer text as escaped plain
   text. Semantic reruns fetch the current pull-request description and linked
   source-issue labels instead of relying on stale or incomplete event data.
+  The evidence marker is extracted from the full current body even when the
+  displayed description is truncated at 10,000 characters. Compound JSON
+  credentials are redacted, and active server blocks suppress retry times.
   Simultaneous cause categories remain visible; bucket details have fixed
   array limits and an explicit truncation flag. The internal Harness schema is
   not a participant contract. The operator guide explains how to rerun a fresh

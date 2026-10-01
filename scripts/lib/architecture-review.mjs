@@ -25,11 +25,55 @@ const URL = /^https?:\/\/\S+$/;
 const SENSITIVE_FIELD_NAMES = '(?:access[ _-]?token|refresh[ _-]?token|id[ _-]?token|auth[ _-]?token|x[ _-]?(?:api|auth)[ _-]?key|api[ _-]?key|client[ _-]?secret|app[ _-]?secret|secret[ _-]?key|secret|password|passphrase|credential(?:s)?|authorization|proxy[ _-]?authorization|cookie|set[ _-]?cookie|private[ _-]?key|signing[ _-]?key|access[ _-]?key|secret[ _-]?access[ _-]?key|session[ _-]?(?:key|token)|token)';
 const SENSITIVE_YAML_BLOCK = new RegExp(`(^[ \\t]*)(["']?)(${SENSITIVE_FIELD_NAMES})\\2([ \\t]*:[ \\t]*)(?:[|>][+-]?[ \\t]*(?:#[^\\r\\n]*)?)(?:\\r?\\n(?:[ \\t]+[^\\r\\n]*(?:\\r?\\n|$))*)`, 'gim');
 const SENSITIVE_ASSIGNMENT = new RegExp(`(["']?)(${SENSITIVE_FIELD_NAMES})\\1([ \\t]*:[ \\t]*(?:\\r?\\n[ \\t]*)?|[ \\t]*=[ \\t]*)(?:\\[redacted(?: (?:private key|token|credential))?\\]|"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|[^,\\r\\n}\\]]+)`, 'gi');
+const SENSITIVE_COMPOUND_ASSIGNMENT = new RegExp(`(["']?)(${SENSITIVE_FIELD_NAMES})\\1([ \\t]*:[ \\t]*)`, 'gi');
+
+function compoundValueEnd(source, start) {
+  const expectedClosers = [source[start] === '{' ? '}' : ']'];
+  let quote = null;
+  let escaped = false;
+  for (let index = start + 1; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") quote = character;
+    else if (character === '{') expectedClosers.push('}');
+    else if (character === '[') expectedClosers.push(']');
+    else if (character === '}' || character === ']') {
+      if (expectedClosers.pop() !== character) return source.length;
+      if (expectedClosers.length === 0) return index + 1;
+    }
+  }
+  return source.length;
+}
+
+function redactSensitiveCompoundValues(value) {
+  const source = String(value ?? '');
+  const assignment = new RegExp(SENSITIVE_COMPOUND_ASSIGNMENT.source, SENSITIVE_COMPOUND_ASSIGNMENT.flags);
+  const replacements = [];
+  let match;
+  while ((match = assignment.exec(source))) {
+    const valueStart = assignment.lastIndex;
+    let compoundStart = valueStart;
+    while (compoundStart < source.length && /\s/.test(source[compoundStart])) compoundStart += 1;
+    if (source[compoundStart] !== '{' && source[compoundStart] !== '[') continue;
+    replacements.push({ start: valueStart, end: compoundValueEnd(source, compoundStart) });
+    assignment.lastIndex = replacements.at(-1).end;
+  }
+  let redacted = source;
+  for (const replacement of replacements.reverse()) {
+    redacted = `${redacted.slice(0, replacement.start)}[redacted]${redacted.slice(replacement.end)}`;
+  }
+  return redacted;
+}
 
 export const REVIEW_SCHEMA_VERSION = 1;
 
 export function redactSensitiveText(value) {
-  let text = String(value ?? '')
+  let text = redactSensitiveCompoundValues(value)
     .replace(SENSITIVE_YAML_BLOCK, (_match, indent, quote, key, separator) => `${indent}${quote}${key}${quote}${separator}[redacted]`)
     .replace(SENSITIVE_ASSIGNMENT, (_match, quote, key, separator) => `${quote}${key}${quote}${separator}[redacted]`)
     .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)/gi, '[redacted private key]')

@@ -124,7 +124,7 @@ test('semantic output requires cited findings and keeps model uncertainty adviso
 test('semantic output is redacted, bounded, and rendered as plain Markdown text', () => {
   const unsafe = parseSemanticOutcome(JSON.stringify({
     status: 'findings',
-    summary: '## Injected heading\n- fake item\n"access_token":\n  "fixture secret with spaces"\npassword:\n  fixture multiline secret\ntoken: >-\n  fixture block secret value',
+    summary: '## Injected heading\n- fake item\n"access_token":\n  "fixture secret with spaces"\npassword:\n  fixture multiline secret\ntoken: >-\n  fixture block secret value\n"client_secret": {\n  "nested": { "value": "fixture compound JSON object secret" }\n}\n"api_key": [\n  "fixture compound JSON array secret"\n]',
     affectedAdrs: ['ADR-0009'],
     affectedContexts: ['agentic-delivery-governance'],
     findings: [{
@@ -139,7 +139,7 @@ test('semantic output is redacted, bounded, and rendered as plain Markdown text'
   }));
   assert.equal(unsafe.status, 'findings');
   assert.equal(Object.hasOwn(unsafe, 'unmodeled'), false);
-  assert.doesNotMatch(JSON.stringify(unsafe), /fixture secret with spaces|fixture block secret value|abcdefghijklmnopqrstuvwxyz/);
+  assert.doesNotMatch(JSON.stringify(unsafe), /fixture secret with spaces|fixture block secret value|fixture compound JSON (?:object|array) secret|abcdefghijklmnopqrstuvwxyz/);
   assert.match(unsafe.summary, /access_token"?:[\s\S]{0,30}\[redacted\]/);
 
   const markdown = formatReviewMarkdown({
@@ -220,7 +220,7 @@ test('semantic execution reports quota and structured findings without becoming 
   const eventDirectory = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-review-event-'));
   t.after(() => rm(eventDirectory, { recursive: true, force: true }));
   const eventPath = path.join(eventDirectory, 'event.json');
-  const currentPullRequestBody = `## Plan\nKeep the review read-only.\n\nAuthorization=fixture-secret\n\n<!-- codex-delivery-evidence:v1\n{\n  "access_token":\n    "fixture marker secret with spaces"\n}\n-->\n${'x'.repeat(10_050)}`;
+  const currentPullRequestBody = `## Plan\nKeep the review read-only.\n\nAuthorization=fixture-secret\n\n"client_secret": {\n  "value": "fixture marker secret with spaces"\n}\n\n${'x'.repeat(10_050)}\n<!-- codex-delivery-evidence:v1\n{\n  "schemaVersion": 1,\n  "producer": "codex-delivery"\n}\n-->`;
   await writeFile(eventPath, JSON.stringify({
     repository: { full_name: 'agentic-delivery-lab/agentic-delivery' },
     pull_request: {
@@ -301,6 +301,9 @@ test('semantic execution reports quota and structured findings without becoming 
   assert.match(projectedDescription.body, /Authorization=\[redacted\]/);
   assert.equal(projectedDescription.body.length, 10_000);
   assert.equal(projectedDescription.bodyTruncated, true);
+  const evidenceMarkerText = bundleText.split('## Pull-request evidence marker\n\n')[1]?.split('\n\n## Official base decision index')[0];
+  assert.ok(evidenceMarkerText);
+  assert.deepEqual(JSON.parse(evidenceMarkerText), { schemaVersion: 1, producer: 'codex-delivery' });
   assert.doesNotMatch(bundleText, /stale event title|stale event body/);
   const sourceIssueText = bundleText.split('## Source issue intent\n\n')[1]?.split('\n\n## Pull-request description')[0];
   assert.ok(sourceIssueText);
@@ -346,9 +349,22 @@ test('semantic execution reports quota and structured findings without becoming 
     triggeringWindows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true }],
     serverBlocks: [{ bucket: 'bucket-1', rateLimitReached: true, spendControlReached: false }],
     truncated: true,
-    nextEligibleAt: 1_800_000_100,
+    nextEligibleAt: null,
   });
   assert.doesNotMatch(JSON.stringify(quotaPaused), /fixture-secret|private-account-id|providerMessage/);
+
+  const spendControlQuota = projectQuotaDiagnostics({
+    reasonCode: 'window_reserve',
+    diagnostics: {
+      reasonCode: 'window_reserve',
+      triggerReasons: ['window_reserve', 'spend_control'],
+      windows: [],
+      triggeringWindows: [],
+      serverBlocks: [{ bucket: 'bucket-1', rateLimitReached: false, spendControlReached: true }],
+      nextEligibleAt: 1_800_000_100,
+    },
+  }, 'active_turn');
+  assert.equal(spendControlQuota.nextEligibleAt, null);
 
   const nonQuotaPause = await runSemanticReview({
     repositoryRoot,
@@ -367,7 +383,8 @@ test('semantic execution reports quota and structured findings without becoming 
   assert.match(markdown, /#### Quota diagnostics/);
   assert.match(markdown, /Stop phase: active turn/);
   assert.match(markdown, /99% of the 300-minute window/);
-  assert.match(markdown, /2027-01-15T08:01:40\.000Z/);
+  assert.match(markdown, /Next eligible time: not derivable from quota telemetry/);
+  assert.doesNotMatch(markdown, /2027-01-15T08:01:40\.000Z/);
   assert.doesNotMatch(markdown, /fixture-secret|private-account-id/);
 
   let startedThread = false;

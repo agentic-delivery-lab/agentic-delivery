@@ -159,7 +159,10 @@ const QUOTA_TRIGGER_CODE_SET = new Set(QUOTA_TRIGGER_CODES);
 const MAX_PULL_REQUEST_BODY_LENGTH = 10_000;
 
 async function currentPullRequestDescription({ repository, pullNumber, fetchImpl = fetch }) {
-  const unavailable = (reason) => ({ status: 'unavailable', reason, title: null, body: null, bodyTruncated: false });
+  const unavailable = (reason) => ({
+    description: { status: 'unavailable', reason, title: null, body: null, bodyTruncated: false },
+    evidence: null,
+  });
   const number = Number(pullNumber);
   const [owner, name] = typeof repository === 'string' ? repository.split('/') : [];
   if (!owner || !name || !/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(name)
@@ -181,11 +184,15 @@ async function currentPullRequestDescription({ repository, pullNumber, fetchImpl
     const value = await response.json();
     if (!value || Number(value.number) !== number) return unavailable('GitHub returned a different pull request than the review event identified.');
     const rawBody = typeof value.body === 'string' ? value.body : '';
+    const safeBody = redactSensitiveText(rawBody);
     return {
-      status: 'current',
-      title: safeIssueText(value.title).slice(0, 500),
-      body: value.body == null ? null : safeIssueText(rawBody).slice(0, MAX_PULL_REQUEST_BODY_LENGTH),
-      bodyTruncated: rawBody.length > MAX_PULL_REQUEST_BODY_LENGTH,
+      description: {
+        status: 'current',
+        title: safeIssueText(value.title).slice(0, 500),
+        body: value.body == null ? null : safeBody.slice(0, MAX_PULL_REQUEST_BODY_LENGTH),
+        bodyTruncated: rawBody.length > MAX_PULL_REQUEST_BODY_LENGTH,
+      },
+      evidence: value.body == null ? null : parseEvidenceMarker(safeBody),
     };
   } catch {
     return unavailable('The current pull request could not be refreshed from GitHub.');
@@ -215,6 +222,7 @@ export function projectQuotaDiagnostics(budget, stopPhase) {
   const allWindows = projectWindows(rawWindows, MAX_TRIGGERING_QUOTA_WINDOWS + MAX_CONTEXT_QUOTA_WINDOWS);
   const requestedTriggers = projectWindows(rawTriggeringWindows, MAX_TRIGGERING_QUOTA_WINDOWS);
   const triggerReasons = Array.isArray(diagnostics?.triggerReasons) ? diagnostics.triggerReasons : [];
+  const rawServerBlocks = Array.isArray(diagnostics?.serverBlocks) ? diagnostics.serverBlocks : [];
   const invalidStopWindows = [QUOTA_REASON.invalidBucket, QUOTA_REASON.missingOrInvalidWindow].includes(reasonCode)
     || triggerReasons.includes(QUOTA_REASON.missingOrInvalidWindow)
     ? allWindows.filter((window) => !window.valid)
@@ -238,7 +246,6 @@ export function projectQuotaDiagnostics(budget, stopPhase) {
     || requestedTriggers.length < Math.min(rawTriggeringWindows.length, MAX_TRIGGERING_QUOTA_WINDOWS)
     || triggerCandidates.length > MAX_TRIGGERING_QUOTA_WINDOWS
     || contextCandidates.length > MAX_CONTEXT_QUOTA_WINDOWS;
-  const rawServerBlocks = Array.isArray(diagnostics?.serverBlocks) ? diagnostics.serverBlocks : [];
   for (const block of rawServerBlocks) {
     if (!block || !bucketName(block.bucket)) {
       truncated = true;
@@ -259,6 +266,10 @@ export function projectQuotaDiagnostics(budget, stopPhase) {
     ...contextServerBlocks.slice(0, Math.max(0, MAX_QUOTA_SERVER_BLOCKS - activeServerBlocks.length)),
   ];
   if (activeServerBlocks.length + contextServerBlocks.length > serverBlocks.length) truncated = true;
+  const hasIndependentStopCause = [budget?.reasonCode, diagnostics?.reasonCode]
+    .some((code) => QUOTA_REASON_CODE_SET.has(code) && code !== QUOTA_REASON.windowReserve)
+    || triggerReasons.some((code) => code !== QUOTA_REASON.windowReserve)
+    || rawServerBlocks.some((block) => block?.rateLimitReached === true || block?.spendControlReached === true);
   const phase = QUOTA_STOP_PHASES.includes(stopPhase) ? stopPhase : QUOTA_STOP_PHASE.unknown;
   return {
     schemaVersion: QUOTA_DIAGNOSTICS_SCHEMA_VERSION,
@@ -271,7 +282,7 @@ export function projectQuotaDiagnostics(budget, stopPhase) {
     triggeringWindows,
     serverBlocks,
     truncated,
-    nextEligibleAt: Number.isFinite(diagnostics?.nextEligibleAt) ? diagnostics.nextEligibleAt : null,
+    nextEligibleAt: !hasIndependentStopCause && Number.isFinite(diagnostics?.nextEligibleAt) ? diagnostics.nextEligibleAt : null,
   };
 }
 
@@ -323,12 +334,12 @@ export async function runSemanticReview({ repositoryRoot, review, eventPath, cre
     const serviceAuth = path.join(process.env.CODEX_AUTH_HOME || '/var/lib/github-runner/.codex', 'auth.json');
     try { await symlink(serviceAuth, authBridge); } catch {}
     const event = eventPath ? JSON.parse(await readFile(eventPath, 'utf8')) : {};
-    const pullRequestDescription = await currentPullRequestDescription({
+    const currentPullRequest = await currentPullRequestDescription({
       repository: event.repository?.full_name ?? review.repository,
       pullNumber: event.pull_request?.number,
       fetchImpl,
     });
-    const evidence = parseEvidenceMarker(pullRequestDescription.body?.slice(0, 20_000) ?? '');
+    const { description: pullRequestDescription, evidence } = currentPullRequest;
     const affectedAdrs = review.affectedAdrs ?? [];
     const [baseAdr, headAdr, baseRecords, headRecords, basePrimitives, headPrimitives, domain, map, schema, quotaSchema, diffText, state, traceability] = await Promise.all([
       revisionFile(repositoryRoot, review.base, 'docs/decisions/README.md'),

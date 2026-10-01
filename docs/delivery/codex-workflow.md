@@ -378,7 +378,9 @@ event supplies the repository and pull-request number; its title and body are
 not reused because a rerun can carry an older event snapshot. If GitHub cannot
 return the current description, the bundle marks it unavailable instead of
 falling back to stale text. The description is untrusted input, is filtered for
-known credentials, and includes at most 10,000 body characters.
+known credentials, and includes at most 10,000 body characters. The versioned
+delivery-evidence marker is extracted separately from the full current body,
+so a long description cannot hide a marker beyond that text cap.
 
 The linked source issue is fetched with the read-only issue permission. Its
 sanitized projection includes current labels so the reviewer can verify ADR
@@ -389,8 +391,10 @@ the stop happened during preflight or an active review turn. It retains every
 known safe cause category and reports at most 32 triggering windows, 32 context
 windows, and 32 server-block records, prioritizing active server blocks. The
 projection sets `truncated` when these limits or safety filters omit bucket
-details. The summary includes usage, duration, reset times, and the next eligible
-time only when the exhausted windows make it possible to calculate one.
+details. The summary includes usage, duration, reset times, and a next eligible
+time only when window reserve is the sole stop cause and the exhausted windows
+make it possible to calculate one. Active server rate limits and spend controls
+always suppress that time.
 Provider limit names, account identifiers, and raw error details are not
 published. An `inconclusive` result means no semantic conclusion was reached;
 it does not change the deterministic review result.
