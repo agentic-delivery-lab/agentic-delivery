@@ -207,27 +207,47 @@ export function projectQuotaDiagnostics(budget, stopPhase) {
   const bucketName = (value) => typeof value === 'string' && /^bucket-[1-9]\d{0,3}$/.test(value);
   const projectWindow = (window) => {
     if (!window || !bucketName(window.bucket) || !['primary', 'secondary'].includes(window.slot)) return null;
+    const usedPercent = Number.isFinite(window.usedPercent) && window.usedPercent >= 0 && window.usedPercent <= 100
+      ? window.usedPercent : null;
+    const windowDurationMins = Number.isFinite(window.windowDurationMins) && window.windowDurationMins > 0
+      ? window.windowDurationMins : null;
+    const resetsAt = Number.isFinite(window.resetsAt) && window.resetsAt >= 0
+      ? window.resetsAt : null;
     return {
       bucket: window.bucket,
       slot: window.slot,
-      usedPercent: Number.isFinite(window.usedPercent) ? window.usedPercent : null,
-      windowDurationMins: Number.isFinite(window.windowDurationMins) ? window.windowDurationMins : null,
-      resetsAt: Number.isFinite(window.resetsAt) ? window.resetsAt : null,
-      valid: window.valid === true,
+      usedPercent,
+      windowDurationMins,
+      resetsAt,
+      valid: window.valid === true && usedPercent !== null && windowDurationMins !== null && resetsAt !== null,
     };
   };
   const rawWindows = Array.isArray(diagnostics?.windows) ? diagnostics.windows : [];
   const rawTriggeringWindows = Array.isArray(diagnostics?.triggeringWindows) ? diagnostics.triggeringWindows : [];
   const projectWindows = (items, limit) => items.slice(0, limit).map(projectWindow).filter(Boolean);
   const allWindows = projectWindows(rawWindows, MAX_TRIGGERING_QUOTA_WINDOWS + MAX_CONTEXT_QUOTA_WINDOWS);
-  const requestedTriggers = projectWindows(rawTriggeringWindows, MAX_TRIGGERING_QUOTA_WINDOWS);
-  const triggerReasons = Array.isArray(diagnostics?.triggerReasons) ? diagnostics.triggerReasons : [];
+  const projectedRequestedTriggers = projectWindows(rawTriggeringWindows, MAX_TRIGGERING_QUOTA_WINDOWS);
+  const requestedTriggers = projectedRequestedTriggers.filter((window) => window.valid && window.usedPercent >= 98);
+  const rawTriggerReasons = Array.isArray(diagnostics?.triggerReasons) ? diagnostics.triggerReasons : [];
   const rawServerBlocks = Array.isArray(diagnostics?.serverBlocks) ? diagnostics.serverBlocks : [];
-  const invalidStopWindows = [QUOTA_REASON.invalidBucket, QUOTA_REASON.missingOrInvalidWindow].includes(reasonCode)
-    || triggerReasons.includes(QUOTA_REASON.missingOrInvalidWindow)
-    ? allWindows.filter((window) => !window.valid)
-    : [];
-  const reserveWindows = allWindows.filter((window) => Number.isFinite(window.usedPercent) && window.usedPercent >= 98);
+  const allReportedWindows = [...new Map([...allWindows, ...projectedRequestedTriggers]
+    .map((window) => [`${window.bucket}:${window.slot}`, window])).values()];
+  const invalidStopWindows = allReportedWindows.filter((window) => !window.valid);
+  const reserveWindows = allReportedWindows.filter((window) => window.valid && window.usedPercent >= 98);
+  const hasValidReserveWindow = reserveWindows.length > 0;
+  const hasInvalidWindow = invalidStopWindows.length > 0;
+  const hasUnsupportedReserveSignal = !hasValidReserveWindow
+    && (reasonCode === QUOTA_REASON.windowReserve
+      || diagnostics?.reasonCode === QUOTA_REASON.windowReserve
+      || rawTriggerReasons.includes(QUOTA_REASON.windowReserve));
+  const projectedReasonCode = hasUnsupportedReserveSignal
+    ? QUOTA_REASON.missingOrInvalidWindow
+    : reasonCode;
+  const triggerReasons = new Set(rawTriggerReasons.filter((code) => QUOTA_TRIGGER_CODE_SET.has(code)));
+  if (!hasValidReserveWindow) triggerReasons.delete(QUOTA_REASON.windowReserve);
+  else triggerReasons.add(QUOTA_REASON.windowReserve);
+  if (hasInvalidWindow || hasUnsupportedReserveSignal) triggerReasons.add(QUOTA_REASON.missingOrInvalidWindow);
+  if (projectedReasonCode !== reasonCode) triggerReasons.add(projectedReasonCode);
   const triggerCandidates = [...new Map([...requestedTriggers, ...invalidStopWindows, ...reserveWindows]
     .map((window) => [`${window.bucket}:${window.slot}`, window])).values()];
   const triggeringWindows = triggerCandidates.slice(0, MAX_TRIGGERING_QUOTA_WINDOWS);
@@ -243,7 +263,7 @@ export function projectQuotaDiagnostics(budget, stopPhase) {
   let truncated = rawWindows.length > MAX_TRIGGERING_QUOTA_WINDOWS + MAX_CONTEXT_QUOTA_WINDOWS
     || rawTriggeringWindows.length > MAX_TRIGGERING_QUOTA_WINDOWS
     || allWindows.length < Math.min(rawWindows.length, MAX_TRIGGERING_QUOTA_WINDOWS + MAX_CONTEXT_QUOTA_WINDOWS)
-    || requestedTriggers.length < Math.min(rawTriggeringWindows.length, MAX_TRIGGERING_QUOTA_WINDOWS)
+    || projectedRequestedTriggers.length < Math.min(rawTriggeringWindows.length, MAX_TRIGGERING_QUOTA_WINDOWS)
     || triggerCandidates.length > MAX_TRIGGERING_QUOTA_WINDOWS
     || contextCandidates.length > MAX_CONTEXT_QUOTA_WINDOWS;
   for (const block of rawServerBlocks) {
@@ -266,23 +286,23 @@ export function projectQuotaDiagnostics(budget, stopPhase) {
     ...contextServerBlocks.slice(0, Math.max(0, MAX_QUOTA_SERVER_BLOCKS - activeServerBlocks.length)),
   ];
   if (activeServerBlocks.length + contextServerBlocks.length > serverBlocks.length) truncated = true;
-  const hasIndependentStopCause = [budget?.reasonCode, diagnostics?.reasonCode]
+  const hasIndependentStopCause = [budget?.reasonCode, diagnostics?.reasonCode, ...triggerReasons]
     .some((code) => QUOTA_REASON_CODE_SET.has(code) && code !== QUOTA_REASON.windowReserve)
-    || triggerReasons.some((code) => code !== QUOTA_REASON.windowReserve)
+    || hasInvalidWindow
     || rawServerBlocks.some((block) => block?.rateLimitReached === true || block?.spendControlReached === true);
   const phase = QUOTA_STOP_PHASES.includes(stopPhase) ? stopPhase : QUOTA_STOP_PHASE.unknown;
   return {
     schemaVersion: QUOTA_DIAGNOSTICS_SCHEMA_VERSION,
-    reasonCode,
+    reasonCode: projectedReasonCode,
     stopPhase: phase,
-    triggerReasons: triggerReasons.length
-      ? [...new Set(triggerReasons.filter((code) => QUOTA_TRIGGER_CODE_SET.has(code)))].slice(0, QUOTA_TRIGGER_CODE_SET.size)
-      : [],
+    triggerReasons: [...triggerReasons].slice(0, QUOTA_TRIGGER_CODE_SET.size),
     windows,
     triggeringWindows,
     serverBlocks,
     truncated,
-    nextEligibleAt: !hasIndependentStopCause && Number.isFinite(diagnostics?.nextEligibleAt) ? diagnostics.nextEligibleAt : null,
+    nextEligibleAt: hasValidReserveWindow && !hasIndependentStopCause
+      && Number.isFinite(diagnostics?.nextEligibleAt) && diagnostics.nextEligibleAt >= 0
+      ? diagnostics.nextEligibleAt : null,
   };
 }
 

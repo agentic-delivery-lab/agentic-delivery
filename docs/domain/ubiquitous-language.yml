@@ -274,7 +274,7 @@ terms:
     definition: "A declared compatible version of an event, lifecycle, state-machine, evidence, bootstrap, primitive, or architecture interface used by a delivery controller and participant."
   - context: "agentic-delivery-control-plane"
     term: "quota diagnostics"
-    definition: "Sanitized quota evidence attached to semantic review output when budget telemetry prevents a conclusion; it records safe cause categories, up to 32 triggering windows, up to 32 context windows, and up to 32 server-block records, and marks omitted bucket details as truncated. A retry time appears only when telemetry supports one."
+    definition: "Internal delivery-controller runtime record of account quota telemetry and the causes used to decide whether model execution must pause. It preserves source windows and server-block flags, marking each window valid only when its telemetry passes the controller's range and expiry checks."
   - context: "agentic-delivery-governance"
     term: "review quota evidence"
     definition: "The bounded, sanitized Harness projection of control-plane quota diagnostics; it records why semantic review could not conclude, marks omitted bucket details as truncated, and never counts as a semantic conclusion or deterministic validation."

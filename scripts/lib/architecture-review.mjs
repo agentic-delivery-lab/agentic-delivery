@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"harness-architecture-review","kind":"validator","enforcement":"deterministic","adrs":["ADR-0009","ADR-0011","ADR-0013"],"domains":["agentic-delivery-governance"]}
+// agentic-primitive: {"id":"harness-architecture-review","kind":"validator","enforcement":"deterministic","adrs":["ADR-0009","ADR-0011","ADR-0013","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -540,7 +540,7 @@ function formatQuotaDiagnostics(value) {
     .filter((window) => displayBucket(window?.bucket) && ['primary', 'secondary'].includes(window.slot))
     .map((window) => `${window.bucket}:${window.slot}`));
   const lines = [
-    '#### Quota diagnostics',
+    '#### Review quota evidence',
     '',
     `- Contract version: ${value.schemaVersion}`,
     `- Stop phase: ${phase}`,
@@ -548,7 +548,7 @@ function formatQuotaDiagnostics(value) {
   ];
   const triggers = Array.isArray(value.triggerReasons) ? value.triggerReasons.map((code) => QUOTA_TRIGGER_LABELS[code]).filter(Boolean) : [];
   if (triggers.length) lines.push(`- Trigger signals: ${[...new Set(triggers)].join(', ')}`);
-  if (value.truncated === true) lines.push('- Some bucket details were omitted to keep quota diagnostics within fixed size limits.');
+  if (value.truncated === true) lines.push('- Some bucket details were omitted to keep review quota evidence within fixed size limits.');
   const next = timestamp(value.nextEligibleAt);
   lines.push(`- Next eligible time: ${next ?? 'not derivable from quota telemetry'}`);
   lines.push('', '**Quota windows**');

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/docs/architecture/quota-diagnostics.schema.json",
-  "title": "Harness quota diagnostics",
-  "description": "Controller-owned, sanitized review evidence. This schema is internal to Harness review artifacts and Actions summaries; it is not a participant contract while it remains inside the control plane. Version 1 consumers ignore optional unknown properties.",
+  "title": "Harness review quota evidence",
+  "description": "Controller-owned, bounded, sanitized review quota evidence. This schema is internal to Harness review artifacts and Actions summaries; it is not a participant contract while it remains inside the control plane. Version 1 consumers ignore optional unknown properties.",
   "type": "object",
   "additionalProperties": true,
   "required": [

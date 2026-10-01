@@ -193,9 +193,10 @@ version while the data stays inside the control plane. They do not become
 participant evidence contracts or release-manifest entries solely because a
 review artifact is machine-readable. Before a participant consumes or
 exchanges one of these schemas, promote it into the versioned participant
-contract and release manifest through a reviewed change. The quota diagnostics
-schema in `docs/architecture/quota-diagnostics.schema.json` follows this
-boundary.
+contract and release manifest through a reviewed change. The schema for
+`review quota evidence` in
+`docs/architecture/quota-diagnostics.schema.json` follows this boundary; its
+source remains the control plane's internal `quota diagnostics` record.
 
 The controller publishes a release manifest containing supported event,
 lifecycle, state-machine, evidence, primitive, Architecture and minimum

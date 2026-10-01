@@ -284,6 +284,7 @@
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
+        "harness-architecture-review",
         "issue-field-controller-boundary",
         "organization-webhook-ingress",
         "participant-registry",
@@ -333,6 +334,7 @@
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
+        "harness-architecture-review",
         "issue-field-controller-boundary",
         "organization-webhook-ingress",
         "participant-registry",
@@ -656,9 +658,11 @@
       "adrs": [
         "ADR-0009",
         "ADR-0011",
-        "ADR-0013"
+        "ADR-0013",
+        "ADR-0018"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },

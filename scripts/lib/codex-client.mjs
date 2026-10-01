@@ -128,7 +128,7 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
     if (credits?.unlimited === true) creditReasons.add(QUOTA_REASON.unlimitedCredits);
     else if (credits?.unlimited !== false) creditReasons.add(QUOTA_REASON.creditTelemetryUnavailable);
   }
-  const exhausted = windows.filter((window) => window.usedPercent >= 98);
+  const exhausted = windows.filter((window) => window.valid && window.usedPercent >= 98);
   const missingOrInvalidWindow = !windows.some((window) => window.windowDurationMins === 300) || windows.some((window) => !window.valid);
   const rateLimited = serverBlocks.some((bucket) => bucket.rateLimitReached);
   const spendControlled = serverBlocks.some((bucket) => bucket.spendControlReached);
@@ -155,13 +155,18 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
   const nextEligibleAt = exhausted.length && triggerReasons.length === 1 && triggerReasons[0] === QUOTA_REASON.windowReserve
     ? Math.max(...exhausted.map((window) => window.resetsAt))
     : null;
+  const triggeringWindows = [
+    ...exhausted,
+    ...(missingOrInvalidWindow ? windows.filter((window) => !window.valid) : []),
+  ];
+  const validWindows = windows.filter((window) => window.valid);
   return {
     stop: blocked,
     reasonCode,
     reason: reasons[reasonCode],
-    usedPercent: Math.max(...windows.map((window) => window.usedPercent)),
+    usedPercent: validWindows.length ? Math.max(...validWindows.map((window) => window.usedPercent)) : null,
     resetsAt: blocked ? nextEligibleAt : Math.max(...windows.map((window) => window.resetsAt)),
-    diagnostics: diagnostics(reasonCode, triggerReasons, exhausted, nextEligibleAt),
+    diagnostics: diagnostics(reasonCode, triggerReasons, triggeringWindows, nextEligibleAt),
   };
 }
 

@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import Ajv2020 from 'ajv/dist/2020.js';
 
 import {
   deterministicReview,
@@ -166,8 +167,9 @@ test('semantic output is redacted, bounded, and rendered as plain Markdown text'
   assert.equal(oversized.status, 'inconclusive');
 });
 
-test('quota diagnostics schema documents the internal SemVer projection', async () => {
+test('review quota evidence schema validates the internal SemVer projection', async () => {
   const schema = JSON.parse(await readFile(path.join(repositoryRoot, 'docs/architecture/quota-diagnostics.schema.json'), 'utf8'));
+  const validateQuotaDiagnostics = new Ajv2020({ allErrors: true, strict: true }).compile(schema);
   const projected = projectQuotaDiagnostics({
     reasonCode: 'credit_spillover',
     diagnostics: {
@@ -185,6 +187,7 @@ test('quota diagnostics schema documents the internal SemVer projection', async 
 
   assert.deepEqual(schema.required, Object.keys(projected));
   assert.deepEqual(Object.keys(projected), Object.keys(schema.properties));
+  assert.equal(validateQuotaDiagnostics(projected), true, JSON.stringify(validateQuotaDiagnostics.errors));
   assert.equal(schema.additionalProperties, true);
   assert.equal(schema.$defs.window.additionalProperties, true);
   assert.equal(schema.$defs.serverBlock.additionalProperties, true);
@@ -207,6 +210,41 @@ test('quota diagnostics schema documents the internal SemVer projection', async 
   assert.equal(projected.truncated, false);
   assert.equal(supportsQuotaDiagnosticsSchemaVersion(projected.schemaVersion), true);
   assert.equal(supportsQuotaDiagnosticsSchemaVersion('2.0.0'), false);
+
+  const invalidInstance = structuredClone(projected);
+  invalidInstance.windows[0].usedPercent = 101;
+  assert.equal(validateQuotaDiagnostics(invalidInstance), false, 'the schema rejects out-of-range usage');
+
+  const invalidTelemetryProjection = projectQuotaDiagnostics({
+    reasonCode: 'window_reserve',
+    diagnostics: {
+      reasonCode: 'window_reserve',
+      triggerReasons: ['window_reserve'],
+      windows: [
+        { bucket: 'bucket-3', slot: 'primary', usedPercent: 101, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true },
+        { bucket: 'bucket-4', slot: 'primary', usedPercent: 99, windowDurationMins: 0, resetsAt: 1_800_000_100, valid: true },
+        { bucket: 'bucket-5', slot: 'secondary', usedPercent: 99, windowDurationMins: 300, resetsAt: -1, valid: true },
+      ],
+      triggeringWindows: [
+        { bucket: 'bucket-3', slot: 'primary', usedPercent: 101, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true },
+        { bucket: 'bucket-4', slot: 'primary', usedPercent: 99, windowDurationMins: 0, resetsAt: 1_800_000_100, valid: true },
+        { bucket: 'bucket-5', slot: 'secondary', usedPercent: 99, windowDurationMins: 300, resetsAt: -1, valid: true },
+      ],
+      serverBlocks: [],
+      nextEligibleAt: -1,
+    },
+  }, 'preflight');
+  assert.equal(invalidTelemetryProjection.reasonCode, 'missing_or_invalid_window');
+  assert.deepEqual(invalidTelemetryProjection.triggerReasons, ['missing_or_invalid_window']);
+  assert.equal(invalidTelemetryProjection.nextEligibleAt, null);
+  assert.deepEqual(invalidTelemetryProjection.windows.map(({ usedPercent, windowDurationMins, resetsAt, valid }) => ({
+    usedPercent, windowDurationMins, resetsAt, valid,
+  })), [
+    { usedPercent: null, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: false },
+    { usedPercent: 99, windowDurationMins: null, resetsAt: 1_800_000_100, valid: false },
+    { usedPercent: 99, windowDurationMins: 300, resetsAt: null, valid: false },
+  ]);
+  assert.equal(validateQuotaDiagnostics(invalidTelemetryProjection), true, JSON.stringify(validateQuotaDiagnostics.errors));
 });
 
 test('semantic execution reports quota and structured findings without becoming deterministic proof', async (t) => {
@@ -380,7 +418,7 @@ test('semantic execution reports quota and structured findings without becoming 
   assert.match(nonQuotaPause.evidenceGaps[0], /password:[\s\S]*\[redacted\]/);
 
   const markdown = formatReviewMarkdown({ ...review, semantic: quotaPaused });
-  assert.match(markdown, /#### Quota diagnostics/);
+  assert.match(markdown, /#### Review quota evidence/);
   assert.match(markdown, /Stop phase: active turn/);
   assert.match(markdown, /99% of the 300-minute window/);
   assert.match(markdown, /Next eligible time: not derivable from quota telemetry/);
@@ -450,7 +488,7 @@ test('quota diagnostic projection and formatting cover each independent stop rea
       quotaDiagnostics: { schemaVersion: '2.0.0', reasonCode: 'window_reserve' },
     },
   });
-  assert.doesNotMatch(unsupported, /#### Quota diagnostics/, 'unknown diagnostic schema versions are not interpreted as v1');
+  assert.doesNotMatch(unsupported, /#### Review quota evidence/, 'unknown diagnostic schema versions are not interpreted as v1');
 
   const compatibleUnknownCode = formatReviewMarkdown({
     status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [],

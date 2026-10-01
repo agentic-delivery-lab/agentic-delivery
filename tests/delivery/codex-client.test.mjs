@@ -26,6 +26,25 @@ test('quota telemetry fails closed on missing, invalid, or expired windows', () 
   assert.equal(quotaBoundary(value, now).stop, true);
 });
 
+test('invalid finite quota metrics never trigger a usage reserve or enter usage summaries', () => {
+  const invalidCases = [
+    (value) => { value.rateLimits.primary.usedPercent = 101; },
+    (value) => { value.rateLimits.primary.windowDurationMins = 0; },
+    (value) => { value.rateLimits.primary.resetsAt = -1; },
+  ];
+  for (const makeInvalid of invalidCases) {
+    const value = quota(99, 20);
+    makeInvalid(value);
+    const decision = quotaBoundary(value, now);
+    assert.equal(decision.stop, true);
+    assert.equal(decision.reasonCode, 'missing_or_invalid_window');
+    assert.deepEqual(decision.diagnostics.triggerReasons, ['missing_or_invalid_window']);
+    assert.equal(decision.diagnostics.triggeringWindows.some((item) => item.valid), false);
+    assert.equal(decision.usedPercent, 20, 'only valid windows contribute to the usage summary');
+    assert.equal(decision.resetsAt, null, 'invalid telemetry cannot supply a retry time');
+  }
+});
+
 test('fails closed when a returned secondary quota window is malformed', () => {
   for (const malformed of ['malformed-window', false, 0, '']) {
     const value = quota();
