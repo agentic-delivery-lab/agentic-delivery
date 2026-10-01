@@ -21,6 +21,7 @@ export const MODELS = Object.freeze({
 export const AUTH_STORAGE_CONFIG = 'cli_auth_credentials_store="file"';
 export const DEFAULT_PERMISSION_CONFIG = 'default_permissions="delivery-plan"';
 const SAFE_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+const SAFE_GPT6_IDENTIFIER = /^(?:[a-z0-9_-]+\/)?gpt-6-[a-z0-9]+(?:[._-][a-z0-9]+)*$/i;
 
 export function modelForProfile(profile = 'planner') {
   const phase = {
@@ -108,8 +109,11 @@ export function verifyModels(models) {
     const summary = catalogProfiles.map(({ model, entries, efforts }) => (
       `${model}[entries=${entries},efforts=${efforts.join(',') || 'unlisted'}]`
     )).join(' | ');
+    const advertisedGpt6Identifiers = [...new Set(models.flatMap((item) => [item.id, item.model]
+      .filter((identifier) => typeof identifier === 'string' && identifier.length <= 120 && SAFE_GPT6_IDENTIFIER.test(identifier))
+      .map((identifier) => identifier.toLowerCase())))].sort();
     throw new Error(
-      `Codex model catalog is missing selected model-effort pairs: ${missingPairs.map(({ model, effort }) => `${model}/${effort}`).join(', ')}; catalog profiles: ${summary}; no fallback is allowed.`,
+      `Codex model catalog is missing selected model-effort pairs: ${missingPairs.map(({ model, effort }) => `${model}/${effort}`).join(', ')}; catalog profiles: ${summary}; catalog total entries=${models.length}; advertised GPT-6 identifiers: ${advertisedGpt6Identifiers.slice(0, 20).join(', ') || 'none'}; no fallback is allowed.`,
     );
   }
 }

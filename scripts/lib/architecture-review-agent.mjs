@@ -160,7 +160,7 @@ export function parseSemanticOutcome(text) {
 
 function safeRunnerFailure(error) {
   const message = typeof error?.message === 'string' ? error.message : '';
-  const catalogFailure = message.match(/^Codex model catalog is missing selected model-effort pairs: (.+); catalog profiles: (.+); no fallback is allowed\.$/);
+  const catalogFailure = message.match(/^Codex model catalog is missing selected model-effort pairs: (.+); catalog profiles: (.+); catalog total entries=(\d+); advertised GPT-6 identifiers: (none|(?:[a-z0-9_-]+\/)?gpt-6-[a-z0-9]+(?:[._-][a-z0-9]+)*(?:, (?:[a-z0-9_-]+\/)?gpt-6-[a-z0-9]+(?:[._-][a-z0-9]+)*)*); no fallback is allowed\.$/);
   if (catalogFailure) {
     const selectedPairs = new Set([
       'gpt-6-luna/low', 'gpt-6-luna/medium', 'gpt-6-luna/max', 'gpt-6-sol/high',
@@ -174,13 +174,18 @@ function safeRunnerFailure(error) {
       if (efforts.some((effort) => !knownEfforts.has(effort))) return null;
       return { model: match[1], entries: Number(match[2]), efforts };
     });
+    const identifiers = catalogFailure[4] === 'none' ? [] : catalogFailure[4].split(', ');
+    const totalEntries = Number(catalogFailure[3]);
     if (missingPairs.length > 0 && missingPairs.every((pair) => selectedPairs.has(pair))
         && profiles.length === 2 && profiles.every(Boolean)
-        && profiles.every((profile) => Number.isSafeInteger(profile.entries) && profile.entries >= 0)) {
+        && profiles.every((profile) => Number.isSafeInteger(profile.entries) && profile.entries >= 0)
+        && Number.isSafeInteger(totalEntries) && totalEntries >= profiles.reduce((sum, profile) => sum + profile.entries, 0)
+        && identifiers.every((identifier) => /^(?:[a-z0-9_-]+\/)?gpt-6-[a-z0-9]+(?:[._-][a-z0-9]+)*$/.test(identifier))) {
       const summary = profiles.map(({ model, entries, efforts }) => (
         `${model}: ${entries} matching entr${entries === 1 ? 'y' : 'ies'}, efforts ${efforts.join(', ') || 'none listed'}`
       )).join('; ');
-      return `The runner catalog did not advertise ${missingPairs.join(', ')}. Catalog response: ${summary}. No model turn was started.`;
+      const advertised = identifiers.length ? identifiers.join(', ') : 'none';
+      return `The runner catalog did not advertise ${missingPairs.join(', ')}. Catalog response: ${summary}; ${totalEntries} total entries; GPT-6 identifiers ${advertised}. No model turn was started.`;
     }
   }
   const unsupportedModel = message.match(/^Codex must support (gpt-6-(?:luna|sol)) with (low|medium|high|max) effort; no fallback is allowed\.$/);
