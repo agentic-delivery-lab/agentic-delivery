@@ -6,6 +6,8 @@ import { test } from 'node:test';
 import {
   checkedRelease,
   adrQualityWorkflowAppliesToFiles,
+  listCheckRuns,
+  listPullRequests,
   reviewCheckReadiness,
   resolveClosedUpdateIssueStates,
   resolveSourceIssue,
@@ -79,6 +81,36 @@ test('reuses one open update pull request and blocks unresolved duplicate decisi
   assert.throws(() => selectPendingUpdatePullRequest([{ ...pullRequest, state: 'closed', merged_at: null }], repository, version.replaceAll('.', '-')), /verified release source issue/);
 });
 
+test('paginates repository pull requests before deciding whether an update is pending', async () => {
+  const version = nextPatchVersion(RELEASE.version);
+  const updatePullRequest = {
+    number: 815,
+    state: 'open',
+    base: { ref: 'main', repo: { full_name: repository } },
+    head: {
+      ref: `chore/issue-742-update-codex-cli-${version.replaceAll('.', '-')}`,
+      repo: { full_name: repository },
+    },
+  };
+  const requestedPages = [];
+  const pullRequests = await listPullRequests(repository, 'test-token', async (url) => {
+    const page = Number(new URL(String(url)).searchParams.get('page'));
+    requestedPages.push(page);
+    assert.equal(new URL(String(url)).searchParams.get('sort'), 'created');
+    assert.equal(new URL(String(url)).searchParams.get('direction'), 'asc');
+    return {
+      ok: true,
+      json: async () => page === 1
+        ? Array.from({ length: 100 }, (_, index) => ({ number: index + 1, state: 'closed', head: { ref: 'feature/unrelated' } }))
+        : [updatePullRequest],
+    };
+  });
+  const pending = selectPendingUpdatePullRequest(pullRequests, repository, '9-9-9');
+  assert.deepEqual(requestedPages, [1, 2]);
+  assert.equal(pending.pullRequest.number, 815);
+  assert.equal(pending.sameCandidate, false);
+});
+
 test('a closed release Task resolves its old PR without blocking later releases', async () => {
   const version = nextPatchVersion(RELEASE.version);
   const issueNumber = 742;
@@ -147,6 +179,62 @@ test('requires ADR validation whenever changed files trigger the ADR-quality wor
   for (const file of ['README.md', 'src/app.ts', 'docs/other.md', 'scripts/example.txt']) {
     assert.equal(adrQualityWorkflowAppliesToFiles([file]), false, file);
   }
+});
+
+test('paginates all exact-head check runs before declaring deterministic checks ready', async () => {
+  const sha = 'a'.repeat(40);
+  const names = [
+    'Validate pull request body',
+    'quality',
+    'portability (ubuntu-latest)',
+    'portability (macos-latest)',
+    'portability (windows-latest)',
+    'validate',
+  ];
+  const baseUrl = `https://api.github.com/repos/${repository}/commits/${sha}/check-runs?filter=latest`;
+  const requestedPages = [];
+  const evidence = await listCheckRuns(baseUrl, 'test-token', async (url) => {
+    const page = Number(new URL(String(url)).searchParams.get('page'));
+    requestedPages.push(page);
+    const unrelated = Array.from({ length: 100 }, (_, index) => ({
+      id: index + 1, name: `unrelated-${index}`, head_sha: sha, status: 'completed',
+      conclusion: 'success', app: { name: 'GitHub Actions' },
+    }));
+    const required = names.map((name, index) => ({
+      id: 101 + index, name, head_sha: sha, status: 'completed', conclusion: 'success',
+      started_at: '2026-10-01T12:00:00Z', app: { name: 'GitHub Actions' },
+    }));
+    return {
+      ok: true,
+      json: async () => ({ total_count: 106, check_runs: page === 1 ? unrelated : required }),
+    };
+  });
+  assert.deepEqual(requestedPages, [1, 2]);
+  assert.equal(evidence.complete, true);
+  assert.equal(evidence.checkRuns.length, 106);
+  assert.equal(reviewCheckReadiness(evidence.checkRuns, sha, true).ready, true);
+});
+
+test('does not treat a short paginated check-run response as complete evidence', async () => {
+  const sha = 'a'.repeat(40);
+  const evidence = await listCheckRuns(
+    `https://api.github.com/repos/${repository}/commits/${sha}/check-runs?filter=latest`,
+    'test-token',
+    async (url) => {
+      const page = Number(new URL(String(url)).searchParams.get('page'));
+      return {
+        ok: true,
+        json: async () => ({
+          total_count: 101,
+          check_runs: page === 1
+            ? Array.from({ length: 100 }, (_, index) => ({ id: index + 1, name: `run-${index}` }))
+            : [],
+        }),
+      };
+    },
+  );
+  assert.equal(evidence.complete, false);
+  assert.deepEqual(evidence.checkRuns, []);
 });
 
 test('reuses a matching open release issue and creates a typed task when no issue exists', async () => {

@@ -237,8 +237,10 @@ issue edits.
   updater does not change the repository Actions setting that combines token
   based PR creation with review approval. It waits for the exact-head body,
   delivery-quality, portability, and applicable ADR checks to pass, then
-  dispatches the no-generation runner smoke. Harness starts only after the
-  smoke passes; a deterministic failure prevents both runner dispatches. The
+  dispatches the no-generation runner smoke. It paginates the pull-request list
+  and exact-head check-run evidence, and fails closed on incomplete responses
+  or page-bound exhaustion. Harness starts only after the smoke passes; a
+  deterministic failure prevents both runner dispatches. The
   generated PR description separates verified release metadata from checks
   that are pending at creation.
   The delivery-quality `quality` job, ADR validation and portability matrix use

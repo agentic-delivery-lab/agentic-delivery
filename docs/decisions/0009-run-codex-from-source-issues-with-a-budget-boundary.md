@@ -122,6 +122,9 @@ update for another release. A closed, unmerged update PR blocks later releases
 while its linked release Task remains open or cannot be verified. Closing that
 Task resolves the candidate: the updater does not recreate the same rejected
 version, while a later stable release can still be evaluated.
+The updater paginates the repository pull-request list and exact-head check-run
+evidence. It stops without dispatching runner smoke or Harness when either API
+result is incomplete or exceeds the supported page bound.
 
 The updater verifies the official release asset digest. It creates the source
 Task and pushes its issue-linked branch with `GITHUB_TOKEN`, which cannot

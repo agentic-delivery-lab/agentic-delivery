@@ -15,6 +15,8 @@ const execFileAsync = promisify(execFile);
 const API_URL = 'https://api.github.com/repos/openai/codex/releases/latest';
 const ASSET_NAME = 'codex-package-x86_64-unknown-linux-musl.tar.gz';
 const MAX_ASSET_BYTES = 256 * 1024 * 1024;
+const GITHUB_PAGE_SIZE = 100;
+const MAX_GITHUB_API_PAGES = 30;
 const UPDATE_BRANCH = /^chore\/issue-([1-9][0-9]*)-update-codex-cli-(0|[1-9][0-9]*)-(0|[1-9][0-9]*)-(0|[1-9][0-9]*)$/;
 
 function versionTuple(version) {
@@ -71,6 +73,55 @@ async function fetchJson(url, token, fetchImpl) {
   });
   if (!response.ok) throw new Error(`Codex release metadata request failed (HTTP ${response.status}).`);
   return response.json();
+}
+
+export async function listPullRequests(repository, token, fetchImpl = globalThis.fetch) {
+  if (!token || !/^[\w.-]+\/[\w.-]+$/.test(repository ?? '')) {
+    throw new Error('A repository and GH_TOKEN are required to list pull requests.');
+  }
+  const pullRequests = [];
+  for (let page = 1; page <= MAX_GITHUB_API_PAGES + 1; page += 1) {
+    const batch = await fetchJson(
+      `https://api.github.com/repos/${repository}/pulls?state=all&sort=created&direction=asc&per_page=${GITHUB_PAGE_SIZE}&page=${page}`,
+      token,
+      fetchImpl,
+    );
+    if (!Array.isArray(batch)) throw new Error('The GitHub pull-request list is invalid.');
+    pullRequests.push(...batch);
+    if (batch.length < GITHUB_PAGE_SIZE) return pullRequests;
+    if (page === MAX_GITHUB_API_PAGES + 1) break;
+  }
+  throw new Error(`The repository pull-request list exceeds the supported ${MAX_GITHUB_API_PAGES}-page bound.`);
+}
+
+export async function listCheckRuns(checkUrl, token, fetchImpl = globalThis.fetch) {
+  if (!token) throw new Error('GH_TOKEN is required to list exact-head check runs.');
+  const checkRuns = new Map();
+  let expectedTotalCount;
+  for (let page = 1; page <= MAX_GITHUB_API_PAGES; page += 1) {
+    const url = new URL(checkUrl);
+    url.searchParams.set('per_page', String(GITHUB_PAGE_SIZE));
+    url.searchParams.set('page', String(page));
+    const result = await fetchJson(url, token, fetchImpl);
+    if (!Array.isArray(result.check_runs) || !Number.isSafeInteger(result.total_count) || result.total_count < 0) {
+      throw new Error('The GitHub exact-head check-run response is invalid.');
+    }
+    if (expectedTotalCount !== undefined && result.total_count !== expectedTotalCount) {
+      return { complete: false, checkRuns: [] };
+    }
+    expectedTotalCount = result.total_count;
+    for (const run of result.check_runs) {
+      if (!Number.isSafeInteger(run?.id)) throw new Error('The GitHub exact-head check-run response contains an invalid run ID.');
+      checkRuns.set(run.id, run);
+    }
+    if (checkRuns.size === expectedTotalCount) {
+      return { complete: true, checkRuns: [...checkRuns.values()] };
+    }
+    if (result.check_runs.length < GITHUB_PAGE_SIZE) {
+      return { complete: false, checkRuns: [] };
+    }
+  }
+  throw new Error(`The exact-head check-run list exceeds the supported ${MAX_GITHUB_API_PAGES}-page bound; runner smoke and semantic review were not dispatched.`);
 }
 
 export async function verifyDownload(candidate, fetchImpl = globalThis.fetch) {
@@ -314,7 +365,7 @@ async function findPendingPullRequest() {
   const repository = process.env.GITHUB_REPOSITORY;
   const candidateSlug = process.env.CODEX_RELEASE_SLUG;
   if (!token || !repository || !candidateSlug) throw new Error('GH_TOKEN, GITHUB_REPOSITORY, and CODEX_RELEASE_SLUG are required.');
-  const pulls = await fetchJson(`https://api.github.com/repos/${repository}/pulls?state=all&per_page=100`, token, globalThis.fetch);
+  const pulls = await listPullRequests(repository, token, globalThis.fetch);
   const closedIssueStates = await resolveClosedUpdateIssueStates(pulls, repository, token, globalThis.fetch);
   const pending = selectPendingUpdatePullRequest(pulls, repository, candidateSlug, closedIssueStates);
   if (pending?.rejectedCandidate) {
@@ -371,8 +422,12 @@ async function waitForPullRequestChecks() {
     if (currentPullRequest.state !== 'open' || currentPullRequest.head?.sha !== expectedSha) {
       throw new Error('The release pull request changed head while the updater waited for exact-head checks.');
     }
-    const response = await fetchJson(checkUrl, token, globalThis.fetch);
-    const readiness = reviewCheckReadiness(response.check_runs, expectedSha, requireAdrValidation);
+    const checkEvidence = await listCheckRuns(checkUrl, token, globalThis.fetch);
+    if (!checkEvidence.complete) {
+      await new Promise((resolve) => setTimeout(resolve, 15_000));
+      continue;
+    }
+    const readiness = reviewCheckReadiness(checkEvidence.checkRuns, expectedSha, requireAdrValidation);
     if (readiness.ready) {
       await appendOutput('checks_ready', 'true');
       process.stdout.write(`Exact-head body, delivery-quality, portability${requireAdrValidation ? ', and ADR-quality' : ''} checks passed for pull request #${number} at ${expectedSha}.\n`);
