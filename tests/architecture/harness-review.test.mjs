@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -11,7 +11,12 @@ import {
   parseEvidenceMarker,
   validateEvidenceRecord,
 } from '../../scripts/lib/architecture-review.mjs';
-import { parseSemanticOutcome, runSemanticReview } from '../../scripts/lib/architecture-review-agent.mjs';
+import {
+  parseSemanticOutcome,
+  runSemanticReview,
+  safeDiffText,
+  semanticReviewDiff,
+} from '../../scripts/lib/architecture-review-agent.mjs';
 import { runArchitectureReview } from '../../scripts/harness-architecture-review.mjs';
 import { runNodeScript } from '../helpers/process.mjs';
 
@@ -27,6 +32,42 @@ test('impact patterns and evidence markers are deterministic and bounded', () =>
   const marker = parseEvidenceMarker('before\n<!-- codex-delivery-evidence:v1\n{"schemaVersion":1,"producer":"codex-delivery"}\n-->\nafter');
   assert.deepEqual(marker, { schemaVersion: 1, producer: 'codex-delivery' });
   assert.equal(parseEvidenceMarker('<!-- codex-delivery-evidence:v1\nnot-json\n-->').__error, 'Evidence marker is not valid JSON.');
+});
+
+test('semantic review diff includes changed configuration and changelog paths', async (t) => {
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-semantic-diff-'));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const run = promisify(execFile);
+  const git = (...args) => run('git', ['-C', fixture, ...args], { encoding: 'utf8' });
+
+  await git('init', '--quiet');
+  await git('config', 'user.name', 'Harness test');
+  await git('config', 'user.email', 'harness-test@example.invalid');
+  await mkdir(path.join(fixture, 'config'), { recursive: true });
+  await writeFile(path.join(fixture, 'config', 'model-policy.yml'), 'implementation: gpt-6-luna:max\n');
+  await writeFile(path.join(fixture, 'CHANGELOG.md'), '## Unreleased\n\n- Existing entry.\n');
+  await git('add', 'config/model-policy.yml', 'CHANGELOG.md');
+  await git('commit', '--quiet', '-m', 'base');
+  const { stdout: baseOutput } = await git('rev-parse', 'HEAD');
+
+  await writeFile(path.join(fixture, 'config', 'model-policy.yml'), 'implementation: gpt-6-luna:max\nreview: gpt-6-sol:high\n');
+  await writeFile(path.join(fixture, 'CHANGELOG.md'), '## Unreleased\n\n- Updated the model policy.\n');
+  await git('add', 'config/model-policy.yml', 'CHANGELOG.md');
+  await git('commit', '--quiet', '-m', 'change policy');
+  const { stdout: headOutput } = await git('rev-parse', 'HEAD');
+
+  const actualDiff = await semanticReviewDiff(fixture, baseOutput.trim(), headOutput.trim());
+  assert.match(actualDiff, /config\/model-policy\.yml/);
+  assert.match(actualDiff, /review: gpt-6-sol:high/);
+  assert.match(actualDiff, /CHANGELOG\.md/);
+  assert.match(actualDiff, /Updated the model policy/);
+});
+
+test('semantic review refuses a diff that would exceed its evidence limit', () => {
+  assert.equal(safeDiffText('x'.repeat(500_000)).length, 500_000);
+  assert.equal(safeDiffText('x'.repeat(500_001)), null);
 });
 
 test('the current architecture map covers the official ADR set and emits a concise result', async () => {

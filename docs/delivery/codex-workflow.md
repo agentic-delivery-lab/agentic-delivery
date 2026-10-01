@@ -259,10 +259,14 @@ issue edits.
   The check records that limitation without spending model quota.
   Harness includes the live PR description, non-Harness check runs for its
   exact reviewed commit, and runner preflight results. It excludes its own
-  `review` check to avoid self-reference. Before a model turn, it waits up to
-  15 minutes for the expected exact-head checks to finish and skips the turn
-  when a required check fails or remains unavailable. A completed review is
-  reused only when its full evidence fingerprint matches and the required
+  `review` check to avoid self-reference. Its semantic diff contains every
+  changed path with five lines of context, including configuration and
+  changelog edits. A diff over 500,000 characters stops before a model turn
+  and is reported as inconclusive instead of being silently truncated. Before
+  a model turn, Harness waits up to 15 minutes for the expected exact-head
+  checks to finish and skips the turn when a required check fails or remains
+  unavailable. A completed review is reused only when its full evidence
+  fingerprint matches and the required
   exact-head checks passed. Quota snapshots are recorded outside the model
   input before and after a semantic turn. Each snapshot keeps
   returned primary and secondary windows separate, including duration, usage,

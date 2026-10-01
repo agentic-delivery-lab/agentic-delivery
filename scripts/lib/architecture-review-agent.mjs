@@ -12,7 +12,8 @@ import { gitFiles, gitShow, parseEvidenceMarker } from './architecture-review.mj
 import { adrQualityWorkflowAppliesToFiles, reviewCheckReadiness } from './pull-request-check-readiness.mjs';
 
 const execFileAsync = promisify(execFile);
-const SEMANTIC_REVIEW_PROMPT_VERSION = 'harness-review-v3';
+const SEMANTIC_REVIEW_PROMPT_VERSION = 'harness-review-v4';
+const SEMANTIC_REVIEW_DIFF_MAX_CHARS = 500_000;
 const REVIEW_STATE_VERSION = 1;
 const REVIEW_STATE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const REVIEW_CHECK_WAIT_TIMEOUT_MS = 15 * 60 * 1000;
@@ -25,10 +26,9 @@ function childEnvironment() {
   return safe;
 }
 
-async function diff(repositoryRoot, base, head) {
-  const { stdout } = await execFileAsync('git', ['-C', repositoryRoot, 'diff', '--unified=30', `${base}..${head}`, '--',
-    'AGENTS.md', '.agents', '.github', 'docs', 'scripts', 'tests', 'package.json', 'pnpm-workspace.yaml'], {
-    encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, windowsHide: true,
+export async function semanticReviewDiff(repositoryRoot, base, head) {
+  const { stdout } = await execFileAsync('git', ['-C', repositoryRoot, 'diff', '--unified=5', `${base}..${head}`], {
+    encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, windowsHide: true,
     env: childEnvironment(),
   });
   return stdout;
@@ -112,8 +112,9 @@ function safeIssueText(value) {
     .slice(0, 20_000);
 }
 
-function safeDiffText(value) {
-  return redactSensitive(value).slice(0, 500_000);
+export function safeDiffText(value) {
+  const sanitized = redactSensitive(value);
+  return sanitized.length <= SEMANTIC_REVIEW_DIFF_MAX_CHARS ? sanitized : null;
 }
 
 async function sourceIssueEvidence(repository, issue) {
@@ -687,13 +688,27 @@ export async function runSemanticReview({
       revisionFile(repositoryRoot, review.head, 'docs/domain/ubiquitous-language.yml'),
       revisionFile(repositoryRoot, review.head, 'docs/architecture/harness-review.yml'),
       revisionFile(repositoryRoot, review.head, 'docs/architecture/delivery-evidence.schema.json'),
-      diff(repositoryRoot, review.mergeBase ?? review.base, review.head),
+      semanticReviewDiff(repositoryRoot, review.mergeBase ?? review.base, review.head),
       safeState(review, event),
       revisionFile(repositoryRoot, review.head, 'docs/architecture/adr-primitive-index.json'),
       event.issue?.body
         ? Promise.resolve(safeIssueText(event.issue.body))
         : sourceIssueEvidence(review.repository, review.sourceIssue?.number),
     ]);
+    const reviewDiff = safeDiffText(diffText);
+    if (reviewDiff === null) {
+      return {
+        status: 'inconclusive',
+        summary: 'The complete pull-request diff exceeds the semantic review input limit; no model turn was started.',
+        findings: [],
+        evidenceGaps: [
+          `The complete changed-file diff exceeds ${SEMANTIC_REVIEW_DIFF_MAX_CHARS} characters and was not sent to the semantic reviewer.`,
+        ],
+        sessionId: null,
+        model: MODELS.review,
+        reviewSession: { disposition: 'diff-too-large', noModelTurn: true },
+      };
+    }
     const reviewRunner = semanticRunnerEvidence(runner);
     const baseContent = [
       '# Harness Architecture Review evidence bundle',
@@ -715,7 +730,7 @@ export async function runSemanticReview({
       `## Head architecture impact map\n\n${map}`,
       `## Head evidence schema\n\n${schema}`,
       `## Safe runner-state summary\n\n${JSON.stringify(state, null, 2)}`,
-      `## Merge-base to head diff\n\n${safeDiffText(diffText)}`,
+      `## Complete merge-base to head diff (all changed paths)\n\n${reviewDiff}`,
     ];
 
     const stableReview = { ...review };
@@ -743,7 +758,7 @@ export async function runSemanticReview({
       architectureMap: map,
       evidenceSchema: schema,
       state,
-      diff: safeDiffText(diffText),
+      diff: reviewDiff,
     });
     statePaths = reviewStateLocation(review, event, identity);
     if (!statePaths) {

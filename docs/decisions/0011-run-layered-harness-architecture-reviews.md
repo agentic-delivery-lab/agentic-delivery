@@ -109,13 +109,16 @@ prompt and rereads the current evidence bundle.
 
 A `semantic review fingerprint` hashes the deterministic result, source issue,
 pull-request body, exact-head non-Harness check results, ADR/domain evidence,
-and diff. Primitive evidence is limited to index records linked to affected
-ADRs; changed file content is already present in the diff, and unchanged
-primitive bodies are omitted. Its session identity also includes the Codex CLI
-version and model profile. It excludes transient runner preflight status, the
-current Harness `review` check, quota counters, and capture times. On a normal
-PR event, Harness waits up to 15 minutes for the expected exact-head checks to
-finish; a failed,
+and the complete changed-path diff with five lines of context. No path allowlist
+is applied, so configuration, changelog, and other changed files are included.
+The diff is capped at 500,000 characters; an oversized diff stops before a
+model turn and is reported as inconclusive rather than silently truncated.
+Primitive evidence is limited to index records linked to affected ADRs; changed
+file content is already present in the diff, and unchanged primitive bodies are
+omitted. Its session identity also includes the Codex CLI version and model
+profile. It excludes transient runner preflight status, the current Harness
+`review` check, quota counters, and capture times. On a normal PR event, Harness
+waits up to 15 minutes for the expected exact-head checks to finish; a failed,
 missing, truncated, or still-running check prevents a semantic model turn. The
 workflow reuses a completed structured result without another model turn only
 when the full fingerprint matches exactly and all exact-head checks are

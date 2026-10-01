@@ -66,6 +66,9 @@ they do not authorize migration, alter that issue's scope, or close it.
   usage and guard signals to the Actions summary and runner log. Deterministic
   quality and ADR checks run on ephemeral hosted runners so they can finish
   while Harness waits on the single persistent Codex runner.
+- Semantic Harness review now includes all changed paths with five lines of
+  context. Diffs above the 500,000-character safety limit stop before a model
+  turn and report an explicit evidence gap instead of reviewing a truncation.
 - Issue intake, delivery, and metadata migration now verify that the live
   Lifecycle Stage and Delivery Readiness fields are pinned to every enabled
   issue type and to issues without a type before authorizing field changes.
