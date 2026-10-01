@@ -20,15 +20,22 @@ async function writePreflightReport(report) {
 async function writeFailureSummary(quota) {
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
   if (!summaryPath) return;
-  const observed = quota
-    ? `${quota.highestWindowUsedPercent}% used; allowance below reserve: ${quota.allowanceAvailable ? 'yes' : 'no'}`
+  const windows = quota?.windows?.length
+    ? quota.windows.map((window) => (
+      `bucket ${window.bucketIndex} ${window.slot}: ${window.durationMinutes}m at ${window.usedPercent}%, resets ${new Date(window.resetsAt * 1000).toISOString()}`
+    )).join('; ')
+    : 'unavailable';
+  const guardSignals = quota?.guardSignals
+    ? `window threshold=${quota.guardSignals.windowThresholdReached}; rate-limit=${quota.guardSignals.rateLimitReached}; spend-control=${quota.guardSignals.spendControlReached}`
     : 'unavailable';
   await appendFile(summaryPath, [
     '### Codex runner preflight',
     '',
     '- Status: failed before a model turn.',
     `- Codex CLI version: ${RELEASE.version}`,
-    `- Highest-window quota observation: ${observed}`,
+    `- Highest-window usage: ${quota ? `${quota.highestWindowUsedPercent}%` : 'unavailable'}`,
+    `- Rate-limit windows: ${windows}`,
+    `- Quota guard signals: ${guardSignals}`,
     '- Model turn: not started.',
     '',
   ].join('\n'));
@@ -93,6 +100,8 @@ try {
     quotaObservation = {
       highestWindowUsedPercent: quota.usedPercent,
       allowanceAvailable: quota.stop === false,
+      windows: quota.windows,
+      guardSignals: quota.guardSignals,
     };
   }
   if (quota.stop !== false || !quotaObservation) {

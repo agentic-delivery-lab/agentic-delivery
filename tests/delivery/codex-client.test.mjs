@@ -13,6 +13,18 @@ test('leaves a small finalization reserve in both usage windows', () => {
   assert.equal(quotaBoundary(quota(98), now).stop, true);
   assert.equal(quotaBoundary(quota(20, 98), now).stop, true);
   assert.equal(quotaBoundary(quota(100), now).resetsAt, now + 100);
+  const weeklyLimit = quotaBoundary(quota(24, 98), now);
+  assert.deepEqual(weeklyLimit.windows.map(({ bucketIndex, slot, durationMinutes, usedPercent }) => (
+    { bucketIndex, slot, durationMinutes, usedPercent }
+  )), [
+    { bucketIndex: 1, slot: 'primary', durationMinutes: 300, usedPercent: 24 },
+    { bucketIndex: 1, slot: 'secondary', durationMinutes: 10_080, usedPercent: 98 },
+  ]);
+  assert.deepEqual(weeklyLimit.guardSignals, {
+    windowThresholdReached: true,
+    rateLimitReached: false,
+    spendControlReached: false,
+  });
 });
 
 test('quota telemetry fails closed on missing, invalid, or expired windows', () => {
@@ -30,6 +42,15 @@ test('checks every returned bucket and explicit server limits', () => {
   value.rateLimitsByLimitId = { codex: value.rateLimits, other: { credits:{hasCredits:false,unlimited:false}, primary: window(99, 60) } };
   assert.equal(quotaBoundary(value, now).stop, true);
   assert.equal(quotaBoundary({rateLimits:{...quota().rateLimits, spendControlReached:true}}, now).stop, true);
+  const serverLimited = quota(24, 62);
+  serverLimited.rateLimits.rateLimitReachedType = 'secondary';
+  const result = quotaBoundary(serverLimited, now);
+  assert.equal(result.usedPercent, 62);
+  assert.deepEqual(result.guardSignals, {
+    windowThresholdReached: false,
+    rateLimitReached: true,
+    spendControlReached: false,
+  });
 });
 
 test('refuses model execution when credit spillover is possible or unknown', () => {

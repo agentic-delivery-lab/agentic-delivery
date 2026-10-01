@@ -252,6 +252,30 @@ async function pullRequestEvidence(review, event) {
   }
 }
 
+function safeQuotaWindows(value) {
+  return Array.isArray(value)
+    ? value.filter((window) => window
+      && Number.isSafeInteger(window.bucketIndex) && window.bucketIndex >= 1 && window.bucketIndex <= 100
+      && ['primary', 'secondary'].includes(window.slot)
+      && Number.isFinite(window.durationMinutes) && window.durationMinutes > 0 && window.durationMinutes <= 100_000
+      && Number.isFinite(window.usedPercent) && window.usedPercent >= 0 && window.usedPercent <= 100
+      && Number.isFinite(window.resetsAt) && window.resetsAt > 0)
+      .slice(0, 100)
+      .map(({ bucketIndex, slot, durationMinutes, usedPercent, resetsAt }) => ({
+        bucketIndex, slot, durationMinutes, usedPercent, resetsAt,
+      }))
+    : [];
+}
+
+function safeQuotaGuardSignals(value) {
+  const signals = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return {
+    windowThresholdReached: typeof signals.windowThresholdReached === 'boolean' ? signals.windowThresholdReached : null,
+    rateLimitReached: typeof signals.rateLimitReached === 'boolean' ? signals.rateLimitReached : null,
+    spendControlReached: typeof signals.spendControlReached === 'boolean' ? signals.spendControlReached : null,
+  };
+}
+
 function safePreflightReport(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const pairs = Array.isArray(value.modelEffortPairs)
@@ -276,6 +300,8 @@ function safePreflightReport(value) {
         allowanceAvailable: typeof value.quota.allowanceAvailable === 'boolean'
           ? value.quota.allowanceAvailable
           : null,
+        windows: safeQuotaWindows(value.quota.windows),
+        guardSignals: safeQuotaGuardSignals(value.quota.guardSignals),
       }
       : null,
     sessionProbe: ['start-and-resume-passed', 'start-passed-resume-needs-first-rollout'].includes(value.sessionProbe)
@@ -317,6 +343,8 @@ function quotaSnapshot(value) {
     status: 'available',
     highestWindowUsedPercent: value.usedPercent,
     allowanceAvailable: value.stop === false,
+    windows: safeQuotaWindows(value.windows),
+    guardSignals: safeQuotaGuardSignals(value.guardSignals),
     capturedAt,
   };
 }

@@ -60,8 +60,9 @@ export function appServerFailure(code, signal, stderr = '') {
 }
 
 export function quotaBoundary(response, now = Date.now() / 1000) {
-  const buckets = Object.values(response?.rateLimitsByLimitId ?? {});
-  if (response?.rateLimits) buckets.push(response.rateLimits);
+  const candidates = Object.values(response?.rateLimitsByLimitId ?? {});
+  if (response?.rateLimits) candidates.push(response.rateLimits);
+  const buckets = candidates.filter((bucket, index) => candidates.indexOf(bucket) === index);
   if (buckets.some((bucket) => !bucket || typeof bucket !== 'object' || !bucket.primary)) {
     return { stop: true, reason: 'Quota telemetry contains an invalid bucket.' };
   }
@@ -77,12 +78,28 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
     return { stop: true, reason: 'Quota telemetry is missing, invalid, or expired.' };
   }
   const exhausted = windows.filter((window) => window.usedPercent >= 98);
-  const blocked = buckets.some((bucket) => bucket.rateLimitReachedType || bucket.spendControlReached);
+  const rateLimitReached = buckets.some((bucket) => Boolean(bucket.rateLimitReachedType));
+  const spendControlReached = buckets.some((bucket) => bucket.spendControlReached === true);
+  const windowUsage = buckets.flatMap((bucket, bucketIndex) => (
+    [['primary', bucket.primary], ['secondary', bucket.secondary]]
+      .filter(([, value]) => value)
+      .map(([slot, value]) => ({
+        bucketIndex: bucketIndex + 1,
+        slot,
+        durationMinutes: value.windowDurationMins,
+        usedPercent: value.usedPercent,
+        resetsAt: value.resetsAt,
+      }))
+  ));
+  const windowThresholdReached = exhausted.length > 0;
+  const blocked = rateLimitReached || spendControlReached;
   return {
     stop: exhausted.length > 0 || blocked,
     reason: exhausted.length || blocked ? 'Codex allowance reached the finalization reserve.' : 'Allowance available.',
     usedPercent: Math.max(...windows.map((window) => window.usedPercent)),
     resetsAt: Math.max(...(exhausted.length ? exhausted : windows).map((window) => window.resetsAt)),
+    windows: windowUsage,
+    guardSignals: { windowThresholdReached, rateLimitReached, spendControlReached },
   };
 }
 

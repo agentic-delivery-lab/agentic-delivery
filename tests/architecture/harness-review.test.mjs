@@ -138,7 +138,12 @@ test('semantic execution reports quota and structured findings without becoming 
     repositoryRoot,
     review,
     createClient: () => ({
-      initialize: async () => {}, capabilities: async () => ({ stop: false, usedPercent: 35 }),
+      initialize: async () => {}, capabilities: async () => ({
+        stop: false,
+        usedPercent: 35,
+        windows: [{ bucketIndex: 1, slot: 'primary', durationMinutes: 300, usedPercent: 35, resetsAt: 1_800_000_100 }],
+        guardSignals: { windowThresholdReached: false, rateLimitReached: false, spendControlReached: false },
+      }),
       startThread: async () => ({ thread: { id: '019fb023-24b8-7881-9119-509f078b610e' } }), close: async () => {},
     }),
     runTurnImpl: async () => ({ status: 'completed', text: JSON.stringify({
@@ -151,6 +156,7 @@ test('semantic execution reports quota and structured findings without becoming 
   assert.equal(findings.quotaTelemetry.before.highestWindowUsedPercent, 35);
   assert.equal(findings.quotaTelemetry.after.highestWindowUsedPercent, 35);
   assert.match(formatReviewMarkdown({ ...review, semantic: findings }), /highest window use was 35% before and 35% after the turn/);
+  assert.match(formatReviewMarkdown({ ...review, semantic: findings }), /bucket 1 primary 300m 35%/);
 });
 
 test('semantic evidence bundle includes the live PR body, exact-head checks, and runner preflight', async (t) => {
@@ -193,7 +199,15 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
         { model: 'gpt-6-luna', effort: 'max' },
         { model: 'gpt-6-sol', effort: 'high' },
       ],
-      quota: { highestWindowUsedPercent: 96, allowanceAvailable: true },
+      quota: {
+        highestWindowUsedPercent: 96,
+        allowanceAvailable: true,
+        windows: [
+          { bucketIndex: 1, slot: 'primary', durationMinutes: 300, usedPercent: 96, resetsAt: 1_800_000_100 },
+          { bucketIndex: 1, slot: 'secondary', durationMinutes: 10_080, usedPercent: 62, resetsAt: 1_800_000_200 },
+        ],
+        guardSignals: { windowThresholdReached: false, rateLimitReached: false, spendControlReached: false },
+      },
       sessionProbe: 'start-and-resume-passed',
       noModelTurn: true,
       capturedAt: '2026-10-01T12:00:00.000Z',
@@ -278,7 +292,18 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
     eventPath,
     createClient: ({ readableFiles }) => ({
       initialize: async () => {},
-      capabilities: async () => ({ stop: false, usedPercent: capabilityReads++ === 0 ? 96 : 97 }),
+      capabilities: async () => {
+        const usedPercent = capabilityReads++ === 0 ? 96 : 97;
+        return {
+          stop: false,
+          usedPercent,
+          windows: [
+            { bucketIndex: 1, slot: 'primary', durationMinutes: 300, usedPercent, resetsAt: 1_800_000_100 },
+            { bucketIndex: 1, slot: 'secondary', durationMinutes: 10_080, usedPercent: 62, resetsAt: 1_800_000_200 },
+          ],
+          guardSignals: { windowThresholdReached: false, rateLimitReached: false, spendControlReached: false },
+        };
+      },
       startThread: async () => ({ thread: { id: '019fb023-24b8-7881-9119-509f078b610e' } }),
       close: async () => {},
       readableFiles,
@@ -302,8 +327,12 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
   assert.match(bundleText, /"codexCliVersion": "0\.159\.3"/);
   assert.match(bundleText, /"highestWindowUsedPercent": 96/);
   assert.match(bundleText, /"allowanceAvailable": true/);
+  assert.match(bundleText, /"durationMinutes": 300/);
+  assert.match(bundleText, /"durationMinutes": 10080/);
+  assert.match(bundleText, /"windowThresholdReached": false/);
   assert.match(bundleText, /"preflightStepOutcome": "success"/);
   assert.equal(result.quotaTelemetry.after.highestWindowUsedPercent, 97);
+  assert.equal(result.quotaTelemetry.after.windows[0].usedPercent, 97);
 });
 
 test('the evidence contract validates the complete projection and rejects mismatches', async () => {

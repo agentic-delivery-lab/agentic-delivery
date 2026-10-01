@@ -430,6 +430,16 @@ export function formatReviewMarkdown(review) {
         ? `${snapshot.highestWindowUsedPercent}%`
         : snapshot?.status ?? 'unavailable';
       lines.push('', `Quota observation for ${quota.model ?? 'the review model'} (${quota.effort ?? 'unspecified'} effort): highest window use was ${describe(quota.before)} before and ${describe(quota.after)} after the turn. Other Codex clients share this allowance, so the snapshots do not attribute usage to this turn alone.`);
+      const describeWindows = (snapshot) => (snapshot?.windows ?? []).map((window) => (
+        `bucket ${window.bucketIndex} ${window.slot} ${window.durationMinutes}m ${window.usedPercent}%`
+      )).join('; ') || 'window-level usage unavailable';
+      lines.push('', `Rate-limit windows before: ${describeWindows(quota.before)}. After: ${describeWindows(quota.after)}.`);
+      const describeSignals = (snapshot) => {
+        const signals = snapshot?.guardSignals;
+        if (!signals) return 'unavailable';
+        return `window threshold ${signals.windowThresholdReached ?? 'unknown'}, rate limit ${signals.rateLimitReached ?? 'unknown'}, spend control ${signals.spendControlReached ?? 'unknown'}`;
+      };
+      lines.push(`Quota guard signals before: ${describeSignals(quota.before)}. After: ${describeSignals(quota.after)}.`);
     }
     for (const finding of review.semantic.findings ?? []) lines.push(`- **${finding.severity ?? 'advisory'}** ${finding.statement} (Evidence: ${(finding.evidence ?? []).join(', ') || 'none'})`);
     if (review.semantic.evidenceGaps?.length) {

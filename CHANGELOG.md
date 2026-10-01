@@ -46,7 +46,8 @@ they do not authorize migration, alter that issue's scope, or close it.
   complete matching-entry capability checks, safe reporting for unsupported
   profile pairs, and no model fallback.
 - Harness review now includes the live PR body, exact-head check runs, runner
-  preflight evidence, and before/after shared-quota observations.
+  preflight evidence, and per-window shared-quota observations before and after
+  review.
 - Issue intake, delivery, and metadata migration now verify that the live
   Lifecycle Stage and Delivery Readiness fields are pinned to every enabled
   issue type and to issues without a type before authorizing field changes.

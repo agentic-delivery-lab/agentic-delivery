@@ -138,11 +138,14 @@ account, model, Plan, quota, and sandbox checks itself before starting its
 review turn. Its evidence bundle includes the live pull-request description,
 the latest check runs for the reviewed commit, the exact runner preflight
 result, and quota snapshots immediately before and after the semantic turn.
-Those snapshots observe a shared allowance and do not attribute usage to one
-model turn. Jobs do not follow a moving `latest` release or update the CLI in
-place, and update pull requests are never auto-merged. Retain the previous pin
-for rollback. The weekly check performs no Codex model turn when no newer
-stable release exists.
+Each snapshot records the returned windows separately by primary or secondary
+slot, duration, usage, and reset time, plus safe booleans for the threshold,
+rate-limit, and spend-control signals. These observations help identify which
+limit stopped work; they still observe a shared allowance and do not attribute
+usage to one model turn. Jobs do not follow a moving `latest` release or update
+the CLI in place, and update pull requests are never auto-merged. Retain the
+previous pin for rollback. The weekly check performs no Codex model turn when
+no newer stable release exists.
 
 The updater uses a job-scoped `GITHUB_TOKEN` with only the permissions needed
 to create the release-specific Task issue, push its issue-linked branch, open
