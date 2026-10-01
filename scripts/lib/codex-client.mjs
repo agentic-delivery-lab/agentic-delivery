@@ -86,8 +86,12 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
 
 export function verifyModels(models) {
   for (const { model, effort } of Object.values(MODELS)) {
-    const match = models.find((item) => (item.model ?? item.id) === model);
-    if (!match?.supportedReasoningEfforts?.some((item) => item.reasoningEffort === effort)) {
+    // Check every exact model-list identifier; a first match may not carry all advertised efforts.
+    const matchingEntries = models.filter((item) => item.model === model || item.id === model);
+    const effortAvailable = matchingEntries.some((entry) => (
+      entry.supportedReasoningEfforts?.some((option) => option.reasoningEffort === effort)
+    ));
+    if (!effortAvailable) {
       throw new Error(`Codex must support ${model} with ${effort} effort; no fallback is allowed.`);
     }
   }

@@ -42,12 +42,13 @@ test('refuses model execution when credit spillover is possible or unknown', () 
 
 test('requires the exact requested models and reasoning efforts', () => {
   const models = [
-    {id:'gpt-6-sol', supportedReasoningEfforts:[{reasoningEffort:'high'}]},
-    {id:'gpt-6-luna', supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'medium'},{reasoningEffort:'max'}]},
+    {id:'gpt-6-sol', model:'gpt-6-sol', supportedReasoningEfforts:[{reasoningEffort:'high'}]},
+    {id:'gpt-6-luna', model:'gpt-6-luna', supportedReasoningEfforts:[{reasoningEffort:'medium'}]},
+    {id:'gpt-6-luna-catalog-entry', model:'gpt-6-luna', supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'max'}]},
   ];
   verifyModels(models);
   assert.throws(() => verifyModels(models.slice(0, 1)), /gpt-6-luna/);
-  models[1].supportedReasoningEfforts = [{reasoningEffort:'low'},{reasoningEffort:'medium'}];
+  models[2].supportedReasoningEfforts = [{reasoningEffort:'low'}];
   assert.throws(() => verifyModels(models), /max/);
 });
 
