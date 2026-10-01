@@ -152,6 +152,40 @@ const QUOTA_REASON_CODE_SET = new Set(QUOTA_REASON_CODES);
 const QUOTA_TRIGGER_CODE_SET = new Set(QUOTA_TRIGGER_CODES);
 const MAX_PULL_REQUEST_BODY_LENGTH = 10_000;
 
+async function currentPullRequestDescription({ repository, pullNumber, fetchImpl = fetch }) {
+  const unavailable = (reason) => ({ status: 'unavailable', reason, title: null, body: null, bodyTruncated: false });
+  const number = Number(pullNumber);
+  const [owner, name] = typeof repository === 'string' ? repository.split('/') : [];
+  if (!owner || !name || !/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(name)
+    || !Number.isSafeInteger(number) || number < 1) {
+    return unavailable('The current pull request could not be identified from the review event.');
+  }
+  const token = process.env.GH_TOKEN;
+  if (!token) return unavailable('The read-only GitHub token is unavailable, so current pull-request text could not be verified.');
+  try {
+    const response = await fetchImpl(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/pulls/${number}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2026-03-10',
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) return unavailable(`The current pull request could not be read (GitHub returned ${response.status}).`);
+    const value = await response.json();
+    if (!value || Number(value.number) !== number) return unavailable('GitHub returned a different pull request than the review event identified.');
+    const rawBody = typeof value.body === 'string' ? value.body : '';
+    return {
+      status: 'current',
+      title: safeIssueText(value.title).slice(0, 500),
+      body: value.body == null ? null : safeIssueText(rawBody).slice(0, MAX_PULL_REQUEST_BODY_LENGTH),
+      bodyTruncated: rawBody.length > MAX_PULL_REQUEST_BODY_LENGTH,
+    };
+  } catch {
+    return unavailable('The current pull request could not be refreshed from GitHub.');
+  }
+}
+
 export function projectQuotaDiagnostics(budget, stopPhase) {
   const diagnostics = budget?.diagnostics;
   const reasonCode = QUOTA_REASON_CODE_SET.has(budget?.reasonCode) ? budget.reasonCode
@@ -245,7 +279,7 @@ export function parseSemanticOutcome(text) {
   };
 }
 
-export async function runSemanticReview({ repositoryRoot, review, eventPath, createClient, runTurnImpl } = {}) {
+export async function runSemanticReview({ repositoryRoot, review, eventPath, createClient, runTurnImpl, fetchImpl = fetch } = {}) {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-architecture-review-'));
   const bundle = path.join(temporary, 'review-bundle.md');
   const runtime = path.join(temporary, 'runtime');
@@ -258,16 +292,12 @@ export async function runSemanticReview({ repositoryRoot, review, eventPath, cre
     const serviceAuth = path.join(process.env.CODEX_AUTH_HOME || '/var/lib/github-runner/.codex', 'auth.json');
     try { await symlink(serviceAuth, authBridge); } catch {}
     const event = eventPath ? JSON.parse(await readFile(eventPath, 'utf8')) : {};
-    const rawPullRequestBody = String(event.pull_request?.body ?? '');
-    const body = rawPullRequestBody.slice(0, 20_000);
-    const evidence = parseEvidenceMarker(body);
-    const pullRequestDescription = {
-      title: safeIssueText(event.pull_request?.title).slice(0, 500),
-      body: event.pull_request?.body == null
-        ? null
-        : safeIssueText(rawPullRequestBody).slice(0, MAX_PULL_REQUEST_BODY_LENGTH),
-      bodyTruncated: rawPullRequestBody.length > MAX_PULL_REQUEST_BODY_LENGTH,
-    };
+    const pullRequestDescription = await currentPullRequestDescription({
+      repository: event.repository?.full_name ?? review.repository,
+      pullNumber: event.pull_request?.number,
+      fetchImpl,
+    });
+    const evidence = parseEvidenceMarker(pullRequestDescription.body?.slice(0, 20_000) ?? '');
     const affectedAdrs = review.affectedAdrs ?? [];
     const [baseAdr, headAdr, baseRecords, headRecords, basePrimitives, headPrimitives, domain, map, schema, quotaSchema, diffText, state, traceability] = await Promise.all([
       revisionFile(repositoryRoot, review.base, 'docs/decisions/README.md'),

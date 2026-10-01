@@ -209,13 +209,22 @@ test('semantic execution reports quota and structured findings without becoming 
   const eventDirectory = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-review-event-'));
   t.after(() => rm(eventDirectory, { recursive: true, force: true }));
   const eventPath = path.join(eventDirectory, 'event.json');
+  const currentPullRequestBody = `## Plan\nKeep the review read-only.\n\nAuthorization=fixture-secret\n\n<!-- codex-delivery-evidence:v1\n{\n  "access_token":\n    "fixture marker secret with spaces"\n}\n-->\n${'x'.repeat(10_050)}`;
   await writeFile(eventPath, JSON.stringify({
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery' },
     issue: { body: 'Source issue evidence.' },
     pull_request: {
-      title: 'fix(review): preserve evidence',
-      body: `## Plan\nKeep the review read-only.\n\nAuthorization=fixture-secret\n\n<!-- codex-delivery-evidence:v1\n{\n  "access_token":\n    "fixture marker secret with spaces"\n}\n-->\n${'x'.repeat(10_050)}`,
+      number: 25,
+      title: 'stale event title',
+      body: 'stale event body',
     },
   }));
+  const previousGithubToken = process.env.GH_TOKEN;
+  process.env.GH_TOKEN = 'fixture-github-token';
+  t.after(() => {
+    if (previousGithubToken === undefined) delete process.env.GH_TOKEN;
+    else process.env.GH_TOKEN = previousGithubToken;
+  });
   const unavailable = await runSemanticReview({
     repositoryRoot,
     review,
@@ -228,6 +237,16 @@ test('semantic execution reports quota and structured findings without becoming 
     repositoryRoot,
     review,
     eventPath,
+    fetchImpl: async (url, options) => {
+      assert.equal(url, 'https://api.github.com/repos/agentic-delivery-lab/agentic-delivery/pulls/25');
+      assert.equal(options.headers.Authorization, 'Bearer fixture-github-token');
+      assert.equal(options.headers.Accept, 'application/vnd.github+json');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ number: 25, title: 'fix(review): preserve evidence', body: currentPullRequestBody }),
+      };
+    },
     createClient: ({ readableFiles }) => {
       [bundlePath] = readableFiles;
       return {
@@ -248,11 +267,13 @@ test('semantic execution reports quota and structured findings without becoming 
   const pullRequestDescription = bundleText.split('## Pull-request description\n\n')[1]?.split('\n\n## Pull-request evidence marker')[0];
   assert.ok(pullRequestDescription);
   const projectedDescription = JSON.parse(pullRequestDescription);
+  assert.equal(projectedDescription.status, 'current');
   assert.equal(projectedDescription.title, 'fix(review): preserve evidence');
   assert.match(projectedDescription.body, /Keep the review read-only\./);
   assert.match(projectedDescription.body, /Authorization=\[redacted\]/);
   assert.equal(projectedDescription.body.length, 10_000);
   assert.equal(projectedDescription.bodyTruncated, true);
+  assert.doesNotMatch(bundleText, /stale event title|stale event body/);
   assert.doesNotMatch(bundleText, /fixture secret with spaces|fixture marker secret with spaces/);
   assert.match(bundleText, /Head internal quota diagnostics schema/);
 
