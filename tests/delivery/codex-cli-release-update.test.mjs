@@ -5,7 +5,9 @@ import { test } from 'node:test';
 
 import {
   checkedRelease,
+  codexSmokeRunIdentityMatches,
   adrQualityWorkflowAppliesToFiles,
+  dispatchAndWaitForCodexSmoke,
   listCheckRuns,
   listPullRequests,
   reviewCheckReadiness,
@@ -345,8 +347,86 @@ test('release source issue discovery paginates and fails closed on incomplete or
   }), /beyond the Search API limit/);
 });
 
+test('runner smoke dispatch waits for the exact returned codex=true workflow run', async () => {
+  const expectedSha = 'a'.repeat(40);
+  const runId = 81234567;
+  const calls = [];
+  const statuses = [
+    { id: runId, head_sha: expectedSha, event: 'workflow_dispatch', display_title: 'Self-hosted runner smoke (codex=true)', status: 'queued' },
+    { id: runId, head_sha: expectedSha, event: 'workflow_dispatch', display_title: 'Self-hosted runner smoke (codex=true)', status: 'in_progress' },
+    { id: runId, head_sha: expectedSha, event: 'workflow_dispatch', display_title: 'Self-hosted runner smoke (codex=true)', status: 'completed', conclusion: 'success' },
+  ];
+  const result = await dispatchAndWaitForCodexSmoke({
+    repository,
+    ref: 'chore/issue-742-update-codex-cli-0-159-4',
+    expectedSha,
+    token: 'test-token',
+    fetchImpl: async (url, options = {}) => {
+      calls.push({ url: String(url), options });
+      if (options.method === 'POST') {
+        assert.equal(JSON.parse(options.body).ref, 'chore/issue-742-update-codex-cli-0-159-4');
+        assert.deepEqual(JSON.parse(options.body).inputs, { codex: true });
+        return { ok: true, json: async () => ({ workflow_run_id: runId }) };
+      }
+      return { ok: true, status: 200, json: async () => statuses.shift() };
+    },
+    wait: async (milliseconds) => assert.equal(milliseconds, 15_000),
+  });
+
+  assert.equal(result.runId, runId);
+  assert.equal(result.runUrl, `https://github.com/${repository}/actions/runs/${runId}`);
+  assert.equal(calls.length, 4);
+  assert.equal(calls[0].url, `https://api.github.com/repos/${repository}/actions/workflows/self-hosted-runner-smoke.yml/dispatches`);
+  assert.ok(calls.slice(1).every((call) => call.url === `https://api.github.com/repos/${repository}/actions/runs/${runId}`));
+  assert.equal(codexSmokeRunIdentityMatches({
+    id: runId,
+    head_sha: expectedSha,
+    event: 'workflow_dispatch',
+    display_title: 'Self-hosted runner smoke (codex=true)',
+  }, { runId, expectedSha }), true);
+  assert.equal(codexSmokeRunIdentityMatches({
+    id: runId,
+    head_sha: expectedSha,
+    event: 'workflow_dispatch',
+    display_title: 'Self-hosted runner smoke (codex=false)',
+  }, { runId, expectedSha }), false);
+});
+
+test('runner smoke refuses a missing dispatch ID and rejects a mismatched run before semantic dispatch', async () => {
+  const expectedSha = 'b'.repeat(40);
+  const input = {
+    repository,
+    ref: 'chore/issue-742-update-codex-cli-0-159-4',
+    expectedSha,
+    token: 'test-token',
+    wait: async () => {},
+  };
+  await assert.rejects(dispatchAndWaitForCodexSmoke({
+    ...input,
+    fetchImpl: async () => ({ ok: true, json: async () => ({}) }),
+  }), /workflow_run_id/);
+  await assert.rejects(dispatchAndWaitForCodexSmoke({
+    ...input,
+    fetchImpl: async (_url, options = {}) => options.method === 'POST'
+      ? { ok: true, json: async () => ({ workflow_run_id: 81234568 }) }
+      : {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 81234568,
+          head_sha: expectedSha,
+          event: 'workflow_dispatch',
+          display_title: 'Self-hosted runner smoke (codex=false)',
+          status: 'completed',
+          conclusion: 'success',
+        }),
+      },
+  }), /did not match its dispatch ID, exact head, workflow_dispatch event, and codex=true title/);
+});
+
 test('the updater uses a restricted App token for PR events and dispatches runner review after smoke', async () => {
   const workflow = await readFile(new URL('../../.github/workflows/codex-cli-release-update.yml', import.meta.url), 'utf8');
+  const smokeWorkflow = await readFile(new URL('../../.github/workflows/self-hosted-runner-smoke.yml', import.meta.url), 'utf8');
   assert.match(workflow, /issues:\s*write/);
   assert.match(workflow, /actions\/create-github-app-token@[a-f0-9]{40} # v3/);
   assert.match(workflow, /permission-contents: read/);
@@ -365,6 +445,9 @@ test('the updater uses a restricted App token for PR events and dispatches runne
   assert.match(workflow, /Harness semantic review starts only after that smoke passes/);
   assert.match(workflow, /Wait for exact-head deterministic checks/);
   assert.match(workflow, /steps\.static\.outputs\.checks_ready == 'true'/);
+  assert.match(workflow, /--smoke-preflight/);
+  assert.doesNotMatch(workflow, /gh run list .*self-hosted-runner-smoke/);
+  assert.match(smokeWorkflow, /run-name: Self-hosted runner smoke \(codex=\$\{\{ inputs\.codex \}\}\)/);
   assert.doesNotMatch(workflow, /Repository Actions setting must permit this workflow token/);
   assert.doesNotMatch(workflow, /branch:start chore 70/);
 });

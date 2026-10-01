@@ -43,7 +43,11 @@ they do not authorize migration, alter that issue's scope, or close it.
   PR checks start automatically. The updater waits for exact-head body,
   quality, portability, and applicable ADR-quality checks before dispatching
   the no-generation runner smoke, then starts Harness only after that smoke
-  passes. The updater paginates the pull-request list and exact-head check-run
+  passes. It validates the exact smoke workflow run ID, head SHA, dispatch
+  event, and `codex=true` run name. A base-revision classifier verifies that
+  only a fully matching updater PR and source Task can delay automatic Harness
+  review; mismatches and unavailable evidence run normal review. The updater
+  paginates the pull-request list and exact-head check-run
   evidence and stops on incomplete results. It paginates the release Task
   search and refuses to create an issue when search results are incomplete or
   exceed the GitHub Search API limit. Only an internal bot-authored update PR

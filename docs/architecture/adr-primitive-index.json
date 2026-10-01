@@ -128,6 +128,7 @@
       "primitives": [
         "codex-cli-release-update-workflow",
         "codex-cli-release-updater",
+        "codex-cli-updater-review-classifier",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "pull-request-check-readiness",
@@ -145,6 +146,7 @@
         "semantic"
       ],
       "primitives": [
+        "codex-cli-updater-review-classifier",
         "harness-architecture-review",
         "pull-request-check-readiness",
         "semantic-architecture-review"
@@ -373,6 +375,7 @@
         "changelog-structure-validator",
         "codex-cli-release-update-workflow",
         "codex-cli-release-updater",
+        "codex-cli-updater-review-classifier",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "commit-format-validator",
@@ -513,6 +516,20 @@
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0009"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "codex-cli-updater-review-classifier",
+      "path": "scripts/classify-codex-cli-updater-review.mjs",
+      "location": "scripts/classify-codex-cli-updater-review.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
       ],
       "domains": [
         "agentic-delivery-governance"

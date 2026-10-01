@@ -144,10 +144,16 @@ smoke with `GITHUB_TOKEN` only after the exact-head body, delivery-quality,
 portability, and applicable ADR checks pass. It dispatches Harness only after
 that smoke passes, and skips both runner dispatches if a deterministic check
 fails.
-The Harness workflow skips its automatic pull-request event only for an
-internal, bot-authored release update PR whose issue-linked update branch,
-Conventional Commit title, and versioned updater marker all match. The marker
-alone cannot suppress review on a human-authored PR. A manual retry may
+The Harness workflow skips its automatic pull-request event only after a
+GitHub-hosted classifier checks trusted base-revision code and verifies that an
+internal PR from the registered updater App has a `main` base, issue-linked
+branch, exact Conventional Commit title, matching version marker, exact source
+issue closing line, and linked release Task title, marker, release URL, and
+repository URL for the same version. A mismatch or unavailable evidence runs
+normal Harness review; forks stay outside the self-hosted runner boundary, and
+manual review dispatch always runs. The updater captures the smoke dispatch's
+returned `workflow_run_id` and requires its exact head, event, `codex=true` run
+name, and successful conclusion before dispatching Harness. A manual retry may
 redispatch the static checks for an existing release PR.
 
 The generated pull-request description records the release digest as complete

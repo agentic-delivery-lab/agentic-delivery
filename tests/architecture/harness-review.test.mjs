@@ -87,6 +87,7 @@ test('the current architecture map covers the official ADR set and emits a conci
   const reviewMap = await readFile(path.join(repositoryRoot, 'docs/architecture/harness-review.yml'), 'utf8');
   assert.match(reviewMap, /id: codex-cli-maintenance/);
   assert.match(reviewMap, /scripts\/codex-cli-release-update\.mjs/);
+  assert.match(reviewMap, /scripts\/classify-codex-cli-updater-review\.mjs/);
   assert.match(reviewMap, /id: agent-invocation/);
   assert.match(formatReviewMarkdown(review), /Harness Architecture Review/);
   assert.match(formatReviewMarkdown(review), /adr-map-coverage/);
@@ -644,12 +645,15 @@ test('the baseline report contains one required matrix row for every official AD
 
 test('architecture-review workflow is pinned, read-only, resumable, and does not publish comments', async () => {
   const workflow = await readFile(path.join(repositoryRoot, '.github/workflows/harness-architecture-review.yml'), 'utf8');
-  for (const phrase of ['pull_request:', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', 'CODEX_REVIEW_STATE_DIR: /var/lib/github-runner/.codex/harness-reviews', 'codex-cli-release-update:v1:', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
+  for (const phrase of ['pull_request:', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', 'CODEX_REVIEW_STATE_DIR: /var/lib/github-runner/.codex/harness-reviews', 'classify-codex-cli-updater-review.mjs', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
     assert.ok(workflow.includes(phrase), `missing workflow control: ${phrase}`);
   }
-  assert.match(workflow, /pull_request\.user\.login != 'agentic-delivery-lab-invoker-7f3a\[bot\]'/);
-  assert.match(workflow, /head\.ref, 'chore\/issue-'/);
-  assert.match(workflow, /pull_request\.title/);
+  assert.match(workflow, /needs: classify_updater/);
+  assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
+  assert.match(workflow, /needs\.classify_updater\.result != 'success'/);
+  assert.match(workflow, /needs\.classify_updater\.outputs\.suppress_review != 'true'/);
+  assert.match(workflow, /ordinary Harness review/);
+  assert.doesNotMatch(workflow, /pull_request\.user\.login != 'agentic-delivery-lab-invoker-7f3a\[bot\]'/);
   assert.doesNotMatch(workflow, /issues:\s*write|pull-requests:\s*write|contents:\s*write/);
   assert.doesNotMatch(workflow, /gh issue comment|curl .*comments|pulls\/.*PATCH/);
 });

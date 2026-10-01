@@ -23,20 +23,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  classify_updater:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      suppress_review: ${{ steps.classify.outputs.suppress_review }}
+    steps:
+      - name: Check out the trusted base revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Verify the Codex CLI updater pull request
+        id: classify
+        env:
+          EVENT_PATH: ${{ github.event_path }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/classify-codex-cli-updater-review.mjs
+
   review:
-    # This repository already limits checked-in code on the dedicated runner
-    # to internal pull requests. Forks remain outside this trust boundary.
-    # The trusted delivery App's updater PRs are reviewed only after the
-    # explicit no-generation smoke succeeds; unrelated bot-authored PRs remain
-    # subject to the ordinary Harness review.
+    needs: classify_updater
+    # Fork PRs remain outside the dedicated-runner trust boundary. The updater
+    # classifier runs from base and suppresses only a fully verified release
+    # PR; classifier errors and mismatches run ordinary Harness review.
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.pull_request.head.repo.full_name == github.repository &&
-      (github.event.pull_request.user.login != 'agentic-delivery-lab-invoker-7f3a[bot]' ||
-      !startsWith(github.event.pull_request.head.ref, 'chore/issue-') ||
-      !contains(github.event.pull_request.head.ref, '-update-codex-cli-') ||
-      !startsWith(github.event.pull_request.title, 'chore(delivery): 🔧 update pinned Codex CLI to ') ||
-      !contains(github.event.pull_request.body, '<!-- codex-cli-release-update:v1:')))
+      always() &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.base.repo.full_name == github.repository &&
+          (
+            needs.classify_updater.result != 'success' ||
+            needs.classify_updater.outputs.suppress_review != 'true'
+          )
+        )
+      )
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 30
     env:

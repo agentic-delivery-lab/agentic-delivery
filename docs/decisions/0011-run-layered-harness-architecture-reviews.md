@@ -138,13 +138,22 @@ the same matcher, including `CHANGELOG.md`, so a dependent runner operation
 cannot start before an applicable ADR check finishes.
 
 The weekly CLI updater uses a versioned PR-body marker to delay its semantic
-review until the candidate runner smoke passes. That marker does not authorize
-the skip: the automatic Harness event is suppressed only when the pull request
-is internal, authored by the registered delivery App bot
-`agentic-delivery-lab-invoker-7f3a[bot]`, and has the expected issue-linked CLI
-update branch and title as well as the marker. Other bot-authored PRs still run
-Harness, and a human-authored PR cannot suppress review by copying the marker
-into its body.
+review until the candidate runner smoke passes. A GitHub-hosted classifier
+checks out only the pull request's trusted base revision and verifies the
+internal registered App author, `main` base, issue-linked CLI update branch,
+exact conventional title, matching version marker, exact `Closes #N` source
+line, and the linked repository issue's Task title, marker, release URL, and
+repository URL. It suppresses the automatic Harness event only when all values
+identify the same release Task and version. Any mismatch, lookup failure, or
+classifier failure runs normal Harness review; forks remain outside the
+self-hosted runner boundary. Manual Harness dispatch always runs review.
+
+The updater captures the `workflow_run_id` returned when it dispatches the
+candidate smoke. It polls only that run and requires its ID, head SHA,
+`workflow_dispatch` event, visible `codex=true` run name, and successful
+conclusion to match before dispatching Harness. An unrelated smoke run for the
+same commit, a default `codex=false` run, or incomplete API evidence cannot
+release the review gate.
 
 The repository has one persistent self-hosted runner for Codex and Harness.
 The delivery-quality `quality` job, ADR validation, and portability matrix run

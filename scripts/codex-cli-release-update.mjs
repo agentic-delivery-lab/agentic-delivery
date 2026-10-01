@@ -20,6 +20,7 @@ const MAX_GITHUB_API_PAGES = 30;
 const MAX_GITHUB_SEARCH_RESULTS = 1_000;
 const MAX_GITHUB_SEARCH_PAGES = Math.ceil(MAX_GITHUB_SEARCH_RESULTS / GITHUB_PAGE_SIZE);
 const UPDATE_BRANCH = /^chore\/issue-([1-9][0-9]*)-update-codex-cli-(0|[1-9][0-9]*)-(0|[1-9][0-9]*)-(0|[1-9][0-9]*)$/;
+const CODEX_SMOKE_RUN_TITLE = 'Self-hosted runner smoke (codex=true)';
 
 function versionTuple(version) {
   const match = String(version).match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
@@ -75,6 +76,91 @@ async function fetchJson(url, token, fetchImpl) {
   });
   if (!response.ok) throw new Error(`Codex release metadata request failed (HTTP ${response.status}).`);
   return response.json();
+}
+
+export function codexSmokeRunIdentityMatches(run, { runId, expectedSha } = {}) {
+  return Number.isSafeInteger(runId)
+    && Number.isSafeInteger(run?.id)
+    && run.id === runId
+    && run.head_sha === expectedSha
+    && run.event === 'workflow_dispatch'
+    && run.display_title === CODEX_SMOKE_RUN_TITLE;
+}
+
+export async function dispatchAndWaitForCodexSmoke({
+  repository,
+  ref,
+  expectedSha,
+  token,
+  fetchImpl = globalThis.fetch,
+  wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  maxAttempts = 240,
+  intervalMs = 15_000,
+} = {}) {
+  const branchMatch = UPDATE_BRANCH.exec(String(ref ?? ''));
+  if (!token || !/^[\w.-]+\/[\w.-]+$/.test(repository ?? '')
+    || !branchMatch || !/^[0-9a-f]{40}$/.test(expectedSha ?? '')
+    || !Number.isSafeInteger(maxAttempts) || maxAttempts < 1
+    || !Number.isSafeInteger(intervalMs) || intervalMs < 0) {
+    throw new Error('A verified updater branch, exact pull-request head, repository, and GH_TOKEN are required for Codex runner smoke.');
+  }
+
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2026-03-10',
+    Authorization: `Bearer ${token}`,
+  };
+  const workflowPath = `https://api.github.com/repos/${repository}/actions/workflows/self-hosted-runner-smoke.yml/dispatches`;
+  const dispatchResponse = await fetchImpl(workflowPath, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ref, inputs: { codex: true } }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!dispatchResponse.ok) throw new Error(`Codex runner smoke dispatch failed (HTTP ${dispatchResponse.status}).`);
+
+  let dispatch;
+  try { dispatch = await dispatchResponse.json(); } catch {
+    throw new Error('Codex runner smoke dispatch did not return its exact workflow run ID.');
+  }
+  const runId = dispatch?.workflow_run_id;
+  if (!Number.isSafeInteger(runId) || runId < 1) {
+    throw new Error('Codex runner smoke dispatch did not return a valid workflow_run_id; Harness was not dispatched.');
+  }
+  await appendOutput('run_id', String(runId));
+
+  const runUrl = `https://api.github.com/repos/${repository}/actions/runs/${runId}`;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const response = await fetchImpl(runUrl, {
+      headers,
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (response.status === 404) {
+      await wait(intervalMs);
+      continue;
+    }
+    if (!response.ok) throw new Error(`Codex runner smoke run ${runId} lookup failed (HTTP ${response.status}).`);
+
+    let run;
+    try { run = await response.json(); } catch {
+      throw new Error(`Codex runner smoke run ${runId} returned invalid JSON; Harness was not dispatched.`);
+    }
+    if (!codexSmokeRunIdentityMatches(run, { runId, expectedSha })) {
+      throw new Error(`Codex runner smoke run ${runId} did not match its dispatch ID, exact head, workflow_dispatch event, and codex=true title; Harness was not dispatched.`);
+    }
+    if (run.status === 'completed') {
+      if (run.conclusion !== 'success') {
+        throw new Error(`Codex runner smoke failed: https://github.com/${repository}/actions/runs/${runId}; Harness was not dispatched.`);
+      }
+      process.stdout.write(`Codex=true runner smoke passed for ${expectedSha}: https://github.com/${repository}/actions/runs/${runId}\n`);
+      return { runId, runUrl: `https://github.com/${repository}/actions/runs/${runId}` };
+    }
+    if (!['queued', 'in_progress', 'requested', 'waiting', 'pending'].includes(run.status)) {
+      throw new Error(`Codex runner smoke run ${runId} has unexpected status ${String(run.status)}; Harness was not dispatched.`);
+    }
+    await wait(intervalMs);
+  }
+  throw new Error(`Timed out waiting for exact Codex=true runner smoke run ${runId}; Harness was not dispatched.`);
 }
 
 export async function listPullRequests(repository, token, fetchImpl = globalThis.fetch) {
@@ -497,6 +583,15 @@ async function waitForPullRequestChecks() {
   throw new Error(`Timed out waiting for exact-head pull-request checks on #${number}; no runner smoke or semantic review was dispatched.`);
 }
 
+async function runCodexSmokePreflight() {
+  await dispatchAndWaitForCodexSmoke({
+    repository: process.env.GITHUB_REPOSITORY,
+    ref: process.env.PR_BRANCH,
+    expectedSha: process.env.EXPECTED_SHA,
+    token: process.env.GH_TOKEN,
+  });
+}
+
 async function ensureSourceIssue(candidatePath) {
   const token = process.env.GH_TOKEN;
   const repository = process.env.GITHUB_REPOSITORY;
@@ -559,9 +654,10 @@ if (isMainModule) {
     if (process.argv[2] === '--check' && process.argv.length === 3) await checkRelease();
     else if (process.argv[2] === '--pending-pr' && process.argv.length === 3) await findPendingPullRequest();
     else if (process.argv[2] === '--wait-checks' && process.argv.length === 3) await waitForPullRequestChecks();
+    else if (process.argv[2] === '--smoke-preflight' && process.argv.length === 3) await runCodexSmokePreflight();
     else if (process.argv[2] === '--ensure-source-issue' && process.argv[3]) await ensureSourceIssue(process.argv[3]);
     else if (process.argv[2] === '--apply' && process.argv[3]) await applyRelease(process.argv[3]);
-    else throw new Error('Usage: codex-cli-release-update.mjs --check | --pending-pr | --wait-checks | --ensure-source-issue <candidate-json> | --apply <candidate-json>');
+    else throw new Error('Usage: codex-cli-release-update.mjs --check | --pending-pr | --wait-checks | --smoke-preflight | --ensure-source-issue <candidate-json> | --apply <candidate-json>');
   } catch (error) {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = 1;

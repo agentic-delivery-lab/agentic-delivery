@@ -214,45 +214,9 @@ jobs:
         if: steps.release.outputs.update == 'true' && steps.pending.outputs.rejected != 'true' && steps.static.outputs.checks_ready == 'true' && ((steps.pending.outputs.pending != 'true') || (steps.pending.outputs.pending == 'true' && steps.pending.outputs.reuse == 'true' && inputs.retry_open_pr))
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ steps.pending.outputs.number || steps.create-pr.outputs.number }}
           PR_BRANCH: ${{ steps.pending.outputs.branch || steps.create-pr.outputs.branch }}
           EXPECTED_SHA: ${{ steps.pending.outputs.head_sha || steps.push.outputs.head_sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          gh workflow run .github/workflows/self-hosted-runner-smoke.yml --repo "$GITHUB_REPOSITORY" --ref "$PR_BRANCH" -f codex=true
-          printf 'dispatched_at=%s\n' "$dispatched_at" >> "$GITHUB_OUTPUT"
-          found_run=''
-          for attempt in $(seq 1 240); do
-            runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow self-hosted-runner-smoke.yml --branch "$PR_BRANCH" --event workflow_dispatch --limit 20 --json databaseId,status,conclusion,createdAt,headSha)"
-            found_run="$(printf '%s' "$runs" | EXPECTED_SHA="$EXPECTED_SHA" DISPATCHED_AT="$dispatched_at" node --input-type=module -e '
-              let raw = "";
-              for await (const chunk of process.stdin) raw += chunk;
-              const runs = JSON.parse(raw);
-              const expectedSha = process.env.EXPECTED_SHA;
-              const dispatchedAt = Date.parse(process.env.DISPATCHED_AT);
-              const run = runs.find((item) => item.headSha === expectedSha && Date.parse(item.createdAt) >= dispatchedAt);
-              if (run) process.stdout.write(JSON.stringify(run));
-            ')
-            if [[ -n "$found_run" ]]; then
-              status="$(node --input-type=module -e 'let raw=""; for await (const chunk of process.stdin) raw+=chunk; process.stdout.write(JSON.parse(raw).status)' <<< "$found_run")"
-              if [[ "$status" == completed ]]; then
-                conclusion="$(node --input-type=module -e 'let raw=""; for await (const chunk of process.stdin) raw+=chunk; process.stdout.write(JSON.parse(raw).conclusion ?? "")' <<< "$found_run")"
-                run_id="$(node --input-type=module -e 'let raw=""; for await (const chunk of process.stdin) raw+=chunk; process.stdout.write(String(JSON.parse(raw).databaseId))' <<< "$found_run")"
-                printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
-                if [[ "$conclusion" != success ]]; then
-                  printf 'No-generation runner smoke failed: https://github.com/%s/actions/runs/%s\n' "$GITHUB_REPOSITORY" "$run_id" >&2
-                  exit 1
-                fi
-                printf 'No-generation runner smoke passed: https://github.com/%s/actions/runs/%s\n' "$GITHUB_REPOSITORY" "$run_id"
-                exit 0
-              fi
-            fi
-            sleep 15
-          done
-          echo 'Timed out waiting for the no-generation runner smoke workflow.' >&2
-          exit 1
+        run: node scripts/codex-cli-release-update.mjs --smoke-preflight
 
       - name: Dispatch Harness semantic review after preflight passes
         if: steps.release.outputs.update == 'true' && steps.pending.outputs.rejected != 'true' && steps.static.outputs.checks_ready == 'true' && ((steps.pending.outputs.pending != 'true') || (steps.pending.outputs.pending == 'true' && steps.pending.outputs.reuse == 'true' && inputs.retry_open_pr)) && steps.smoke.outcome == 'success'
