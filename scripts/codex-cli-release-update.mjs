@@ -1,14 +1,18 @@
 // agentic-primitive: {"id":"codex-cli-release-updater","kind":"script","enforcement":"deterministic","adrs":["ADR-0009"],"domains":["agentic-delivery-governance"]}
 import { createHash } from 'node:crypto';
-import { appendFile, readFile, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { appendFile, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 import { RELEASE } from './setup-runner-codex.mjs';
 
+const execFileAsync = promisify(execFile);
 const API_URL = 'https://api.github.com/repos/openai/codex/releases/latest';
 const ASSET_NAME = 'codex-package-x86_64-unknown-linux-musl.tar.gz';
 const MAX_ASSET_BYTES = 256 * 1024 * 1024;
+const UPDATE_BRANCH = /^chore\/issue-([1-9][0-9]*)-update-codex-cli-(0|[1-9][0-9]*)-(0|[1-9][0-9]*)-(0|[1-9][0-9]*)$/;
 
 function versionTuple(version) {
   const match = String(version).match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
@@ -25,7 +29,7 @@ function isNewer(candidate, current) {
   return false;
 }
 
-function checkedRelease(release, currentVersion) {
+export function checkedRelease(release, currentVersion = RELEASE.version) {
   if (!release || release.draft !== false || release.prerelease !== false) {
     throw new Error('The official Codex latest-release response is not a stable published release.');
   }
@@ -66,7 +70,7 @@ async function fetchJson(url, token, fetchImpl) {
   return response.json();
 }
 
-async function verifyDownload(candidate, fetchImpl) {
+export async function verifyDownload(candidate, fetchImpl = globalThis.fetch) {
   const response = await fetchImpl(candidate.url, { signal: AbortSignal.timeout(120_000), redirect: 'follow' });
   if (!response.ok) throw new Error(`Codex release asset download failed (HTTP ${response.status}).`);
   const finalHost = new URL(response.url).hostname;
@@ -85,6 +89,153 @@ async function appendOutput(name, value) {
   const outputPath = process.env.GITHUB_OUTPUT;
   if (!outputPath) return;
   await appendFile(outputPath, `${name}=${String(value)}\n`);
+}
+
+export function selectPendingUpdatePullRequest(pulls, repository, candidateSlug) {
+  const updates = (Array.isArray(pulls) ? pulls : []).filter((pullRequest) => {
+    const branch = String(pullRequest.head?.ref ?? '');
+    return pullRequest.base?.ref === 'main'
+      && pullRequest.base?.repo?.full_name === repository
+      && pullRequest.head?.repo?.full_name === repository
+      && UPDATE_BRANCH.test(branch);
+  });
+  const closedWithoutMerge = updates.filter((pullRequest) => pullRequest.state === 'closed' && !pullRequest.merged_at);
+  if (closedWithoutMerge.length) throw new Error('A Codex CLI update pull request was closed without merging; resolve that release decision before opening another update.');
+  const pending = updates.filter((pullRequest) => pullRequest.state === 'open');
+  if (pending.length > 1) throw new Error('More than one open Codex CLI update pull request exists; resolve the duplicates first.');
+  if (!pending.length) return null;
+  const pullRequest = pending[0];
+  const match = UPDATE_BRANCH.exec(pullRequest.head.ref);
+  const branchVersion = match.slice(2).join('-');
+  return {
+    pullRequest,
+    branch: pullRequest.head.ref,
+    issueNumber: match[1],
+    sameCandidate: branchVersion === candidateSlug,
+  };
+}
+
+function sourceIssueTitle(version) {
+  return `Task: Update pinned Codex CLI to ${version}`;
+}
+
+function sourceIssueMarker(version) {
+  return `<!-- codex-cli-release-update:v1:${version} -->`;
+}
+
+function sourceIssueBody(candidate, repository) {
+  const repositoryUrl = `${String(process.env.GITHUB_SERVER_URL ?? 'https://github.com').replace(/\/+$/, '')}/${repository}`;
+  return [
+    sourceIssueMarker(candidate.version),
+    '',
+    '## Requested outcome',
+    '',
+    `Promote Codex CLI ${candidate.version} to the central Actions runner pin after the exact candidate passes the no-generation runner checks and review.`,
+    '',
+    '## Context',
+    '',
+    `This release-specific task follows the ongoing runner maintenance policy in issue #70. The weekly updater verified the official release metadata and Linux x64 asset digest before opening this issue.`,
+    '',
+    '## Acceptance criteria',
+    '',
+    '- The pull request updates the single central CLI version, official asset URL, and SHA-256 digest.',
+    '- The exact candidate passes ChatGPT authentication, Plan mode, sandbox isolation, quota, and configured model-effort checks without a model turn before semantic review.',
+    '- Delivery-quality, ADR-quality, pull-request body, and Harness review checks are recorded on the exact pull-request head.',
+    '- The pull request remains open for human review and closes this release-specific issue only when merged.',
+    '',
+    '## Related work',
+    '',
+    `- Ongoing runner maintenance and model-profile policy: [issue #70](${repositoryUrl}/issues/70).`,
+    `- Official Codex release: [${candidate.version}](${candidate.releaseUrl}).`,
+    `- Verified Linux x64 asset SHA-256: \`${candidate.sha256}\`.`,
+  ].join('\n');
+}
+
+export async function resolveSourceIssue({
+  candidate,
+  repository,
+  token,
+  fetchImpl = globalThis.fetch,
+  createIssue,
+} = {}) {
+  if (!candidate || !/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !token) {
+    throw new Error('A verified candidate, repository, and GH_TOKEN are required to resolve the update source issue.');
+  }
+  const verified = checkedRelease({
+    draft: false,
+    prerelease: false,
+    tag_name: candidate.tag,
+    assets: [{
+      name: candidate.assetName,
+      browser_download_url: candidate.url,
+      digest: `sha256:${candidate.sha256}`,
+      size: candidate.assetSize,
+    }],
+  }, RELEASE.version);
+  if (!verified || verified.version !== candidate.version || verified.releaseUrl !== candidate.releaseUrl) {
+    throw new Error('The source issue candidate does not match a newer verified Codex release.');
+  }
+  candidate = verified;
+  const title = sourceIssueTitle(candidate.version);
+  const marker = sourceIssueMarker(candidate.version);
+  const query = new URLSearchParams({
+    q: `repo:${repository} is:issue is:open in:title "Update pinned Codex CLI to"`,
+    per_page: '100',
+  });
+  const search = await fetchJson(`https://api.github.com/search/issues?${query}`, token, fetchImpl);
+  const matches = (Array.isArray(search.items) ? search.items : []).filter((issue) => (
+    !issue.pull_request
+      && issue.state === 'open'
+      && /^Task: Update pinned Codex CLI to \d+\.\d+\.\d+$/.test(String(issue.title ?? ''))
+      && /<!-- codex-cli-release-update:v1:\d+\.\d+\.\d+ -->/.test(String(issue.body ?? ''))
+  ));
+  if (matches.length > 1) throw new Error('More than one open Codex CLI release source issue exists; resolve the duplicate or older task before starting another.');
+  if (matches.length === 1) {
+    const issue = matches[0];
+    const issueVersion = String(issue.body ?? '').match(/<!-- codex-cli-release-update:v1:(\d+\.\d+\.\d+) -->/)?.[1];
+    if (issueVersion !== candidate.version || issue.title !== title) {
+      throw new Error(`Open Codex CLI source issue #${issue.number} is for release ${issueVersion ?? 'unknown'}; resolve it before starting ${candidate.version}.`);
+    }
+    if (!Number.isSafeInteger(issue.number) || issue.number < 1
+      || issue.html_url !== `https://github.com/${repository}/issues/${issue.number}`) {
+      throw new Error('The matching Codex CLI update source issue has an invalid repository URL or number.');
+    }
+    return { number: issue.number, url: issue.html_url, title, created: false };
+  }
+
+  const body = sourceIssueBody(candidate, repository);
+  const create = createIssue ?? (async ({ issueTitle, issueBody }) => {
+    const temporaryDirectory = process.env.RUNNER_TEMP;
+    if (!temporaryDirectory) throw new Error('RUNNER_TEMP is required to create the Codex CLI update source issue.');
+    const bodyPath = path.join(temporaryDirectory, `codex-cli-update-issue-${candidate.version}.md`);
+    await writeFile(bodyPath, `${issueBody}\n`, { mode: 0o600 });
+    try {
+      const { stdout } = await execFileAsync('gh', [
+        'issue', 'create', '--repo', repository, '--title', issueTitle,
+        '--body-file', bodyPath, '--type', 'Task',
+      ], {
+        encoding: 'utf8',
+        windowsHide: true,
+        maxBuffer: 1_000_000,
+        env: { ...process.env, GH_TOKEN: token, GH_REPO: repository },
+      });
+      const url = stdout.trim().split(/\r?\n/).at(-1);
+      const prefix = `https://github.com/${repository}/issues/`;
+      const issueNumber = url?.startsWith(prefix) ? url.slice(prefix.length) : '';
+      if (!/^[1-9][0-9]*$/.test(issueNumber)) throw new Error('GitHub CLI did not return the created source issue URL.');
+      return { number: Number(issueNumber), url };
+    } catch {
+      throw new Error(`Could not create the Codex CLI ${candidate.version} source issue as a Task.`);
+    } finally {
+      await unlink(bodyPath).catch(() => {});
+    }
+  });
+  const created = await create({ repository, issueTitle: title, issueBody: body, token });
+  if (!Number.isSafeInteger(created?.number) || created.number < 1
+    || created.url !== `https://github.com/${repository}/issues/${created.number}`) {
+    throw new Error('The newly created Codex CLI update source issue has an invalid repository URL or number.');
+  }
+  return { number: created.number, url: created.url, title, created: true };
 }
 
 async function checkRelease() {
@@ -112,32 +263,35 @@ async function findPendingPullRequest() {
   const repository = process.env.GITHUB_REPOSITORY;
   const candidateSlug = process.env.CODEX_RELEASE_SLUG;
   if (!token || !repository || !candidateSlug) throw new Error('GH_TOKEN, GITHUB_REPOSITORY, and CODEX_RELEASE_SLUG are required.');
-  const pulls = await fetchJson(`https://api.github.com/repos/${repository}/pulls?state=open&per_page=100`, token, globalThis.fetch);
-  const prefix = 'chore/issue-70-update-codex-cli-';
-  const pending = (Array.isArray(pulls) ? pulls : []).filter((pullRequest) => (
-    pullRequest.base?.ref === 'main'
-      && pullRequest.base?.repo?.full_name === repository
-      && pullRequest.head?.repo?.full_name === repository
-      && String(pullRequest.head?.ref ?? '').startsWith(prefix)
-  ));
-  if (pending.length > 1) throw new Error('More than one open Codex CLI update pull request exists; resolve the duplicates first.');
-  if (!pending.length) {
+  const pulls = await fetchJson(`https://api.github.com/repos/${repository}/pulls?state=all&per_page=100`, token, globalThis.fetch);
+  const pending = selectPendingUpdatePullRequest(pulls, repository, candidateSlug);
+  if (!pending) {
     await appendOutput('pending', 'false');
     process.stdout.write('No open Codex CLI update pull request exists.\n');
     return;
   }
 
-  const pullRequest = pending[0];
-  const branch = pullRequest.head.ref;
-  const sameCandidate = branch === `${prefix}${candidateSlug}`;
   await appendOutput('pending', 'true');
-  await appendOutput('reuse', String(sameCandidate));
-  await appendOutput('branch', branch);
-  await appendOutput('number', String(pullRequest.number));
-  await appendOutput('head_sha', pullRequest.head.sha);
-  process.stdout.write(sameCandidate
-    ? `Codex CLI update pull request #${pullRequest.number} is already open; no duplicate was created.\n`
-    : `Codex CLI update pull request #${pullRequest.number} for an earlier release is still open; resolve it before opening another.\n`);
+  await appendOutput('reuse', String(pending.sameCandidate));
+  await appendOutput('branch', pending.branch);
+  await appendOutput('number', String(pending.pullRequest.number));
+  await appendOutput('issue_number', pending.issueNumber);
+  await appendOutput('head_sha', pending.pullRequest.head.sha);
+  process.stdout.write(pending.sameCandidate
+    ? `Codex CLI update pull request #${pending.pullRequest.number} is already open; no duplicate was created.\n`
+    : `Codex CLI update pull request #${pending.pullRequest.number} for an earlier release is still open; resolve it before opening another.\n`);
+}
+
+async function ensureSourceIssue(candidatePath) {
+  const token = process.env.GH_TOKEN;
+  const repository = process.env.GITHUB_REPOSITORY;
+  const candidate = JSON.parse(await readFile(candidatePath, 'utf8'));
+  const issue = await resolveSourceIssue({ candidate, repository, token });
+  await appendOutput('issue_number', String(issue.number));
+  await appendOutput('issue_url', issue.url);
+  process.stdout.write(issue.created
+    ? `Created Task source issue #${issue.number} for Codex CLI ${candidate.version}.\n`
+    : `Reusing open Task source issue #${issue.number} for Codex CLI ${candidate.version}.\n`);
 }
 
 async function applyRelease(candidatePath) {
@@ -189,8 +343,9 @@ if (isMainModule) {
   try {
     if (process.argv[2] === '--check' && process.argv.length === 3) await checkRelease();
     else if (process.argv[2] === '--pending-pr' && process.argv.length === 3) await findPendingPullRequest();
+    else if (process.argv[2] === '--ensure-source-issue' && process.argv[3]) await ensureSourceIssue(process.argv[3]);
     else if (process.argv[2] === '--apply' && process.argv[3]) await applyRelease(process.argv[3]);
-    else throw new Error('Usage: codex-cli-release-update.mjs --check | --pending-pr | --apply <candidate-json>');
+    else throw new Error('Usage: codex-cli-release-update.mjs --check | --pending-pr | --ensure-source-issue <candidate-json> | --apply <candidate-json>');
   } catch (error) {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = 1;

@@ -16,7 +16,7 @@ on:
 permissions:
   actions: write
   contents: write
-  issues: read
+  issues: write
   pull-requests: write
 
 concurrency:
@@ -56,11 +56,22 @@ jobs:
           CODEX_RELEASE_SLUG: ${{ steps.release.outputs.slug }}
         run: node scripts/codex-cli-release-update.mjs --pending-pr
 
+      - name: Create or reuse a release-specific source issue
+        id: source
+        if: steps.release.outputs.update == 'true' && steps.pending.outputs.pending != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CODEX_RELEASE_CANDIDATE_PATH: ${{ runner.temp }}/codex-release-candidate.json
+        run: node scripts/codex-cli-release-update.mjs --ensure-source-issue "$CODEX_RELEASE_CANDIDATE_PATH"
+
       - name: Create an issue-linked branch
         if: steps.release.outputs.update == 'true' && steps.pending.outputs.pending != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: pnpm branch:start chore 70 update-codex-cli-${{ steps.release.outputs.slug }}
+          SOURCE_ISSUE: ${{ steps.source.outputs.issue_number }}
+          CODEX_RELEASE_SLUG: ${{ steps.release.outputs.slug }}
+        run: pnpm branch:start chore "$SOURCE_ISSUE" "update-codex-cli-$CODEX_RELEASE_SLUG"
 
       - name: Apply the verified central pin and changelog entry
         if: steps.release.outputs.update == 'true' && steps.pending.outputs.pending != 'true'
@@ -93,6 +104,8 @@ jobs:
           CODEX_VERSION: ${{ steps.release.outputs.version }}
           CODEX_RELEASE_URL: https://github.com/openai/codex/releases/tag/rust-v${{ steps.release.outputs.version }}
           CODEX_ASSET_SHA256: ${{ steps.release.outputs.sha256 }}
+          PR_SOURCE_ISSUE: ${{ steps.source.outputs.issue_number }}
+          PR_SOURCE_ISSUE_URL: ${{ steps.source.outputs.issue_url }}
           PR_BRANCH: ${{ steps.push.outputs.branch }}
           PR_TITLE: "chore(delivery): 🔧 update pinned Codex CLI to ${{ steps.release.outputs.version }}"
         shell: bash
@@ -107,7 +120,8 @@ jobs:
 
           ## Source
 
-          - Source issue: Refs #70 — [Reduce Codex allowance use and maintain runner CLI](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70)
+          - Source issue: Closes #$PR_SOURCE_ISSUE — [Task: Update pinned Codex CLI to $CODEX_VERSION]($PR_SOURCE_ISSUE_URL)
+          - Ongoing policy: Refs #70 — [Reduce Codex allowance use and maintain runner CLI](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70)
 
           ## Plan
 
@@ -121,9 +135,9 @@ jobs:
 
           ## Verification
 
-          - The weekly updater downloaded the official release asset and reproduced its published SHA-256 digest before opening this PR.
-          - The no-generation runner smoke check is dispatched for this exact PR head. It must verify ChatGPT authentication, Plan mode, sandbox isolation, and every configured model-effort pair before the separate semantic review is dispatched.
-          - Delivery-quality, ADR-quality, and pull-request body checks are explicitly dispatched because GitHub suppresses ordinary PR-triggered workflows for PRs created with `GITHUB_TOKEN`.
+          - Before opening this PR, the updater downloaded the official release asset and reproduced its published size and SHA-256 digest. This verifies the release artifact only; it does not verify the candidate on the Actions runner.
+          - At PR creation, the no-generation runner smoke, delivery-quality, ADR-quality, and pull-request body results are pending. The updater dispatches those checks against this exact PR head because GitHub suppresses ordinary PR-triggered workflows for PRs created with `GITHUB_TOKEN`.
+          - Harness semantic review is dispatched only after the no-generation runner smoke passes. Do not treat any post-creation check as complete until its result appears on this PR.
 
           ## Evidence
 
@@ -137,7 +151,7 @@ jobs:
           - Breaking changes and compatibility: The installed CLI version changes for future Actions jobs after merge; no external API or persisted state changes.
           - Deployment or migration: None. The exact candidate is checked in the dedicated runner before semantic review.
           - Rollback: Revert this pull request to restore the previous version, URL, and digest.
-          - Dependencies and follow-up work: Review dispatched checks and the semantic Harness result before merge.
+          - Dependencies and follow-up work: Review every dispatched check and the semantic Harness result before merge; merge closes this release-specific source issue while #70 continues to track the policy.
 
           ## Review guidance
 
@@ -147,12 +161,10 @@ jobs:
 
           ## Author checklist
 
-          - [x] I reviewed my own diff and removed accidental or unrelated changes.
-          - [x] The source issue, implementation plan, and any deviations are recorded above.
-          - [x] Verification evidence is complete, and failures or skipped checks are explained.
-          - [x] Tests, documentation, release notes, and operational guidance are updated where needed.
-          - [x] Security, privacy, compatibility, deployment, and rollback effects are assessed.
-          - [x] This pull request contains no secrets, unnecessary personal data, or sensitive logs.
+          - [x] The official release metadata, asset URL, size, and SHA-256 digest were verified before this PR was opened.
+          - [x] The release-specific source issue and ongoing policy issue are linked above.
+          - [x] Verification distinguishes checks that passed before PR creation from checks that are still pending.
+          - [x] Security, compatibility, deployment, and rollback effects are documented for review.
           EOF
           gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$PR_BRANCH" --title "$PR_TITLE" --body-file "$RUNNER_TEMP/codex-cli-update-pr.md"
           pr_number="$(gh pr view --repo "$GITHUB_REPOSITORY" "$PR_BRANCH" --json number --jq .number)"
@@ -168,7 +180,7 @@ jobs:
           PR_BRANCH: ${{ steps.pending.outputs.branch || steps.create-pr.outputs.branch }}
         run: |
           set -euo pipefail
-          gh workflow run .github/workflows/pull-request-body.yml --repo "$GITHUB_REPOSITORY" --ref main -f "pull_request_number=$PR_NUMBER"
+          gh workflow run .github/workflows/pull-request-body.yml --repo "$GITHUB_REPOSITORY" --ref "$PR_BRANCH" -f "pull_request_number=$PR_NUMBER"
           gh workflow run .github/workflows/delivery-quality.yml --repo "$GITHUB_REPOSITORY" --ref "$PR_BRANCH" -f "pull_request_number=$PR_NUMBER"
           gh workflow run .github/workflows/adr-quality.yml --repo "$GITHUB_REPOSITORY" --ref "$PR_BRANCH"
 

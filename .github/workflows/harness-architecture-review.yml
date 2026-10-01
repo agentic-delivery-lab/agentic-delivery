@@ -12,6 +12,7 @@ on:
         type: number
 
 permissions:
+  checks: read
   contents: read
   issues: read
   pull-requests: read
@@ -90,9 +91,13 @@ jobs:
         run: node scripts/setup-runner-codex.mjs
 
       - name: Check Codex model, account, Plan mode, and quota without a model turn
+        id: preflight
+        env:
+          CODEX_PREFLIGHT_REPORT_PATH: ${{ runner.temp }}/codex-preflight-report.json
         run: node scripts/codex-preflight.mjs
 
       - name: Check actual sandbox isolation without a model turn
+        id: sandbox
         run: node scripts/codex-sandbox-check.mjs
 
       - name: Run deterministic and semantic architecture review
@@ -110,5 +115,8 @@ jobs:
           --semantic
         env:
           BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || steps.target.outputs.base_sha }}
-          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || steps.target.outputs.head_sha }}
           EVENT_PATH: ${{ github.event_name == 'pull_request' && github.event_path || steps.target.outputs.event_path }}
+          CODEX_PREFLIGHT_REPORT_PATH: ${{ runner.temp }}/codex-preflight-report.json
+          RUNNER_PREFLIGHT_OUTCOME: ${{ steps.preflight.outcome }}
+          RUNNER_SANDBOX_OUTCOME: ${{ steps.sandbox.outcome }}

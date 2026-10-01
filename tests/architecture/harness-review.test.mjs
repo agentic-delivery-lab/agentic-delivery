@@ -138,7 +138,7 @@ test('semantic execution reports quota and structured findings without becoming 
     repositoryRoot,
     review,
     createClient: () => ({
-      initialize: async () => {}, capabilities: async () => ({}),
+      initialize: async () => {}, capabilities: async () => ({ stop: false, usedPercent: 35 }),
       startThread: async () => ({ thread: { id: '019fb023-24b8-7881-9119-509f078b610e' } }), close: async () => {},
     }),
     runTurnImpl: async () => ({ status: 'completed', text: JSON.stringify({
@@ -148,6 +148,162 @@ test('semantic execution reports quota and structured findings without becoming 
   });
   assert.equal(findings.status, 'findings');
   assert.equal(findings.findings[0].severity, 'advisory');
+  assert.equal(findings.quotaTelemetry.before.highestWindowUsedPercent, 35);
+  assert.equal(findings.quotaTelemetry.after.highestWindowUsedPercent, 35);
+  assert.match(formatReviewMarkdown({ ...review, semantic: findings }), /highest window use was 35% before and 35% after the turn/);
+});
+
+test('semantic evidence bundle includes the live PR body, exact-head checks, and runner preflight', async (t) => {
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-semantic-evidence-'));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+  const revision = (await (async () => {
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const { stdout } = await promisify(execFile)('git', ['-C', repositoryRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+    return stdout.trim();
+  })());
+  const repository = 'agentic-delivery-lab/agentic-delivery';
+  const pullRequestBody = 'Runner and semantic checks are pending at PR creation.';
+  const eventPath = path.join(fixture, 'event.json');
+  const preflightPath = path.join(fixture, 'preflight.json');
+  await Promise.all([
+    writeFile(eventPath, JSON.stringify({
+      repository: { full_name: repository },
+      pull_request: {
+        number: 25,
+        html_url: `https://github.com/${repository}/pull/25`,
+        title: 'feat(delivery): ✨ review evidence',
+        body: pullRequestBody,
+        state: 'open',
+        head: { ref: 'feat/issue-25-review-evidence', sha: revision },
+        base: { ref: 'main', sha: revision },
+      },
+    })),
+    writeFile(preflightPath, `${JSON.stringify({
+      schemaVersion: 1,
+      status: 'passed',
+      codexCliVersion: '0.159.3',
+      accountType: 'chatgpt',
+      planMode: 'passed',
+      modelCatalog: 'passed',
+      permissionProfiles: 'passed',
+      modelEffortPairs: [
+        { model: 'gpt-6-luna', effort: 'low' },
+        { model: 'gpt-6-luna', effort: 'medium' },
+        { model: 'gpt-6-luna', effort: 'max' },
+        { model: 'gpt-6-sol', effort: 'high' },
+      ],
+      quota: { highestWindowUsedPercent: 96, allowanceAvailable: true },
+      sessionProbe: 'start-and-resume-passed',
+      noModelTurn: true,
+      capturedAt: '2026-10-01T12:00:00.000Z',
+    }, null, 2)}\n`),
+  ]);
+
+  const envKeys = ['GH_TOKEN', 'GITHUB_REPOSITORY', 'CODEX_PREFLIGHT_REPORT_PATH', 'RUNNER_PREFLIGHT_OUTCOME', 'RUNNER_SANDBOX_OUTCOME', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'HEAD_SHA'];
+  const previousEnv = new Map(envKeys.map((key) => [key, process.env[key]]));
+  const previousFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = previousFetch;
+    for (const key of envKeys) {
+      if (previousEnv.get(key) === undefined) delete process.env[key];
+      else process.env[key] = previousEnv.get(key);
+    }
+  });
+  Object.assign(process.env, {
+    GH_TOKEN: 'test-token',
+    GITHUB_REPOSITORY: repository,
+    CODEX_PREFLIGHT_REPORT_PATH: preflightPath,
+    RUNNER_PREFLIGHT_OUTCOME: 'success',
+    RUNNER_SANDBOX_OUTCOME: 'success',
+    GITHUB_RUN_ID: '123456',
+    GITHUB_RUN_ATTEMPT: '1',
+    HEAD_SHA: revision,
+  });
+  globalThis.fetch = async (url) => {
+    const address = String(url);
+    if (address.endsWith('/pulls/25')) return {
+      ok: true,
+      json: async () => ({
+        number: 25,
+        html_url: `https://github.com/${repository}/pull/25`,
+        title: 'feat(delivery): ✨ review evidence',
+        body: pullRequestBody,
+        state: 'open',
+        user: { login: 'octocat' },
+        head: { ref: 'feat/issue-25-review-evidence', sha: revision },
+        base: { ref: 'main', sha: revision },
+      }),
+    };
+    if (address.includes(`/commits/${revision}/check-runs`)) return {
+      ok: true,
+      json: async () => ({ total_count: 1, check_runs: [{
+        id: 654321,
+        name: 'Validate pull request body',
+        status: 'completed',
+        conclusion: 'success',
+        head_sha: revision,
+        html_url: `https://github.com/${repository}/actions/runs/123456/job/654321`,
+        details_url: null,
+        app: { name: 'GitHub Actions' },
+        started_at: '2026-10-01T12:01:00Z',
+        completed_at: '2026-10-01T12:02:00Z',
+        output: { summary: 'Exact PR head passed.' },
+      }] }),
+    };
+    if (address.endsWith('/issues/25')) return {
+      ok: true,
+      json: async () => ({ number: 25, title: 'Review evidence', body: 'Check evidence collection.', state: 'open' }),
+    };
+    if (address.includes('/issues/25/comments?')) return { ok: true, json: async () => [] };
+    throw new Error('Unexpected GitHub evidence request.');
+  };
+
+  const event = {
+    repository: { full_name: repository },
+    pull_request: {
+      number: 25,
+      html_url: `https://github.com/${repository}/pull/25`,
+      body: pullRequestBody,
+      head: { ref: 'feat/issue-25-review-evidence', sha: revision },
+    },
+  };
+  await writeFile(eventPath, JSON.stringify(event));
+  const review = await deterministicReview({ repositoryRoot, base: revision, head: revision, eventPath });
+  let bundleText = '';
+  let capabilityReads = 0;
+  const result = await runSemanticReview({
+    repositoryRoot,
+    review,
+    eventPath,
+    createClient: ({ readableFiles }) => ({
+      initialize: async () => {},
+      capabilities: async () => ({ stop: false, usedPercent: capabilityReads++ === 0 ? 96 : 97 }),
+      startThread: async () => ({ thread: { id: '019fb023-24b8-7881-9119-509f078b610e' } }),
+      close: async () => {},
+      readableFiles,
+    }),
+    runTurnImpl: async ({ client }) => {
+      bundleText = await readFile(client.readableFiles[0], 'utf8');
+      return { status: 'completed', text: JSON.stringify({
+        status: 'aligned',
+        summary: 'The review evidence is sufficient.',
+        affectedAdrs: ['ADR-0009'],
+        affectedContexts: ['agentic-delivery-governance'],
+        findings: [],
+        evidenceGaps: [],
+      }) };
+    },
+  });
+  assert.equal(result.status, 'aligned');
+  assert.match(bundleText, /Runner and semantic checks are pending at PR creation\./);
+  assert.match(bundleText, /"id": 654321/);
+  assert.match(bundleText, /"conclusion": "success"/);
+  assert.match(bundleText, /"codexCliVersion": "0\.159\.3"/);
+  assert.match(bundleText, /"highestWindowUsedPercent": 96/);
+  assert.match(bundleText, /"allowanceAvailable": true/);
+  assert.match(bundleText, /"preflightStepOutcome": "success"/);
+  assert.equal(result.quotaTelemetry.after.highestWindowUsedPercent, 97);
 });
 
 test('the evidence contract validates the complete projection and rejects mismatches', async () => {

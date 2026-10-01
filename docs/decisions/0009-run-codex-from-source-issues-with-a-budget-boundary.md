@@ -112,30 +112,47 @@ Keep the Actions runner's Codex CLI centrally pinned in
 `scripts/setup-runner-codex.mjs`. The pin includes the official Linux x64
 release URL and SHA-256 digest, and every Actions workflow installs through
 that script. A weekly release check may promote a newer stable release only by
-opening an issue-linked review pull request. It verifies the official release
-asset digest and dispatches the applicable body, delivery-quality, ADR-quality,
-and no-generation runner checks; this is required because a pull request
-created with `GITHUB_TOKEN` does not start ordinary pull-request workflows.
+opening a release-specific Task issue and an issue-linked review pull request.
+The issue records that release's exact version and digest; the pull request
+closes it when merged and references issue #70 as the ongoing maintenance
+policy. This keeps each upgrade traceable without requiring the broader issue
+to remain open forever. The updater reuses an existing open issue or pull
+request for the same release and stops if it finds duplicates or an unresolved
+update for another release.
+
+The updater verifies the official release asset digest, then dispatches the
+applicable body, delivery-quality, ADR-quality, and no-generation runner
+checks. Each dispatch targets the candidate pull-request branch so its check
+run is associated with that exact commit; this is required because a pull
+request created with `GITHUB_TOKEN` does not start ordinary pull-request
+workflows. The generated pull-request description records the release check
+as completed and identifies runner and review checks as pending until their
+results appear on the pull request.
+
 The candidate runner checks ChatGPT authentication, actual Plan mode, sandbox
-isolation, and all configured model-effort pairs advertised by that account.
-Any missing or incomplete capability stops before a model turn. The updater
-waits for the no-generation smoke to pass before dispatching the Harness
-semantic review. The Harness workflow repeats the no-generation account,
-model, Plan, quota, and sandbox checks itself before starting its review turn.
-Jobs do not follow a moving `latest` release or update the CLI in place, and
-update pull requests are never auto-merged. Retain the previous pin for
-rollback. The weekly check performs no Codex model turn when no newer stable
-release exists.
+isolation, quota, and all configured model-effort pairs advertised by that
+account. Any missing or incomplete capability stops before a model turn. The
+updater waits for the no-generation smoke to pass before dispatching the
+Harness semantic review. The Harness workflow repeats the no-generation
+account, model, Plan, quota, and sandbox checks itself before starting its
+review turn. Its evidence bundle includes the live pull-request description,
+the latest check runs for the reviewed commit, the exact runner preflight
+result, and quota snapshots immediately before and after the semantic turn.
+Those snapshots observe a shared allowance and do not attribute usage to one
+model turn. Jobs do not follow a moving `latest` release or update the CLI in
+place, and update pull requests are never auto-merged. Retain the previous pin
+for rollback. The weekly check performs no Codex model turn when no newer
+stable release exists.
 
 The updater uses a job-scoped `GITHUB_TOKEN` with only the permissions needed
-to read the source issue, push its issue-linked branch, open the pull request,
-and dispatch these checks. It does not use the GitHub App's central
-publication credentials. Repository Actions settings must permit this workflow
-token to create pull requests; GitHub couples that setting with approval
-permission. This updater has no approval or merge step, and other repository
-workflows retain read-only pull-request permissions. The update process
-remains provisional until merged into `main` and the runner preflight passes
-for the candidate release.
+to create the release-specific Task issue, push its issue-linked branch, open
+the pull request, and dispatch these checks. It does not use the GitHub App's
+central publication credentials. Repository Actions settings must permit this
+workflow token to create pull requests; GitHub couples that setting with
+approval permission. This updater has no approval or merge step, and other
+repository workflows retain read-only pull-request permissions. The update
+process remains provisional until merged into `main` and the runner preflight
+passes for the candidate release.
 
 Amendment source: [issue #70](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70).
 

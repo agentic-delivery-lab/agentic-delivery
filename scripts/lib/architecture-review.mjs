@@ -424,6 +424,13 @@ export function formatReviewMarkdown(review) {
   for (const item of review.checks) lines.push(`- **${item.status}** \`${item.id}\`: ${item.message}`);
   if (review.semantic?.status && review.semantic.status !== 'not-run') {
     lines.push('', `#### Semantic review: ${review.semantic.status}`, '', review.semantic.summary ?? 'No semantic summary was returned.');
+    const quota = review.semantic.quotaTelemetry;
+    if (quota) {
+      const describe = (snapshot) => snapshot?.status === 'available'
+        ? `${snapshot.highestWindowUsedPercent}%`
+        : snapshot?.status ?? 'unavailable';
+      lines.push('', `Quota observation for ${quota.model ?? 'the review model'} (${quota.effort ?? 'unspecified'} effort): highest window use was ${describe(quota.before)} before and ${describe(quota.after)} after the turn. Other Codex clients share this allowance, so the snapshots do not attribute usage to this turn alone.`);
+    }
     for (const finding of review.semantic.findings ?? []) lines.push(`- **${finding.severity ?? 'advisory'}** ${finding.statement} (Evidence: ${(finding.evidence ?? []).join(', ') || 'none'})`);
     if (review.semantic.evidenceGaps?.length) {
       lines.push('', '**Evidence gaps**', '', ...review.semantic.evidenceGaps.map((gap) => `- ${gap}`));

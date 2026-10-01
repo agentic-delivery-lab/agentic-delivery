@@ -227,10 +227,16 @@ issue edits.
   SHA-256 verification. Every Actions workflow uses this setup script; the
   dedicated tool cache keeps this installation separate from personal tools.
   A weekly release check opens a review pull request for a newer stable release
-  and explicitly dispatches the required checks because PRs created with
-  `GITHUB_TOKEN` do not start ordinary pull-request workflows. The runner
-  verifies every configured model/effort pair, ChatGPT login, Plan mode, and
-  quota telemetry before a model turn.
+  after creating a release-specific Task issue. Its pull request closes that
+  issue when merged and references issue #70 for the ongoing maintenance
+  policy, so future CLI updates do not depend on #70 remaining open. The
+  updater explicitly dispatches the required checks because PRs created with
+  `GITHUB_TOKEN` do not start ordinary pull-request workflows. Every dispatch
+  targets the candidate branch so the check is associated with the exact PR
+  head. The generated PR description distinguishes the verified release
+  artifact from runner and review checks that are still pending at creation.
+  The runner verifies every configured model/effort pair, ChatGPT login, Plan
+  mode, and quota telemetry before a model turn.
   Repository Actions settings must allow `GITHUB_TOKEN` to create pull
   requests. GitHub couples that ability with review-approval permission; this
   updater opens PRs but has no approval or merge step.
@@ -238,6 +244,10 @@ issue edits.
   resume. Treat the result as release-specific runner evidence; a fresh session
   may require its first model rollout before exact resume can be verified.
   The check records that limitation without spending model quota.
+  Harness includes the live PR description, check runs for its exact reviewed
+  commit, runner preflight results, and shared-quota snapshots before and after
+  the semantic turn. The snapshots provide observed usage but cannot attribute
+  a change to one model when other Codex clients share the allowance.
 - ChatGPT login for the installed `codex` executable under that user,
   `github-runner`. Another user's installation/login is not sufficient. For a
   headless runner, use the file-backed credential store so the service does not
