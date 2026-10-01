@@ -130,6 +130,7 @@
         "codex-cli-release-updater",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
+        "pull-request-check-readiness",
         "pull-request-dispatch-context-resolver"
       ]
     },
@@ -145,6 +146,7 @@
       ],
       "primitives": [
         "harness-architecture-review",
+        "pull-request-check-readiness",
         "semantic-architecture-review"
       ]
     },
@@ -396,6 +398,7 @@
         "organization-webhook-ingress",
         "pull-request-body-check",
         "pull-request-body-validator",
+        "pull-request-check-readiness",
         "pull-request-dispatch-context-resolver",
         "repository-governance-instructions",
         "semantic-architecture-review",
@@ -962,6 +965,20 @@
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0016"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "pull-request-check-readiness",
+      "path": "scripts/lib/pull-request-check-readiness.mjs",
+      "location": "scripts/lib/pull-request-check-readiness.mjs",
+      "kind": "customization",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
       ],
       "domains": [
         "agentic-delivery-governance"

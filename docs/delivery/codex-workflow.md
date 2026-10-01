@@ -230,29 +230,47 @@ issue edits.
   after creating a release-specific Task issue. Its pull request closes that
   issue when merged and references issue #70 for the ongoing maintenance
   policy, so future CLI updates do not depend on #70 remaining open. The
-  updater explicitly dispatches the required checks because PRs created with
-  `GITHUB_TOKEN` do not start ordinary pull-request workflows. Every dispatch
-  targets the candidate branch so the check is associated with the exact PR
-  head. The generated PR description distinguishes the verified release
-  artifact from runner and review checks that are still pending at creation.
+  updater creates the release Task and pushes its issue-linked branch with
+  `GITHUB_TOKEN`, then opens the PR with a short-lived repository-scoped GitHub
+  App token limited to contents read and pull requests write. The PR event
+  starts the body, delivery-quality, and ADR checks on the exact head. The
+  updater does not change the repository Actions setting that combines token
+  based PR creation with review approval. It waits for the exact-head body,
+  delivery-quality, portability, and applicable ADR checks to pass, then
+  dispatches the no-generation runner smoke. Harness starts only after the
+  smoke passes; a deterministic failure prevents both runner dispatches. The
+  generated PR description separates verified release metadata from checks
+  that are pending at creation.
   The runner verifies every configured model/effort pair, ChatGPT login, Plan
   mode, and quota telemetry before a model turn.
-  Repository Actions settings must allow `GITHUB_TOKEN` to create pull
-  requests. GitHub couples that ability with review-approval permission; this
-  updater opens PRs but has no approval or merge step.
   The no-generation smoke check also probes persistent thread start and exact
   resume. Treat the result as release-specific runner evidence; a fresh session
   may require its first model rollout before exact resume can be verified.
   The check records that limitation without spending model quota.
-  Harness includes the live PR description, check runs for its exact reviewed
-  commit, runner preflight results, and shared-quota snapshots before and after
-  the semantic turn. Each quota snapshot keeps the returned primary and
-  secondary windows separate, including duration, usage, reset time, and safe
-  threshold, rate-limit, and spend-control signals. The snapshots provide
-  observed usage but cannot attribute a change to one model when other Codex
-  clients share the allowance. A failed preflight writes its per-window
-  observations and guard signals to the Actions job summary and runner log
-  before any semantic model turn starts.
+  Harness includes the live PR description, non-Harness check runs for its
+  exact reviewed commit, and runner preflight results. It excludes its own
+  `review` check to avoid self-reference. Before a model turn, it waits up to
+  15 minutes for the expected exact-head checks to finish and skips the turn
+  when a required check fails or remains unavailable. A completed review is
+  reused only when its full evidence fingerprint matches and the required
+  exact-head checks passed. Quota snapshots are recorded outside the model
+  input before and after a semantic turn. Each snapshot keeps
+  returned primary and secondary windows separate, including duration, usage,
+  reset time, and safe threshold, rate-limit, and spend-control signals. The
+  snapshots show observed usage but cannot attribute a change to one model
+  when other Codex clients share the allowance. A failed preflight writes its
+  per-window observations and guard signals to the Actions job summary and
+  runner log before any semantic model turn starts. Deterministic violations
+  skip the semantic turn.
+- Harness review sessions use protected, runner-local state at
+  `/var/lib/github-runner/.codex/harness-reviews`, outside disposable
+  checkouts and Actions artifacts. The thread UUID is saved before the model
+  turn; an interrupted review resumes the same thread with a short prompt. A
+  completed result is reused without another semantic model turn only when
+  the exact semantic evidence fingerprint matches and expected exact-head
+  checks are complete. Session files are restricted to `github-runner` and
+  become eligible for pruning after 30 days. This state survives workflow jobs
+  on the same persistent runner, not replacement of that runner.
 - ChatGPT login for the installed `codex` executable under that user,
   `github-runner`. Another user's installation/login is not sufficient. For a
   headless runner, use the file-backed credential store so the service does not

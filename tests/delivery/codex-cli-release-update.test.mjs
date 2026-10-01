@@ -5,6 +5,8 @@ import { test } from 'node:test';
 
 import {
   checkedRelease,
+  reviewCheckReadiness,
+  resolveClosedUpdateIssueStates,
   resolveSourceIssue,
   selectPendingUpdatePullRequest,
   verifyDownload,
@@ -57,7 +59,7 @@ test('verifies the downloaded archive bytes against the official digest and size
   await assert.rejects(verifyDownload({ ...candidate, sha256: 'b'.repeat(64) }, async () => response), /official SHA-256 digest/);
 });
 
-test('reuses only one open issue-linked CLI update pull request for the candidate', () => {
+test('reuses one open update pull request and blocks unresolved duplicate decisions', () => {
   const version = nextPatchVersion(RELEASE.version);
   const branch = `chore/issue-742-update-codex-cli-${version.replaceAll('.', '-')}`;
   const pullRequest = {
@@ -73,7 +75,63 @@ test('reuses only one open issue-linked CLI update pull request for the candidat
   assert.equal(selectPendingUpdatePullRequest([pullRequest], repository, '9-9-9').sameCandidate, false);
   assert.equal(selectPendingUpdatePullRequest([], repository, '9-9-9'), null);
   assert.throws(() => selectPendingUpdatePullRequest([pullRequest, { ...pullRequest, number: 816 }], repository, '9-9-9'), /More than one open/);
-  assert.throws(() => selectPendingUpdatePullRequest([{ ...pullRequest, state: 'closed', merged_at: null }], repository, version.replaceAll('.', '-')), /closed without merging/);
+  assert.throws(() => selectPendingUpdatePullRequest([{ ...pullRequest, state: 'closed', merged_at: null }], repository, version.replaceAll('.', '-')), /verified release source issue/);
+});
+
+test('a closed release Task resolves its old PR without blocking later releases', async () => {
+  const version = nextPatchVersion(RELEASE.version);
+  const issueNumber = 742;
+  const closedPullRequest = {
+    number: 815,
+    state: 'closed',
+    merged_at: null,
+    base: { ref: 'main', repo: { full_name: repository } },
+    head: { ref: `chore/issue-${issueNumber}-update-codex-cli-${version.replaceAll('.', '-')}`, repo: { full_name: repository } },
+  };
+  let state = 'closed';
+  const fetchImpl = async (url) => {
+    assert.equal(String(url), `https://api.github.com/repos/${repository}/issues/${issueNumber}`);
+    return {
+      ok: true,
+      json: async () => ({
+        number: issueNumber,
+        title: `Task: Update pinned Codex CLI to ${version}`,
+        body: `<!-- codex-cli-release-update:v1:${version} -->\nRelease task`,
+        state,
+        html_url: `https://github.com/${repository}/issues/${issueNumber}`,
+      }),
+    };
+  };
+  const closedStates = await resolveClosedUpdateIssueStates([closedPullRequest], repository, 'test-token', fetchImpl);
+  assert.deepEqual(closedStates.get(issueNumber), { state: 'closed', version });
+  assert.equal(selectPendingUpdatePullRequest([closedPullRequest], repository, version.replaceAll('.', '-'), closedStates).rejectedCandidate, true);
+  assert.equal(selectPendingUpdatePullRequest([closedPullRequest], repository, nextPatchVersion(version).replaceAll('.', '-'), closedStates), null);
+
+  state = 'open';
+  const openStates = await resolveClosedUpdateIssueStates([closedPullRequest], repository, 'test-token', fetchImpl);
+  assert.throws(() => selectPendingUpdatePullRequest([closedPullRequest], repository, nextPatchVersion(version).replaceAll('.', '-'), openStates), /source issue #742 remains open/);
+  await assert.rejects(resolveClosedUpdateIssueStates([closedPullRequest], repository, '', fetchImpl), /GH_TOKEN/);
+});
+
+test('semantic review readiness requires exact-head deterministic checks and ignores its own check run', () => {
+  const sha = 'a'.repeat(40);
+  const names = [
+    'Validate pull request body',
+    'quality',
+    'portability (ubuntu-latest)',
+    'portability (macos-latest)',
+    'portability (windows-latest)',
+  ];
+  const checkRuns = names.map((name, index) => ({
+    name, id: index + 1, head_sha: sha, status: 'completed', conclusion: 'success',
+    started_at: '2026-10-01T12:00:00Z', app: { name: 'GitHub Actions' },
+  }));
+  checkRuns.push({ name: 'review', head_sha: sha, status: 'in_progress', app: { name: 'GitHub Actions' } });
+  assert.equal(reviewCheckReadiness(checkRuns, sha).ready, true);
+  assert.deepEqual(reviewCheckReadiness(checkRuns, sha, true).missing, ['validate']);
+  assert.deepEqual(reviewCheckReadiness(checkRuns.map((run) => ({ ...run, head_sha: 'b'.repeat(40) })), sha).missing, names);
+  const failed = checkRuns.map((run) => run.name === 'quality' ? { ...run, conclusion: 'failure' } : run);
+  assert.deepEqual(reviewCheckReadiness(failed, sha).failed, ['quality']);
 });
 
 test('reuses a matching open release issue and creates a typed task when no issue exists', async () => {
@@ -130,14 +188,23 @@ test('reuses a matching open release issue and creates a typed task when no issu
   assert.equal(createCount, 1);
 });
 
-test('the updater links release issues and dispatches the body check against the candidate branch', async () => {
+test('the updater uses a restricted App token for PR events and dispatches runner review after smoke', async () => {
   const workflow = await readFile(new URL('../../.github/workflows/codex-cli-release-update.yml', import.meta.url), 'utf8');
   assert.match(workflow, /issues:\s*write/);
+  assert.match(workflow, /actions\/create-github-app-token@[a-f0-9]{40} # v3/);
+  assert.match(workflow, /permission-contents: read/);
+  assert.match(workflow, /permission-pull-requests: write/);
+  assert.match(workflow, /pull-requests: read/);
+  assert.match(workflow, /checks: read/);
   assert.match(workflow, /--ensure-source-issue/);
   assert.match(workflow, /pnpm branch:start chore "\$SOURCE_ISSUE"/);
   assert.match(workflow, /Source issue: Closes #\$PR_SOURCE_ISSUE/);
   assert.match(workflow, /Ongoing policy: Refs #70/);
   assert.match(workflow, /pull-request-body\.yml --repo "\$GITHUB_REPOSITORY" --ref "\$PR_BRANCH"/);
-  assert.match(workflow, /At PR creation,[\s\S]*?results are pending/);
+  assert.match(workflow, /<!-- codex-cli-release-update:v1:\$CODEX_VERSION -->/);
+  assert.match(workflow, /Harness semantic review starts only after that smoke passes/);
+  assert.match(workflow, /Wait for exact-head deterministic checks/);
+  assert.match(workflow, /steps\.static\.outputs\.checks_ready == 'true'/);
+  assert.doesNotMatch(workflow, /Repository Actions setting must permit this workflow token/);
   assert.doesNotMatch(workflow, /branch:start chore 70/);
 });

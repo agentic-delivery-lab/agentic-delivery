@@ -422,14 +422,27 @@ export function formatReviewMarkdown(review) {
   lines.push(`- Affected bounded contexts: ${review.affectedContexts.join(', ') || 'none detected'}`);
   lines.push('', '#### Deterministic checks', '');
   for (const item of review.checks) lines.push(`- **${item.status}** \`${item.id}\`: ${item.message}`);
+  if (review.semantic?.skippedReason) lines.push('', review.semantic.skippedReason);
   if (review.semantic?.status && review.semantic.status !== 'not-run') {
     lines.push('', `#### Semantic review: ${review.semantic.status}`, '', review.semantic.summary ?? 'No semantic summary was returned.');
+    const session = review.semantic.reviewSession;
+    if (session?.disposition === 'cached') {
+      const runReference = session.sourceRunId ? ` from Actions run ${session.sourceRunId}` : '';
+      lines.push('', `Exact semantic evidence was cached${runReference}; this workflow started no semantic model turn.`);
+    } else if (session?.disposition === 'resumed') {
+      lines.push('', 'The saved Codex review session was resumed with a focused continuation prompt.');
+    } else if (session?.disposition === 'awaiting-checks') {
+      lines.push('', 'Some exact-head checks are still pending or missing. Rerun Harness after they finish to continue this saved review session.');
+    } else if (session?.disposition === 'retryable') {
+      lines.push('', 'The result was not cached. Rerun Harness to continue this saved review session.');
+    }
     const quota = review.semantic.quotaTelemetry;
     if (quota) {
       const describe = (snapshot) => snapshot?.status === 'available'
         ? `${snapshot.highestWindowUsedPercent}%`
         : snapshot?.status ?? 'unavailable';
-      lines.push('', `Quota observation for ${quota.model ?? 'the review model'} (${quota.effort ?? 'unspecified'} effort): highest window use was ${describe(quota.before)} before and ${describe(quota.after)} after the turn. Other Codex clients share this allowance, so the snapshots do not attribute usage to this turn alone.`);
+      const observationSource = session?.disposition === 'cached' ? 'the original semantic turn' : 'this semantic turn';
+      lines.push('', `Quota observation for ${quota.model ?? 'the review model'} (${quota.effort ?? 'unspecified'} effort) from ${observationSource}: highest window use was ${describe(quota.before)} before and ${describe(quota.after)} after. Other Codex clients share this allowance, so the snapshots do not attribute usage to this turn alone.`);
       const describeWindows = (snapshot) => (snapshot?.windows ?? []).map((window) => (
         `bucket ${window.bucketIndex} ${window.slot} ${window.durationMinutes}m ${window.usedPercent}%`
       )).join('; ') || 'window-level usage unavailable';

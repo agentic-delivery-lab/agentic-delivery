@@ -26,13 +26,20 @@ jobs:
   review:
     # This repository already limits checked-in code on the dedicated runner
     # to internal pull requests. Forks remain outside this trust boundary.
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    # Updater PRs are reviewed only after the explicit no-generation smoke
+    # succeeds; their App-created pull_request event must not start a duplicate
+    # semantic turn before that gate.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      !contains(github.event.pull_request.body, '<!-- codex-cli-release-update:v1:'))
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 30
     env:
       CODEX_AUTH_HOME: /var/lib/github-runner/.codex
       GH_TOKEN: ${{ github.token }}
       CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
+      CODEX_REVIEW_STATE_DIR: /var/lib/github-runner/.codex/harness-reviews
     steps:
       - name: Check out the review candidate
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -88,16 +95,19 @@ jobs:
           pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Set up pinned Codex CLI
+        id: codex
         run: node scripts/setup-runner-codex.mjs
 
       - name: Check Codex model, account, Plan mode, and quota without a model turn
         id: preflight
+        continue-on-error: true
         env:
           CODEX_PREFLIGHT_REPORT_PATH: ${{ runner.temp }}/codex-preflight-report.json
         run: node scripts/codex-preflight.mjs
 
       - name: Check actual sandbox isolation without a model turn
         id: sandbox
+        continue-on-error: true
         run: node scripts/codex-sandbox-check.mjs
 
       - name: Run deterministic and semantic architecture review

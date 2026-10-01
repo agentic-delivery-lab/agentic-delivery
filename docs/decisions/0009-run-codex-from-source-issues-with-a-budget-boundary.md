@@ -118,16 +118,33 @@ closes it when merged and references issue #70 as the ongoing maintenance
 policy. This keeps each upgrade traceable without requiring the broader issue
 to remain open forever. The updater reuses an existing open issue or pull
 request for the same release and stops if it finds duplicates or an unresolved
-update for another release.
+update for another release. A closed, unmerged update PR blocks later releases
+while its linked release Task remains open or cannot be verified. Closing that
+Task resolves the candidate: the updater does not recreate the same rejected
+version, while a later stable release can still be evaluated.
 
-The updater verifies the official release asset digest, then dispatches the
-applicable body, delivery-quality, ADR-quality, and no-generation runner
-checks. Each dispatch targets the candidate pull-request branch so its check
-run is associated with that exact commit; this is required because a pull
-request created with `GITHUB_TOKEN` does not start ordinary pull-request
-workflows. The generated pull-request description records the release check
-as completed and identifies runner and review checks as pending until their
-results appear on the pull request.
+The updater verifies the official release asset digest. It creates the source
+Task and pushes its issue-linked branch with `GITHUB_TOKEN`, which cannot
+create a pull request while the repository's combined create-and-approve
+setting is disabled. It then mints a short-lived GitHub App installation token
+restricted to this repository with `contents:read` and
+`pull_requests:write`; that token is used only to open the pull request. The
+normal body, delivery-quality, and ADR-quality pull-request workflows then
+start from the App-created pull-request event. The updater does not change the
+repository Actions setting. It explicitly dispatches the no-generation runner
+smoke with `GITHUB_TOKEN` only after the exact-head body, delivery-quality,
+portability, and applicable ADR checks pass. It dispatches Harness only after
+that smoke passes, and skips both runner dispatches if a deterministic check
+fails.
+An updater marker makes the Harness workflow skip its automatic pull-request
+event, preventing a duplicate semantic model turn. A manual retry may
+redispatch the static checks for an existing release PR.
+
+The generated pull-request description records the release digest as complete
+and identifies checks as pending until their exact-head results appear. This
+two-token sequence preserves `GITHUB_TOKEN` event suppression for issue and
+branch creation while using the App token only for the action that needs
+ordinary pull-request events.
 
 The candidate runner checks ChatGPT authentication, actual Plan mode, sandbox
 isolation, quota, and all configured model-effort pairs advertised by that
@@ -135,29 +152,52 @@ account. Any missing or incomplete capability stops before a model turn. The
 updater waits for the no-generation smoke to pass before dispatching the
 Harness semantic review. The Harness workflow repeats the no-generation
 account, model, Plan, quota, and sandbox checks itself before starting its
-review turn. Its evidence bundle includes the live pull-request description,
-the latest check runs for the reviewed commit, the exact runner preflight
-result, and quota snapshots immediately before and after the semantic turn.
-Each snapshot records the returned windows separately by primary or secondary
-slot, duration, usage, and reset time, plus safe booleans for the threshold,
-rate-limit, and spend-control signals. These observations help identify which
-limit stopped work; they still observe a shared allowance and do not attribute
-usage to one model turn. A failed preflight also writes those per-window
-observations and guard signals to the Actions job summary and runner log before
-any model turn starts. Jobs do not follow a moving `latest` release or update
-the CLI in place, and update pull requests are never auto-merged. Retain the
-previous pin for rollback. The weekly check performs no Codex model turn when
-no newer stable release exists.
+review turn. The Harness workflow also runs deterministic checks first and
+skips semantic model execution when those checks find an objective violation.
+Its evidence bundle includes the live pull-request description, exact-head
+non-Harness check runs, the runner's model, account, Plan, and sandbox
+preflight results, and the safe issue-state summary. It excludes its own
+`review` check run so the review cannot use its in-progress or previous result
+as evidence about itself.
 
-The updater uses a job-scoped `GITHUB_TOKEN` with only the permissions needed
-to create the release-specific Task issue, push its issue-linked branch, open
-the pull request, and dispatch these checks. It does not use the GitHub App's
-central publication credentials. Repository Actions settings must permit this
-workflow token to create pull requests; GitHub couples that setting with
-approval permission. This updater has no approval or merge step, and other
-repository workflows retain read-only pull-request permissions. The update
-process remains provisional until merged into `main` and the runner preflight
-passes for the candidate release.
+Quota snapshots are captured before and after a model turn for the Actions
+summary, but their counters and capture times are not sent in the semantic
+evidence bundle. Each report records returned windows separately by primary
+or secondary slot, duration, usage, and reset time, plus safe booleans for the
+threshold, rate-limit, and spend-control signals. These observations help
+identify which limit stopped work; they still observe a shared allowance and
+do not attribute usage to one model turn. A failed preflight writes those
+per-window observations and guard signals to the Actions job summary and
+runner log before any model turn starts.
+
+The Harness persists its Codex app-server thread and a versioned manifest in
+`/var/lib/github-runner/.codex/harness-reviews`, outside the checkout and
+Actions artifacts. The directory and files are restricted to the runner
+service account. The manifest records the review identity, exact semantic
+evidence fingerprint, thread UUID, status, and completed structured result.
+It saves the UUID before the first model turn. An interrupted review resumes
+that thread with a short continuation prompt. A completed result is reused
+without a model turn only when the current semantic evidence fingerprint
+matches exactly and the expected exact-head checks have completed. A changed
+pull-request revision, Architecture Authority pin, CLI version, model profile,
+or prompt version starts a new review. A later Harness run prunes session
+material whose directory has not been updated for 30 days. This is durable
+across jobs on the single persistent self-hosted runner;
+replacing that runner requires a separately approved shared-store design.
+
+The weekly check performs no Codex model turn when no newer stable release
+exists. Jobs do not follow a moving `latest` release or update the CLI in
+place, and update pull requests are never auto-merged. Retain the previous pin
+for rollback.
+
+The updater uses `GITHUB_TOKEN` for the release-specific Task issue, branch
+push, and Actions dispatch. Since that token cannot create a pull request
+without the combined repository setting that also permits approvals, the
+updater mints a short-lived repository-scoped GitHub App token with
+`contents:read` and `pull_requests:write` only for `gh pr create`. The workflow
+does not change the Actions setting, call an approval or merge operation, or
+give its App token to Codex. The process remains provisional until merged
+into `main` and the runner preflight passes for the candidate release.
 
 Amendment source: [issue #70](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70).
 

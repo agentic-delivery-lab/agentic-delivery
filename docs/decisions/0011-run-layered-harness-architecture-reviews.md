@@ -96,6 +96,40 @@ references, validation, bounded telemetry and an audit checkpoint. Runner
 state remains canonical; the pull-request projection is the reviewer-facing
 reference and is replaced idempotently on publication retry.
 
+The Harness keeps its own `architecture review session`, separate from the
+source-issue delivery `Codex session`. It stores the app-server thread under
+`/var/lib/github-runner/.codex/harness-reviews`, outside the checkout and
+ordinary Actions artifacts. The manifest and thread files are accessible only
+to the runner service account and are pruned during a later Harness run when
+their last update is older than 30 days. The thread UUID is
+saved before the first model turn. If a turn is interrupted, the next review
+for the same base, head, Architecture Authority pin, Codex CLI version, model
+profile, and prompt version resumes that thread with a short continuation
+prompt and rereads the current evidence bundle.
+
+A `semantic review fingerprint` hashes the deterministic result, source issue,
+pull-request body, exact-head non-Harness check results, ADR/domain evidence,
+and diff. Primitive evidence is limited to index records linked to affected
+ADRs; changed file content is already present in the diff, and unchanged
+primitive bodies are omitted. Its session identity also includes the Codex CLI
+version and model profile. It excludes transient runner preflight status, the
+current Harness `review` check, quota counters, and capture times. On a normal
+PR event, Harness waits up to 15 minutes for the expected exact-head checks to
+finish; a failed,
+missing, truncated, or still-running check prevents a semantic model turn. The
+workflow reuses a completed structured result without another model turn only
+when the full fingerprint matches exactly and all exact-head checks are
+complete, with the required checks successful. A completed review with changed
+evidence starts a new thread. Deterministic violations also skip the semantic
+turn. Quota snapshots remain in the Actions report and runner log, outside the
+semantic model context.
+
+This storage choice assumes the single persistent self-hosted runner remains
+available across workflow jobs. It avoids publishing raw thread material to
+Actions artifacts or mixing semantic-review transcripts with webhook replay
+data in Neon. Replacing the runner or adding a runner pool requires a separately
+approved shared-store decision before resumable reviews can span hosts.
+
 ### Consequences
 
 - Good, because structural rules fail predictably and semantic concerns remain
@@ -105,6 +139,11 @@ reference and is replaced idempotently on publication retry.
 - Good, because read-only permissions preserve human and controller ownership.
 - Bad, because semantic review consumes subscription allowance and can be
   inconclusive when quota or runtime evidence is unavailable.
+- Good, because an exact completed review can be reused without another model
+  turn, and an interrupted semantic review can resume from its saved Codex
+  thread. Incomplete or failed exact-head checks stop before model execution.
+- Bad, because raw review thread material remains on the dedicated runner and
+  cannot be resumed after its disk is replaced or lost.
 - Bad, because the runtime-surface impact map must be maintained when
   architectural surfaces move, although it does not duplicate ADR rationale
   or the generated ADR-to-primitive relationship.
@@ -116,10 +155,13 @@ reference and is replaced idempotently on publication retry.
 Tests must cover impact-map coverage, evidence-schema validation, redaction,
 publication retry idempotency, deterministic failure codes, exact GPT-6 Sol
 High review settings, denied model network, cited semantic findings,
-inconclusive quota/evidence handling, workflow permissions and no-comment
-behavior. A human reviewer must inspect whether the baseline and semantic
-findings cite evidence rather than treating tests or documentation as runtime
-proof.
+inconclusive quota/evidence handling, no-model execution for deterministic
+violations and incomplete checks, exclusion of the current Harness check,
+exact-fingerprint cache reuse, interrupted-thread resume, changed-evidence
+invalidation, state-file permissions and retention, workflow permissions, and
+no-comment behavior. A
+human reviewer must inspect whether the baseline and semantic findings cite
+evidence rather than treating tests or documentation as runtime proof.
 
 ## Pros and Cons of the Options
 

@@ -12,6 +12,7 @@ import {
   validateEvidenceRecord,
 } from '../../scripts/lib/architecture-review.mjs';
 import { parseSemanticOutcome, runSemanticReview } from '../../scripts/lib/architecture-review-agent.mjs';
+import { runArchitectureReview } from '../../scripts/harness-architecture-review.mjs';
 import { runNodeScript } from '../helpers/process.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
@@ -120,43 +121,108 @@ test('semantic output requires cited findings and keeps model uncertainty adviso
   assert.equal(invalid.status, 'inconclusive');
 });
 
-test('semantic execution reports quota and structured findings without becoming deterministic proof', async () => {
+test('deterministic architecture violations skip semantic model execution', async (t) => {
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-harness-skip-'));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
   const revision = (await (async () => {
     const { execFile } = await import('node:child_process');
     const { promisify } = await import('node:util');
     const { stdout } = await promisify(execFile)('git', ['-C', repositoryRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
     return stdout.trim();
   })());
-  const review = await deterministicReview({ repositoryRoot, base: revision, head: revision });
-  const unavailable = await runSemanticReview({
+  const eventPath = path.join(fixture, 'event.json');
+  await writeFile(eventPath, JSON.stringify({
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery' },
+    pull_request: { number: 25, head: { ref: 'unlinked-branch', sha: revision } },
+  }));
+  const result = await runArchitectureReview({
     repositoryRoot,
-    review,
-    createClient: () => ({ initialize: async () => {}, capabilities: async () => { throw new Error('quota'); }, close: async () => {} }),
+    base: revision,
+    head: revision,
+    event: eventPath,
+    semantic: true,
   });
-  assert.equal(unavailable.status, 'inconclusive');
-  const findings = await runSemanticReview({
-    repositoryRoot,
-    review,
-    createClient: () => ({
-      initialize: async () => {}, capabilities: async () => ({
-        stop: false,
-        usedPercent: 35,
-        windows: [{ bucketIndex: 1, slot: 'primary', durationMinutes: 300, usedPercent: 35, resetsAt: 1_800_000_100 }],
-        guardSignals: { windowThresholdReached: false, rateLimitReached: false, spendControlReached: false },
+  assert.equal(result.status, 'fail');
+  assert.equal(result.semantic.status, 'not-run');
+  assert.match(result.semantic.skippedReason, /no semantic model turn was started/);
+});
+
+test('semantic execution reports quota and structured findings without becoming deterministic proof', async () => {
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-semantic-state-'));
+  const envKeys = ['GITHUB_REPOSITORY', 'CODEX_REVIEW_STATE_DIR', 'GH_TOKEN'];
+  const previousEnv = new Map(envKeys.map((key) => [key, process.env[key]]));
+  try {
+    const revision = (await (async () => {
+      const { execFile } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const { stdout } = await promisify(execFile)('git', ['-C', repositoryRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+      return stdout.trim();
+    })());
+    const repository = 'agentic-delivery-lab/agentic-delivery';
+    const eventPath = path.join(fixture, 'event.json');
+    await writeFile(eventPath, JSON.stringify({
+      repository: { id: 1, full_name: repository },
+      pull_request: {
+        number: 25,
+        html_url: `https://github.com/${repository}/pull/25`,
+        body: 'Semantic review fixture.',
+        head: { ref: 'feat/issue-25-semantic-review', sha: revision },
+        base: { ref: 'main', sha: revision },
+      },
+    }));
+    Object.assign(process.env, { GITHUB_REPOSITORY: repository, CODEX_REVIEW_STATE_DIR: path.join(fixture, 'reviews') });
+    delete process.env.GH_TOKEN;
+    const review = await deterministicReview({ repositoryRoot, base: revision, head: revision, eventPath });
+    const unavailable = await runSemanticReview({
+      repositoryRoot,
+      review,
+      eventPath,
+      createClient: () => ({ initialize: async () => {}, capabilities: async () => { throw new Error('quota'); }, close: async () => {} }),
+    });
+    assert.equal(unavailable.status, 'inconclusive');
+    const findings = await runSemanticReview({
+      repositoryRoot,
+      review,
+      eventPath,
+      createClient: () => ({
+        initialize: async () => {},
+        capabilities: async () => ({
+          stop: false,
+          usedPercent: 35,
+          windows: [{ bucketIndex: 1, slot: 'primary', durationMinutes: 300, usedPercent: 35, resetsAt: 1_800_000_100 }],
+          guardSignals: { windowThresholdReached: false, rateLimitReached: false, spendControlReached: false },
+        }),
+        startThread: async () => ({ thread: { id: '019fb023-24b8-7881-9119-509f078b610e' } }),
+        close: async () => {},
       }),
-      startThread: async () => ({ thread: { id: '019fb023-24b8-7881-9119-509f078b610e' } }), close: async () => {},
-    }),
-    runTurnImpl: async () => ({ status: 'completed', text: JSON.stringify({
-      status: 'findings', summary: 'A cited concern remains.', affectedAdrs: ['ADR-0009'], affectedContexts: ['agentic-delivery-governance'],
-      findings: [{ category: 'observability', severity: 'advisory', statement: 'Runtime evidence is unavailable.', evidence: ['Safe runner-state summary'], recommendedAction: 'Record the gap.' }], evidenceGaps: [],
-    }) }),
-  });
-  assert.equal(findings.status, 'findings');
-  assert.equal(findings.findings[0].severity, 'advisory');
-  assert.equal(findings.quotaTelemetry.before.highestWindowUsedPercent, 35);
-  assert.equal(findings.quotaTelemetry.after.highestWindowUsedPercent, 35);
-  assert.match(formatReviewMarkdown({ ...review, semantic: findings }), /highest window use was 35% before and 35% after the turn/);
-  assert.match(formatReviewMarkdown({ ...review, semantic: findings }), /bucket 1 primary 300m 35%/);
+      runTurnImpl: async () => ({ status: 'completed', text: JSON.stringify({
+        status: 'findings',
+        summary: 'A cited concern remains.',
+        affectedAdrs: ['ADR-0009'],
+        affectedContexts: ['agentic-delivery-governance'],
+        findings: [{
+          category: 'observability',
+          severity: 'advisory',
+          statement: 'Runtime evidence is unavailable.',
+          evidence: ['Safe runner-state summary'],
+          recommendedAction: 'Record the gap.',
+        }],
+        evidenceGaps: [],
+      }) }),
+    });
+    assert.equal(findings.status, 'findings');
+    assert.equal(findings.findings[0].severity, 'advisory');
+    assert.equal(findings.quotaTelemetry.before.highestWindowUsedPercent, 35);
+    assert.equal(findings.quotaTelemetry.after.highestWindowUsedPercent, 35);
+    assert.match(formatReviewMarkdown({ ...review, semantic: findings }), /highest window use was 35% before and 35% after/);
+    assert.match(formatReviewMarkdown({ ...review, semantic: findings }), /bucket 1 primary 300m 35%/);
+  } finally {
+    for (const key of envKeys) {
+      if (previousEnv.get(key) === undefined) delete process.env[key];
+      else process.env[key] = previousEnv.get(key);
+    }
+    await rm(fixture, { recursive: true, force: true });
+  }
 });
 
 test('semantic evidence bundle includes the live PR body, exact-head checks, and runner preflight', async (t) => {
@@ -169,12 +235,15 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
     return stdout.trim();
   })());
   const repository = 'agentic-delivery-lab/agentic-delivery';
-  const pullRequestBody = 'Runner and semantic checks are pending at PR creation.';
+  let pullRequestBody = 'Runner and semantic checks are pending at PR creation.';
+  let qualityConclusion = 'success';
+  let pendingQualityFetches = 1;
+  let checkFetches = 0;
   const eventPath = path.join(fixture, 'event.json');
   const preflightPath = path.join(fixture, 'preflight.json');
   await Promise.all([
     writeFile(eventPath, JSON.stringify({
-      repository: { full_name: repository },
+      repository: { id: 25, full_name: repository },
       pull_request: {
         number: 25,
         html_url: `https://github.com/${repository}/pull/25`,
@@ -214,7 +283,7 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
     }, null, 2)}\n`),
   ]);
 
-  const envKeys = ['GH_TOKEN', 'GITHUB_REPOSITORY', 'CODEX_PREFLIGHT_REPORT_PATH', 'RUNNER_PREFLIGHT_OUTCOME', 'RUNNER_SANDBOX_OUTCOME', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'HEAD_SHA'];
+  const envKeys = ['GH_TOKEN', 'GITHUB_REPOSITORY', 'CODEX_PREFLIGHT_REPORT_PATH', 'CODEX_REVIEW_STATE_DIR', 'RUNNER_PREFLIGHT_OUTCOME', 'RUNNER_SANDBOX_OUTCOME', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'HEAD_SHA'];
   const previousEnv = new Map(envKeys.map((key) => [key, process.env[key]]));
   const previousFetch = globalThis.fetch;
   t.after(() => {
@@ -228,6 +297,7 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
     GH_TOKEN: 'test-token',
     GITHUB_REPOSITORY: repository,
     CODEX_PREFLIGHT_REPORT_PATH: preflightPath,
+    CODEX_REVIEW_STATE_DIR: path.join(fixture, 'review-state'),
     RUNNER_PREFLIGHT_OUTCOME: 'success',
     RUNNER_SANDBOX_OUTCOME: 'success',
     GITHUB_RUN_ID: '123456',
@@ -251,19 +321,34 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
     };
     if (address.includes(`/commits/${revision}/check-runs`)) return {
       ok: true,
-      json: async () => ({ total_count: 1, check_runs: [{
-        id: 654321,
-        name: 'Validate pull request body',
-        status: 'completed',
-        conclusion: 'success',
-        head_sha: revision,
-        html_url: `https://github.com/${repository}/actions/runs/123456/job/654321`,
-        details_url: null,
-        app: { name: 'GitHub Actions' },
-        started_at: '2026-10-01T12:01:00Z',
-        completed_at: '2026-10-01T12:02:00Z',
-        output: { summary: 'Exact PR head passed.' },
-      }] }),
+      json: async () => {
+        checkFetches += 1;
+        const qualityPending = pendingQualityFetches > 0;
+        if (qualityPending) pendingQualityFetches -= 1;
+        const checks = [
+          ['Validate pull request body', 654321],
+          ['quality', 654322],
+          ['portability (ubuntu-latest)', 654323],
+          ['portability (macos-latest)', 654324],
+          ['portability (windows-latest)', 654325],
+          ['review', 654326],
+        ].map(([name, id]) => ({
+          id,
+          name,
+          status: name === 'review' ? 'in_progress' : 'completed',
+          ...(name === 'quality' && qualityPending
+            ? { status: 'in_progress', conclusion: null }
+            : { conclusion: name === 'review' ? null : name === 'quality' ? qualityConclusion : 'success' }),
+          head_sha: revision,
+          html_url: `https://github.com/${repository}/actions/runs/123456/job/${id}`,
+          details_url: null,
+          app: { name: 'GitHub Actions' },
+          started_at: '2026-10-01T12:01:00Z',
+          completed_at: name === 'review' ? null : '2026-10-01T12:02:00Z',
+          output: { summary: name === 'review' ? 'Do not include this self-review result.' : 'Exact PR head passed.' },
+        }));
+        return { total_count: checks.length, check_runs: checks };
+      },
     };
     if (address.endsWith('/issues/25')) return {
       ok: true,
@@ -286,10 +371,15 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
   const review = await deterministicReview({ repositoryRoot, base: revision, head: revision, eventPath });
   let bundleText = '';
   let capabilityReads = 0;
+  let modelTurns = 0;
+  let threadStarts = 0;
   const result = await runSemanticReview({
     repositoryRoot,
     review,
     eventPath,
+    sleepImpl: async () => {},
+    checkWaitTimeoutMs: 1000,
+    checkPollIntervalMs: 0,
     createClient: ({ readableFiles }) => ({
       initialize: async () => {},
       capabilities: async () => {
@@ -304,11 +394,12 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
           guardSignals: { windowThresholdReached: false, rateLimitReached: false, spendControlReached: false },
         };
       },
-      startThread: async () => ({ thread: { id: '019fb023-24b8-7881-9119-509f078b610e' } }),
+      startThread: async () => ({ thread: { id: threadStarts++ === 0 ? '019fb023-24b8-7881-9119-509f078b610e' : '119fb023-24b8-7881-9119-509f078b610e' } }),
       close: async () => {},
       readableFiles,
     }),
     runTurnImpl: async ({ client }) => {
+      modelTurns += 1;
       bundleText = await readFile(client.readableFiles[0], 'utf8');
       return { status: 'completed', text: JSON.stringify({
         status: 'aligned',
@@ -321,18 +412,151 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
     },
   });
   assert.equal(result.status, 'aligned');
+  assert.equal(result.reviewSession.disposition, 'completed');
+  assert.equal(checkFetches, 2, 'Harness waits for required exact-head checks before the model turn.');
   assert.match(bundleText, /Runner and semantic checks are pending at PR creation\./);
   assert.match(bundleText, /"id": 654321/);
   assert.match(bundleText, /"conclusion": "success"/);
   assert.match(bundleText, /"codexCliVersion": "0\.159\.3"/);
-  assert.match(bundleText, /"highestWindowUsedPercent": 96/);
-  assert.match(bundleText, /"allowanceAvailable": true/);
-  assert.match(bundleText, /"durationMinutes": 300/);
-  assert.match(bundleText, /"durationMinutes": 10080/);
-  assert.match(bundleText, /"windowThresholdReached": false/);
+  assert.match(bundleText, /no ADR-linked primitives selected because this review has no affected ADR/);
+  assert.doesNotMatch(bundleText, /function safePreflightReport|export async function runSemanticReview/);
+  assert.ok(bundleText.length < 100_000, 'unrelated primitive source files must not inflate the semantic evidence bundle');
+  assert.doesNotMatch(bundleText, /Do not include this self-review result|"id": 654326/);
+  assert.match(bundleText, /quota telemetry is recorded by the runner/i);
+  const quotaFields = /highestWindowUsedPercent|allowanceAvailable|durationMinutes|windowThresholdReached/;
+  const quotaFieldMatch = quotaFields.exec(bundleText);
+  assert.equal(quotaFieldMatch, null, quotaFieldMatch
+    ? bundleText.slice(Math.max(0, quotaFieldMatch.index - 120), quotaFieldMatch.index + 180)
+    : undefined);
   assert.match(bundleText, /"preflightStepOutcome": "success"/);
   assert.equal(result.quotaTelemetry.after.highestWindowUsedPercent, 97);
   assert.equal(result.quotaTelemetry.after.windows[0].usedPercent, 97);
+
+  const cached = await runSemanticReview({
+    repositoryRoot,
+    review,
+    eventPath,
+    createClient: () => { throw new Error('an exact cache hit must not create Codex'); },
+    runTurnImpl: async () => { throw new Error('an exact cache hit must not start a model turn'); },
+  });
+  assert.equal(cached.status, 'aligned');
+  assert.equal(cached.reviewSession.disposition, 'cached');
+  assert.equal(cached.reviewSession.noModelTurn, true);
+  assert.equal(modelTurns, 1);
+
+  const quotaBlockedPreflight = JSON.parse(await readFile(preflightPath, 'utf8'));
+  quotaBlockedPreflight.status = 'failed';
+  quotaBlockedPreflight.quota.highestWindowUsedPercent = 100;
+  quotaBlockedPreflight.quota.allowanceAvailable = false;
+  await writeFile(preflightPath, `${JSON.stringify(quotaBlockedPreflight, null, 2)}\n`);
+  process.env.RUNNER_PREFLIGHT_OUTCOME = 'failure';
+  const cachedDuringQuotaHold = await runSemanticReview({
+    repositoryRoot,
+    review,
+    eventPath,
+    createClient: () => { throw new Error('a cached exact review must work without available quota'); },
+    runTurnImpl: async () => { throw new Error('a cached exact review must not spend quota'); },
+  });
+  assert.equal(cachedDuringQuotaHold.reviewSession.disposition, 'cached');
+  assert.equal(cachedDuringQuotaHold.reviewSession.noModelTurn, true);
+  assert.equal(modelTurns, 1);
+
+  pullRequestBody = 'The exact-head checks and review guidance have been updated.';
+  const changedButQuotaBlocked = await runSemanticReview({
+    repositoryRoot,
+    review,
+    eventPath,
+    createClient: () => { throw new Error('changed evidence must not bypass a failed quota preflight'); },
+    runTurnImpl: async () => { throw new Error('changed evidence must not start a model turn after failed preflight'); },
+  });
+  assert.equal(changedButQuotaBlocked.status, 'inconclusive');
+  assert.equal(changedButQuotaBlocked.reviewSession.noModelTurn, true);
+  assert.equal(modelTurns, 1);
+
+  const availablePreflight = JSON.parse(await readFile(preflightPath, 'utf8'));
+  availablePreflight.status = 'passed';
+  availablePreflight.quota.highestWindowUsedPercent = 96;
+  availablePreflight.quota.allowanceAvailable = true;
+  await writeFile(preflightPath, `${JSON.stringify(availablePreflight, null, 2)}\n`);
+  process.env.RUNNER_PREFLIGHT_OUTCOME = 'success';
+  qualityConclusion = 'failure';
+  const failedStaticChecks = await runSemanticReview({
+    repositoryRoot,
+    review,
+    eventPath,
+    createClient: () => { throw new Error('failed exact-head checks must stop before Codex initialization'); },
+    runTurnImpl: async () => { throw new Error('failed exact-head checks must not start a model turn'); },
+  });
+  assert.equal(failedStaticChecks.status, 'inconclusive');
+  assert.equal(failedStaticChecks.reviewSession.disposition, 'checks-failed');
+  assert.equal(failedStaticChecks.reviewSession.noModelTurn, true);
+  assert.equal(modelTurns, 1);
+  qualityConclusion = 'success';
+
+  const changedEvidence = await runSemanticReview({
+    repositoryRoot,
+    review,
+    eventPath,
+    createClient: () => ({
+      initialize: async () => {},
+      capabilities: async () => ({ stop: false, usedPercent: 97, windows: [], guardSignals: { windowThresholdReached: false, rateLimitReached: false, spendControlReached: false } }),
+      startThread: async () => ({ thread: { id: '219fb023-24b8-7881-9119-509f078b610e' } }),
+      close: async () => {},
+    }),
+    runTurnImpl: async () => {
+      modelTurns += 1;
+      return { status: 'completed', text: JSON.stringify({
+        status: 'aligned', summary: 'The changed evidence is aligned.', affectedAdrs: [], affectedContexts: [], findings: [], evidenceGaps: [],
+      }) };
+    },
+  });
+  assert.equal(changedEvidence.status, 'aligned');
+  assert.equal(changedEvidence.reviewSession.disposition, 'completed');
+  assert.equal(modelTurns, 2);
+
+  const preflight = JSON.parse(await readFile(preflightPath, 'utf8'));
+  preflight.codexCliVersion = '0.159.4';
+  await writeFile(preflightPath, `${JSON.stringify(preflight, null, 2)}\n`);
+  const interrupted = await runSemanticReview({
+    repositoryRoot,
+    review,
+    eventPath,
+    createClient: () => ({
+      initialize: async () => {},
+      capabilities: async () => ({ stop: false, usedPercent: 97, windows: [], guardSignals: { windowThresholdReached: false, rateLimitReached: false, spendControlReached: false } }),
+      startThread: async () => ({ thread: { id: '319fb023-24b8-7881-9119-509f078b610e' } }),
+      close: async () => {},
+    }),
+    runTurnImpl: async () => ({ status: 'paused', reason: 'The quota boundary interrupted the review.' }),
+  });
+  assert.equal(interrupted.status, 'inconclusive');
+  assert.equal(interrupted.reviewSession.disposition, 'interrupted');
+
+  let resumedThread = false;
+  const resumed = await runSemanticReview({
+    repositoryRoot,
+    review,
+    eventPath,
+    createClient: () => ({
+      initialize: async () => {},
+      capabilities: async () => ({ stop: false, usedPercent: 96, windows: [], guardSignals: { windowThresholdReached: false, rateLimitReached: false, spendControlReached: false } }),
+      startThread: async () => { throw new Error('an interrupted review must resume its saved thread'); },
+      resumeThread: async (_cwd, id) => { resumedThread = id === '319fb023-24b8-7881-9119-509f078b610e'; },
+      close: async () => {},
+    }),
+    runTurnImpl: async ({ prompt }) => {
+      assert.match(prompt, /Continue the interrupted read-only architecture review/);
+      assert.doesNotMatch(prompt, /Compare verification statements/);
+      modelTurns += 1;
+      return { status: 'completed', text: JSON.stringify({
+        status: 'aligned', summary: 'The resumed review is aligned.', affectedAdrs: [], affectedContexts: [], findings: [], evidenceGaps: [],
+      }) };
+    },
+  });
+  assert.equal(resumedThread, true);
+  assert.equal(resumed.status, 'aligned');
+  assert.equal(resumed.reviewSession.disposition, 'resumed');
+  assert.equal(modelTurns, 3);
 });
 
 test('the evidence contract validates the complete projection and rejects mismatches', async () => {
@@ -373,9 +597,9 @@ test('the baseline report contains one required matrix row for every official AD
   assert.match(report, /agentic-delivery-governance/);
 });
 
-test('architecture-review workflow is pinned, read-only, and does not publish comments', async () => {
+test('architecture-review workflow is pinned, read-only, resumable, and does not publish comments', async () => {
   const workflow = await readFile(path.join(repositoryRoot, '.github/workflows/harness-architecture-review.yml'), 'utf8');
-  for (const phrase of ['pull_request:', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
+  for (const phrase of ['pull_request:', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', 'CODEX_REVIEW_STATE_DIR: /var/lib/github-runner/.codex/harness-reviews', 'codex-cli-release-update:v1:', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
     assert.ok(workflow.includes(phrase), `missing workflow control: ${phrase}`);
   }
   assert.doesNotMatch(workflow, /issues:\s*write|pull-requests:\s*write|contents:\s*write/);

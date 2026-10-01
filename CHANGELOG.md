@@ -39,16 +39,24 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 - Actions now use Codex CLI 0.159.3 pinned to the published Linux asset
   SHA-256; a weekly updater verifies candidate assets, creates a release-specific
-  Task issue, and opens review PRs whose dispatched checks attach to the exact
-  candidate commit.
+  Task issue, and opens review PRs with a repository-scoped App token so normal
+  PR checks start automatically. The updater waits for exact-head deterministic
+  checks before dispatching the no-generation runner smoke, then starts Harness
+  only after that smoke passes. A closed update PR no longer blocks later
+  releases after its linked Task issue is resolved.
 - Codex delivery and Harness review now use phase-specific GPT-6 Luna
   Low/Medium/Max and GPT-6 Sol High profiles, with runner-catalog preflight,
   complete matching-entry capability checks, safe reporting for unsupported
   profile pairs, and no model fallback.
-- Harness review now includes the live PR body, exact-head check runs, runner
-  preflight evidence, and per-window shared-quota observations before and after
-  review. A preflight that stops before a model turn also writes the sanitized
-  per-window usage and guard signals to the Actions summary and runner log.
+- Harness review excludes its own check run, keeps quota counters outside the
+  semantic model input, limits primitive evidence to affected ADR metadata,
+  waits for exact-head deterministic checks, and skips a model turn when a
+  required check fails or stays incomplete. It resumes
+  interrupted Codex threads and reuses a completed result for an exact evidence
+  fingerprint without a new model turn. Transient preflight and quota results
+  do not invalidate that fingerprint. Protected runner-local session data is
+  pruned after 30 days. A failed preflight still writes sanitized per-window
+  usage and guard signals to the Actions summary and runner log.
 - Issue intake, delivery, and metadata migration now verify that the live
   Lifecycle Stage and Delivery Readiness fields are pinned to every enabled
   issue type and to issues without a type before authorizing field changes.

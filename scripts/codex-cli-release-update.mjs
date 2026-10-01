@@ -6,7 +6,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import { reviewCheckReadiness } from './lib/pull-request-check-readiness.mjs';
 import { RELEASE } from './setup-runner-codex.mjs';
+
+export { reviewCheckReadiness } from './lib/pull-request-check-readiness.mjs';
 
 const execFileAsync = promisify(execFile);
 const API_URL = 'https://api.github.com/repos/openai/codex/releases/latest';
@@ -91,28 +94,76 @@ async function appendOutput(name, value) {
   await appendFile(outputPath, `${name}=${String(value)}\n`);
 }
 
-export function selectPendingUpdatePullRequest(pulls, repository, candidateSlug) {
-  const updates = (Array.isArray(pulls) ? pulls : []).filter((pullRequest) => {
+function updaterPullRequests(pulls, repository) {
+  return (Array.isArray(pulls) ? pulls : []).filter((pullRequest) => {
     const branch = String(pullRequest.head?.ref ?? '');
     return pullRequest.base?.ref === 'main'
       && pullRequest.base?.repo?.full_name === repository
       && pullRequest.head?.repo?.full_name === repository
       && UPDATE_BRANCH.test(branch);
   });
+}
+
+export async function resolveClosedUpdateIssueStates(pulls, repository, token, fetchImpl = globalThis.fetch) {
+  if (!token || !/^[\w.-]+\/[\w.-]+$/.test(repository ?? '')) {
+    throw new Error('A repository and GH_TOKEN are required to resolve closed Codex CLI update pull requests.');
+  }
+  const closed = updaterPullRequests(pulls, repository)
+    .filter((pullRequest) => pullRequest.state === 'closed' && !pullRequest.merged_at);
+  const issues = new Map();
+  for (const pullRequest of closed) {
+    const match = UPDATE_BRANCH.exec(String(pullRequest.head?.ref ?? ''));
+    const issueNumber = Number(match?.[1]);
+    const version = match?.slice(2).join('.');
+    if (!Number.isSafeInteger(issueNumber) || !version) {
+      throw new Error('A closed Codex CLI update pull request has no valid release source issue.');
+    }
+    const issue = await fetchJson(`https://api.github.com/repos/${repository}/issues/${issueNumber}`, token, fetchImpl);
+    const marker = `<!-- codex-cli-release-update:v1:${version} -->`;
+    if (issue.number !== issueNumber || issue.pull_request
+      || issue.html_url !== `https://github.com/${repository}/issues/${issueNumber}`
+      || issue.title !== sourceIssueTitle(version)
+      || !String(issue.body ?? '').includes(marker)
+      || !['open', 'closed'].includes(issue.state)) {
+      throw new Error(`Closed Codex CLI update pull request #${pullRequest.number} does not link to its matching release Task issue.`);
+    }
+    issues.set(issueNumber, { state: issue.state, version });
+  }
+  return issues;
+}
+
+export function selectPendingUpdatePullRequest(pulls, repository, candidateSlug, closedIssueStates = new Map()) {
+  const updates = updaterPullRequests(pulls, repository);
   const closedWithoutMerge = updates.filter((pullRequest) => pullRequest.state === 'closed' && !pullRequest.merged_at);
-  if (closedWithoutMerge.length) throw new Error('A Codex CLI update pull request was closed without merging; resolve that release decision before opening another update.');
+  let rejectedCandidate;
+  for (const pullRequest of closedWithoutMerge) {
+    const match = UPDATE_BRANCH.exec(pullRequest.head.ref);
+    const issueNumber = Number(match?.[1]);
+    const version = match?.slice(2).join('.');
+    const sourceIssue = closedIssueStates.get(issueNumber);
+    if (!sourceIssue || sourceIssue.version !== version || !['open', 'closed'].includes(sourceIssue.state)) {
+      throw new Error(`Closed Codex CLI update pull request #${pullRequest.number} has no verified release source issue; resolve it before opening another update.`);
+    }
+    if (sourceIssue.state !== 'closed') {
+      throw new Error(`Codex CLI update pull request #${pullRequest.number} is closed without merging while its source issue #${issueNumber} remains open; close or merge that release decision before opening another update.`);
+    }
+    if (version.replaceAll('.', '-') === candidateSlug) rejectedCandidate = { version, issueNumber, pullRequest };
+  }
   const pending = updates.filter((pullRequest) => pullRequest.state === 'open');
   if (pending.length > 1) throw new Error('More than one open Codex CLI update pull request exists; resolve the duplicates first.');
-  if (!pending.length) return null;
-  const pullRequest = pending[0];
-  const match = UPDATE_BRANCH.exec(pullRequest.head.ref);
-  const branchVersion = match.slice(2).join('-');
-  return {
-    pullRequest,
-    branch: pullRequest.head.ref,
-    issueNumber: match[1],
-    sameCandidate: branchVersion === candidateSlug,
-  };
+  if (pending.length) {
+    const pullRequest = pending[0];
+    const match = UPDATE_BRANCH.exec(pullRequest.head.ref);
+    const branchVersion = match.slice(2).join('-');
+    return {
+      pullRequest,
+      branch: pullRequest.head.ref,
+      issueNumber: match[1],
+      sameCandidate: branchVersion === candidateSlug,
+    };
+  }
+  if (rejectedCandidate) return { rejectedCandidate: true, ...rejectedCandidate };
+  return null;
 }
 
 function sourceIssueTitle(version) {
@@ -264,9 +315,19 @@ async function findPendingPullRequest() {
   const candidateSlug = process.env.CODEX_RELEASE_SLUG;
   if (!token || !repository || !candidateSlug) throw new Error('GH_TOKEN, GITHUB_REPOSITORY, and CODEX_RELEASE_SLUG are required.');
   const pulls = await fetchJson(`https://api.github.com/repos/${repository}/pulls?state=all&per_page=100`, token, globalThis.fetch);
-  const pending = selectPendingUpdatePullRequest(pulls, repository, candidateSlug);
+  const closedIssueStates = await resolveClosedUpdateIssueStates(pulls, repository, token, globalThis.fetch);
+  const pending = selectPendingUpdatePullRequest(pulls, repository, candidateSlug, closedIssueStates);
+  if (pending?.rejectedCandidate) {
+    await appendOutput('pending', 'false');
+    await appendOutput('rejected', 'true');
+    await appendOutput('rejected_version', pending.version);
+    await appendOutput('rejected_issue_number', String(pending.issueNumber));
+    process.stdout.write(`Codex CLI ${pending.version} was explicitly resolved by closing source issue #${pending.issueNumber}; the updater will not recreate that rejected candidate. A later release can be evaluated normally.\n`);
+    return;
+  }
   if (!pending) {
     await appendOutput('pending', 'false');
+    await appendOutput('rejected', 'false');
     process.stdout.write('No open Codex CLI update pull request exists.\n');
     return;
   }
@@ -280,6 +341,52 @@ async function findPendingPullRequest() {
   process.stdout.write(pending.sameCandidate
     ? `Codex CLI update pull request #${pending.pullRequest.number} is already open; no duplicate was created.\n`
     : `Codex CLI update pull request #${pending.pullRequest.number} for an earlier release is still open; resolve it before opening another.\n`);
+}
+
+async function waitForPullRequestChecks() {
+  const token = process.env.GH_TOKEN;
+  const repository = process.env.GITHUB_REPOSITORY;
+  const number = Number(process.env.PR_NUMBER);
+  const expectedSha = process.env.EXPECTED_SHA;
+  if (!token || !repository || !Number.isSafeInteger(number) || number < 1 || !/^[0-9a-f]{40}$/.test(expectedSha ?? '')) {
+    throw new Error('GH_TOKEN, GITHUB_REPOSITORY, PR_NUMBER, and EXPECTED_SHA are required to wait for candidate checks.');
+  }
+  const pullUrl = `https://api.github.com/repos/${repository}/pulls/${number}`;
+  const pullRequest = await fetchJson(pullUrl, token, globalThis.fetch);
+  if (pullRequest.state !== 'open' || pullRequest.head?.sha !== expectedSha) {
+    throw new Error('The release pull request closed or changed head before its exact-head checks were ready.');
+  }
+  const files = [];
+  for (let page = 1; page <= 30; page += 1) {
+    const batch = await fetchJson(`${pullUrl}/files?per_page=100&page=${page}`, token, globalThis.fetch);
+    if (!Array.isArray(batch)) throw new Error('The release pull request changed-file list is invalid.');
+    files.push(...batch);
+    if (batch.length < 100) break;
+    if (page === 30) throw new Error('The release pull request changed-file list exceeds the supported review bound.');
+  }
+  const requireAdrValidation = files.some((file) => String(file.filename ?? '').startsWith('docs/decisions/'));
+  const checkUrl = `https://api.github.com/repos/${repository}/commits/${expectedSha}/check-runs?filter=latest&per_page=100`;
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const currentPullRequest = await fetchJson(pullUrl, token, globalThis.fetch);
+    if (currentPullRequest.state !== 'open' || currentPullRequest.head?.sha !== expectedSha) {
+      throw new Error('The release pull request changed head while the updater waited for exact-head checks.');
+    }
+    const response = await fetchJson(checkUrl, token, globalThis.fetch);
+    const readiness = reviewCheckReadiness(response.check_runs, expectedSha, requireAdrValidation);
+    if (readiness.ready) {
+      await appendOutput('checks_ready', 'true');
+      process.stdout.write(`Exact-head body, delivery-quality, portability${requireAdrValidation ? ', and ADR-quality' : ''} checks passed for pull request #${number} at ${expectedSha}.\n`);
+      return;
+    }
+    if (readiness.failed.length) {
+      await appendOutput('checks_ready', 'false');
+      await appendOutput('failed_checks', readiness.failed.join(','));
+      process.stdout.write(`Deterministic checks failed for pull request #${number}: ${readiness.failed.join(', ')}. Runner smoke and semantic review will not be dispatched.\n`);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 15_000));
+  }
+  throw new Error(`Timed out waiting for exact-head pull-request checks on #${number}; no runner smoke or semantic review was dispatched.`);
 }
 
 async function ensureSourceIssue(candidatePath) {
@@ -343,9 +450,10 @@ if (isMainModule) {
   try {
     if (process.argv[2] === '--check' && process.argv.length === 3) await checkRelease();
     else if (process.argv[2] === '--pending-pr' && process.argv.length === 3) await findPendingPullRequest();
+    else if (process.argv[2] === '--wait-checks' && process.argv.length === 3) await waitForPullRequestChecks();
     else if (process.argv[2] === '--ensure-source-issue' && process.argv[3]) await ensureSourceIssue(process.argv[3]);
     else if (process.argv[2] === '--apply' && process.argv[3]) await applyRelease(process.argv[3]);
-    else throw new Error('Usage: codex-cli-release-update.mjs --check | --pending-pr | --ensure-source-issue <candidate-json> | --apply <candidate-json>');
+    else throw new Error('Usage: codex-cli-release-update.mjs --check | --pending-pr | --wait-checks | --ensure-source-issue <candidate-json> | --apply <candidate-json>');
   } catch (error) {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = 1;
