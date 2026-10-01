@@ -542,7 +542,7 @@ function formatQuotaDiagnostics(value) {
   const lines = [
     '#### Review quota evidence',
     '',
-    `- Contract version: ${value.schemaVersion}`,
+    `- Schema version: ${value.schemaVersion}`,
     `- Stop phase: ${phase}`,
     `- Reason: ${reason}`,
   ];

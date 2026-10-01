@@ -51,7 +51,8 @@ they do not authorize migration, alter that issue's scope, or close it.
   Simultaneous cause categories remain visible; bucket details have fixed
   array limits and an explicit truncation flag. Invalid finite window metrics
   are normalized before projection, and tests validate emitted records against
-  the 2020-12 schema. The report labels the projection `review quota evidence`,
+  the 2020-12 schema. The report uses `Schema version` for its internal format
+  marker and labels the projection `review quota evidence`,
   distinct from the controller's internal `quota diagnostics` record. The
   internal Harness schema is not a participant contract. The operator guide
   explains how to rerun a fresh review on the same pull-request head after the

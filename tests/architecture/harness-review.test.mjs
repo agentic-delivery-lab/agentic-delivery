@@ -501,7 +501,7 @@ test('quota diagnostic projection and formatting cover each independent stop rea
       },
     },
   });
-  assert.match(compatibleUnknownCode, /Contract version: 1\.2\.0-beta\.1\+build\.6/);
+  assert.match(compatibleUnknownCode, /Schema version: 1\.2\.0-beta\.1\+build\.6/);
   assert.match(compatibleUnknownCode, /Reason: unrecognized by this consumer/);
   assert.match(compatibleUnknownCode, /Trigger signals: 98% usage reserve/);
   assert.match(compatibleUnknownCode, /98% of the 300-minute window/);
