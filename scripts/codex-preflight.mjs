@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { appendFile, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
-import { AUTH_STORAGE_CONFIG, CodexClient, MODELS } from './lib/codex-client.mjs';
+import { AUTH_STORAGE_CONFIG, CodexClient, formatQuotaDiagnostics, MODELS } from './lib/codex-client.mjs';
 import { RELEASE } from './setup-runner-codex.mjs';
 
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -129,6 +129,7 @@ try {
   console.log(`Codex preflight passed: GPT-6 Luna Low/Medium/Max, GPT-6 Sol High, Plan mode, permission profiles, ChatGPT authentication, and ${sessionProbe}; highest window usage ${quota.usedPercent}%. No model turn was started.`);
 } catch (error) {
   console.error(error.message);
+  if (quotaObservation) console.error(formatQuotaDiagnostics(quotaObservation));
   const report = {
     schemaVersion: 1,
     status: 'failed',

@@ -250,7 +250,9 @@ issue edits.
   secondary windows separate, including duration, usage, reset time, and safe
   threshold, rate-limit, and spend-control signals. The snapshots provide
   observed usage but cannot attribute a change to one model when other Codex
-  clients share the allowance.
+  clients share the allowance. A failed preflight writes its per-window
+  observations and guard signals to the Actions job summary and runner log
+  before any semantic model turn starts.
 - ChatGPT login for the installed `codex` executable under that user,
   `github-runner`. Another user's installation/login is not sufficient. For a
   headless runner, use the file-backed credential store so the service does not
@@ -327,13 +329,14 @@ The controller checks all returned usage windows and stops at 98 percent
 usage. It also stops when Codex reports a rate-limit or spend-control block or
 if telemetry cannot be read. Five hours describes the subscription window and
 is the normal model-execution boundary, but a secondary window may stop work
-first. Preflight evidence records each returned window separately so the
-limiting window can be identified. A turn has no independent absolute duration
-limit: its 20-minute inactivity watchdog starts
-after `turn/start` acknowledges the active turn and resets whenever that turn
-produces activity. The 5.5-hour controller timeout and 350-minute Actions
-timeout are recovery failsafes. Their gap gives the controller time to save a
-handoff before Actions stops the job. Validation repairs are capped at three.
+first. Preflight evidence records each returned window separately in the
+Actions job summary and runner log so the limiting window can be identified.
+A turn has no independent absolute duration limit: its 20-minute inactivity
+watchdog starts after `turn/start` acknowledges the active turn. It resets
+whenever the turn produces activity. The 5.5-hour controller timeout and
+350-minute Actions timeout are recovery failsafes. Their gap gives the
+controller time to save a handoff before Actions stops the job. Validation
+repairs are capped at three.
 
 Implementation can span multiple model turns in one run. A `continue` outcome
 records exact remaining implementation tasks and starts the next turn without

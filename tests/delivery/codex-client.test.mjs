@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import path from 'node:path';
 import { rm } from 'node:fs/promises';
-import { CodexClient, quotaBoundary, verifyModels, modelEnvironment, deliveryPermissions, checkConfiguration, AUTH_STORAGE_CONFIG, DEFAULT_PERMISSION_CONFIG, appServerFailure } from '../../scripts/lib/codex-client.mjs';
+import { CodexClient, quotaBoundary, formatQuotaDiagnostics, verifyModels, modelEnvironment, deliveryPermissions, checkConfiguration, AUTH_STORAGE_CONFIG, DEFAULT_PERMISSION_CONFIG, appServerFailure } from '../../scripts/lib/codex-client.mjs';
 
 const now = 1_800_000_000;
 const window = (usedPercent, windowDurationMins = 300) => ({ usedPercent, windowDurationMins, resetsAt: now + 100 });
@@ -51,6 +51,15 @@ test('checks every returned bucket and explicit server limits', () => {
     rateLimitReached: true,
     spendControlReached: false,
   });
+});
+
+test('formats sanitized per-window quota details for runner logs', () => {
+  const diagnostics = formatQuotaDiagnostics(quotaBoundary(quota(24, 98), now));
+  assert.match(diagnostics, /highest-window usage 98%/);
+  assert.match(diagnostics, /bucket 1 primary: 300m at 24%, resets 2027-/);
+  assert.match(diagnostics, /bucket 1 secondary: 10080m at 98%, resets 2027-/);
+  assert.match(diagnostics, /window threshold=true; rate-limit=false; spend-control=false/);
+  assert.doesNotMatch(diagnostics, /codex|limitId/i);
 });
 
 test('refuses model execution when credit spillover is possible or unknown', () => {

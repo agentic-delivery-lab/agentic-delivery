@@ -47,7 +47,8 @@ they do not authorize migration, alter that issue's scope, or close it.
   profile pairs, and no model fallback.
 - Harness review now includes the live PR body, exact-head check runs, runner
   preflight evidence, and per-window shared-quota observations before and after
-  review.
+  review. A preflight that stops before a model turn also writes the sanitized
+  per-window usage and guard signals to the Actions summary and runner log.
 - Issue intake, delivery, and metadata migration now verify that the live
   Lifecycle Stage and Delivery Readiness fields are pinned to every enabled
   issue type and to issues without a type before authorizing field changes.

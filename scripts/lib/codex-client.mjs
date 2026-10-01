@@ -103,6 +103,30 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
   };
 }
 
+export function formatQuotaDiagnostics(quota) {
+  const windows = Array.isArray(quota?.windows)
+    ? quota.windows.filter((window) => Number.isSafeInteger(window.bucketIndex)
+      && ['primary', 'secondary'].includes(window.slot)
+      && Number.isFinite(window.durationMinutes) && window.durationMinutes > 0
+      && Number.isFinite(window.usedPercent) && window.usedPercent >= 0 && window.usedPercent <= 100
+      && Number.isFinite(window.resetsAt))
+    : [];
+  const describeWindow = (window) => {
+    const reset = new Date(window.resetsAt * 1000);
+    const resetsAt = Number.isNaN(reset.getTime()) ? 'invalid' : reset.toISOString();
+    return `bucket ${window.bucketIndex} ${window.slot}: ${window.durationMinutes}m at ${window.usedPercent}%, resets ${resetsAt}`;
+  };
+  const usage = Number.isFinite(quota?.usedPercent)
+    ? `${quota.usedPercent}%`
+    : Number.isFinite(quota?.highestWindowUsedPercent) ? `${quota.highestWindowUsedPercent}%` : 'unavailable';
+  const guardSignals = quota?.guardSignals
+    && ['windowThresholdReached', 'rateLimitReached', 'spendControlReached']
+      .every((key) => typeof quota.guardSignals[key] === 'boolean')
+    ? `window threshold=${quota.guardSignals.windowThresholdReached}; rate-limit=${quota.guardSignals.rateLimitReached}; spend-control=${quota.guardSignals.spendControlReached}`
+    : 'unavailable';
+  return `Quota diagnostics: highest-window usage ${usage}; windows ${windows.length ? windows.map(describeWindow).join('; ') : 'unavailable'}; guards ${guardSignals}.`;
+}
+
 export function verifyModels(models) {
   const requiredPairs = [...new Map(Object.values(MODELS).map(({ model, effort }) => [
     `${model}/${effort}`,

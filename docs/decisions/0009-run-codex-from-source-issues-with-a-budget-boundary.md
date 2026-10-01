@@ -142,7 +142,9 @@ Each snapshot records the returned windows separately by primary or secondary
 slot, duration, usage, and reset time, plus safe booleans for the threshold,
 rate-limit, and spend-control signals. These observations help identify which
 limit stopped work; they still observe a shared allowance and do not attribute
-usage to one model turn. Jobs do not follow a moving `latest` release or update
+usage to one model turn. A failed preflight also writes those per-window
+observations and guard signals to the Actions job summary and runner log before
+any model turn starts. Jobs do not follow a moving `latest` release or update
 the CLI in place, and update pull requests are never auto-merged. Retain the
 previous pin for rollback. The weekly check performs no Codex model turn when
 no newer stable release exists.
