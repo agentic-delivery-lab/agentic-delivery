@@ -17,6 +17,8 @@ const ASSET_NAME = 'codex-package-x86_64-unknown-linux-musl.tar.gz';
 const MAX_ASSET_BYTES = 256 * 1024 * 1024;
 const GITHUB_PAGE_SIZE = 100;
 const MAX_GITHUB_API_PAGES = 30;
+const MAX_GITHUB_SEARCH_RESULTS = 1_000;
+const MAX_GITHUB_SEARCH_PAGES = Math.ceil(MAX_GITHUB_SEARCH_RESULTS / GITHUB_PAGE_SIZE);
 const UPDATE_BRANCH = /^chore\/issue-([1-9][0-9]*)-update-codex-cli-(0|[1-9][0-9]*)-(0|[1-9][0-9]*)-(0|[1-9][0-9]*)$/;
 
 function versionTuple(version) {
@@ -122,6 +124,60 @@ export async function listCheckRuns(checkUrl, token, fetchImpl = globalThis.fetc
     }
   }
   throw new Error(`The exact-head check-run list exceeds the supported ${MAX_GITHUB_API_PAGES}-page bound; runner smoke and semantic review were not dispatched.`);
+}
+
+export async function listSearchIssues(query, token, fetchImpl = globalThis.fetch) {
+  if (!token || typeof query !== 'string' || !query.trim()) {
+    throw new Error('A search query and GH_TOKEN are required to list GitHub issues.');
+  }
+  const searchUrl = new URL('https://api.github.com/search/issues');
+  searchUrl.searchParams.set('q', query);
+  searchUrl.searchParams.set('per_page', String(GITHUB_PAGE_SIZE));
+  searchUrl.searchParams.set('sort', 'created');
+  searchUrl.searchParams.set('order', 'asc');
+  const issues = [];
+  const issueNumbers = new Set();
+  let expectedTotalCount;
+
+  for (let page = 1; page <= MAX_GITHUB_SEARCH_PAGES; page += 1) {
+    searchUrl.searchParams.set('page', String(page));
+    const result = await fetchJson(searchUrl, token, fetchImpl);
+    if (!Array.isArray(result.items)
+      || !Number.isSafeInteger(result.total_count)
+      || result.total_count < 0
+      || typeof result.incomplete_results !== 'boolean'
+      || result.items.length > GITHUB_PAGE_SIZE
+      || result.items.some((issue) => !Number.isSafeInteger(issue?.number) || issue.number < 1)) {
+      throw new Error('The GitHub issue-search response is invalid.');
+    }
+    if (result.incomplete_results) {
+      throw new Error('GitHub issue search returned incomplete results; no release source issue will be created.');
+    }
+    if (expectedTotalCount !== undefined && result.total_count !== expectedTotalCount) {
+      throw new Error('GitHub issue-search result count changed during pagination; no release source issue will be created.');
+    }
+    expectedTotalCount = result.total_count;
+    if (expectedTotalCount > MAX_GITHUB_SEARCH_RESULTS) {
+      throw new Error(`GitHub issue search found more than ${MAX_GITHUB_SEARCH_RESULTS} results, beyond the Search API limit; no release source issue will be created.`);
+    }
+
+    for (const issue of result.items) {
+      if (issueNumbers.has(issue.number)) {
+        throw new Error('GitHub issue search repeated an issue across pages; no release source issue will be created.');
+      }
+      issueNumbers.add(issue.number);
+      issues.push(issue);
+    }
+    if (issues.length > expectedTotalCount) {
+      throw new Error('GitHub issue search returned more results than its total_count; no release source issue will be created.');
+    }
+    if (issues.length === expectedTotalCount) return issues;
+    if (result.items.length < GITHUB_PAGE_SIZE) {
+      throw new Error('GitHub issue search returned fewer results than its total_count; no release source issue will be created.');
+    }
+  }
+
+  throw new Error(`GitHub issue search exceeds the supported ${MAX_GITHUB_SEARCH_PAGES}-page bound; no release source issue will be created.`);
 }
 
 export async function verifyDownload(candidate, fetchImpl = globalThis.fetch) {
@@ -280,12 +336,9 @@ export async function resolveSourceIssue({
   candidate = verified;
   const title = sourceIssueTitle(candidate.version);
   const marker = sourceIssueMarker(candidate.version);
-  const query = new URLSearchParams({
-    q: `repo:${repository} is:issue is:open in:title "Update pinned Codex CLI to"`,
-    per_page: '100',
-  });
-  const search = await fetchJson(`https://api.github.com/search/issues?${query}`, token, fetchImpl);
-  const matches = (Array.isArray(search.items) ? search.items : []).filter((issue) => (
+  const query = `repo:${repository} is:issue is:open in:title "Update pinned Codex CLI to"`;
+  const searchIssues = await listSearchIssues(query, token, fetchImpl);
+  const matches = searchIssues.filter((issue) => (
     !issue.pull_request
       && issue.state === 'open'
       && /^Task: Update pinned Codex CLI to \d+\.\d+\.\d+$/.test(String(issue.title ?? ''))

@@ -123,8 +123,13 @@ while its linked release Task remains open or cannot be verified. Closing that
 Task resolves the candidate: the updater does not recreate the same rejected
 version, while a later stable release can still be evaluated.
 The updater paginates the repository pull-request list and exact-head check-run
-evidence. It stops without dispatching runner smoke or Harness when either API
-result is incomplete or exceeds the supported page bound.
+evidence. It also paginates all matching open release Tasks before creating a
+new source issue. The Search API reports incomplete searches and limits a
+query to 1,000 results; the updater stops without creating a Task when the
+search is incomplete, inconsistent across pages, short of its reported total,
+or beyond that limit. It stops without dispatching runner smoke or Harness
+when pull-request or check-run evidence is incomplete or exceeds the supported
+page bound.
 
 The updater verifies the official release asset digest. It creates the source
 Task and pushes its issue-linked branch with `GITHUB_TOKEN`, which cannot
@@ -139,8 +144,10 @@ smoke with `GITHUB_TOKEN` only after the exact-head body, delivery-quality,
 portability, and applicable ADR checks pass. It dispatches Harness only after
 that smoke passes, and skips both runner dispatches if a deterministic check
 fails.
-An updater marker makes the Harness workflow skip its automatic pull-request
-event, preventing a duplicate semantic model turn. A manual retry may
+The Harness workflow skips its automatic pull-request event only for an
+internal, bot-authored release update PR whose issue-linked update branch,
+Conventional Commit title, and versioned updater marker all match. The marker
+alone cannot suppress review on a human-authored PR. A manual retry may
 redispatch the static checks for an existing release PR.
 
 The generated pull-request description records the release digest as complete

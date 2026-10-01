@@ -247,7 +247,7 @@ test('reuses a matching open release issue and creates a typed task when no issu
     assert.match(String(url), /search\/issues\?/);
     return {
       ok: true,
-      json: async () => ({ items: [{
+      json: async () => ({ total_count: 1, incomplete_results: false, items: [{
         number: 742,
         title,
         body: `${marker}\nRelease task`,
@@ -264,7 +264,7 @@ test('reuses a matching open release issue and creates a typed task when no issu
     candidate,
     repository,
     token: 'test-token',
-    fetchImpl: async () => ({ ok: true, json: async () => ({ items: [{
+    fetchImpl: async () => ({ ok: true, json: async () => ({ total_count: 1, incomplete_results: false, items: [{
       number: 741,
       title: `Task: Update pinned Codex CLI to ${RELEASE.version}`,
       body: `<!-- codex-cli-release-update:v1:${RELEASE.version} -->`,
@@ -279,7 +279,7 @@ test('reuses a matching open release issue and creates a typed task when no issu
     candidate,
     repository,
     token: 'test-token',
-    fetchImpl: async () => ({ ok: true, json: async () => ({ items: [] }) }),
+    fetchImpl: async () => ({ ok: true, json: async () => ({ total_count: 0, incomplete_results: false, items: [] }) }),
     createIssue: async ({ issueTitle, issueBody }) => {
       createCount += 1;
       assert.equal(issueTitle, title);
@@ -289,6 +289,60 @@ test('reuses a matching open release issue and creates a typed task when no issu
   });
   assert.deepEqual(created, { number: 743, url: `https://github.com/${repository}/issues/743`, title, created: true });
   assert.equal(createCount, 1);
+});
+
+test('release source issue discovery paginates and fails closed on incomplete or capped search results', async () => {
+  const version = nextPatchVersion(RELEASE.version);
+  const candidate = checkedRelease(release(version), RELEASE.version);
+  const title = `Task: Update pinned Codex CLI to ${version}`;
+  const marker = `<!-- codex-cli-release-update:v1:${version} -->`;
+  const pages = [];
+  const fetchImpl = async (url) => {
+    const page = Number(new URL(String(url)).searchParams.get('page'));
+    pages.push(page);
+    const items = page === 1
+      ? Array.from({ length: 100 }, (_, index) => ({
+        number: index + 1,
+        title: 'Task: An unrelated task',
+        body: 'No Codex release marker',
+        state: 'open',
+      }))
+      : [{
+        number: 742,
+        title,
+        body: `${marker}\nRelease task`,
+        state: 'open',
+        html_url: `https://github.com/${repository}/issues/742`,
+      }];
+    return { ok: true, json: async () => ({ total_count: 101, incomplete_results: false, items }) };
+  };
+
+  const reused = await resolveSourceIssue({ candidate, repository, token: 'test-token', fetchImpl });
+  assert.deepEqual(reused, { number: 742, url: `https://github.com/${repository}/issues/742`, title, created: false });
+  assert.deepEqual(pages, [1, 2]);
+
+  const createIssue = async () => { throw new Error('A source issue must not be created from incomplete search evidence.'); };
+  await assert.rejects(resolveSourceIssue({
+    candidate,
+    repository,
+    token: 'test-token',
+    fetchImpl: async () => ({ ok: true, json: async () => ({ total_count: 1, incomplete_results: true, items: [] }) }),
+    createIssue,
+  }), /incomplete results/);
+  await assert.rejects(resolveSourceIssue({
+    candidate,
+    repository,
+    token: 'test-token',
+    fetchImpl: async () => ({ ok: true, json: async () => ({ total_count: 101, incomplete_results: false, items: [{ number: 1 }] }) }),
+    createIssue,
+  }), /fewer results than its total_count/);
+  await assert.rejects(resolveSourceIssue({
+    candidate,
+    repository,
+    token: 'test-token',
+    fetchImpl: async () => ({ ok: true, json: async () => ({ total_count: 1001, incomplete_results: false, items: [] }) }),
+    createIssue,
+  }), /beyond the Search API limit/);
 });
 
 test('the updater uses a restricted App token for PR events and dispatches runner review after smoke', async () => {

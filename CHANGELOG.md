@@ -44,8 +44,13 @@ they do not authorize migration, alter that issue's scope, or close it.
   quality, portability, and applicable ADR-quality checks before dispatching
   the no-generation runner smoke, then starts Harness only after that smoke
   passes. The updater paginates the pull-request list and exact-head check-run
-  evidence and stops on incomplete results. A closed update PR no longer blocks
-  later releases after its linked Task issue is resolved.
+  evidence and stops on incomplete results. It paginates the release Task
+  search and refuses to create an issue when search results are incomplete or
+  exceed the GitHub Search API limit. Only an internal bot-authored update PR
+  with the expected branch, title, and marker can delay automatic Harness
+  review until runner smoke; a PR author cannot suppress review by copying the
+  marker. A closed update PR no longer blocks later releases after its linked
+  Task issue is resolved.
 - Codex delivery and Harness review now use phase-specific GPT-6 Luna
   Low/Medium/Max and GPT-6 Sol High profiles, with runner-catalog preflight,
   complete matching-entry capability checks, safe reporting for unsupported

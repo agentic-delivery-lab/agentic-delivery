@@ -129,6 +129,13 @@ workflow's pull-request path filter. Harness and the CLI release updater use
 the same matcher, including `CHANGELOG.md`, so a dependent runner operation
 cannot start before an applicable ADR check finishes.
 
+The weekly CLI updater uses a versioned PR-body marker to delay its semantic
+review until the candidate runner smoke passes. That marker does not authorize
+the skip: the automatic Harness event is suppressed only when the pull request
+is internal, bot-authored, and has the expected issue-linked CLI update branch
+and title as well as the marker. A human-authored PR cannot suppress the
+review by copying the marker into its body.
+
 The repository has one persistent self-hosted runner for Codex and Harness.
 The delivery-quality `quality` job, ADR validation, and portability matrix run
 on ephemeral GitHub-hosted runners, with read-only workflow permissions and the

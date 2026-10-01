@@ -44,6 +44,8 @@ test('the current architecture map covers the official ADR set and emits a conci
   }
   assert.equal(review.checks.find((item) => item.id === 'bounded-context-map').status, 'pass');
   const reviewMap = await readFile(path.join(repositoryRoot, 'docs/architecture/harness-review.yml'), 'utf8');
+  assert.match(reviewMap, /id: codex-cli-maintenance/);
+  assert.match(reviewMap, /scripts\/codex-cli-release-update\.mjs/);
   assert.match(reviewMap, /id: agent-invocation/);
   assert.match(formatReviewMarkdown(review), /Harness Architecture Review/);
   assert.match(formatReviewMarkdown(review), /adr-map-coverage/);
@@ -602,6 +604,9 @@ test('architecture-review workflow is pinned, read-only, resumable, and does not
   for (const phrase of ['pull_request:', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', 'CODEX_REVIEW_STATE_DIR: /var/lib/github-runner/.codex/harness-reviews', 'codex-cli-release-update:v1:', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
     assert.ok(workflow.includes(phrase), `missing workflow control: ${phrase}`);
   }
+  assert.match(workflow, /pull_request\.user\.type != 'Bot'/);
+  assert.match(workflow, /head\.ref, 'chore\/issue-'/);
+  assert.match(workflow, /pull_request\.title/);
   assert.doesNotMatch(workflow, /issues:\s*write|pull-requests:\s*write|contents:\s*write/);
   assert.doesNotMatch(workflow, /gh issue comment|curl .*comments|pulls\/.*PATCH/);
 });

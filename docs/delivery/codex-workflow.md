@@ -238,8 +238,12 @@ issue edits.
   based PR creation with review approval. It waits for the exact-head body,
   delivery-quality, portability, and applicable ADR checks to pass, then
   dispatches the no-generation runner smoke. It paginates the pull-request list
-  and exact-head check-run evidence, and fails closed on incomplete responses
-  or page-bound exhaustion. Harness starts only after the smoke passes; a
+  and exact-head check-run evidence. It also paginates open release Task search
+  results and stops before issue creation if the search is incomplete, changes
+  during pagination, or exceeds GitHub's 1,000-result limit. The Harness skips
+  the automatic event only for an internal bot-authored update PR with the
+  expected branch, title, and versioned marker; a human cannot suppress review
+  by editing the body. Harness starts only after the smoke passes; a
   deterministic failure prevents both runner dispatches. The
   generated PR description separates verified release metadata from checks
   that are pending at creation.
