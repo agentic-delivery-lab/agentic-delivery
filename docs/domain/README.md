@@ -37,6 +37,13 @@ The existing `control plane` term names GitHub's authoritative work-state
 surfaces. The executable implementation is called the `delivery controller` so
 that the two meanings are not silently conflated across the extraction.
 
+The control plane owns `quota diagnostics` as a runtime record of quota
+telemetry and its safe causes. The governance context consumes the sanitized
+projection as `review quota evidence` in a Harness result or Actions summary.
+That evidence explains why semantic review could not conclude; it is not a
+semantic conclusion, deterministic validation, or participant evidence
+contract.
+
 Do not assume that a registered meaning applies outside its bounded context. Add another bounded context only when a model has a distinct purpose or a term needs a meaning that would conflict with the existing context. Describe translations at the boundary when two contexts must interact.
 
 ## Changing the model

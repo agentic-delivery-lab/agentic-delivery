@@ -22,8 +22,41 @@ const TEXT_EXTENSIONS = new Set(['.md', '.mjs', '.js', '.yml', '.yaml', '.json',
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHA = /^[0-9a-f]{40}$/i;
 const URL = /^https?:\/\/\S+$/;
+const SENSITIVE_FIELD_NAMES = '(?:access[ _-]?token|refresh[ _-]?token|id[ _-]?token|auth[ _-]?token|x[ _-]?(?:api|auth)[ _-]?key|api[ _-]?key|client[ _-]?secret|app[ _-]?secret|secret[ _-]?key|secret|password|passphrase|credential(?:s)?|authorization|proxy[ _-]?authorization|cookie|set[ _-]?cookie|private[ _-]?key|signing[ _-]?key|access[ _-]?key|secret[ _-]?access[ _-]?key|session[ _-]?(?:key|token)|token)';
+const SENSITIVE_YAML_BLOCK = new RegExp(`(^[ \\t]*)(["']?)(${SENSITIVE_FIELD_NAMES})\\2([ \\t]*:[ \\t]*)(?:[|>][+-]?[ \\t]*(?:#[^\\r\\n]*)?)(?:\\r?\\n(?:[ \\t]+[^\\r\\n]*(?:\\r?\\n|$))*)`, 'gim');
+const SENSITIVE_ASSIGNMENT = new RegExp(`(["']?)(${SENSITIVE_FIELD_NAMES})\\1([ \\t]*:[ \\t]*(?:\\r?\\n[ \\t]*)?|[ \\t]*=[ \\t]*)(?:\\[redacted(?: (?:private key|token|credential))?\\]|"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|[^,\\r\\n}\\]]+)`, 'gi');
 
 export const REVIEW_SCHEMA_VERSION = 1;
+
+export function redactSensitiveText(value) {
+  let text = String(value ?? '')
+    .replace(SENSITIVE_YAML_BLOCK, (_match, indent, quote, key, separator) => `${indent}${quote}${key}${quote}${separator}[redacted]`)
+    .replace(SENSITIVE_ASSIGNMENT, (_match, quote, key, separator) => `${quote}${key}${quote}${separator}[redacted]`)
+    .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)/gi, '[redacted private key]')
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]{8,}={0,2}/gi, 'Bearer [redacted]')
+    .replace(/\bBasic\s+[A-Za-z0-9+/]{8,}={0,2}/gi, 'Basic [redacted]')
+    .replace(/\b(?:github_pat_|gh[pousr]_|glpat-|glsa-|xox[baprs]-|npm_|pypi-)[A-Za-z0-9_-]{8,}/gi, '[redacted token]')
+    .replace(/\bsk-(?:proj-|live_|test_)?[A-Za-z0-9_-]{16,}/gi, '[redacted token]')
+    .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, '[redacted token]')
+    .replace(/\bAIza[0-9A-Za-z_-]{30,}\b/g, '[redacted token]')
+    .replace(/\bya29\.[0-9A-Za-z_-]{16,}\b/g, '[redacted token]')
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{8,}\b/g, '[redacted token]')
+    .replace(/\b(https?:\/\/)[^\s/:@]+:[^\s/@]+@/gi, '$1[redacted]@');
+  for (const name of ['GH_TOKEN', 'GITHUB_TOKEN', 'PUBLISH_TOKEN', 'OPENAI_API_KEY', 'CODEX_DELIVERY_APP_PRIVATE_KEY']) {
+    const secret = process.env[name];
+    if (secret && secret.length >= 8) text = text.split(secret).join('[redacted credential]');
+  }
+  return text;
+}
+
+function safeSemanticMarkdown(value) {
+  return redactSensitiveText(value)
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/([\\`*_{}\[\]()#+.!|\-])/g, '\\$1');
+}
 
 function childEnvironment() {
   const { GH_TOKEN: _ghToken, GITHUB_TOKEN: _githubToken, PUBLISH_TOKEN: _publishToken,
@@ -430,10 +463,15 @@ export function formatReviewMarkdown(review) {
   lines.push('', '#### Deterministic checks', '');
   for (const item of review.checks) lines.push(`- **${item.status}** \`${item.id}\`: ${item.message}`);
   if (review.semantic?.status && review.semantic.status !== 'not-run') {
-    lines.push('', `#### Semantic review: ${review.semantic.status}`, '', review.semantic.summary ?? 'No semantic summary was returned.');
-    for (const finding of review.semantic.findings ?? []) lines.push(`- **${finding.severity ?? 'advisory'}** ${finding.statement} (Evidence: ${(finding.evidence ?? []).join(', ') || 'none'})`);
+    const semanticStatus = ['aligned', 'findings', 'inconclusive'].includes(review.semantic.status) ? review.semantic.status : 'inconclusive';
+    lines.push('', `#### Semantic review: ${semanticStatus}`, '', safeSemanticMarkdown(review.semantic.summary ?? 'No semantic summary was returned.'));
+    for (const finding of review.semantic.findings ?? []) {
+      const severity = ['concern', 'advisory'].includes(finding.severity) ? finding.severity : 'advisory';
+      const evidence = Array.isArray(finding.evidence) ? finding.evidence.slice(0, 20).map(safeSemanticMarkdown).join(', ') : '';
+      lines.push(`- **${severity}** ${safeSemanticMarkdown(finding.statement)} (Evidence: ${evidence || 'none'})`);
+    }
     if (review.semantic.evidenceGaps?.length) {
-      lines.push('', '**Evidence gaps**', '', ...review.semantic.evidenceGaps.map((gap) => `- ${gap}`));
+      lines.push('', '**Evidence gaps**', '', ...review.semantic.evidenceGaps.slice(0, 50).map((gap) => `- ${safeSemanticMarkdown(gap)}`));
     }
     const quota = formatQuotaDiagnostics(review.semantic.quotaDiagnostics);
     if (quota.length) lines.push('', ...quota);

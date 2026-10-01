@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"quota-diagnostics-contract","kind":"script","enforcement":"deterministic","adrs":["ADR-0009","ADR-0011","ADR-0018"],"domains":["agentic-delivery-control-plane","agentic-delivery-governance"]}
+// agentic-primitive: {"id":"quota-diagnostics-contract","kind":"script","enforcement":"deterministic","adrs":["ADR-0003","ADR-0009","ADR-0011","ADR-0018"],"domains":["agentic-delivery-control-plane","agentic-delivery-governance"]}
 // Shared contract for quota stop diagnostics emitted in review reports.
 export const QUOTA_DIAGNOSTICS_SCHEMA_VERSION = '1.0.0';
 

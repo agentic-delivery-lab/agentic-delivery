@@ -128,41 +128,39 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
     if (credits?.unlimited === true) creditReasons.add(QUOTA_REASON.unlimitedCredits);
     else if (credits?.unlimited !== false) creditReasons.add(QUOTA_REASON.creditTelemetryUnavailable);
   }
-  if (creditReasons.size) {
-    const triggerReasons = [QUOTA_REASON.creditSpillover, QUOTA_REASON.unlimitedCredits, QUOTA_REASON.creditTelemetryUnavailable]
-      .filter((reasonCode) => creditReasons.has(reasonCode));
-    const reasonCode = triggerReasons[0];
-    const reasons = {
-      [QUOTA_REASON.creditSpillover]: 'Spendable credits are available; subscription-only execution is required.',
-      [QUOTA_REASON.unlimitedCredits]: 'Unlimited credits are available; subscription-only execution is required.',
-      [QUOTA_REASON.creditTelemetryUnavailable]: 'Credit telemetry is missing or incomplete; subscription-only execution is required.',
-    };
-    return decision(reasonCode, reasons[reasonCode], triggerReasons);
-  }
-  if (!windows.some((window) => window.windowDurationMins === 300) || windows.some((window) => !window.valid)) {
-    return decision(QUOTA_REASON.missingOrInvalidWindow, 'Quota telemetry is missing, invalid, or expired.');
-  }
-
   const exhausted = windows.filter((window) => window.usedPercent >= 98);
+  const missingOrInvalidWindow = !windows.some((window) => window.windowDurationMins === 300) || windows.some((window) => !window.valid);
   const rateLimited = serverBlocks.some((bucket) => bucket.rateLimitReached);
   const spendControlled = serverBlocks.some((bucket) => bucket.spendControlReached);
   const triggerReasons = [
+    ...[QUOTA_REASON.creditSpillover, QUOTA_REASON.unlimitedCredits, QUOTA_REASON.creditTelemetryUnavailable]
+      .filter((reasonCode) => creditReasons.has(reasonCode)),
+    ...(missingOrInvalidWindow ? [QUOTA_REASON.missingOrInvalidWindow] : []),
     ...(exhausted.length ? [QUOTA_REASON.windowReserve] : []),
     ...(rateLimited ? [QUOTA_REASON.serverRateLimit] : []),
     ...(spendControlled ? [QUOTA_REASON.spendControl] : []),
   ];
   const blocked = triggerReasons.length > 0;
-  const reasonCode = exhausted.length ? QUOTA_REASON.windowReserve : rateLimited ? QUOTA_REASON.serverRateLimit
-    : spendControlled ? QUOTA_REASON.spendControl : QUOTA_REASON.available;
-  const nextEligibleAt = exhausted.length && !rateLimited && !spendControlled
+  const reasonCode = triggerReasons[0] ?? QUOTA_REASON.available;
+  const reasons = {
+    [QUOTA_REASON.creditSpillover]: 'Spendable credits are available; subscription-only execution is required.',
+    [QUOTA_REASON.unlimitedCredits]: 'Unlimited credits are available; subscription-only execution is required.',
+    [QUOTA_REASON.creditTelemetryUnavailable]: 'Credit telemetry is missing or incomplete; subscription-only execution is required.',
+    [QUOTA_REASON.missingOrInvalidWindow]: 'Quota telemetry is missing, invalid, or expired.',
+    [QUOTA_REASON.windowReserve]: 'Codex allowance reached the finalization reserve.',
+    [QUOTA_REASON.serverRateLimit]: 'The server reported a rate limit.',
+    [QUOTA_REASON.spendControl]: 'The server reported a spend-control block.',
+    [QUOTA_REASON.available]: 'Allowance available.',
+  };
+  const nextEligibleAt = exhausted.length && triggerReasons.length === 1 && triggerReasons[0] === QUOTA_REASON.windowReserve
     ? Math.max(...exhausted.map((window) => window.resetsAt))
     : null;
   return {
     stop: blocked,
     reasonCode,
-    reason: blocked ? 'Codex allowance reached the finalization reserve.' : 'Allowance available.',
+    reason: reasons[reasonCode],
     usedPercent: Math.max(...windows.map((window) => window.usedPercent)),
-    resetsAt: Math.max(...(exhausted.length ? exhausted : windows).map((window) => window.resetsAt)),
+    resetsAt: blocked ? nextEligibleAt : Math.max(...windows.map((window) => window.resetsAt)),
     diagnostics: diagnostics(reasonCode, triggerReasons, exhausted, nextEligibleAt),
   };
 }

@@ -141,6 +141,24 @@ test('quota reason codes distinguish credit, server-rate, and spend-control stop
   assert.deepEqual(spendDecision.diagnostics.triggerReasons, ['spend_control']);
 });
 
+test('quota diagnostics retain credit, window, and server causes when they occur together', () => {
+  const mixed = quota(99, 20);
+  mixed.rateLimits.credits.hasCredits = true;
+  mixed.rateLimits.rateLimitReachedType = 'provider-detail-must-not-be-published';
+
+  const decision = quotaBoundary(mixed, now);
+
+  assert.equal(decision.stop, true);
+  assert.equal(decision.reasonCode, 'credit_spillover', 'the existing credit-first primary reason remains stable');
+  assert.deepEqual(decision.diagnostics.triggerReasons, ['credit_spillover', 'window_reserve', 'server_rate_limit']);
+  assert.deepEqual(decision.diagnostics.triggeringWindows, [{
+    bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: now + 100, valid: true,
+  }]);
+  assert.equal(decision.diagnostics.serverBlocks[0].rateLimitReached, true);
+  assert.equal(decision.diagnostics.nextEligibleAt, null, 'a reset is not a retry time while other causes remain');
+  assert.equal(decision.resetsAt, null);
+});
+
 test('capability preflight converts quota-read failures to a safe pause', async () => {
   const client = Object.create(CodexClient.prototype);
   client.request = async (method) => {

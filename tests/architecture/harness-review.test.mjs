@@ -12,7 +12,7 @@ import {
   validateEvidenceRecord,
 } from '../../scripts/lib/architecture-review.mjs';
 import { parseSemanticOutcome, projectQuotaDiagnostics, runSemanticReview } from '../../scripts/lib/architecture-review-agent.mjs';
-import { QUOTA_DIAGNOSTICS_SCHEMA_VERSION } from '../../scripts/lib/quota-diagnostics.mjs';
+import { QUOTA_DIAGNOSTICS_SCHEMA_VERSION, supportsQuotaDiagnosticsSchemaVersion } from '../../scripts/lib/quota-diagnostics.mjs';
 import { runNodeScript } from '../helpers/process.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
@@ -121,6 +121,83 @@ test('semantic output requires cited findings and keeps model uncertainty adviso
   assert.equal(invalid.status, 'inconclusive');
 });
 
+test('semantic output is redacted, bounded, and rendered as plain Markdown text', () => {
+  const unsafe = parseSemanticOutcome(JSON.stringify({
+    status: 'findings',
+    summary: '## Injected heading\n- fake item\n"access_token":\n  "fixture secret with spaces"\npassword:\n  fixture multiline secret\ntoken: >-\n  fixture block secret value',
+    affectedAdrs: ['ADR-0009'],
+    affectedContexts: ['agentic-delivery-governance'],
+    findings: [{
+      category: 'security',
+      severity: 'concern',
+      statement: '<img src=x onerror=alert(1)> Bearer abcdefghijklmnopqrstuvwxyz',
+      evidence: ['docs/example.md:12'],
+      recommendedAction: 'Remove the unsafe rendering path.',
+    }],
+    evidenceGaps: ['Authorization: Bearer abcdefghijklmnopqrstuvwxyz'],
+    unmodeled: 'extra model content must not reach the report',
+  }));
+  assert.equal(unsafe.status, 'findings');
+  assert.equal(Object.hasOwn(unsafe, 'unmodeled'), false);
+  assert.doesNotMatch(JSON.stringify(unsafe), /fixture secret with spaces|fixture block secret value|abcdefghijklmnopqrstuvwxyz/);
+  assert.match(unsafe.summary, /access_token"?:[\s\S]{0,30}\[redacted\]/);
+
+  const markdown = formatReviewMarkdown({
+    status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [], semantic: unsafe,
+  });
+  assert.doesNotMatch(markdown, /^## Injected heading/m);
+  assert.doesNotMatch(markdown, /\n- fake item/);
+  assert.doesNotMatch(markdown, /<img/i);
+  assert.match(markdown, /&lt;img/);
+  assert.doesNotMatch(markdown, /abcdefghijklmnopqrstuvwxyz|fixture secret with spaces/);
+
+  const listInjection = parseSemanticOutcome(JSON.stringify({
+    status: 'aligned', summary: '- fabricated reviewer finding', affectedAdrs: [], affectedContexts: [], findings: [], evidenceGaps: [],
+  }));
+  const listMarkdown = formatReviewMarkdown({
+    status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [], semantic: listInjection,
+  });
+  assert.doesNotMatch(listMarkdown, /\n- fabricated reviewer finding/);
+  assert.match(listMarkdown, /\\- fabricated reviewer finding/);
+
+  const oversized = parseSemanticOutcome(JSON.stringify({
+    status: 'aligned', summary: 'A'.repeat(4_001), affectedAdrs: [], affectedContexts: [], findings: [], evidenceGaps: [],
+  }));
+  assert.equal(oversized.status, 'inconclusive');
+});
+
+test('quota diagnostics schema documents the internal SemVer projection', async () => {
+  const schema = JSON.parse(await readFile(path.join(repositoryRoot, 'docs/architecture/quota-diagnostics.schema.json'), 'utf8'));
+  const projected = projectQuotaDiagnostics({
+    reasonCode: 'credit_spillover',
+    diagnostics: {
+      reasonCode: 'credit_spillover',
+      triggerReasons: ['credit_spillover', 'missing_or_invalid_window', 'window_reserve', 'server_rate_limit', 'spend_control'],
+      windows: [
+        { bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true },
+        { bucket: 'bucket-2', slot: 'secondary', usedPercent: null, windowDurationMins: null, resetsAt: null, valid: false },
+      ],
+      triggeringWindows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true }],
+      serverBlocks: [{ bucket: 'bucket-1', rateLimitReached: true, spendControlReached: true }],
+      nextEligibleAt: null,
+    },
+  }, 'active_turn');
+
+  assert.deepEqual(schema.required, Object.keys(projected));
+  assert.deepEqual(Object.keys(projected), Object.keys(schema.properties));
+  assert.equal(schema.additionalProperties, false);
+  assert.match(schema.$id, /quota-diagnostics\.schema\.json$/);
+  assert.match(schema.description, /not a participant contract/);
+  assert.equal(schema.properties.triggerReasons.maxItems, 9);
+  const schemaVersionPattern = new RegExp(schema.properties.schemaVersion.pattern);
+  assert.equal(schemaVersionPattern.test('1.2.3-beta.1+build.6'), true);
+  assert.equal(schemaVersionPattern.test('1.2.3-01'), false);
+  assert.deepEqual(projected.triggerReasons, ['credit_spillover', 'missing_or_invalid_window', 'window_reserve', 'server_rate_limit', 'spend_control']);
+  assert.equal(projected.triggeringWindows.some((window) => !window.valid), true);
+  assert.equal(supportsQuotaDiagnosticsSchemaVersion(projected.schemaVersion), true);
+  assert.equal(supportsQuotaDiagnosticsSchemaVersion('2.0.0'), false);
+});
+
 test('semantic execution reports quota and structured findings without becoming deterministic proof', async (t) => {
   const revision = (await (async () => {
     const { execFile } = await import('node:child_process');
@@ -136,7 +213,7 @@ test('semantic execution reports quota and structured findings without becoming 
     issue: { body: 'Source issue evidence.' },
     pull_request: {
       title: 'fix(review): preserve evidence',
-      body: `## Plan\nKeep the review read-only.\n\nAuthorization=fixture-secret\n${'x'.repeat(10_050)}`,
+      body: `## Plan\nKeep the review read-only.\n\nAuthorization=fixture-secret\n\n<!-- codex-delivery-evidence:v1\n{\n  "access_token":\n    "fixture marker secret with spaces"\n}\n-->\n${'x'.repeat(10_050)}`,
     },
   }));
   const unavailable = await runSemanticReview({
@@ -173,9 +250,11 @@ test('semantic execution reports quota and structured findings without becoming 
   const projectedDescription = JSON.parse(pullRequestDescription);
   assert.equal(projectedDescription.title, 'fix(review): preserve evidence');
   assert.match(projectedDescription.body, /Keep the review read-only\./);
-  assert.match(projectedDescription.body, /Authorization: \[redacted\]/);
+  assert.match(projectedDescription.body, /Authorization=\[redacted\]/);
   assert.equal(projectedDescription.body.length, 10_000);
   assert.equal(projectedDescription.bodyTruncated, true);
+  assert.doesNotMatch(bundleText, /fixture secret with spaces|fixture marker secret with spaces/);
+  assert.match(bundleText, /Head internal quota diagnostics schema/);
 
   const quotaPaused = await runSemanticReview({
     repositoryRoot,
@@ -215,6 +294,19 @@ test('semantic execution reports quota and structured findings without becoming 
     nextEligibleAt: 1_800_000_100,
   });
   assert.doesNotMatch(JSON.stringify(quotaPaused), /fixture-secret|private-account-id|providerMessage/);
+
+  const nonQuotaPause = await runSemanticReview({
+    repositoryRoot,
+    review,
+    createClient: () => ({
+      initialize: async () => {}, capabilities: async () => ({}),
+      startThread: async () => ({ thread: { id: '019fb023-24b8-7881-9119-509f078b610e' } }), close: async () => {},
+    }),
+    runTurnImpl: async () => ({ status: 'paused', reason: 'password:\n  fixture paused secret value' }),
+  });
+  assert.equal(nonQuotaPause.status, 'inconclusive');
+  assert.doesNotMatch(JSON.stringify(nonQuotaPause), /fixture paused secret value/);
+  assert.match(nonQuotaPause.evidenceGaps[0], /password:[\s\S]*\[redacted\]/);
 
   const markdown = formatReviewMarkdown({ ...review, semantic: quotaPaused });
   assert.match(markdown, /#### Quota diagnostics/);

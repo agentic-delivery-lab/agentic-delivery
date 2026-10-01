@@ -42,6 +42,7 @@
       ],
       "primitives": [
         "domain-language-validator",
+        "quota-diagnostics-contract",
         "repository-governance-instructions"
       ]
     },
@@ -949,6 +950,7 @@
       "kind": "script",
       "enforcement": "deterministic",
       "adrs": [
+        "ADR-0003",
         "ADR-0009",
         "ADR-0011",
         "ADR-0018"
