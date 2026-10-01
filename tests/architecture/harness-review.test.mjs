@@ -16,6 +16,7 @@ import {
   runSemanticReview,
   safeDiffText,
   semanticReviewDiff,
+  stableCheckRunEvidence,
 } from '../../scripts/lib/architecture-review-agent.mjs';
 import { runArchitectureReview } from '../../scripts/harness-architecture-review.mjs';
 import { runNodeScript } from '../helpers/process.mjs';
@@ -68,6 +69,39 @@ test('semantic review diff includes changed configuration and changelog paths', 
 test('semantic review refuses a diff that would exceed its evidence limit', () => {
   assert.equal(safeDiffText('x'.repeat(500_000)).length, 500_000);
   assert.equal(safeDiffText('x'.repeat(500_001)), null);
+});
+
+test('semantic review fingerprints check meaning while ignoring replay-specific run identifiers', () => {
+  const first = {
+    id: 654321,
+    name: 'quality',
+    status: 'completed',
+    conclusion: 'success',
+    headSha: 'a'.repeat(40),
+    app: 'GitHub Actions',
+    summary: 'Exact PR head passed.',
+    workflowVerified: true,
+    workflowPath: '.github/workflows/delivery-quality.yml',
+    workflowId: 82,
+    workflowRunId: 70002,
+    workflowJobId: 654321,
+    workflowEvent: 'pull_request',
+    startedAt: '2026-10-01T12:00:00Z',
+    completedAt: '2026-10-01T12:01:00Z',
+    detailsUrl: 'https://github.com/example/repo/actions/runs/70002/job/654321',
+  };
+  const replay = {
+    ...first,
+    id: 754321,
+    workflowRunId: 80002,
+    workflowJobId: 754321,
+    startedAt: '2026-10-02T12:00:00Z',
+    completedAt: '2026-10-02T12:01:00Z',
+    detailsUrl: 'https://github.com/example/repo/actions/runs/80002/job/754321',
+  };
+  assert.deepEqual(stableCheckRunEvidence([replay]), stableCheckRunEvidence([first]));
+  assert.notDeepEqual(stableCheckRunEvidence([{ ...replay, conclusion: 'failure' }]), stableCheckRunEvidence([first]));
+  assert.notDeepEqual(stableCheckRunEvidence([{ ...replay, workflowPath: '.github/workflows/unrelated.yml' }]), stableCheckRunEvidence([first]));
 });
 
 test('the current architecture map covers the official ADR set and emits a concise result', async () => {
@@ -281,6 +315,7 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
   const repository = 'agentic-delivery-lab/agentic-delivery';
   let pullRequestBody = 'Runner and semantic checks are pending at PR creation.';
   let qualityConclusion = 'success';
+  let counterfeitWorkflow = false;
   let pendingQualityFetches = 1;
   let checkFetches = 0;
   const eventPath = path.join(fixture, 'event.json');
@@ -384,8 +419,9 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
             ? { status: 'in_progress', conclusion: null }
             : { conclusion: name === 'review' ? null : name === 'quality' ? qualityConclusion : 'success' }),
           head_sha: revision,
-          html_url: `https://github.com/${repository}/actions/runs/123456/job/${id}`,
-          details_url: null,
+          url: `https://api.github.com/repos/${repository}/check-runs/${id}`,
+          html_url: `https://github.com/${repository}/actions/runs/${id < 654322 ? 70001 : 70002}/job/${id}`,
+          details_url: `https://github.com/${repository}/actions/runs/${id < 654322 ? 70001 : 70002}/job/${id}`,
           app: { name: 'GitHub Actions' },
           started_at: '2026-10-01T12:01:00Z',
           completed_at: name === 'review' ? null : '2026-10-01T12:02:00Z',
@@ -394,6 +430,49 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
         return { total_count: checks.length, check_runs: checks };
       },
     };
+    const workflowForJob = (jobId) => {
+      if (jobId === 654321) return { id: 70001, head_sha: revision, path: '.github/workflows/pull-request-body.yml', event: 'pull_request_target', name: 'pull-request-body', workflow_id: 81 };
+      return {
+        id: 70002,
+        head_sha: revision,
+        path: counterfeitWorkflow ? '.github/workflows/unrelated.yml' : '.github/workflows/delivery-quality.yml',
+        event: 'pull_request',
+        name: 'delivery-quality',
+        workflow_id: 82,
+      };
+    };
+    const jobNames = new Map([
+      [654321, 'Validate pull request body'],
+      [654322, 'quality'],
+      [654323, 'portability (ubuntu-latest)'],
+      [654324, 'portability (macos-latest)'],
+      [654325, 'portability (windows-latest)'],
+    ]);
+    const actionRunMatch = address.match(new RegExp(`/${repository}/actions/runs/(\\d+)$`));
+    if (actionRunMatch) {
+      const jobId = actionRunMatch[1] === '70001' ? 654321 : 654322;
+      return { ok: true, json: async () => workflowForJob(jobId) };
+    }
+    const actionJobMatch = address.match(new RegExp(`/${repository}/actions/jobs/(\\d+)$`));
+    if (actionJobMatch) {
+      const jobId = Number(actionJobMatch[1]);
+      const workflow = workflowForJob(jobId);
+      const qualityPending = pendingQualityFetches > 0;
+      const status = jobId === 654322 && qualityPending ? 'in_progress' : 'completed';
+      return {
+        ok: true,
+        json: async () => ({
+          id: jobId,
+          run_id: workflow.id,
+          head_sha: revision,
+          name: jobNames.get(jobId),
+          workflow_name: workflow.name,
+          check_run_url: `https://api.github.com/repos/${repository}/check-runs/${jobId}`,
+          status,
+          conclusion: status === 'completed' ? 'success' : null,
+        }),
+      };
+    }
     if (address.endsWith('/issues/25')) return {
       ok: true,
       json: async () => ({ number: 25, title: 'Review evidence', body: 'Check evidence collection.', state: 'open' }),
@@ -455,7 +534,7 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
       }) };
     },
   });
-  assert.equal(result.status, 'aligned');
+  assert.equal(result.status, 'aligned', JSON.stringify(result));
   assert.equal(result.reviewSession.disposition, 'completed');
   assert.equal(checkFetches, 2, 'Harness waits for required exact-head checks before the model turn.');
   assert.match(bundleText, /Runner and semantic checks are pending at PR creation\./);
@@ -538,6 +617,21 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
   assert.equal(failedStaticChecks.reviewSession.noModelTurn, true);
   assert.equal(modelTurns, 1);
   qualityConclusion = 'success';
+
+  counterfeitWorkflow = true;
+  const wrongWorkflowChecks = await runSemanticReview({
+    repositoryRoot,
+    review,
+    eventPath,
+    createClient: () => { throw new Error('a copied check name from another workflow must stop before Codex initialization'); },
+    runTurnImpl: async () => { throw new Error('unverified workflow provenance must not start a semantic model turn'); },
+  });
+  assert.equal(wrongWorkflowChecks.status, 'inconclusive');
+  assert.equal(wrongWorkflowChecks.reviewSession.disposition, 'checks-failed');
+  assert.equal(wrongWorkflowChecks.reviewSession.noModelTurn, true);
+  assert.match(wrongWorkflowChecks.evidenceGaps.join(' '), /quality|portability/);
+  assert.equal(modelTurns, 1);
+  counterfeitWorkflow = false;
 
   const changedEvidence = await runSemanticReview({
     repositoryRoot,

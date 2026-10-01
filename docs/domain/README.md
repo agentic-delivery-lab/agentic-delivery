@@ -32,9 +32,11 @@ of those GitHub values.
 The source-issue `Codex session` and pull-request `architecture review
 session` are separate records with different owners and resume conditions. A
 semantic review fingerprint identifies the evidence behind a reusable Harness
-result; transient runner preflight status, quota counters and the Harness
-review check itself are not part of that evidence. The review-session identity
-also includes the Codex CLI version and model profile.
+result. It includes exact-head check outcomes and verified workflow identity,
+but excludes run-specific IDs, links and timestamps so a deterministic rerun
+with the same evidence can reuse a completed result. Transient runner preflight
+status, quota counters and the Harness review check itself are also excluded.
+The review-session identity includes the Codex CLI version and model profile.
 
 ## Repository boundary
 

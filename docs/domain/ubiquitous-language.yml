@@ -36,7 +36,7 @@ terms:
     definition: "A persistent Codex app-server thread and protected runner-local state used to complete one pull request's semantic architecture review; it is separate from a source-issue delivery Codex session."
   - context: "agentic-delivery-governance"
     term: "semantic review fingerprint"
-    definition: "A SHA-256 digest of the semantic review evidence that determines whether a completed pull-request review result can be reused without another model turn. It excludes transient runner preflight status, the Harness review check itself, quota counters, and capture times; the separate review-session identity includes the Codex CLI version and model profile."
+    definition: "A SHA-256 digest of semantic review evidence that determines whether a completed pull-request review result can be reused without another model turn. It includes exact-head check results and verified workflow identity but excludes transient runner preflight status, the Harness review check itself, quota counters, capture times, and check-run, job, and workflow-run identifiers and links; the separate review-session identity includes the Codex CLI version and model profile."
   - context: "agentic-delivery-governance"
     term: "waiting comment boundary"
     definition: "The persisted issue-comment ID after which a trusted repository-writer comment is eligible to continue an awaiting-human delivery run."

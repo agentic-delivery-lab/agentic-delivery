@@ -9,7 +9,12 @@ import { promisify } from 'node:util';
 import { CodexClient, MODELS } from './codex-client.mjs';
 import { outcomeSchema, runTurn } from './codex-loop.mjs';
 import { gitFiles, gitShow, parseEvidenceMarker } from './architecture-review.mjs';
-import { adrQualityWorkflowAppliesToFiles, reviewCheckReadiness } from './pull-request-check-readiness.mjs';
+import {
+  adrQualityWorkflowAppliesToFiles,
+  REQUIRED_REVIEW_CHECKS,
+  reviewCheckReadiness,
+  verifyReviewCheckRunProducers,
+} from './pull-request-check-readiness.mjs';
 
 const execFileAsync = promisify(execFile);
 const SEMANTIC_REVIEW_PROMPT_VERSION = 'harness-review-v5';
@@ -178,7 +183,32 @@ function safeCheckRun(run) {
     startedAt: run.started_at,
     completedAt: run.completed_at,
     summary: outputSummary,
+    workflowVerified: run.workflowVerified === true,
+    workflowPath: run.workflowPath ?? null,
+    workflowId: run.workflowId ?? null,
+    workflowRunId: run.workflowRunId ?? null,
+    workflowJobId: run.workflowJobId ?? null,
+    workflowEvent: run.workflowEvent ?? null,
   };
+}
+
+export function stableCheckRunEvidence(runs) {
+  return (Array.isArray(runs) ? runs : []).map((run) => ({
+    name: run.name,
+    status: run.status,
+    conclusion: run.conclusion,
+    headSha: run.headSha,
+    app: run.app,
+    summary: run.summary,
+    workflowVerified: run.workflowVerified === true,
+    workflowPath: run.workflowPath ?? null,
+    workflowId: run.workflowId ?? null,
+    workflowEvent: run.workflowEvent ?? null,
+  })).sort((left, right) => {
+    const leftKey = `${left.app ?? ''}:${left.name ?? ''}`;
+    const rightKey = `${right.app ?? ''}:${right.name ?? ''}`;
+    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+  });
 }
 
 function isHarnessReviewCheck(run) {
@@ -255,13 +285,32 @@ async function pullRequestEvidence(review, event, {
     try {
       const checkUrl = `https://api.github.com/repos/${repository}/commits/${review.head}/check-runs?filter=latest&per_page=100`;
       const requireAdrValidation = adrQualityWorkflowAppliesToFiles(review.changedFiles);
+      const verifiedProducers = new Map();
+      const producerEvidenceKey = (run) => [run.id, run.head_sha, run.details_url, run.status, run.conclusion].join(':');
       const fetchCheckEvidence = async () => {
         const result = await githubJson(checkUrl, token);
         const exactRuns = (Array.isArray(result.check_runs) ? result.check_runs : [])
           .filter((run) => run.head_sha === review.head);
         const latestRuns = latestCheckRuns(exactRuns.filter((run) => !isHarnessReviewCheck(run)));
         const truncated = Number(result.total_count ?? exactRuns.length) > exactRuns.length;
-        const readiness = reviewCheckReadiness(latestRuns, review.head, requireAdrValidation);
+        const preliminary = reviewCheckReadiness(latestRuns, review.head, requireAdrValidation, false);
+        let readiness = preliminary;
+        if (preliminary.requiredReady) {
+          const requiredNames = new Set(requireAdrValidation ? [...REQUIRED_REVIEW_CHECKS, 'validate'] : REQUIRED_REVIEW_CHECKS);
+          const unverified = latestRuns.filter((run) => requiredNames.has(run.name)
+            && !verifiedProducers.has(producerEvidenceKey(run)));
+          if (unverified.length) {
+            const verified = await verifyReviewCheckRunProducers(unverified, {
+              repository,
+              expectedSha: review.head,
+              token,
+            });
+            for (const run of verified) verifiedProducers.set(producerEvidenceKey(run), run);
+          }
+          const evidencedRuns = latestRuns.map((run) => verifiedProducers.get(producerEvidenceKey(run)) ?? run);
+          readiness = reviewCheckReadiness(evidencedRuns, review.head, requireAdrValidation);
+          latestRuns.splice(0, latestRuns.length, ...evidencedRuns);
+        }
         return { latestRuns, truncated, readiness };
       };
       let snapshot = await fetchCheckEvidence();
@@ -314,6 +363,7 @@ async function pullRequestEvidence(review, event, {
             missing: snapshot.readiness.missing,
             pending: snapshot.readiness.pending,
             failed: snapshot.readiness.failed,
+            wrongWorkflow: snapshot.readiness.wrongWorkflow,
             timedOut: snapshot.readiness.timedOut === true,
           },
         },
@@ -742,11 +792,11 @@ export async function runSemanticReview({
       status: github.status,
       pullRequest: github.pullRequest,
       checkRuns: github.checkRuns ? {
-        status: github.checkRuns.status,
-        headSha: github.checkRuns.headSha,
-        totalCount: github.checkRuns.totalCount,
-        truncated: github.checkRuns.truncated,
-        runs: github.checkRuns.runs,
+      status: github.checkRuns.status,
+      headSha: github.checkRuns.headSha,
+      totalCount: github.checkRuns.totalCount,
+      truncated: github.checkRuns.truncated,
+      runs: stableCheckRunEvidence(github.checkRuns.runs),
       } : null,
     };
     identity = reviewIdentity(review, runner);

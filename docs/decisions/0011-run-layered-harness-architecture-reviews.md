@@ -109,15 +109,20 @@ prompt and rereads the current evidence bundle.
 
 A `semantic review fingerprint` hashes the deterministic result, source issue,
 pull-request body, exact-head non-Harness check results, ADR/domain evidence,
-and the complete changed-path diff with five lines of context. No path allowlist
-is applied, so configuration, changelog, and other changed files are included.
+and the complete changed-path diff with five lines of context. Check results
+are canonicalized by name, exact head, result, summary, app, and verified
+workflow ID, path, and event. Check-run, job, and workflow-run IDs, timestamps,
+and links remain in the evidence bundle but are excluded from the fingerprint,
+so a rerun with the same result can reuse a completed semantic review. No path
+allowlist is applied, so configuration, changelog, and other changed files are included.
 The diff is capped at 500,000 characters; an oversized diff stops before a
 model turn and is reported as inconclusive rather than silently truncated.
 Primitive evidence is limited to index records linked to affected ADRs; changed
 file content is already present in the diff, and unchanged primitive bodies are
 omitted. Its session identity also includes the Codex CLI version and model
 profile. It excludes transient runner preflight status, the current Harness
-`review` check, quota counters, and capture times. On a normal PR event, Harness
+`review` check, quota counters, check/job/run IDs, links, and capture times. On
+a normal PR event, Harness
 waits up to 15 minutes for the expected exact-head checks to finish; a failed,
 missing, truncated, or still-running check prevents a semantic model turn. The
 workflow reuses a completed structured result without another model turn only
@@ -137,16 +142,24 @@ workflow's pull-request path filter. Harness and the CLI release updater use
 the same matcher, including `CHANGELOG.md`, so a dependent runner operation
 cannot start before an applicable ADR check finishes.
 
+Each required check must also be attributable to its expected workflow file.
+Harness and the CLI release updater resolve the exact check's Actions run and
+job and compare the workflow path, commit, job name, check-run URL, status, and
+conclusion. A matching check name or GitHub Actions app alone is insufficient.
+Missing or mismatched provenance stops before a semantic model turn and, for
+the CLI updater, before runner smoke.
+
 The weekly CLI updater uses a versioned PR-body marker to delay its semantic
 review until the candidate runner smoke passes. A GitHub-hosted classifier
 checks out only the pull request's trusted base revision and verifies the
 internal registered App author, `main` base, issue-linked CLI update branch,
 exact conventional title, matching version marker, exact `Closes #N` source
-line, and the linked repository issue's Task title, marker, release URL, and
-repository URL. It suppresses the automatic Harness event only when all values
-identify the same release Task and version. Any mismatch, lookup failure, or
-classifier failure runs normal Harness review; forks remain outside the
-self-hosted runner boundary. Manual Harness dispatch always runs review.
+line, and the linked repository issue's native `Task` type, title, marker,
+release URL, and repository URL. It suppresses the automatic Harness event
+only when all values identify the same release Task and version. Any mismatch,
+lookup failure, or classifier failure runs normal Harness review; forks remain
+outside the self-hosted runner boundary. Manual Harness dispatch always runs
+review.
 
 The updater captures the `workflow_run_id` returned when it dispatches the
 candidate smoke. It polls only that run and requires its ID, head SHA,

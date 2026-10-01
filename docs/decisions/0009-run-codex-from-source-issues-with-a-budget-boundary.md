@@ -131,6 +131,13 @@ or beyond that limit. It stops without dispatching runner smoke or Harness
 when pull-request or check-run evidence is incomplete or exceeds the supported
 page bound.
 
+Before reusing or creating a release source issue, the updater verifies its
+organization-native issue type through GitHub GraphQL and requires `Task`.
+The issue title and release marker are supporting evidence, not substitutes
+for the native type. The updater classifier applies the same check before it
+may suppress automatic Harness review. A missing or mismatched type fails
+closed: the candidate is not treated as a verified release Task.
+
 The updater verifies the official release asset digest. It creates the source
 Task and pushes its issue-linked branch with `GITHUB_TOKEN`, which cannot
 create a pull request while the repository's combined create-and-approve
@@ -155,6 +162,15 @@ manual review dispatch always runs. The updater captures the smoke dispatch's
 returned `workflow_run_id` and requires its exact head, event, `codex=true` run
 name, and successful conclusion before dispatching Harness. A manual retry may
 redispatch the static checks for an existing release PR.
+
+Check names alone do not establish which workflow produced a result. Before
+runner smoke or semantic review can proceed, both the updater and Harness
+resolve each required exact-head check's Actions run and job. The run must
+match the expected workflow file and commit; its job must match the required
+name, run, check-run API URL, status, and conclusion. Missing or mismatched
+producer evidence stops before runner smoke or a semantic model turn. This
+prevents an unrelated workflow with a copied check name from satisfying the
+gate.
 
 The generated pull-request description records the release digest as complete
 and identifies checks as pending until their exact-head results appear. This

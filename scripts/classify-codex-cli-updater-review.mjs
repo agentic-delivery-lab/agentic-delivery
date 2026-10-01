@@ -2,6 +2,7 @@
 import { appendFile, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { getNativeIssueType } from './lib/github-native-issue-type.mjs';
 
 const UPDATER_BOT = 'agentic-delivery-lab-invoker-7f3a[bot]';
 const SUPPORTED_ACTIONS = new Set(['opened', 'synchronize', 'reopened', 'ready_for_review']);
@@ -41,8 +42,9 @@ export function updaterReviewCandidate({ event, repository }) {
   return { issueNumber, version };
 }
 
-export function releaseTaskMatches({ issue, issueNumber, repository, version }) {
+export function releaseTaskMatches({ issue, nativeIssueType, issueNumber, repository, version }) {
   if (!issue || issue.number !== issueNumber || issue.pull_request
+    || nativeIssueType !== 'Task'
     || issue.html_url !== `https://github.com/${repository}/issues/${issueNumber}`
     || issue.state !== 'open'
     || issue.title !== `Task: Update pinned Codex CLI to ${version}`) return false;
@@ -71,7 +73,8 @@ export async function classifyUpdaterReview({ event, repository, token, fetchImp
       return { suppressReview: false, reason: `The release Task lookup returned HTTP ${response.status}.` };
     }
     const issue = await response.json();
-    if (!releaseTaskMatches({ issue, ...candidate, repository })) {
+    const nativeIssueType = await getNativeIssueType({ repository, issueNumber: candidate.issueNumber, token, fetchImpl });
+    if (!releaseTaskMatches({ issue, nativeIssueType, ...candidate, repository })) {
       return { suppressReview: false, reason: 'The linked source issue does not match the release Task, version, and repository.' };
     }
     return { suppressReview: true, reason: 'The registered updater PR and its linked release Task match the same version.' };

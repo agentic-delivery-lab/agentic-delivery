@@ -11,6 +11,10 @@ const repository = 'agentic-delivery-lab/agentic-delivery';
 const version = '0.159.4';
 const issueNumber = 742;
 
+function graphQlIssueType(name = 'Task') {
+  return { ok: true, json: async () => ({ data: { repository: { issue: { issueType: name ? { name } : null } } } }) };
+}
+
 function pullRequestEvent(overrides = {}) {
   const marker = `<!-- codex-cli-release-update:v1:${version} -->`;
   const sourceLine = `- Source issue: Closes #${issueNumber} — [Task: Update pinned Codex CLI to ${version}](https://github.com/${repository}/issues/${issueNumber})`;
@@ -53,20 +57,24 @@ function releaseTask(overrides = {}) {
   };
 }
 
-test('suppresses only a registered updater PR whose exact source Task verifies the same release', async () => {
-  let requestedUrl;
+test('suppresses only a registered updater PR whose native Task verifies the same release', async () => {
+  const requestedUrls = [];
   const result = await classifyUpdaterReview({
     event: pullRequestEvent(),
     repository,
     token: 'test-token',
     fetchImpl: async (url, options) => {
-      requestedUrl = String(url);
       assert.equal(options.headers.Authorization, 'Bearer test-token');
+      requestedUrls.push(String(url));
+      if (String(url) === 'https://api.github.com/graphql') return graphQlIssueType();
       return { ok: true, json: async () => releaseTask() };
     },
   });
 
-  assert.equal(requestedUrl, `https://api.github.com/repos/${repository}/issues/${issueNumber}`);
+  assert.deepEqual(requestedUrls, [
+    `https://api.github.com/repos/${repository}/issues/${issueNumber}`,
+    'https://api.github.com/graphql',
+  ]);
   assert.deepEqual(result, {
     suppressReview: true,
     reason: 'The registered updater PR and its linked release Task match the same version.',
@@ -109,15 +117,30 @@ test('a source Task must match issue URL, exact title, state, release marker, an
     { ...releaseTask(), pull_request: { url: 'https://api.github.com/repos/agentic-delivery-lab/agentic-delivery/pulls/742' } },
   ];
   for (const issue of invalidIssues) {
-    assert.equal(releaseTaskMatches({ issue, issueNumber, repository, version }), false);
+    assert.equal(releaseTaskMatches({ issue, nativeIssueType: 'Task', issueNumber, repository, version }), false);
     const result = await classifyUpdaterReview({
       event: pullRequestEvent(),
       repository,
       token: 'test-token',
-      fetchImpl: async () => ({ ok: true, json: async () => issue }),
+      fetchImpl: async (url) => String(url) === 'https://api.github.com/graphql'
+        ? graphQlIssueType()
+        : ({ ok: true, json: async () => issue }),
     });
     assert.equal(result.suppressReview, false);
   }
+  assert.equal(releaseTaskMatches({ issue: releaseTask(), nativeIssueType: null, issueNumber, repository, version }), false);
+});
+
+test('a same-looking release issue without native Task type does not suppress semantic review', async () => {
+  const result = await classifyUpdaterReview({
+    event: pullRequestEvent(),
+    repository,
+    token: 'test-token',
+    fetchImpl: async (url) => String(url) === 'https://api.github.com/graphql'
+      ? graphQlIssueType(null)
+      : ({ ok: true, json: async () => releaseTask() }),
+  });
+  assert.equal(result.suppressReview, false);
 });
 
 test('missing or unavailable issue evidence fails open to ordinary Harness review', async () => {

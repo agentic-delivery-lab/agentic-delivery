@@ -45,10 +45,13 @@ they do not authorize migration, alter that issue's scope, or close it.
   the no-generation runner smoke, then starts Harness only after that smoke
   passes. It validates the exact smoke workflow run ID, head SHA, dispatch
   event, and `codex=true` run name. A base-revision classifier verifies that
-  only a fully matching updater PR and source Task can delay automatic Harness
-  review; mismatches and unavailable evidence run normal review. The updater
-  paginates the pull-request list and exact-head check-run
-  evidence and stops on incomplete results. It paginates the release Task
+  only a fully matching updater PR and source Task, including the Task's native
+  issue type, can delay automatic Harness review; mismatches and unavailable
+  evidence run normal review. The updater and Harness verify that required
+  exact-head checks came from their expected workflow file and matching job,
+  rather than trusting the check name alone. The updater paginates the
+  pull-request list and exact-head check-run evidence and stops on incomplete
+  or mismatched provenance. It paginates the release Task
   search and refuses to create an issue when search results are incomplete or
   exceed the GitHub Search API limit. Only an internal bot-authored update PR
   with the expected branch, title, and marker can delay automatic Harness
@@ -61,11 +64,14 @@ they do not authorize migration, alter that issue's scope, or close it.
   profile pairs, and no model fallback.
 - Harness review excludes its own check run, keeps quota counters outside the
   semantic model input, limits primitive evidence to affected ADR metadata,
-  waits for exact-head deterministic checks, and skips a model turn when a
-  required check fails or stays incomplete. It resumes
+  waits for exact-head deterministic checks and their verified workflow
+  provenance, and skips a model turn when a required check fails, stays
+  incomplete, or comes from another workflow. It resumes
   interrupted Codex threads and reuses a completed result for an exact evidence
-  fingerprint without a new model turn. Transient preflight and quota results
-  do not invalidate that fingerprint. Protected runner-local session data is
+  fingerprint without a new model turn. Identical check reruns no longer
+  invalidate that fingerprint only because run IDs, links, or timestamps
+  changed. Transient preflight and quota results do not invalidate that
+  fingerprint. Protected runner-local session data is
   pruned after 30 days. A failed preflight still writes sanitized per-window
   usage and guard signals to the Actions summary and runner log. Deterministic
   quality and ADR checks run on ephemeral hosted runners so they can finish

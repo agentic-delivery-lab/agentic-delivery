@@ -6,7 +6,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { adrQualityWorkflowAppliesToFiles, reviewCheckReadiness } from './lib/pull-request-check-readiness.mjs';
+import {
+  adrQualityWorkflowAppliesToFiles,
+  reviewCheckReadiness,
+  verifyReviewCheckRunProducers,
+} from './lib/pull-request-check-readiness.mjs';
+import { getNativeIssueType } from './lib/github-native-issue-type.mjs';
 import { RELEASE } from './setup-runner-codex.mjs';
 
 export { adrQualityWorkflowAppliesToFiles, reviewCheckReadiness } from './lib/pull-request-check-readiness.mjs';
@@ -312,8 +317,10 @@ export async function resolveClosedUpdateIssueStates(pulls, repository, token, f
       throw new Error('A closed Codex CLI update pull request has no valid release source issue.');
     }
     const issue = await fetchJson(`https://api.github.com/repos/${repository}/issues/${issueNumber}`, token, fetchImpl);
+    const nativeIssueType = await getNativeIssueType({ repository, issueNumber, token, fetchImpl });
     const marker = `<!-- codex-cli-release-update:v1:${version} -->`;
-    if (issue.number !== issueNumber || issue.pull_request
+    if (nativeIssueType !== 'Task'
+      || issue.number !== issueNumber || issue.pull_request
       || issue.html_url !== `https://github.com/${repository}/issues/${issueNumber}`
       || issue.title !== sourceIssueTitle(version)
       || !String(issue.body ?? '').includes(marker)
@@ -441,6 +448,10 @@ export async function resolveSourceIssue({
       || issue.html_url !== `https://github.com/${repository}/issues/${issue.number}`) {
       throw new Error('The matching Codex CLI update source issue has an invalid repository URL or number.');
     }
+    const nativeIssueType = await getNativeIssueType({ repository, issueNumber: issue.number, token, fetchImpl });
+    if (nativeIssueType !== 'Task') {
+      throw new Error(`The matching Codex CLI update source issue #${issue.number} has native issue type ${nativeIssueType ?? 'none'}; expected Task.`);
+    }
     return { number: issue.number, url: issue.html_url, title, created: false };
   }
 
@@ -475,6 +486,10 @@ export async function resolveSourceIssue({
   if (!Number.isSafeInteger(created?.number) || created.number < 1
     || created.url !== `https://github.com/${repository}/issues/${created.number}`) {
     throw new Error('The newly created Codex CLI update source issue has an invalid repository URL or number.');
+  }
+  const nativeIssueType = await getNativeIssueType({ repository, issueNumber: created.number, token, fetchImpl });
+  if (nativeIssueType !== 'Task') {
+    throw new Error(`The newly created Codex CLI update source issue #${created.number} has native issue type ${nativeIssueType ?? 'none'}; expected Task.`);
   }
   return { number: created.number, url: created.url, title, created: true };
 }
@@ -566,7 +581,16 @@ async function waitForPullRequestChecks() {
       await new Promise((resolve) => setTimeout(resolve, 15_000));
       continue;
     }
-    const readiness = reviewCheckReadiness(checkEvidence.checkRuns, expectedSha, requireAdrValidation);
+    const preliminary = reviewCheckReadiness(checkEvidence.checkRuns, expectedSha, requireAdrValidation, false);
+    const verifiedRuns = preliminary.requiredReady
+      ? await verifyReviewCheckRunProducers(checkEvidence.checkRuns, {
+        repository,
+        expectedSha,
+        token,
+        fetchImpl: globalThis.fetch,
+      })
+      : checkEvidence.checkRuns;
+    const readiness = reviewCheckReadiness(verifiedRuns, expectedSha, requireAdrValidation);
     if (readiness.ready) {
       await appendOutput('checks_ready', 'true');
       process.stdout.write(`Exact-head body, delivery-quality, portability${requireAdrValidation ? ', and ADR-quality' : ''} checks passed for pull request #${number} at ${expectedSha}.\n`);

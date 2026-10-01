@@ -17,9 +17,15 @@ import {
   verifyDownload,
 } from '../../scripts/codex-cli-release-update.mjs';
 import { RELEASE } from '../../scripts/setup-runner-codex.mjs';
+import { reviewCheckWorkflowPath, verifyReviewCheckRunProducers } from '../../scripts/lib/pull-request-check-readiness.mjs';
+import { getNativeIssueType } from '../../scripts/lib/github-native-issue-type.mjs';
 
 const repository = 'agentic-delivery-lab/agentic-delivery';
 const assetName = 'codex-package-x86_64-unknown-linux-musl.tar.gz';
+
+function graphqlIssueType(name = 'Task') {
+  return { ok: true, json: async () => ({ data: { repository: { issue: { issueType: name ? { name } : null } } } }) };
+}
 
 function nextPatchVersion(version) {
   const [major, minor, patch] = version.split('.').map(Number);
@@ -125,6 +131,7 @@ test('a closed release Task resolves its old PR without blocking later releases'
   };
   let state = 'closed';
   const fetchImpl = async (url) => {
+    if (String(url) === 'https://api.github.com/graphql') return graphqlIssueType();
     assert.equal(String(url), `https://api.github.com/repos/${repository}/issues/${issueNumber}`);
     return {
       ok: true,
@@ -162,11 +169,101 @@ test('semantic review readiness requires exact-head deterministic checks and ign
     started_at: '2026-10-01T12:00:00Z', app: { name: 'GitHub Actions' },
   }));
   checkRuns.push({ name: 'review', head_sha: sha, status: 'in_progress', app: { name: 'GitHub Actions' } });
-  assert.equal(reviewCheckReadiness(checkRuns, sha).ready, true);
+  assert.equal(reviewCheckReadiness(checkRuns, sha, false, false).ready, true);
+  assert.deepEqual(reviewCheckReadiness(checkRuns, sha).wrongWorkflow, names);
   assert.deepEqual(reviewCheckReadiness(checkRuns, sha, true).missing, ['validate']);
-  assert.deepEqual(reviewCheckReadiness(checkRuns.map((run) => ({ ...run, head_sha: 'b'.repeat(40) })), sha).missing, names);
+  assert.deepEqual(reviewCheckReadiness(checkRuns.map((run) => ({ ...run, head_sha: 'b'.repeat(40) })), sha, false, false).missing, names);
   const failed = checkRuns.map((run) => run.name === 'quality' ? { ...run, conclusion: 'failure' } : run);
-  assert.deepEqual(reviewCheckReadiness(failed, sha).failed, ['quality']);
+  assert.deepEqual(reviewCheckReadiness(failed, sha, false, false).failed, ['quality']);
+});
+
+test('required check runs are accepted only when their exact workflow run and job produced them', async () => {
+  const sha = 'a'.repeat(40);
+  const checkRun = {
+    id: 900,
+    name: 'quality',
+    head_sha: sha,
+    status: 'completed',
+    conclusion: 'success',
+    url: `https://api.github.com/repos/${repository}/check-runs/900`,
+    details_url: `https://github.com/${repository}/actions/runs/700/job/800`,
+    app: { name: 'GitHub Actions' },
+  };
+  const fetchEvidence = (workflowPath) => async (url) => {
+    const address = String(url);
+    if (address.endsWith('/actions/runs/700')) return {
+      ok: true,
+      json: async () => ({
+        id: 700,
+        head_sha: sha,
+        path: workflowPath,
+        event: 'pull_request',
+        name: 'delivery-quality',
+        workflow_id: 21,
+      }),
+    };
+    if (address.endsWith('/actions/jobs/800')) return {
+      ok: true,
+      json: async () => ({
+        id: 800,
+        run_id: 700,
+        head_sha: sha,
+        name: 'quality',
+        workflow_name: 'delivery-quality',
+        check_run_url: checkRun.url,
+        status: 'completed',
+        conclusion: 'success',
+      }),
+    };
+    throw new Error(`Unexpected evidence request: ${address}`);
+  };
+
+  assert.equal(reviewCheckWorkflowPath('quality'), '.github/workflows/delivery-quality.yml');
+  const valid = await verifyReviewCheckRunProducers([checkRun], {
+    repository,
+    expectedSha: sha,
+    token: 'test-token',
+    fetchImpl: fetchEvidence('.github/workflows/delivery-quality.yml'),
+  });
+  assert.equal(valid[0].workflowVerified, true);
+  assert.equal(valid[0].workflowPath, '.github/workflows/delivery-quality.yml');
+
+  const counterfeit = await verifyReviewCheckRunProducers([checkRun], {
+    repository,
+    expectedSha: sha,
+    token: 'test-token',
+    fetchImpl: fetchEvidence('.github/workflows/unrelated.yml'),
+  });
+  assert.equal(counterfeit[0].workflowVerified, false);
+  assert.equal(reviewCheckReadiness(counterfeit, sha).ready, false);
+  assert.deepEqual(reviewCheckReadiness(counterfeit, sha).wrongWorkflow, ['quality']);
+});
+
+test('native issue-type lookup reads the organization issue type from GraphQL', async () => {
+  let request;
+  const issueType = await getNativeIssueType({
+    repository,
+    issueNumber: 742,
+    token: 'test-token',
+    fetchImpl: async (url, options) => {
+      request = { url: String(url), options };
+      return graphqlIssueType();
+    },
+  });
+  assert.equal(issueType, 'Task');
+  assert.equal(request.url, 'https://api.github.com/graphql');
+  assert.equal(request.options.method, 'POST');
+  assert.deepEqual(JSON.parse(request.options.body).variables, {
+    owner: 'agentic-delivery-lab',
+    name: 'agentic-delivery',
+    number: 742,
+  });
+  assert.equal(await getNativeIssueType({
+    repository,
+    issueNumber: 742,
+    token: 'test-token',
+    fetchImpl: async () => graphqlIssueType(null),
+  }), null);
 });
 
 test('requires ADR validation whenever changed files trigger the ADR-quality workflow', () => {
@@ -214,7 +311,7 @@ test('paginates all exact-head check runs before declaring deterministic checks 
   assert.deepEqual(requestedPages, [1, 2]);
   assert.equal(evidence.complete, true);
   assert.equal(evidence.checkRuns.length, 106);
-  assert.equal(reviewCheckReadiness(evidence.checkRuns, sha, true).ready, true);
+  assert.equal(reviewCheckReadiness(evidence.checkRuns, sha, true, false).ready, true);
 });
 
 test('does not treat a short paginated check-run response as complete evidence', async () => {
@@ -246,6 +343,7 @@ test('reuses a matching open release issue and creates a typed task when no issu
   const marker = `<!-- codex-cli-release-update:v1:${version} -->`;
   let createCount = 0;
   const fetchImpl = async (url) => {
+    if (String(url) === 'https://api.github.com/graphql') return graphqlIssueType();
     assert.match(String(url), /search\/issues\?/);
     return {
       ok: true,
@@ -260,6 +358,23 @@ test('reuses a matching open release issue and creates a typed task when no issu
   };
   const reused = await resolveSourceIssue({ candidate, repository, token: 'test-token', fetchImpl, createIssue: async () => { createCount += 1; } });
   assert.deepEqual(reused, { number: 742, url: `https://github.com/${repository}/issues/742`, title, created: false });
+  assert.equal(createCount, 0);
+
+  await assert.rejects(resolveSourceIssue({
+    candidate,
+    repository,
+    token: 'test-token',
+    fetchImpl: async (url) => String(url) === 'https://api.github.com/graphql'
+      ? graphqlIssueType(null)
+      : { ok: true, json: async () => ({ total_count: 1, incomplete_results: false, items: [{
+        number: 742,
+        title,
+        body: `${marker}\nRelease task`,
+        state: 'open',
+        html_url: `https://github.com/${repository}/issues/742`,
+      }] }) },
+    createIssue: async () => { createCount += 1; },
+  }), /native issue type none; expected Task/);
   assert.equal(createCount, 0);
 
   await assert.rejects(resolveSourceIssue({
@@ -281,7 +396,9 @@ test('reuses a matching open release issue and creates a typed task when no issu
     candidate,
     repository,
     token: 'test-token',
-    fetchImpl: async () => ({ ok: true, json: async () => ({ total_count: 0, incomplete_results: false, items: [] }) }),
+    fetchImpl: async (url) => String(url) === 'https://api.github.com/graphql'
+      ? graphqlIssueType()
+      : { ok: true, json: async () => ({ total_count: 0, incomplete_results: false, items: [] }) },
     createIssue: async ({ issueTitle, issueBody }) => {
       createCount += 1;
       assert.equal(issueTitle, title);
@@ -300,6 +417,7 @@ test('release source issue discovery paginates and fails closed on incomplete or
   const marker = `<!-- codex-cli-release-update:v1:${version} -->`;
   const pages = [];
   const fetchImpl = async (url) => {
+    if (String(url) === 'https://api.github.com/graphql') return graphqlIssueType();
     const page = Number(new URL(String(url)).searchParams.get('page'));
     pages.push(page);
     const items = page === 1

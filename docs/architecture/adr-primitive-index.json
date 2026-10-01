@@ -131,6 +131,7 @@
         "codex-cli-updater-review-classifier",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
+        "github-native-issue-type",
         "pull-request-check-readiness",
         "pull-request-dispatch-context-resolver"
       ]
@@ -147,6 +148,7 @@
       ],
       "primitives": [
         "codex-cli-updater-review-classifier",
+        "github-native-issue-type",
         "harness-architecture-review",
         "pull-request-check-readiness",
         "semantic-architecture-review"
@@ -384,6 +386,7 @@
         "domain-language-validator",
         "event-catalog",
         "event-catalog-validator",
+        "github-native-issue-type",
         "harness-architecture-review",
         "issue-branch-name-validator",
         "issue-classifier",
@@ -690,6 +693,20 @@
       ],
       "domains": [
         "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "github-native-issue-type",
+      "path": "scripts/lib/github-native-issue-type.mjs",
+      "location": "scripts/lib/github-native-issue-type.mjs",
+      "kind": "customization",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
       ]
     },
     {
