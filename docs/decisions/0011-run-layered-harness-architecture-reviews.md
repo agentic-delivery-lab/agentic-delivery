@@ -85,6 +85,9 @@ repository, issue, run or session evidence. Findings, invalid semantic output,
 unavailable evidence and unavailable quota are reported as advisory or
 inconclusive results. The profile change may affect review quality; maintainers
 inspect the first completed result alongside its quota evidence.
+When the runner's model catalog rejects a required approved model-effort pair,
+the evidence names that pair without publishing raw runner errors. Other
+unknown runner failures remain redacted.
 
 Agent-created pull requests carry a versioned evidence projection derived from
 persisted delivery state. The projection contains source issue, workflow run,

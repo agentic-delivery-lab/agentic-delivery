@@ -379,9 +379,12 @@ Internal pull requests also run the read-only Harness Architecture Review. The
 deterministic layer compares the merge-base-to-head diff with the official base
 ADRs, provisional head changes, the domain register, and the evidence contract.
 The semantic layer uses a bounded GPT-6 Sol Medium review turn when quota and runner
-evidence are available. Deterministic violations fail; semantic concerns and
-inconclusive runtime evidence remain cited review findings. The review workflow
-does not comment, modify, merge or close anything.
+evidence are available. Preflight checks the exact model-effort profile against
+the runner catalog. A known unsupported pair is reported by name without raw
+runner errors; other initialization failures stay redacted. Deterministic
+violations fail; semantic concerns and inconclusive runtime evidence remain
+cited review findings. The review workflow does not comment, modify, merge or
+close anything.
 
 Review generated workflow and test changes before approving their execution.
 Review PR CI runs repository code directly as the runner service account; it

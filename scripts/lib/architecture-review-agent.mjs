@@ -158,6 +158,19 @@ export function parseSemanticOutcome(text) {
   return value;
 }
 
+function safeRunnerFailure(error) {
+  const message = typeof error?.message === 'string' ? error.message : '';
+  const unsupportedModel = message.match(/^Codex must support (gpt-6-(?:luna|sol)) with (low|medium) effort; no fallback is allowed\.$/);
+  if (unsupportedModel) {
+    return `The runner's Codex model catalog does not advertise ${unsupportedModel[1]} with ${unsupportedModel[2]} reasoning effort; no model turn was started.`;
+  }
+  if (message === 'Runner Codex must be signed in with ChatGPT; API billing is not allowed.'
+      || message === 'Runner Codex must support actual Plan mode.') {
+    return message;
+  }
+  return 'The read-only review agent could not run; inspect runner diagnostics without publishing raw errors.';
+}
+
 export async function runSemanticReview({ repositoryRoot, review, eventPath, createClient, runTurnImpl } = {}) {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-architecture-review-'));
   const bundle = path.join(temporary, 'review-bundle.md');
@@ -253,7 +266,7 @@ export async function runSemanticReview({ repositoryRoot, review, eventPath, cre
       status: 'inconclusive',
       summary: 'Semantic architecture review is unavailable.',
       findings: [],
-      evidenceGaps: ['The read-only review agent could not run; inspect runner diagnostics without publishing raw errors.'],
+      evidenceGaps: [safeRunnerFailure(error)],
       sessionId: null,
       model: MODELS.review,
     };
