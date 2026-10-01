@@ -260,7 +260,9 @@ issue edits.
   Harness includes the live PR description, non-Harness check runs for its
   exact reviewed commit, and runner preflight results. It excludes its own
   `review` check only after verifying its workflow-run and job provenance, so
-  an unrelated same-name check remains visible. Its semantic diff contains every
+  an unrelated same-name check remains visible. It resumes an interrupted
+  thread only when the full evidence fingerprint is unchanged; changed evidence
+  gets an isolated thread. Its semantic diff contains every
   changed path with five lines of context, including configuration and
   changelog edits. A diff over 500,000 characters stops before a model turn
   and is reported as inconclusive instead of being silently truncated. Before

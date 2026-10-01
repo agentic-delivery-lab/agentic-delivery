@@ -100,12 +100,13 @@ The Harness keeps its own `architecture review session`, separate from the
 source-issue delivery `Codex session`. It stores the app-server thread under
 `/var/lib/github-runner/.codex/harness-reviews`, outside the checkout and
 ordinary Actions artifacts. The manifest and thread files are accessible only
-to the runner service account and are pruned during a later Harness run when
-their last update is older than 30 days. The thread UUID is
-saved before the first model turn. If a turn is interrupted, the next review
-for the same base, head, Architecture Authority pin, Codex CLI version, model
-profile, and prompt version resumes that thread with a short continuation
-prompt and rereads the current evidence bundle.
+to the runner service account. Each full semantic evidence fingerprint has an
+isolated state directory. State directories whose last update is older than
+30 days are pruned before a review, including the directory selected for the
+current review. The thread UUID is saved before the first model turn. If a turn
+is interrupted, a later review resumes that thread only when the complete
+semantic evidence fingerprint is unchanged; changed evidence starts a fresh
+thread and cannot inherit earlier model context.
 
 A `semantic review fingerprint` hashes the deterministic result, source issue,
 pull-request body, exact-head non-Harness check results, ADR/domain evidence,
@@ -127,10 +128,10 @@ waits up to 15 minutes for the expected exact-head checks to finish; a failed,
 missing, truncated, or still-running check prevents a semantic model turn. The
 workflow reuses a completed structured result without another model turn only
 when the full fingerprint matches exactly and all exact-head checks are
-complete, with the required checks successful. A completed review with changed
-evidence starts a new thread. Deterministic violations also skip the semantic
-turn. Quota snapshots remain in the Actions report and runner log, outside the
-semantic model context.
+complete, with the required checks successful. A completed or interrupted
+review with changed evidence starts a fresh, fingerprint-isolated thread.
+Deterministic violations also skip the semantic turn. Quota snapshots remain
+in the Actions report and runner log, outside the semantic model context.
 
 The evidence bundle omits the deterministic review's `not-run` semantic
 placeholder and identifies that the bundle is assembled before the current
@@ -216,10 +217,11 @@ Tests must cover impact-map coverage, evidence-schema validation, redaction,
 publication retry idempotency, deterministic failure codes, exact GPT-6 Sol
 High review settings, denied model network, cited semantic findings,
 inconclusive quota/evidence handling, no-model execution for deterministic
-violations and incomplete checks, exclusion of the current Harness check,
-exact-fingerprint cache reuse, interrupted-thread resume, changed-evidence
-invalidation, state-file permissions and retention, workflow permissions, and
-no-comment behavior. A
+violations and incomplete checks, exclusion of the current Harness check only
+after exact workflow provenance, exact-fingerprint cache reuse, interrupted
+thread resume only for unchanged evidence, fresh-thread behavior after
+evidence changes, pruning of expired current and non-current state, state-file
+permissions, workflow permissions, and no-comment behavior. A
 human reviewer must inspect whether the baseline and semantic findings cite
 evidence rather than treating tests or documentation as runtime proof.
 

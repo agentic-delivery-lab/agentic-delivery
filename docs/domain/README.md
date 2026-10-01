@@ -34,9 +34,13 @@ session` are separate records with different owners and resume conditions. A
 semantic review fingerprint identifies the evidence behind a reusable Harness
 result. It includes exact-head check outcomes and verified workflow identity,
 but excludes run-specific IDs, links and timestamps so a deterministic rerun
-with the same evidence can reuse a completed result. Transient runner preflight
-status, quota counters and the Harness review check itself are also excluded.
-The review-session identity includes the Codex CLI version and model profile.
+with the same evidence can reuse a completed result. An interrupted review
+thread resumes only for the same full fingerprint; changed evidence gets an
+isolated thread and state directory. Expired state, including the directory
+selected for the current review, is pruned before reuse. Transient runner
+preflight status, quota counters and the Harness review check itself are also
+excluded. The review-session identity includes the Codex CLI version and model
+profile.
 
 ## Repository boundary
 

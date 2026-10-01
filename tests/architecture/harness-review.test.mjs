@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -15,6 +15,7 @@ import {
   parseSemanticOutcome,
   excludeVerifiedHarnessReviewChecks,
   isHarnessReviewCheck,
+  pruneExpiredReviewState,
   runSemanticReview,
   safeDiffText,
   semanticReviewDiff,
@@ -130,6 +131,24 @@ test('Harness excludes only its own check after exact workflow provenance is ver
   assert.equal(isHarnessReviewCheck(verifiedHarness), true);
   assert.equal(isHarnessReviewCheck(verifiedUnrelated), false);
   assert.deepEqual(excludeVerifiedHarnessReviewChecks([candidate, verifiedHarness, verifiedUnrelated]), [candidate, verifiedUnrelated]);
+});
+
+test('review-state retention prunes an expired directory even when it is the current candidate', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-review-retention-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const currentDirectory = path.join(root, 'repository-25', '71', 'a'.repeat(64));
+  const retainedDirectory = path.join(root, 'repository-25', '71', 'b'.repeat(64));
+  await Promise.all([
+    mkdir(currentDirectory, { recursive: true }),
+    mkdir(retainedDirectory, { recursive: true }),
+  ]);
+  const expiredAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+  await utimes(currentDirectory, expiredAt, expiredAt);
+
+  await pruneExpiredReviewState(root);
+
+  await assert.rejects(stat(currentDirectory), { code: 'ENOENT' });
+  assert.equal((await stat(retainedDirectory)).isDirectory(), true);
 });
 
 test('the current architecture map covers the official ADR set and emits a concise result', async () => {
@@ -732,6 +751,53 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
   assert.equal(resumed.status, 'aligned');
   assert.equal(resumed.reviewSession.disposition, 'resumed');
   assert.equal(modelTurns, 3);
+
+  pullRequestBody = 'Changed evidence while a new review is interrupted.';
+  const interruptedChangedEvidence = await runSemanticReview({
+    repositoryRoot,
+    review,
+    eventPath,
+    createClient: () => ({
+      initialize: async () => {},
+      capabilities: async () => ({ stop: false, usedPercent: 97, windows: [], guardSignals: { windowThresholdReached: false, rateLimitReached: false, spendControlReached: false } }),
+      startThread: async () => ({ thread: { id: '419fb023-24b8-7881-9119-509f078b610e' } }),
+      close: async () => {},
+    }),
+    runTurnImpl: async () => ({ status: 'paused', reason: 'The changed-evidence review was interrupted.' }),
+  });
+  assert.equal(interruptedChangedEvidence.reviewSession.disposition, 'interrupted');
+
+  pullRequestBody = 'The evidence changed again after the interrupted review.';
+  let freshThreadStarted = false;
+  let staleThreadResumed = false;
+  const changedEvidenceAfterInterruption = await runSemanticReview({
+    repositoryRoot,
+    review,
+    eventPath,
+    createClient: () => ({
+      initialize: async () => {},
+      capabilities: async () => ({ stop: false, usedPercent: 97, windows: [], guardSignals: { windowThresholdReached: false, rateLimitReached: false, spendControlReached: false } }),
+      startThread: async () => {
+        freshThreadStarted = true;
+        return { thread: { id: '519fb023-24b8-7881-9119-509f078b610e' } };
+      },
+      resumeThread: async () => { staleThreadResumed = true; },
+      close: async () => {},
+    }),
+    runTurnImpl: async ({ prompt }) => {
+      assert.match(prompt, /Review the evidence bundle/);
+      assert.doesNotMatch(prompt, /Continue the interrupted read-only architecture review/);
+      modelTurns += 1;
+      return { status: 'completed', text: JSON.stringify({
+        status: 'aligned', summary: 'Changed evidence receives a fresh review thread.', affectedAdrs: [], affectedContexts: [], findings: [], evidenceGaps: [],
+      }) };
+    },
+  });
+  assert.equal(freshThreadStarted, true);
+  assert.equal(staleThreadResumed, false);
+  assert.equal(changedEvidenceAfterInterruption.status, 'aligned');
+  assert.equal(changedEvidenceAfterInterruption.reviewSession.disposition, 'completed');
+  assert.equal(modelTurns, 4);
 });
 
 test('the evidence contract validates the complete projection and rejects mismatches', async () => {

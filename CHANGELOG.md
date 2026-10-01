@@ -62,13 +62,17 @@ they do not authorize migration, alter that issue's scope, or close it.
   Low/Medium/Max and GPT-6 Sol High profiles, with runner-catalog preflight,
   complete matching-entry capability checks, safe reporting for unsupported
   profile pairs, and no model fallback.
-- Harness review excludes its own check run, keeps quota counters outside the
-  semantic model input, limits primitive evidence to affected ADR metadata,
+- Harness review excludes its own check run only after verifying its exact
+  workflow path, keeps quota counters outside the semantic model input, limits
+  primitive evidence to affected ADR metadata,
   waits for exact-head deterministic checks and their verified workflow
   provenance, and skips a model turn when a required check fails, stays
-  incomplete, or comes from another workflow. It resumes
-  interrupted Codex threads and reuses a completed result for an exact evidence
-  fingerprint without a new model turn. Identical check reruns no longer
+  incomplete, or comes from another workflow. It resumes interrupted Codex
+  threads only when the full evidence fingerprint is unchanged; changed
+  evidence starts in an isolated thread directory. Expired review state,
+  including the current candidate directory, is pruned before review. It reuses
+  a completed result for an exact evidence fingerprint without a new model
+  turn. Identical check reruns no longer
   invalidate that fingerprint only because run IDs, links, or timestamps
   changed. Transient preflight and quota results do not invalidate that
   fingerprint. Protected runner-local session data is

@@ -575,16 +575,17 @@ function digest(value) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-function reviewStateLocation(review, event, identity) {
+function reviewStateLocation(review, event, fingerprint) {
   const root = process.env.CODEX_REVIEW_STATE_DIR;
   const repository = review.repository;
   const pullRequestNumber = review.pullRequest?.number ?? event.pull_request?.number;
   const repositoryId = event.repository?.id !== undefined && /^[1-9]\d*$/.test(String(event.repository.id))
     ? String(event.repository.id)
     : /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository ?? '') ? repository.replace('/', '_') : null;
-  if (!root || !repositoryId || !Number.isSafeInteger(Number(pullRequestNumber)) || Number(pullRequestNumber) < 1) return null;
+  if (!root || !repositoryId || !Number.isSafeInteger(Number(pullRequestNumber)) || Number(pullRequestNumber) < 1
+      || !/^[a-f0-9]{64}$/.test(fingerprint ?? '')) return null;
   const absoluteRoot = path.resolve(root);
-  const directory = path.join(absoluteRoot, repositoryId, String(pullRequestNumber), identity);
+  const directory = path.join(absoluteRoot, repositoryId, String(pullRequestNumber), fingerprint);
   if (!directory.startsWith(`${absoluteRoot}${path.sep}`)) return null;
   return {
     root: absoluteRoot,
@@ -600,7 +601,7 @@ async function ensurePrivateDirectory(directory) {
   await chmod(directory, 0o700);
 }
 
-async function pruneExpiredReviewState(root, currentDirectory, now = Date.now()) {
+export async function pruneExpiredReviewState(root, now = Date.now()) {
   const expiredBefore = now - REVIEW_STATE_RETENTION_MS;
   let repositories;
   try { repositories = await readdir(root, { withFileTypes: true }); }
@@ -613,7 +614,6 @@ async function pruneExpiredReviewState(root, currentDirectory, now = Date.now())
       for (const review of await readdir(pullRequestPath, { withFileTypes: true }).catch(() => [])) {
         if (!review.isDirectory() || !/^[a-f0-9]{64}$/.test(review.name)) continue;
         const candidate = path.join(pullRequestPath, review.name);
-        if (candidate === currentDirectory) continue;
         const info = await stat(candidate).catch(() => null);
         if (info && info.mtimeMs < expiredBefore) await rm(candidate, { recursive: true, force: true });
       }
@@ -834,7 +834,7 @@ export async function runSemanticReview({
       state,
       diff: reviewDiff,
     });
-    statePaths = reviewStateLocation(review, event, identity);
+    statePaths = reviewStateLocation(review, event, fingerprint);
     if (!statePaths) {
       return {
         status: 'inconclusive',
@@ -848,15 +848,16 @@ export async function runSemanticReview({
     const repositoryDirectory = path.dirname(path.dirname(statePaths.directory));
     const pullRequestDirectory = path.dirname(statePaths.directory);
     await ensurePrivateDirectory(statePaths.root);
+    await pruneExpiredReviewState(statePaths.root);
     await ensurePrivateDirectory(repositoryDirectory);
     await ensurePrivateDirectory(pullRequestDirectory);
     await ensurePrivateDirectory(statePaths.directory);
     await ensurePrivateDirectory(statePaths.codexHome);
-    await pruneExpiredReviewState(statePaths.root, statePaths.directory);
     await writeFile(statePaths.bundle, `${baseContent.join('\n\n')}\n`, { mode: 0o600 });
     await chmod(statePaths.bundle, 0o600);
 
-    const existing = await readReviewManifest(statePaths.manifest, identity);
+    const savedManifest = await readReviewManifest(statePaths.manifest, identity);
+    const existing = savedManifest?.fingerprint === fingerprint ? savedManifest : null;
     if (existing?.status === 'completed' && existing.fingerprint === fingerprint) {
       const cachedOutcome = parseSemanticOutcome(JSON.stringify(existing.outcome));
       if (cachedOutcome.status === 'aligned' || cachedOutcome.status === 'findings') {
@@ -949,7 +950,9 @@ export async function runSemanticReview({
     await writeFile(statePaths.bundle, `${baseContent.join('\n\n')}${quotaNote}\n`, { mode: 0o600 });
     await chmod(statePaths.bundle, 0o600);
 
-    const canResume = existing && ['in-progress', 'interrupted', 'retryable'].includes(existing.status);
+    const canResume = existing
+      && existing.fingerprint === fingerprint
+      && ['in-progress', 'interrupted', 'retryable'].includes(existing.status);
     if (canResume) {
       threadId = existing.threadId;
       await client.resumeThread(repositoryRoot, threadId, REVIEW_THREAD_INSTRUCTIONS, 'review');
