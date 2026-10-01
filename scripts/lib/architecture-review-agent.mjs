@@ -211,8 +211,18 @@ export function stableCheckRunEvidence(runs) {
   });
 }
 
-function isHarnessReviewCheck(run) {
+function isHarnessReviewCheckCandidate(run) {
   return run?.app?.name === 'GitHub Actions' && String(run.name ?? '').trim().toLowerCase() === 'review';
+}
+
+export function isHarnessReviewCheck(run) {
+  return isHarnessReviewCheckCandidate(run)
+    && run.workflowVerified === true
+    && run.workflowPath === '.github/workflows/harness-architecture-review.yml';
+}
+
+export function excludeVerifiedHarnessReviewChecks(runs) {
+  return (Array.isArray(runs) ? runs : []).filter((run) => !isHarnessReviewCheck(run));
 }
 
 function latestCheckRuns(runs) {
@@ -291,7 +301,18 @@ async function pullRequestEvidence(review, event, {
         const result = await githubJson(checkUrl, token);
         const exactRuns = (Array.isArray(result.check_runs) ? result.check_runs : [])
           .filter((run) => run.head_sha === review.head);
-        const latestRuns = latestCheckRuns(exactRuns.filter((run) => !isHarnessReviewCheck(run)));
+        const harnessCandidates = exactRuns.filter((run) => isHarnessReviewCheckCandidate(run)
+          && !verifiedProducers.has(producerEvidenceKey(run)));
+        if (harnessCandidates.length) {
+          const verified = await verifyReviewCheckRunProducers(harnessCandidates, {
+            repository,
+            expectedSha: review.head,
+            token,
+          });
+          for (const run of verified) verifiedProducers.set(producerEvidenceKey(run), run);
+        }
+        const evidencedRuns = exactRuns.map((run) => verifiedProducers.get(producerEvidenceKey(run)) ?? run);
+        const latestRuns = latestCheckRuns(excludeVerifiedHarnessReviewChecks(evidencedRuns));
         const truncated = Number(result.total_count ?? exactRuns.length) > exactRuns.length;
         const preliminary = reviewCheckReadiness(latestRuns, review.head, requireAdrValidation, false);
         let readiness = preliminary;

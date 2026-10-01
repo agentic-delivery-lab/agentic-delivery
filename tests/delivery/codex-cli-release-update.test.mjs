@@ -219,6 +219,7 @@ test('required check runs are accepted only when their exact workflow run and jo
   };
 
   assert.equal(reviewCheckWorkflowPath('quality'), '.github/workflows/delivery-quality.yml');
+  assert.equal(reviewCheckWorkflowPath('review'), '.github/workflows/harness-architecture-review.yml');
   const valid = await verifyReviewCheckRunProducers([checkRun], {
     repository,
     expectedSha: sha,

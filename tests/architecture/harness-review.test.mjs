@@ -13,6 +13,8 @@ import {
 } from '../../scripts/lib/architecture-review.mjs';
 import {
   parseSemanticOutcome,
+  excludeVerifiedHarnessReviewChecks,
+  isHarnessReviewCheck,
   runSemanticReview,
   safeDiffText,
   semanticReviewDiff,
@@ -102,6 +104,32 @@ test('semantic review fingerprints check meaning while ignoring replay-specific 
   assert.deepEqual(stableCheckRunEvidence([replay]), stableCheckRunEvidence([first]));
   assert.notDeepEqual(stableCheckRunEvidence([{ ...replay, conclusion: 'failure' }]), stableCheckRunEvidence([first]));
   assert.notDeepEqual(stableCheckRunEvidence([{ ...replay, workflowPath: '.github/workflows/unrelated.yml' }]), stableCheckRunEvidence([first]));
+});
+
+test('Harness excludes only its own check after exact workflow provenance is verified', () => {
+  const candidate = {
+    id: 1,
+    name: 'review',
+    app: { name: 'GitHub Actions' },
+    workflowVerified: false,
+    workflowPath: null,
+  };
+  const verifiedHarness = {
+    ...candidate,
+    id: 2,
+    workflowVerified: true,
+    workflowPath: '.github/workflows/harness-architecture-review.yml',
+  };
+  const verifiedUnrelated = {
+    ...verifiedHarness,
+    id: 3,
+    workflowPath: '.github/workflows/unrelated-review.yml',
+  };
+
+  assert.equal(isHarnessReviewCheck(candidate), false);
+  assert.equal(isHarnessReviewCheck(verifiedHarness), true);
+  assert.equal(isHarnessReviewCheck(verifiedUnrelated), false);
+  assert.deepEqual(excludeVerifiedHarnessReviewChecks([candidate, verifiedHarness, verifiedUnrelated]), [candidate, verifiedUnrelated]);
 });
 
 test('the current architecture map covers the official ADR set and emits a concise result', async () => {
@@ -411,27 +439,30 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
           ['portability (macos-latest)', 654324],
           ['portability (windows-latest)', 654325],
           ['review', 654326],
+          ['review', 654327],
         ].map(([name, id]) => ({
           id,
           name,
-          status: name === 'review' ? 'in_progress' : 'completed',
-          ...(name === 'quality' && qualityPending
-            ? { status: 'in_progress', conclusion: null }
-            : { conclusion: name === 'review' ? null : name === 'quality' ? qualityConclusion : 'success' }),
+          status: id === 654326 || (name === 'quality' && qualityPending) ? 'in_progress' : 'completed',
+          conclusion: id === 654326 || (name === 'quality' && qualityPending)
+            ? null
+            : name === 'quality' ? qualityConclusion : 'success',
           head_sha: revision,
           url: `https://api.github.com/repos/${repository}/check-runs/${id}`,
-          html_url: `https://github.com/${repository}/actions/runs/${id < 654322 ? 70001 : 70002}/job/${id}`,
-          details_url: `https://github.com/${repository}/actions/runs/${id < 654322 ? 70001 : 70002}/job/${id}`,
+          html_url: `https://github.com/${repository}/actions/runs/${id === 654321 ? 70001 : id === 654326 ? 70003 : id === 654327 ? 70004 : 70002}/job/${id}`,
+          details_url: `https://github.com/${repository}/actions/runs/${id === 654321 ? 70001 : id === 654326 ? 70003 : id === 654327 ? 70004 : 70002}/job/${id}`,
           app: { name: 'GitHub Actions' },
           started_at: '2026-10-01T12:01:00Z',
-          completed_at: name === 'review' ? null : '2026-10-01T12:02:00Z',
-          output: { summary: name === 'review' ? 'Do not include this self-review result.' : 'Exact PR head passed.' },
+          completed_at: id === 654326 ? null : '2026-10-01T12:02:00Z',
+          output: { summary: id === 654326 ? 'Do not include this self-review result.' : id === 654327 ? 'Keep this unrelated review visible.' : 'Exact PR head passed.' },
         }));
         return { total_count: checks.length, check_runs: checks };
       },
     };
     const workflowForJob = (jobId) => {
       if (jobId === 654321) return { id: 70001, head_sha: revision, path: '.github/workflows/pull-request-body.yml', event: 'pull_request_target', name: 'pull-request-body', workflow_id: 81 };
+      if (jobId === 654326) return { id: 70003, head_sha: revision, path: '.github/workflows/harness-architecture-review.yml', event: 'pull_request', name: 'harness-architecture-review', workflow_id: 83 };
+      if (jobId === 654327) return { id: 70004, head_sha: revision, path: '.github/workflows/unrelated-review.yml', event: 'pull_request', name: 'unrelated-review', workflow_id: 84 };
       return {
         id: 70002,
         head_sha: revision,
@@ -447,10 +478,12 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
       [654323, 'portability (ubuntu-latest)'],
       [654324, 'portability (macos-latest)'],
       [654325, 'portability (windows-latest)'],
+      [654326, 'review'],
+      [654327, 'review'],
     ]);
     const actionRunMatch = address.match(new RegExp(`/${repository}/actions/runs/(\\d+)$`));
     if (actionRunMatch) {
-      const jobId = actionRunMatch[1] === '70001' ? 654321 : 654322;
+      const jobId = actionRunMatch[1] === '70001' ? 654321 : actionRunMatch[1] === '70003' ? 654326 : actionRunMatch[1] === '70004' ? 654327 : 654322;
       return { ok: true, json: async () => workflowForJob(jobId) };
     }
     const actionJobMatch = address.match(new RegExp(`/${repository}/actions/jobs/(\\d+)$`));
@@ -458,7 +491,7 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
       const jobId = Number(actionJobMatch[1]);
       const workflow = workflowForJob(jobId);
       const qualityPending = pendingQualityFetches > 0;
-      const status = jobId === 654322 && qualityPending ? 'in_progress' : 'completed';
+      const status = jobId === 654326 || (jobId === 654322 && qualityPending) ? 'in_progress' : 'completed';
       return {
         ok: true,
         json: async () => ({
@@ -547,6 +580,8 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
   assert.doesNotMatch(bundleText, /function safePreflightReport|export async function runSemanticReview/);
   assert.ok(bundleText.length < 100_000, 'unrelated primitive source files must not inflate the semantic evidence bundle');
   assert.doesNotMatch(bundleText, /Do not include this self-review result|"id": 654326/);
+  assert.match(bundleText, /"id": 654327/);
+  assert.match(bundleText, /Keep this unrelated review visible\./);
   assert.match(bundleText, /quota telemetry is recorded by the runner/i);
   const quotaFields = /highestWindowUsedPercent|allowanceAvailable|durationMinutes|windowThresholdReached/;
   const quotaFieldMatch = quotaFields.exec(bundleText);

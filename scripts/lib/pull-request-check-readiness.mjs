@@ -15,6 +15,7 @@ const REVIEW_CHECK_WORKFLOWS = Object.freeze({
   'portability (macos-latest)': '.github/workflows/delivery-quality.yml',
   'portability (windows-latest)': '.github/workflows/delivery-quality.yml',
   validate: '.github/workflows/adr-quality.yml',
+  review: '.github/workflows/harness-architecture-review.yml',
 });
 
 export function reviewCheckWorkflowPath(checkName) {

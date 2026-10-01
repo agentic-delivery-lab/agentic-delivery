@@ -149,6 +149,12 @@ conclusion. A matching check name or GitHub Actions app alone is insufficient.
 Missing or mismatched provenance stops before a semantic model turn and, for
 the CLI updater, before runner smoke.
 
+Harness excludes its in-progress `review` check from its own readiness evidence
+only after verifying that the exact check run and job came from
+`.github/workflows/harness-architecture-review.yml` on the reviewed commit. A
+same-name check from another workflow remains visible and cannot be excluded
+based only on its name or app.
+
 The weekly CLI updater uses a versioned PR-body marker to delay its semantic
 review until the candidate runner smoke passes. A GitHub-hosted classifier
 checks out only the pull request's trusted base revision and verifies the
