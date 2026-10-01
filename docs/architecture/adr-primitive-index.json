@@ -126,8 +126,11 @@
         "instructional"
       ],
       "primitives": [
+        "codex-cli-release-update-workflow",
+        "codex-cli-release-updater",
         "codex-delivery-controller",
-        "codex-delivery-workflow-guide"
+        "codex-delivery-workflow-guide",
+        "pull-request-dispatch-context-resolver"
       ]
     },
     {
@@ -227,6 +230,7 @@
         "organization-metadata-runbook",
         "pull-request-body-check",
         "pull-request-body-validator",
+        "pull-request-dispatch-context-resolver",
         "repository-governance-instructions"
       ]
     },
@@ -365,6 +369,8 @@
         "agent-invocation-preflight",
         "agent-invocation-workflow",
         "changelog-structure-validator",
+        "codex-cli-release-update-workflow",
+        "codex-cli-release-updater",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "commit-format-validator",
@@ -390,6 +396,7 @@
         "organization-webhook-ingress",
         "pull-request-body-check",
         "pull-request-body-validator",
+        "pull-request-dispatch-context-resolver",
         "repository-governance-instructions",
         "semantic-architecture-review",
         "semantic-issue-router",
@@ -477,6 +484,32 @@
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0006"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "codex-cli-release-update-workflow",
+      "path": ".github/workflows/codex-cli-release-update.yml",
+      "location": ".github/workflows/codex-cli-release-update.yml",
+      "kind": "workflow",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "codex-cli-release-updater",
+      "path": "scripts/codex-cli-release-update.mjs",
+      "location": "scripts/codex-cli-release-update.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009"
       ],
       "domains": [
         "agentic-delivery-governance"
@@ -928,6 +961,20 @@
       "kind": "validator",
       "enforcement": "deterministic",
       "adrs": [
+        "ADR-0016"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "pull-request-dispatch-context-resolver",
+      "path": "scripts/resolve-pull-request-context.mjs",
+      "location": "scripts/resolve-pull-request-context.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
         "ADR-0016"
       ],
       "domains": [

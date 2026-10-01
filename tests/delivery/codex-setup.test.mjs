@@ -4,7 +4,9 @@ import { createHash } from 'node:crypto';
 import { verifyArchive, setupTarget, RELEASE } from '../../scripts/setup-runner-codex.mjs';
 
 test('runner setup is pinned and fails closed on a changed download', () => {
-  assert.equal(RELEASE.version, '0.153.4');
+  assert.match(RELEASE.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(RELEASE.url, `https://github.com/openai/codex/releases/download/rust-v${RELEASE.version}/codex-package-x86_64-unknown-linux-musl.tar.gz`);
+  assert.match(RELEASE.sha256, /^[a-f0-9]{64}$/);
   const bytes = Buffer.from('fixture');
   const digest = createHash('sha256').update(bytes).digest('hex');
   verifyArchive(bytes, digest);
@@ -12,7 +14,7 @@ test('runner setup is pinned and fails closed on a changed download', () => {
 });
 
 test('runner setup only selects a dedicated Linux x64 cache directory', () => {
-  assert.equal(setupTarget('/runner/cache', 'linux', 'x64'), '/runner/cache/codex-delivery/0.153.4');
+  assert.equal(setupTarget('/runner/cache', 'linux', 'x64'), `/runner/cache/codex-delivery/${RELEASE.version}`);
   assert.throws(() => setupTarget('/cache', 'win32', 'x64'), /Linux x64/);
   assert.throws(() => setupTarget('/cache', 'linux', 'arm64'), /Linux x64/);
   assert.throws(() => setupTarget('relative', 'linux', 'x64'), /absolute/);

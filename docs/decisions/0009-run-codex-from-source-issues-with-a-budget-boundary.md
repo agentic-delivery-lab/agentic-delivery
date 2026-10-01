@@ -51,6 +51,10 @@ delivery run, budget boundary, and continuation prompt.
 - Continue multi-turn implementation without requiring repeated human comments.
 - Keep credentials and publication outside model-generated commands.
 - Preserve human review, merge, and issue-closing authority.
+- Keep the Actions runner's Codex CLI version, artifact URL, and integrity digest
+  centrally pinned and reviewable.
+- Promote compatible stable CLI releases without floating versions or spending
+  model quota during an ordinary release check.
 - Continue only the exact source issue and persistent Codex session selected by
   a validated semantic routing proposal from a trusted repository writer.
 - Interpret natural language in its full issue context without letting fixed
@@ -67,6 +71,9 @@ delivery run, budget boundary, and continuation prompt.
   remove turn-level failure detection.
 - For issue and comment routing, use contextual model reasoning with a closed
   deterministic validator, keyword matching, or unconditional continuation.
+- For runner CLI maintenance, keep a manual pin, install the moving latest
+  release per job, or check stable releases and promote them through a verified
+  review pull request.
 
 ## Decision Outcome
 
@@ -74,7 +81,7 @@ Chosen option: **A small Node.js controller using `codex app-server`**, because
 its protocol exposes actual collaboration modes, per-turn model settings,
 clarification requests, interruption, and subscription quota telemetry.
 
-### Quota-aware model profile amendment (Issue #70)
+### Quota-aware model profiles and CLI maintenance (Issue #70)
 
 Automatic delivery uses GPT-6 Luna Low for routing; GPT-6 Luna Medium for
 refinement, discovery, research, requirements, and coordination; GPT-6 Sol High
@@ -100,6 +107,37 @@ allowance. Use it as a role-allocation reference only; do not treat it as
 evidence that these profiles will reduce allowance use. See the
 [DeepSWE leaderboard](https://deepswe.datacurve.ai/) and
 [methodology](https://deepswe.datacurve.ai/blog/deepswe).
+
+Keep the Actions runner's Codex CLI centrally pinned in
+`scripts/setup-runner-codex.mjs`. The pin includes the official Linux x64
+release URL and SHA-256 digest, and every Actions workflow installs through
+that script. A weekly release check may promote a newer stable release only by
+opening an issue-linked review pull request. It verifies the official release
+asset digest and dispatches the applicable body, delivery-quality, ADR-quality,
+and no-generation runner checks; this is required because a pull request
+created with `GITHUB_TOKEN` does not start ordinary pull-request workflows.
+The candidate runner checks ChatGPT authentication, actual Plan mode, sandbox
+isolation, and all configured model-effort pairs advertised by that account.
+Any missing or incomplete capability stops before a model turn. The updater
+waits for the no-generation smoke to pass before dispatching the Harness
+semantic review. The Harness workflow repeats the no-generation account,
+model, Plan, quota, and sandbox checks itself before starting its review turn.
+Jobs do not follow a moving `latest` release or update the CLI in place, and
+update pull requests are never auto-merged. Retain the previous pin for
+rollback. The weekly check performs no Codex model turn when no newer stable
+release exists.
+
+The updater uses a job-scoped `GITHUB_TOKEN` with only the permissions needed
+to read the source issue, push its issue-linked branch, open the pull request,
+and dispatch these checks. It does not use the GitHub App's central
+publication credentials. Repository Actions settings must permit this workflow
+token to create pull requests; GitHub couples that setting with approval
+permission. This updater has no approval or merge step, and other repository
+workflows retain read-only pull-request permissions. The update process
+remains provisional until merged into `main` and the runner preflight passes
+for the candidate release.
+
+Amendment source: [issue #70](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70).
 
 An issue or newly created comment can enter semantic routing only after
 deterministic repository, issue, event, bot, and repository-writer checks pass.
@@ -272,13 +310,14 @@ Amendment source: [issue #32](https://github.com/agentic-delivery-lab/agentic-de
 
 - [Codex app-server](https://learn.chatgpt.com/docs/app-server)
 - [Codex permissions](https://learn.chatgpt.com/docs/permissions)
-- [Codex managed network proxy](https://github.com/openai/codex/blob/rust-v0.153.4/codex-rs/network-proxy/README.md)
+- [Codex managed network proxy](https://github.com/openai/codex/blob/rust-v0.159.3/codex-rs/network-proxy/README.md)
 - [Codex subscription allowance](https://learn.chatgpt.com/docs/pricing)
 - [GitHub workflow triggers](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
 - [GitHub branch protection availability](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
 - [Issue #18: Restore exact Codex issue continuation](https://github.com/agentic-delivery-lab/agentic-delivery/issues/18)
 - [Issue #21: Replace the fixed Codex turn deadline with quota-led execution](https://github.com/agentic-delivery-lab/agentic-delivery/issues/21)
-- [Issue #70: Reduce Codex allowance use with phase-specific GPT-6 profiles](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70)
+- [Issue #70: Reduce Codex allowance use and maintain runner CLI](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70)
+- [PR #71: Assign role-specific GPT-6 profiles and maintain the runner CLI pin](https://github.com/agentic-delivery-lab/agentic-delivery/pull/71)
 - [Issue #17: Introduce an issue-driven intake and routing harness](https://github.com/agentic-delivery-lab/agentic-delivery/issues/17)
 - [PR #20: Make Codex issue comments actionable](https://github.com/agentic-delivery-lab/agentic-delivery/pull/20)
 - [Operation and continuation](../delivery/codex-workflow.md)

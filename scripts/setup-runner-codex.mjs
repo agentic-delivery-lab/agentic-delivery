@@ -7,9 +7,9 @@ import { promisify } from 'node:util';
 
 // Reviewed official Linux package, including its sandbox and search helpers.
 export const RELEASE = Object.freeze({
-  version: '0.153.4',
-  url: 'https://github.com/openai/codex/releases/download/rust-v0.153.4/codex-package-x86_64-unknown-linux-musl.tar.gz',
-  sha256: 'a822187e1a2420c61c5926721bfbd878701ed95547c9bb0d4de4498a16ba1821',
+  version: '0.159.3',
+  url: 'https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-package-x86_64-unknown-linux-musl.tar.gz',
+  sha256: '3930f31ac5fca861ea3e444e2683f261190d96b63fba58e0a40a879174369cdf',
 });
 
 export function verifyArchive(bytes, expected = RELEASE.sha256) {

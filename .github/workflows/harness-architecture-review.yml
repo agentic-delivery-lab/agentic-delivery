@@ -4,6 +4,12 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Open pull request to review after runner preflight succeeds
+        required: true
+        type: number
 
 permissions:
   contents: read
@@ -12,20 +18,18 @@ permissions:
   actions: read
 
 concurrency:
-  group: harness-architecture-review-${{ github.event.pull_request.number }}
+  group: harness-architecture-review-${{ github.event.pull_request.number || inputs.pull_request_number }}
   cancel-in-progress: true
 
 jobs:
   review:
     # This repository already limits checked-in code on the dedicated runner
     # to internal pull requests. Forks remain outside this trust boundary.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 30
     env:
       CODEX_AUTH_HOME: /var/lib/github-runner/.codex
-      BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       GH_TOKEN: ${{ github.token }}
       CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
     steps:
@@ -34,6 +38,14 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Resolve the dispatched pull request
+        id: target
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          PULL_REQUEST_NUMBER: ${{ inputs.pull_request_number }}
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: node scripts/resolve-pull-request-context.mjs
 
       - name: Resolve the immutable Architecture Authority pin
         id: architecture-pin
@@ -77,12 +89,18 @@ jobs:
       - name: Set up pinned Codex CLI
         run: node scripts/setup-runner-codex.mjs
 
+      - name: Check Codex model, account, Plan mode, and quota without a model turn
+        run: node scripts/codex-preflight.mjs
+
+      - name: Check actual sandbox isolation without a model turn
+        run: node scripts/codex-sandbox-check.mjs
+
       - name: Run deterministic and semantic architecture review
         run: >-
           node scripts/harness-architecture-review.mjs
           --base "$BASE_SHA"
           --head "$HEAD_SHA"
-          --event "$GITHUB_EVENT_PATH"
+          --event "$EVENT_PATH"
           --architecture-root architecture-authority
           --architecture-commit "${{ steps.architecture-pin.outputs.commit }}"
           --architecture-digest "${{ steps.architecture-pin.outputs.digest }}"
@@ -90,3 +108,7 @@ jobs:
           --output "$RUNNER_TEMP/harness-architecture-review.json"
           --summary "$GITHUB_STEP_SUMMARY"
           --semantic
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || steps.target.outputs.base_sha }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          EVENT_PATH: ${{ github.event_name == 'pull_request' && github.event_path || steps.target.outputs.event_path }}

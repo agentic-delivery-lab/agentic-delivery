@@ -37,6 +37,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Actions now use Codex CLI 0.159.3 pinned to the published Linux asset
+  SHA-256; a weekly updater verifies candidate assets and opens review PRs.
 - Codex delivery and Harness review now use phase-specific GPT-6 Luna
   Low/Medium/Max and GPT-6 Sol High profiles, with runner-catalog preflight,
   complete matching-entry capability checks, safe reporting for unsupported

@@ -4,9 +4,16 @@ name: pull-request-body
 on:
   pull_request_target:
     types: [opened, edited, reopened, synchronize, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Open pull request whose body should be validated
+        required: true
+        type: number
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   validate:
@@ -17,11 +24,22 @@ jobs:
       - name: Check out the trusted base revision
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.event.pull_request.base.sha }}
           persist-credentials: false
+
+      - name: Resolve the requested pull request
+        id: pull-request
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST_NUMBER: ${{ inputs.pull_request_number }}
+          PULL_REQUEST_REQUIRE_CHECKOUT_MATCH: 'false'
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: node scripts/resolve-pull-request-context.mjs
 
       - name: Validate the pull request body
         env:
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR: ${{ github.event_name == 'workflow_dispatch' && steps.pull-request.outputs.author || github.event.pull_request.user.login }}
+          PR_BODY: ${{ github.event_name == 'workflow_dispatch' && steps.pull-request.outputs.body || github.event.pull_request.body }}
         run: node scripts/validate-pull-request-body.mjs

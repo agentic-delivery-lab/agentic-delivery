@@ -1,0 +1,226 @@
+name: codex-cli-release-update
+
+# agentic-primitive: {"id":"codex-cli-release-update-workflow","kind":"workflow","enforcement":"deterministic","adrs":["ADR-0009"],"domains":["agentic-delivery-governance"]}
+
+on:
+  schedule:
+    - cron: '23 7 * * 1'
+  workflow_dispatch:
+    inputs:
+      retry_open_pr:
+        description: Re-dispatch checks for the same open Codex CLI update pull request
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  actions: write
+  contents: write
+  issues: read
+  pull-requests: write
+
+concurrency:
+  group: codex-cli-release-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out the protected base
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Check and verify the latest stable Codex release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODEX_RELEASE_CANDIDATE_PATH: ${{ runner.temp }}/codex-release-candidate.json
+        run: node scripts/codex-cli-release-update.mjs --check
+
+      - name: Find an existing Codex CLI update pull request
+        id: pending
+        if: steps.release.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CODEX_RELEASE_SLUG: ${{ steps.release.outputs.slug }}
+        run: node scripts/codex-cli-release-update.mjs --pending-pr
+
+      - name: Create an issue-linked branch
+        if: steps.release.outputs.update == 'true' && steps.pending.outputs.pending != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pnpm branch:start chore 70 update-codex-cli-${{ steps.release.outputs.slug }}
+
+      - name: Apply the verified central pin and changelog entry
+        if: steps.release.outputs.update == 'true' && steps.pending.outputs.pending != 'true'
+        env:
+          CODEX_RELEASE_CANDIDATE_PATH: ${{ runner.temp }}/codex-release-candidate.json
+        run: node scripts/codex-cli-release-update.mjs --apply "$CODEX_RELEASE_CANDIDATE_PATH"
+
+      - name: Commit and push the update branch
+        id: push
+        if: steps.release.outputs.update == 'true' && steps.pending.outputs.pending != 'true'
+        env:
+          CODEX_VERSION: ${{ steps.release.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch_name="$(git branch --show-current)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/setup-runner-codex.mjs CHANGELOG.md
+          git commit -m "chore(delivery): 🔧 update pinned Codex CLI to $CODEX_VERSION"
+          git push --set-upstream origin "$branch_name"
+          printf 'branch=%s\n' "$branch_name" >> "$GITHUB_OUTPUT"
+          printf 'head_sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Open the review pull request
+        id: create-pr
+        if: steps.release.outputs.update == 'true' && steps.pending.outputs.pending != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODEX_VERSION: ${{ steps.release.outputs.version }}
+          CODEX_RELEASE_URL: https://github.com/openai/codex/releases/tag/rust-v${{ steps.release.outputs.version }}
+          CODEX_ASSET_SHA256: ${{ steps.release.outputs.sha256 }}
+          PR_BRANCH: ${{ steps.push.outputs.branch }}
+          PR_TITLE: "chore(delivery): 🔧 update pinned Codex CLI to ${{ steps.release.outputs.version }}"
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/codex-cli-update-pr.md" <<EOF
+          # Pull request
+
+          ## Summary
+
+          Update the centrally pinned Codex CLI from the previous reviewed release to $CODEX_VERSION. The weekly release check verified the official release asset digest; candidate runner capabilities remain a required no-generation check before semantic review.
+
+          ## Source
+
+          - Source issue: Refs #70 — [Reduce Codex allowance use and maintain runner CLI](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70)
+
+          ## Plan
+
+          - Implementation plan: Promote the stable CLI release through the shared installer, retain its exact official package URL and SHA-256 pin, record the toolchain change, and dispatch the checks that a `GITHUB_TOKEN`-created PR will not trigger automatically.
+          - Plan deviations: None.
+
+          ## Changes
+
+          - Updated the one central Codex CLI version, Linux x64 package URL, and SHA-256 digest.
+          - Added a curated changelog entry. No runtime `latest` lookup, in-place runner update, or automatic merge was introduced.
+
+          ## Verification
+
+          - The weekly updater downloaded the official release asset and reproduced its published SHA-256 digest before opening this PR.
+          - The no-generation runner smoke check is dispatched for this exact PR head. It must verify ChatGPT authentication, Plan mode, sandbox isolation, and every configured model-effort pair before the separate semantic review is dispatched.
+          - Delivery-quality, ADR-quality, and pull-request body checks are explicitly dispatched because GitHub suppresses ordinary PR-triggered workflows for PRs created with `GITHUB_TOKEN`.
+
+          ## Evidence
+
+          - Official release: [$CODEX_VERSION]($CODEX_RELEASE_URL)
+          - Official Linux x64 asset SHA-256: `$CODEX_ASSET_SHA256`
+
+          ## Risk and delivery
+
+          - Risk level and impact: Moderate. Codex protocol or catalog changes may affect runner compatibility; the no-generation preflight fails closed before model execution.
+          - Security and privacy: The update workflow uses a repository-scoped `GITHUB_TOKEN`; it does not use GitHub App credentials or expose runner authentication data.
+          - Breaking changes and compatibility: The installed CLI version changes for future Actions jobs after merge; no external API or persisted state changes.
+          - Deployment or migration: None. The exact candidate is checked in the dedicated runner before semantic review.
+          - Rollback: Revert this pull request to restore the previous version, URL, and digest.
+          - Dependencies and follow-up work: Review dispatched checks and the semantic Harness result before merge.
+
+          ## Review guidance
+
+          - Review focus: Verify the release tag and digest, central pin, no-generation runner preflight, dispatched checks, and rollback value.
+          - Suggested review order: release metadata and pin; runner smoke; delivery-quality and ADR-quality; Harness semantic review.
+          - Out of scope: Changing model assignments, quota thresholds, account or billing settings, or merging this pull request.
+
+          ## Author checklist
+
+          - [x] I reviewed my own diff and removed accidental or unrelated changes.
+          - [x] The source issue, implementation plan, and any deviations are recorded above.
+          - [x] Verification evidence is complete, and failures or skipped checks are explained.
+          - [x] Tests, documentation, release notes, and operational guidance are updated where needed.
+          - [x] Security, privacy, compatibility, deployment, and rollback effects are assessed.
+          - [x] This pull request contains no secrets, unnecessary personal data, or sensitive logs.
+          EOF
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$PR_BRANCH" --title "$PR_TITLE" --body-file "$RUNNER_TEMP/codex-cli-update-pr.md"
+          pr_number="$(gh pr view --repo "$GITHUB_REPOSITORY" "$PR_BRANCH" --json number --jq .number)"
+          printf 'number=%s\n' "$pr_number" >> "$GITHUB_OUTPUT"
+          printf 'branch=%s\n' "$PR_BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch reviewable PR checks
+        id: dispatch-static
+        if: steps.release.outputs.update == 'true' && (steps.pending.outputs.pending != 'true' || (steps.pending.outputs.reuse == 'true' && inputs.retry_open_pr))
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pending.outputs.number || steps.create-pr.outputs.number }}
+          PR_BRANCH: ${{ steps.pending.outputs.branch || steps.create-pr.outputs.branch }}
+        run: |
+          set -euo pipefail
+          gh workflow run .github/workflows/pull-request-body.yml --repo "$GITHUB_REPOSITORY" --ref main -f "pull_request_number=$PR_NUMBER"
+          gh workflow run .github/workflows/delivery-quality.yml --repo "$GITHUB_REPOSITORY" --ref "$PR_BRANCH" -f "pull_request_number=$PR_NUMBER"
+          gh workflow run .github/workflows/adr-quality.yml --repo "$GITHUB_REPOSITORY" --ref "$PR_BRANCH"
+
+      - name: Dispatch and wait for no-generation runner preflight
+        id: smoke
+        if: steps.release.outputs.update == 'true' && (steps.pending.outputs.pending != 'true' || (steps.pending.outputs.reuse == 'true' && inputs.retry_open_pr))
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pending.outputs.number || steps.create-pr.outputs.number }}
+          PR_BRANCH: ${{ steps.pending.outputs.branch || steps.create-pr.outputs.branch }}
+          EXPECTED_SHA: ${{ steps.pending.outputs.head_sha || steps.push.outputs.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh workflow run .github/workflows/self-hosted-runner-smoke.yml --repo "$GITHUB_REPOSITORY" --ref "$PR_BRANCH" -f codex=true
+          printf 'dispatched_at=%s\n' "$dispatched_at" >> "$GITHUB_OUTPUT"
+          found_run=''
+          for attempt in $(seq 1 240); do
+            runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow self-hosted-runner-smoke.yml --branch "$PR_BRANCH" --event workflow_dispatch --limit 20 --json databaseId,status,conclusion,createdAt,headSha)"
+            found_run="$(printf '%s' "$runs" | EXPECTED_SHA="$EXPECTED_SHA" DISPATCHED_AT="$dispatched_at" node --input-type=module -e '
+              let raw = "";
+              for await (const chunk of process.stdin) raw += chunk;
+              const runs = JSON.parse(raw);
+              const expectedSha = process.env.EXPECTED_SHA;
+              const dispatchedAt = Date.parse(process.env.DISPATCHED_AT);
+              const run = runs.find((item) => item.headSha === expectedSha && Date.parse(item.createdAt) >= dispatchedAt);
+              if (run) process.stdout.write(JSON.stringify(run));
+            ')
+            if [[ -n "$found_run" ]]; then
+              status="$(node --input-type=module -e 'let raw=""; for await (const chunk of process.stdin) raw+=chunk; process.stdout.write(JSON.parse(raw).status)' <<< "$found_run")"
+              if [[ "$status" == completed ]]; then
+                conclusion="$(node --input-type=module -e 'let raw=""; for await (const chunk of process.stdin) raw+=chunk; process.stdout.write(JSON.parse(raw).conclusion ?? "")' <<< "$found_run")"
+                run_id="$(node --input-type=module -e 'let raw=""; for await (const chunk of process.stdin) raw+=chunk; process.stdout.write(String(JSON.parse(raw).databaseId))' <<< "$found_run")"
+                printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
+                if [[ "$conclusion" != success ]]; then
+                  printf 'No-generation runner smoke failed: https://github.com/%s/actions/runs/%s\n' "$GITHUB_REPOSITORY" "$run_id" >&2
+                  exit 1
+                fi
+                printf 'No-generation runner smoke passed: https://github.com/%s/actions/runs/%s\n' "$GITHUB_REPOSITORY" "$run_id"
+                exit 0
+              fi
+            fi
+            sleep 15
+          done
+          echo 'Timed out waiting for the no-generation runner smoke workflow.' >&2
+          exit 1
+
+      - name: Dispatch Harness semantic review after preflight passes
+        if: steps.release.outputs.update == 'true' && (steps.pending.outputs.pending != 'true' || (steps.pending.outputs.reuse == 'true' && inputs.retry_open_pr)) && steps.smoke.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pending.outputs.number || steps.create-pr.outputs.number }}
+          PR_BRANCH: ${{ steps.pending.outputs.branch || steps.create-pr.outputs.branch }}
+        run: gh workflow run .github/workflows/harness-architecture-review.yml --repo "$GITHUB_REPOSITORY" --ref "$PR_BRANCH" -f "pull_request_number=$PR_NUMBER"

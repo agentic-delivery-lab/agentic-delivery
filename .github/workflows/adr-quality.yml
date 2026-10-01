@@ -45,6 +45,7 @@ on:
       - tests/communication/**
       - tests/delivery/**
       - tests/domain/**
+  workflow_dispatch:
 
 permissions:
   contents: read

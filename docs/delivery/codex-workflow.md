@@ -222,14 +222,22 @@ issue edits.
 - A dedicated Linux runner with labels `self-hosted`, `linux`, `x64`, `omarchy`.
 - Node.js and exact pnpm as defined in `package.json`; workflows use the pinned
   pnpm setup action and frozen installations with lifecycle scripts disabled.
-- Codex CLI 0.153.4, installed by `scripts/setup-runner-codex.mjs` from the
-  official Linux x64 package after SHA-256 verification. The dedicated tool
-  cache keeps this installation separate from personal tools. The runner verifies
-  both model/effort combinations, ChatGPT login, Plan mode, and quota telemetry.
+- The centrally pinned Codex CLI release, installed by
+  `scripts/setup-runner-codex.mjs` from the official Linux x64 package after
+  SHA-256 verification. Every Actions workflow uses this setup script; the
+  dedicated tool cache keeps this installation separate from personal tools.
+  A weekly release check opens a review pull request for a newer stable release
+  and explicitly dispatches the required checks because PRs created with
+  `GITHUB_TOKEN` do not start ordinary pull-request workflows. The runner
+  verifies every configured model/effort pair, ChatGPT login, Plan mode, and
+  quota telemetry before a model turn.
+  Repository Actions settings must allow `GITHUB_TOKEN` to create pull
+  requests. GitHub couples that ability with review-approval permission; this
+  updater opens PRs but has no approval or merge step.
   The no-generation smoke check also probes persistent thread start and exact
-  resume; this pinned CLI reports that a brand-new thread has no resumable
-  rollout until its first model turn, so the check records that limitation
-  without spending model quota.
+  resume. Treat the result as release-specific runner evidence; a fresh session
+  may require its first model rollout before exact resume can be verified.
+  The check records that limitation without spending model quota.
 - ChatGPT login for the installed `codex` executable under that user,
   `github-runner`. Another user's installation/login is not sufficient. For a
   headless runner, use the file-backed credential store so the service does not
@@ -241,7 +249,7 @@ issue edits.
   sudo -H -u github-runner env \
     HOME=/var/lib/github-runner \
     CODEX_HOME=/var/lib/github-runner/.codex \
-    /opt/actions-runner/_work/_tool/codex-delivery/0.153.4/bin/codex \
+    /opt/actions-runner/_work/_tool/codex-delivery/<pinned-version>/bin/codex \
     -c 'cli_auth_credentials_store="file"' login --device-auth
   ```
 
