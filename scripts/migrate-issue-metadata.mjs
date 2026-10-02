@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadLifecycleConfig, githubApi } from './issue-intake.mjs';
-import { githubGraphqlApi, readIssueControlPlane } from './lib/issue-field-api.mjs';
+import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane } from './lib/issue-field-api.mjs';
 import { applyIssueMetadataMigration, organizationMetadataManifest, planIssueMetadataMigration } from './lib/issue-metadata-migration.mjs';
 import { issueMetadata, issueTypes } from './lib/issue-metadata.mjs';
 
@@ -56,6 +56,7 @@ export async function runMigration({ env = process.env, argv = process.argv, roo
   if (!/^[^/\s]+\/[^/\s]+$/.test(repository ?? '') || !env.GH_TOKEN) throw new Error('GITHUB_REPOSITORY and GH_TOKEN are required.');
   const issueNumber = requireIssue(options.issue);
   const runtimeBindings = bindings(env);
+  const boundConfig = bindIssueMetadataConfig(config, runtimeBindings);
   const api = githubApi({ repository, token: env.GH_TOKEN, fetchImpl });
   const restIssue = await api(`/issues/${issueNumber}`);
   const graphql = graphqlImpl ?? githubGraphqlApi({ token: env.GH_TOKEN, fetchImpl });
@@ -82,8 +83,8 @@ export async function runMigration({ env = process.env, argv = process.argv, roo
     actor: 'controller',
     verify: () => verifyEventually(async () => {
       const observed = await readIssueControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
-      const metadata = issueMetadata(observed, config);
-      const targetType = issueTypes(config).find((type) => type.id === plan.target.issueType);
+      const metadata = issueMetadata(observed, boundConfig);
+      const targetType = issueTypes(boundConfig).find((type) => type.id === plan.target.issueType);
       if (targetType && (metadata.issueType.source !== 'native' || metadata.issueType.id !== targetType.id)) {
         throw new Error(`Native issue type ${targetType.native_name} was not observed after migration.`);
       }

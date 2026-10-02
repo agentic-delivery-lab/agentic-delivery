@@ -4,8 +4,10 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { issueMetadata } from '../../scripts/lib/issue-metadata.mjs';
+import { bindIssueMetadataConfig } from '../../scripts/lib/issue-field-api.mjs';
 import { applyIssueMetadataMigration, organizationMetadataManifest, planIssueMetadataMigration } from '../../scripts/lib/issue-metadata-migration.mjs';
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
+import { runMigration } from '../../scripts/migrate-issue-metadata.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const config = parseRepositoryYaml(await readFile(path.join(root, 'config/issue-metadata.yml'), 'utf8'), 'issue metadata');
@@ -199,4 +201,51 @@ test('migration applies provisioned fields with explicit runtime bindings', asyn
     ] },
   ]);
   assert.deepEqual(calls.at(-1).labels, []);
+});
+
+test('migration verifies field writes using the bound runtime field IDs', async () => {
+  const fields = [];
+  const issue = { id: 'I_15', number: 15, state: 'OPEN', title: 'Disposable', body: '', issueType: null, parent: null, subIssues: { nodes: [] } };
+  const graphql = async (query, variables) => {
+    if (query.includes('setIssueFieldValue')) {
+      for (const input of variables.input.issueFields) {
+        const field = liveCatalog().find((candidate) => candidate.id === input.fieldId);
+        const option = field.options.find((candidate) => candidate.id === input.singleSelectOptionId);
+        fields.push({
+          id: `value-${field.id}`,
+          name: option.name,
+          value: option.name,
+          optionId: option.id,
+          field: { id: field.id, name: field.name, dataType: field.dataType },
+        });
+      }
+      return { setIssueFieldValue: { issue: { id: issue.id } } };
+    }
+    return {
+      repository: { issue: { ...issue, issueFieldValues: { nodes: fields } } },
+      organization: {
+        issueTypes: { nodes: liveIssueTypes() },
+        issueFields: { nodes: liveCatalog() },
+        pinnedIssueFields: { nodes: liveCatalog() },
+      },
+    };
+  };
+
+  const result = await runMigration({
+    env: {
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      GH_TOKEN: 'test-token',
+      ISSUE_FIELD_BINDINGS_JSON: JSON.stringify(liveBindings()),
+    },
+    argv: ['node', 'scripts/migrate-issue-metadata.mjs', '--apply', '--issue', String(issue.number)],
+    root,
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ ...issue, state: 'open', labels: [] }) }),
+    graphqlImpl: graphql,
+  });
+
+  assert.equal(result.mode, 'apply');
+  assert.equal(result.result.applied, true);
+  const observed = issueMetadata({ issueFieldValues: fields }, bindIssueMetadataConfig(config, liveBindings()));
+  assert.equal(observed.lifecycleStage, 'intake');
+  assert.equal(observed.readiness, 'not-ready');
 });
