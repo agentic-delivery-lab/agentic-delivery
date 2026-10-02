@@ -9,6 +9,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.45` at
   `eed2505edaf4e1f839030697973dcaaf0c1b1bea`, retaining draft44 for rollback.
