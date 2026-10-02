@@ -80,6 +80,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The controller release advances to `0.2.0-draft.44` at
+  `331c433345519f00ecc15be0bd843a45651147f2`; the central participant
+  moves to that immutable code pin while draft43 and earlier remain
+  available for rollback.
+
 - Read-only issue intake now requires the scoped `readOnlyIntake` App token and
   fails closed if its credentials are unavailable. The classify job's workflow
   token has repository read permissions only.
