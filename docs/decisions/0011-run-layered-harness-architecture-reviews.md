@@ -47,7 +47,8 @@ cannot be treated as deterministic proof.
   safety-sensitive merge gate dependent on quota, model availability and
   non-deterministic judgment.
 - **Layered read-only review.** Deterministic checks fail only on objective
-  violations; a bounded Sol High reviewer returns cited advisory findings.
+  violations; a bounded GPT-6 Sol High reviewer returns cited advisory
+  findings.
 
 ## Decision Outcome
 
@@ -77,12 +78,16 @@ ADR/primitive relationships, domain applicability, required deterministic
 enforcement, source-issue and branch correlation, required durable-artifact
 relationships, deletion outcomes, supersession, and permission/state
 invariants. It fails the check only for a clear violation. The semantic layer
-uses GPT-5.6 Sol with
+uses GPT-6 Sol with
 high reasoning effort, read-only `delivery-review` permissions, the existing
 subscription-only budget boundary and no external network. It must cite exact
 repository, issue, run or session evidence. Findings, invalid semantic output,
 unavailable evidence and unavailable quota are reported as advisory or
-inconclusive results.
+inconclusive results. The profile change may affect review quality; maintainers
+inspect the first completed result alongside its quota evidence.
+When the runner's model catalog rejects a required approved model-effort pair,
+the evidence names that pair without publishing raw runner errors. Other
+unknown runner failures remain redacted.
 
 Agent-created pull requests carry a versioned evidence projection derived from
 persisted delivery state. The projection contains source issue, workflow run,
@@ -90,6 +95,106 @@ branch and verified revision, Codex session, model turn settings, ADR/context
 references, validation, bounded telemetry and an audit checkpoint. Runner
 state remains canonical; the pull-request projection is the reviewer-facing
 reference and is replaced idempotently on publication retry.
+
+The Harness keeps its own `architecture review session`, separate from the
+source-issue delivery `Codex session`. It stores the app-server thread under
+`/var/lib/github-runner/.codex/harness-reviews`, outside the checkout and
+ordinary Actions artifacts. The manifest and thread files are accessible only
+to the runner service account. Each full semantic evidence fingerprint has an
+isolated state directory. State directories whose last update is older than
+30 days are pruned before a review, including the directory selected for the
+current review. The thread UUID is saved before the first model turn. If a turn
+is interrupted, a later review resumes that thread only when the complete
+semantic evidence fingerprint is unchanged; changed evidence starts a fresh
+thread and cannot inherit earlier model context.
+
+A `semantic review fingerprint` hashes the deterministic result, source issue,
+pull-request body, exact-head non-Harness check results, ADR/domain evidence,
+and the complete changed-path diff with five lines of context. Check results
+are canonicalized by name, exact head, result, summary, app, and verified
+workflow ID, path, and event. Check-run, job, and workflow-run IDs, timestamps,
+and links remain in the evidence bundle but are excluded from the fingerprint,
+so a rerun with the same result can reuse a completed semantic review. No path
+allowlist is applied, so configuration, changelog, and other changed files are included.
+The diff is capped at 500,000 characters; an oversized diff stops before a
+model turn and is reported as inconclusive rather than silently truncated.
+Primitive evidence is limited to index records linked to affected ADRs; changed
+file content is already present in the diff, and unchanged primitive bodies are
+omitted. Its session identity also includes the Codex CLI version and model
+profile. It excludes transient runner preflight status, the current Harness
+`review` check, quota counters, check/job/run IDs, links, and capture times. On
+a normal PR event, Harness
+waits up to 15 minutes for the expected exact-head checks to finish; a failed,
+missing, truncated, or still-running check prevents a semantic model turn. The
+workflow reuses a completed structured result without another model turn only
+when the full fingerprint matches exactly and all exact-head checks are
+complete, with the required checks successful. A completed or interrupted
+review with changed evidence starts a fresh, fingerprint-isolated thread.
+Deterministic violations also skip the semantic turn. Quota snapshots remain
+in the Actions report and runner log, outside the semantic model context.
+
+The evidence bundle omits the deterministic review's `not-run` semantic
+placeholder and identifies that the bundle is assembled before the current
+semantic turn. The current turn produces the semantic result, so its expected
+absence from its own input is not an evidence gap.
+
+The ADR-quality `validate` check is required whenever changed paths match the
+workflow's pull-request path filter. Harness and the CLI release updater use
+the same matcher, including `CHANGELOG.md`, so a dependent runner operation
+cannot start before an applicable ADR check finishes.
+
+Each required check must also be attributable to its expected workflow file.
+Harness and the CLI release updater resolve the exact check's Actions run and
+job and compare the workflow path, commit, job name, check-run URL, status, and
+conclusion. A matching check name or GitHub Actions app alone is insufficient.
+Missing or mismatched provenance stops before a semantic model turn and, for
+the CLI updater, before runner smoke.
+
+Harness excludes its in-progress `review` check from its own readiness evidence
+only after verifying that the exact check run and job came from
+`.github/workflows/harness-architecture-review.yml` on the reviewed commit. A
+same-name check from another workflow remains visible and cannot be excluded
+based only on its name or app.
+
+The weekly CLI updater uses a versioned PR-body marker to delay its semantic
+review until the candidate runner smoke passes. A GitHub-hosted classifier
+checks out only the pull request's trusted base revision and verifies the
+internal registered App author, `main` base, issue-linked CLI update branch,
+exact conventional title, matching version marker, exact `Closes #N` source
+line, and the linked repository issue's native `Task` type, title, marker,
+release URL, archive SHA-256, package-tree SHA-256, and repository URL; the PR's
+release URL and both digests must match the same Task. The weekly updater
+applies the same exact registered App, PR, Task, release URL, archive digest,
+and extracted package-tree digest
+checks before it reuses an open update PR. After exact-head checks finish, it
+repeats the mutable PR and Task verification immediately before runner smoke,
+then checks them again after smoke and immediately before Harness dispatch. It
+suppresses the automatic Harness event
+only when all values identify the same release Task and version. Any mismatch,
+lookup failure, or classifier failure runs normal Harness review; forks remain
+outside the self-hosted runner boundary. Manual Harness dispatch always runs
+review.
+
+The updater captures the `workflow_run_id` returned when it dispatches the
+candidate smoke. It polls only that run and requires its ID, head SHA,
+`workflow_dispatch` event, visible `codex=true` run name, and successful
+conclusion to match before dispatching Harness. An unrelated smoke run for the
+same commit, a default `codex=false` run, or incomplete API evidence cannot
+release the review gate.
+
+The repository has one persistent self-hosted runner for Codex and Harness.
+The delivery-quality `quality` job, ADR validation, and portability matrix run
+on ephemeral GitHub-hosted runners, with read-only workflow permissions and the
+existing same-repository pull-request boundary. This lets those exact-head
+checks finish while Harness occupies the persistent runner and waits for their
+result; running any of them on that single runner would leave the check queued
+behind the waiting review.
+
+This storage choice assumes the single persistent self-hosted runner remains
+available across workflow jobs. It avoids publishing raw thread material to
+Actions artifacts or mixing semantic-review transcripts with webhook replay
+data in Neon. Replacing the runner or adding a runner pool requires a separately
+approved shared-store decision before resumable reviews can span hosts.
 
 ### Consequences
 
@@ -100,6 +205,13 @@ reference and is replaced idempotently on publication retry.
 - Good, because read-only permissions preserve human and controller ownership.
 - Bad, because semantic review consumes subscription allowance and can be
   inconclusive when quota or runtime evidence is unavailable.
+- Good, because an exact completed review can be reused without another model
+  turn, and an interrupted semantic review can resume from its saved Codex
+  thread. Incomplete or failed exact-head checks stop before model execution.
+- Good, because required deterministic checks can complete independently of
+  the persistent Codex runner, avoiding a queue dependency cycle during review.
+- Bad, because raw review thread material remains on the dedicated runner and
+  cannot be resumed after its disk is replaced or lost.
 - Bad, because the runtime-surface impact map must be maintained when
   architectural surfaces move, although it does not duplicate ADR rationale
   or the generated ADR-to-primitive relationship.
@@ -109,9 +221,14 @@ reference and is replaced idempotently on publication retry.
 ### Confirmation
 
 Tests must cover impact-map coverage, evidence-schema validation, redaction,
-publication retry idempotency, deterministic failure codes, exact Sol High
-review settings, denied model network, cited semantic findings, inconclusive
-quota/evidence handling, workflow permissions and no-comment behavior. A
+publication retry idempotency, deterministic failure codes, exact GPT-6 Sol
+High review settings, denied model network, cited semantic findings,
+inconclusive quota/evidence handling, no-model execution for deterministic
+violations and incomplete checks, exclusion of the current Harness check only
+after exact workflow provenance, exact-fingerprint cache reuse, interrupted
+thread resume only for unchanged evidence, fresh-thread behavior after
+evidence changes, pruning of expired current and non-current state, state-file
+permissions, workflow permissions, and no-comment behavior. A
 human reviewer must inspect whether the baseline and semantic findings cite
 evidence rather than treating tests or documentation as runtime proof.
 
@@ -149,5 +266,6 @@ evidence rather than treating tests or documentation as runtime proof.
 - Domain register: [`ubiquitous-language.yml`](../domain/ubiquitous-language.yml)
 - Related decisions: [ADR-0001](0001-use-madr-for-architecture-decisions.md), [ADR-0003](0003-use-context-scoped-ubiquitous-language.md), [ADR-0009](0009-run-codex-from-source-issues-with-a-budget-boundary.md), [ADR-0012](0012-use-github-as-the-lifecycle-control-plane.md), and [ADR-0013](0013-derive-adr-traceability-from-agentic-primitives.md)
 - Amendment source: [issue #32](https://github.com/agentic-delivery-lab/agentic-delivery/issues/32)
+- Model profile amendment: [issue #70](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70)
 - This decision is provisional on its feature branch and becomes official only
   after its review pull request is merged into `main`.

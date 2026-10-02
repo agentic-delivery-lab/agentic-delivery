@@ -93,8 +93,8 @@ without code; Architecture Decision work follows the ADR process; Validation
 can run independently; and a lineage root can coordinate child outcomes.
 Fresh implementation work uses Plan → Implement only when no valid plan
 exists. A valid existing plan invokes the implementer directly, and an
-unchanged execution continuation resumes the exact saved GPT-5.6 Luna Max
-session without planning again. A scope-changing comment invalidates the plan
+unchanged execution continuation resumes the exact saved Codex session without
+planning again. A scope-changing comment invalidates the plan
 and returns to the appropriate requirements, research, architecture, or
 planning route.
 

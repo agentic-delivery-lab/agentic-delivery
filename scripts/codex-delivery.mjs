@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
-import { CodexClient } from './lib/codex-client.mjs';
+import { CodexClient, MODELS } from './lib/codex-client.mjs';
 import { continuation, formatPlanComment, formatProgressComment, formatRefinementComment, orchestrationOutcomeSchema, runTurn, validateOrchestrationOutcome, validateOutcome, validateRefinementOutcome } from './lib/codex-loop.mjs';
 import { classifyIssue } from './lib/issue-routing.mjs';
 import { loadLifecycleConfig } from './issue-intake.mjs';
@@ -1293,9 +1293,9 @@ legacy owner-only rule in the base instruction file.`;
       revision: { branch: state.branch, commit: revision, tree: state.validatedTree },
       codexSession: { id: state.sessionId },
       modelTurns: [
-        ...(state.refined ? [{ phase: 'refine', model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' }] : []),
-        { phase: 'plan', model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-        { phase: 'implement', model: 'gpt-5.6-luna', effort: 'max', mode: 'default' },
+        ...(state.refined ? [{ phase: 'refine', ...MODELS.refine }] : []),
+        { phase: 'plan', ...MODELS.plan },
+        { phase: 'implement', ...MODELS.implement },
       ],
       architectureContext: {
         officialAdrs: [...new Set(officialAdrs)].sort(),

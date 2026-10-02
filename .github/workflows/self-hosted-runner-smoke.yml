@@ -1,4 +1,5 @@
 name: self-hosted-runner-smoke
+run-name: Self-hosted runner smoke (codex=${{ inputs.codex }})
 
 on:
   workflow_dispatch:
