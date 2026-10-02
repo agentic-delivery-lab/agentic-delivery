@@ -249,3 +249,41 @@ test('migration verifies field writes using the bound runtime field IDs', async 
   assert.equal(observed.lifecycleStage, 'intake');
   assert.equal(observed.readiness, 'not-ready');
 });
+
+test('migration keeps legacy labels when field readback does not confirm the write', async () => {
+  const issue = { id: 'I_16', number: 16, state: 'OPEN', title: 'Disposable', body: '', issueType: null, parent: null, subIssues: { nodes: [] } };
+  const restCalls = [];
+  let fieldMutationCalls = 0;
+  const graphql = async (query) => {
+    if (query.includes('setIssueFieldValue')) {
+      fieldMutationCalls += 1;
+      return { setIssueFieldValue: { issue: { id: issue.id } } };
+    }
+    return {
+      repository: { issue: { ...issue, issueFieldValues: { nodes: [] } } },
+      organization: {
+        issueTypes: { nodes: liveIssueTypes() },
+        issueFields: { nodes: liveCatalog() },
+        pinnedIssueFields: { nodes: liveCatalog() },
+      },
+    };
+  };
+
+  await assert.rejects(() => runMigration({
+    env: {
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      GH_TOKEN: 'test-token',
+      ISSUE_FIELD_BINDINGS_JSON: JSON.stringify(liveBindings()),
+    },
+    argv: ['node', 'scripts/migrate-issue-metadata.mjs', '--apply', '--issue', String(issue.number)],
+    root,
+    fetchImpl: async (url, init = {}) => {
+      restCalls.push({ url: String(url), method: init.method ?? 'GET' });
+      return { ok: true, status: 200, json: async () => ({ ...issue, state: 'open', labels: [{ name: 'state:ready-for-plan' }] }) };
+    },
+    graphqlImpl: graphql,
+  }), /Issue fields were not observed after migration\./);
+
+  assert.equal(fieldMutationCalls, 1);
+  assert.ok(restCalls.every(({ url, method }) => !(method === 'PUT' && url.endsWith('/labels'))));
+});

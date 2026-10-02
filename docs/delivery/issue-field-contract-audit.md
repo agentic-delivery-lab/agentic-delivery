@@ -158,10 +158,11 @@ The first migration attempt exposed a controller verification bug: it wrote the
 fields, then resolved the GraphQL values against the unbound logical config
 instead of the live field IDs. The controller therefore reported a failed
 readback even though the REST API showed both values. The values were restored
-immediately and verified as `[]`. The regression test reproduced that failure
-before the fix. The fix binds the observed field IDs for migration readback;
-the test now passes, and the second live write/read/restore cycle succeeded in
-both repositories.
+immediately and verified as `[]`. The regression tests reproduce the failure
+caused by resolving live IDs against the logical config and confirm that
+missing readback leaves legacy labels in place. The fix binds the observed
+field IDs for migration readback; the second live write/read/restore cycle
+succeeded in both repositories.
 
 Invalid-option and missing-target controller checks were also run. Both were
 rejected before a GraphQL mutation call (`graphqlCalls: 0`). The shadow canary
