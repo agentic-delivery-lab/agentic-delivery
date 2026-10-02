@@ -182,6 +182,11 @@ jobs:
       - name: Install trusted controller dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Mask organization issue-field binding components
+        env:
+          ISSUE_FIELD_BINDINGS_JSON: ${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}
+        run: node scripts/mask-issue-field-bindings.mjs
+
       - name: Run source issue delivery
         env:
           GH_TOKEN: ${{ github.token }}

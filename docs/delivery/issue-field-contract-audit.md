@@ -138,10 +138,12 @@ log. The log archive was deleted after the exposure was identified; the run
 record remains, but its step logs are no longer available for independent
 review. The binding value is now stored as the repository Actions secret of the
 same name. This branch changes intake and delivery workflows, including their
-reusable-workflow hand-offs, to read the secret. The old repository variable
-must be removed after this change is merged. Do not run another canary until
-the old variable is removed and a read-only run confirms that Actions masks
-the secret.
+reusable-workflow hand-offs, to read the secret. Each consuming job registers
+the field and option IDs individually for masking before using the bindings,
+because transformed or partial values are not guaranteed to match the full
+JSON secret. The old repository variable must be removed after this change is
+merged. Do not run another canary until the old variable is removed and a
+read-only run confirms that the bindings do not appear in logs.
 
 ## Deferred proof and dependencies
 

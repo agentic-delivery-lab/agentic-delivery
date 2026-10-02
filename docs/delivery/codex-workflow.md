@@ -140,10 +140,11 @@ Actions secrets. Store `ISSUE_FIELD_BINDINGS_JSON` as a repository Actions
 secret as well. Its organization-specific field and option IDs are
 configuration rather than credentials, but they must not appear in public
 workflow logs. The issue-intake and delivery workflows pass this secret
-explicitly through their reusable-workflow calls. Remove the old repository
-variable after the workflow changes use the secret. Rotate the webhook secret,
-dispatch secret, and private key through their respective Vercel or Actions
-secret stores; never commit them.
+explicitly through their reusable-workflow calls, and each consuming job
+registers every runtime field and option ID for masking before using it.
+Remove the old repository variable after the workflow changes use the secret.
+Rotate the webhook secret, dispatch secret, and private key through their
+respective Vercel or Actions secret stores; never commit them.
 
 The ingress verifies the webhook signature and delivery ID, checks the exact
 actor catalog, signs the complete dispatch envelope with the separate dispatch

@@ -94,10 +94,11 @@ after the operator binds the provisioned GitHub IDs.
 GitHub assigns organization-specific node IDs to Issue Types, fields, and
 single-select options. These IDs are configuration, not credentials, but they
 are organization-only metadata. Store the observed bindings as a repository
-Actions secret named `ISSUE_FIELD_BINDINGS_JSON` so Actions masks them in
-public workflow logs. Pass the secret explicitly through each reusable
-workflow that needs it. Remove the old repository variable after all workflow
-references use the secret:
+Actions secret named `ISSUE_FIELD_BINDINGS_JSON`. Pass the secret explicitly
+through each reusable workflow that needs it, and register every runtime field
+and option ID individually for masking in each consuming job before use. This
+covers values that appear separately or in a transformed form in logs. Remove
+the old repository variable after all workflow references use the secret:
 
 The metadata controller reads this catalog through the GitHub GraphQL API with
 version `2026-03-10`. Keep that version pinned when operating or extending the

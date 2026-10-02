@@ -4,6 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
+import { issueFieldBindingMaskCommands } from '../../scripts/mask-issue-field-bindings.mjs';
 import {
   EXPECTED_ORGANIZATION_ISSUE_FORMS,
   loadOrganizationIssueForms,
@@ -99,6 +100,26 @@ test('organization issue-field bindings use Actions secrets through reusable wor
   assert.equal(sourceDelivery.env.ISSUE_FIELD_BINDINGS_JSON, secretRef);
   assert.doesNotMatch(intakeSource, /vars\.ISSUE_FIELD_BINDINGS_JSON/);
   assert.doesNotMatch(deliverySource, /vars\.ISSUE_FIELD_BINDINGS_JSON/);
+});
+
+test('organization issue-field binding components are masked before each consumer runs', async () => {
+  const intake = parseRepositoryYaml(await text('.github/workflows/issue-intake.yml'), 'issue intake workflow');
+  const delivery = parseRepositoryYaml(await text('.github/workflows/codex-delivery.yml'), 'codex delivery workflow');
+  const intakeSteps = intake.jobs.classify.steps;
+  const deliverySteps = delivery.jobs.deliver.steps;
+  const intakeMask = intakeSteps.findIndex((step) => step.name === 'Mask organization issue-field binding components');
+  const deliveryMask = deliverySteps.findIndex((step) => step.name === 'Mask organization issue-field binding components');
+  const classifier = intakeSteps.findIndex((step) => step.name === 'Reason about and validate issue routing');
+  const sourceDelivery = deliverySteps.findIndex((step) => step.name === 'Run source issue delivery');
+  const secretRef = '${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}';
+
+  assert.ok(intakeMask >= 0 && intakeMask < classifier);
+  assert.ok(deliveryMask >= 0 && deliveryMask < sourceDelivery);
+  assert.equal(intakeSteps[intakeMask].env.ISSUE_FIELD_BINDINGS_JSON, secretRef);
+  assert.equal(deliverySteps[deliveryMask].env.ISSUE_FIELD_BINDINGS_JSON, secretRef);
+  assert.equal(issueFieldBindingMaskCommands(JSON.stringify({ fields: {
+    lifecycle_stage: { id: 'field-id', options: { ready: 'option-id' } },
+  } })), '::add-mask::field-id\n::add-mask::option-id\n');
 });
 
 test('issue events invoke intake and only an authorized route invokes reusable delivery', async () => {

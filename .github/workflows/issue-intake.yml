@@ -221,6 +221,12 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
         working-directory: .
 
+      - name: Mask organization issue-field binding components
+        if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
+        env:
+          ISSUE_FIELD_BINDINGS_JSON: ${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}
+        run: node scripts/mask-issue-field-bindings.mjs
+
       - name: Set up pinned Codex CLI
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.force }}
         run: node scripts/setup-runner-codex.mjs
