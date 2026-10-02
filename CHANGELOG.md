@@ -88,8 +88,8 @@ they do not authorize migration, alter that issue's scope, or close it.
   `0.2.0-draft.45` at
   `eed2505edaf4e1f839030697973dcaaf0c1b1bea`, retaining draft44 for rollback.
   Runtime intake uses the new pin after a separate reviewed bootstrap advance.
-- Controller release validation checks that the primary release contains the
-  issue-field binding masker used by shared intake.
+- Controller release validation checks that the primary release and bootstrap
+  pin contain the issue-field binding masker used by shared intake and delivery.
 - The controller release advances to `0.2.0-draft.44` at
   `331c433345519f00ecc15be0bd843a45651147f2`; the central participant
   moves to that immutable code pin while draft43 and earlier remain

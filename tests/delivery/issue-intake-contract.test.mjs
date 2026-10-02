@@ -107,8 +107,10 @@ test('organization issue-field binding components are masked before each consume
   const delivery = parseRepositoryYaml(await text('.github/workflows/codex-delivery.yml'), 'codex delivery workflow');
   const intakeSteps = intake.jobs.classify.steps;
   const deliverySteps = delivery.jobs.deliver.steps;
+  const release = JSON.parse(await text('config/controller-release.json'));
   const intakeMask = intakeSteps.findIndex((step) => step.name === 'Mask organization issue-field binding components');
   const deliveryMask = deliverySteps.findIndex((step) => step.name === 'Mask organization issue-field binding components');
+  const intakeBootstrap = intakeSteps.findIndex((step) => step.name === 'Check out trusted intake');
   const deliveryBootstrap = deliverySteps.findIndex((step) => step.name === 'Check out trusted issue-field masker');
   const classifier = intakeSteps.findIndex((step) => step.name === 'Reason about and validate issue routing');
   const sourceDelivery = deliverySteps.findIndex((step) => step.name === 'Run source issue delivery');
@@ -121,7 +123,9 @@ test('organization issue-field binding components are masked before each consume
   assert.equal(deliverySteps[deliveryMask].env.ISSUE_FIELD_BINDINGS_JSON, secretRef);
   assert.equal(intakeSteps[intakeMask]['working-directory'], 'trusted-intake');
   assert.equal(deliverySteps[deliveryMask]['working-directory'], 'trusted-bootstrap');
+  assert.equal(intakeSteps[intakeBootstrap].with.ref, release.bootstrapCommit);
   assert.equal(deliverySteps[deliveryBootstrap].with.path, 'trusted-bootstrap');
+  assert.equal(deliverySteps[deliveryBootstrap].with.ref, release.bootstrapCommit);
   assert.equal(issueFieldBindingMaskCommands(JSON.stringify({ fields: {
     lifecycle_stage: { id: 'field-id', options: { ready: 'option-id' } },
   } })), '::add-mask::field-id\n::add-mask::option-id\n');

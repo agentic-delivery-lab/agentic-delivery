@@ -59,6 +59,12 @@ export async function validateControllerRelease({ repositoryRoot = path.resolve(
       } catch {
         errors.push(`controller release ${release.version} is missing required runtime file ${runtimeFile}`);
       }
+      try {
+        const bootstrapRuntimeFileType = await git(repositoryRoot, ['cat-file', '-t', `${release.bootstrapCommit}:${runtimeFile}`]);
+        if (bootstrapRuntimeFileType !== 'blob') errors.push(`bootstrap commit ${release.bootstrapCommit} is missing required runtime file ${runtimeFile}`);
+      } catch {
+        errors.push(`bootstrap commit ${release.bootstrapCommit} is missing required runtime file ${runtimeFile}`);
+      }
     }
   }
   if (errors.length > 0) throw new ControllerReleaseValidationError(`${errors.map((error) => `Controller release check: ${error}`).join('\n')}\nController release check failed with ${errors.length} error(s).`);
