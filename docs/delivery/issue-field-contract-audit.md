@@ -159,10 +159,11 @@ fields, then resolved the GraphQL values against the unbound logical config
 instead of the live field IDs. The controller therefore reported a failed
 readback even though the REST API showed both values. The values were restored
 immediately and verified as `[]`. The regression tests reproduce the failure
-caused by resolving live IDs against the logical config and ensure that a
-matching legacy label cannot stand in for an observed issue-field value. The
-fix binds the observed field IDs and requires both fields to be present before
-readback succeeds; the second live write/read/restore cycle succeeded in both
+caused by resolving live IDs against the logical config, reject the expected
+option name when its live option ID differs, and ensure a matching legacy label
+cannot stand in for an observed issue-field value. The fix binds the observed
+field and option IDs and requires both fields to be present before readback
+succeeds; the second live write/read/restore cycle succeeded in both
 repositories.
 
 Invalid-option and missing-target controller checks were also run. Both were

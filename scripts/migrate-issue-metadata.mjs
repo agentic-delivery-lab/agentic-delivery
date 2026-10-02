@@ -48,6 +48,20 @@ async function verifyEventually(verify, attempts = 4) {
   throw lastError;
 }
 
+function boundFieldOption(config, fieldKey, logicalOptionId) {
+  const field = config?.fields?.[fieldKey];
+  const option = field?.options?.find((candidate) => candidate.id === logicalOptionId);
+  return {
+    fieldId: field?.runtime_id ?? field?.github_id ?? null,
+    optionId: option?.runtime_id ?? option?.github_id ?? null,
+  };
+}
+
+function observedFieldOptionId(issue, fieldId) {
+  const values = issue?.issueFieldValues?.nodes ?? issue?.issueFieldValues ?? [];
+  return values.find((value) => value?.field?.id === fieldId)?.optionId ?? null;
+}
+
 export async function runMigration({ env = process.env, argv = process.argv, root = repositoryRoot, fetchImpl = fetch, graphqlImpl } = {}) {
   const options = args(argv);
   const config = await loadLifecycleConfig(root);
@@ -85,10 +99,20 @@ export async function runMigration({ env = process.env, argv = process.argv, roo
       const observed = await readIssueControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
       const metadata = issueMetadata(observed, boundConfig);
       const targetType = issueTypes(config).find((type) => type.id === plan.target.issueType);
+      const expectedFields = [
+        ['lifecycle_stage', plan.target.lifecycleStage],
+        ['readiness', plan.target.readiness],
+      ];
+      const fieldOptionsMatch = expectedFields.every(([fieldKey, logicalOptionId]) => {
+        const expected = boundFieldOption(boundConfig, fieldKey, logicalOptionId);
+        return expected.fieldId && expected.optionId
+          && observedFieldOptionId(observed, expected.fieldId) === expected.optionId;
+      });
       if (targetType && (metadata.issueType.source !== 'native' || metadata.issueType.id !== targetType.id)) {
         throw new Error(`Native issue type ${targetType.native_name} was not observed after migration.`);
       }
       if (!metadata.fieldPresence?.lifecycleStage || !metadata.fieldPresence?.readiness
+        || !fieldOptionsMatch
         || metadata.lifecycleStage !== plan.target.lifecycleStage
         || metadata.readiness !== plan.target.readiness) {
         throw new Error('Issue fields were not observed after migration.');
