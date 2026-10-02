@@ -25,9 +25,11 @@ test('runner setup can verify installed package contents independently of the ar
   const verified = await packageTreeSha256(root);
   await writeFile(path.join(root, '.release-sha256'), RELEASE.sha256);
   assert.equal(await packageTreeSha256(root), verified);
-  await chmod(path.join(root, 'bin', 'codex'), 0o755);
-  assert.notEqual(await packageTreeSha256(root), verified);
-  await chmod(path.join(root, 'bin', 'codex'), 0o644);
+  if (process.platform !== 'win32') {
+    await chmod(path.join(root, 'bin', 'codex'), 0o755);
+    assert.notEqual(await packageTreeSha256(root), verified);
+    await chmod(path.join(root, 'bin', 'codex'), 0o644);
+  }
   await writeFile(path.join(root, 'bin', 'codex'), 'modified executable');
   assert.notEqual(await packageTreeSha256(root), verified);
 });
