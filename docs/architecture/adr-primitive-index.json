@@ -127,8 +127,14 @@
         "instructional"
       ],
       "primitives": [
+        "codex-cli-release-update-workflow",
+        "codex-cli-release-updater",
+        "codex-cli-updater-review-classifier",
         "codex-delivery-controller",
-        "codex-delivery-workflow-guide"
+        "codex-delivery-workflow-guide",
+        "github-native-issue-type",
+        "pull-request-check-readiness",
+        "pull-request-dispatch-context-resolver"
       ]
     },
     {
@@ -142,7 +148,12 @@
         "semantic"
       ],
       "primitives": [
+        "codex-cli-release-update-workflow",
+        "codex-cli-release-updater",
+        "codex-cli-updater-review-classifier",
+        "github-native-issue-type",
         "harness-architecture-review",
+        "pull-request-check-readiness",
         "semantic-architecture-review"
       ]
     },
@@ -228,6 +239,7 @@
         "organization-metadata-runbook",
         "pull-request-body-check",
         "pull-request-body-validator",
+        "pull-request-dispatch-context-resolver",
         "repository-governance-instructions"
       ]
     },
@@ -378,6 +390,9 @@
         "agent-invocation-preflight",
         "agent-invocation-workflow",
         "changelog-structure-validator",
+        "codex-cli-release-update-workflow",
+        "codex-cli-release-updater",
+        "codex-cli-updater-review-classifier",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "commit-format-validator",
@@ -386,6 +401,7 @@
         "domain-language-validator",
         "event-catalog",
         "event-catalog-validator",
+        "github-native-issue-type",
         "harness-architecture-review",
         "issue-branch-name-validator",
         "issue-classifier",
@@ -403,6 +419,8 @@
         "organization-webhook-ingress",
         "pull-request-body-check",
         "pull-request-body-validator",
+        "pull-request-check-readiness",
+        "pull-request-dispatch-context-resolver",
         "repository-governance-instructions",
         "semantic-architecture-review",
         "semantic-issue-router",
@@ -490,6 +508,48 @@
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0006"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "codex-cli-release-update-workflow",
+      "path": ".github/workflows/codex-cli-release-update.yml",
+      "location": ".github/workflows/codex-cli-release-update.yml",
+      "kind": "workflow",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "codex-cli-release-updater",
+      "path": "scripts/codex-cli-release-update.mjs",
+      "location": "scripts/codex-cli-release-update.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "codex-cli-updater-review-classifier",
+      "path": "scripts/classify-codex-cli-updater-review.mjs",
+      "location": "scripts/classify-codex-cli-updater-review.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
       ],
       "domains": [
         "agentic-delivery-governance"
@@ -668,6 +728,20 @@
       ],
       "domains": [
         "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "github-native-issue-type",
+      "path": "scripts/lib/github-native-issue-type.mjs",
+      "location": "scripts/lib/github-native-issue-type.mjs",
+      "kind": "customization",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
       ]
     },
     {
@@ -987,6 +1061,34 @@
       "kind": "validator",
       "enforcement": "deterministic",
       "adrs": [
+        "ADR-0016"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "pull-request-check-readiness",
+      "path": "scripts/lib/pull-request-check-readiness.mjs",
+      "location": "scripts/lib/pull-request-check-readiness.mjs",
+      "kind": "customization",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "pull-request-dispatch-context-resolver",
+      "path": "scripts/resolve-pull-request-context.mjs",
+      "location": "scripts/resolve-pull-request-context.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
         "ADR-0016"
       ],
       "domains": [

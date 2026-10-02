@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import path from 'node:path';
 import { rm } from 'node:fs/promises';
-import { CodexClient, quotaBoundary, verifyModels, modelEnvironment, deliveryPermissions, checkConfiguration, AUTH_STORAGE_CONFIG, DEFAULT_PERMISSION_CONFIG, appServerFailure } from '../../scripts/lib/codex-client.mjs';
+import { CodexClient, quotaBoundary, formatQuotaDiagnostics, verifyModels, modelEnvironment, deliveryPermissions, checkConfiguration, AUTH_STORAGE_CONFIG, DEFAULT_PERMISSION_CONFIG, appServerFailure } from '../../scripts/lib/codex-client.mjs';
 
 const now = 1_800_000_000;
 const window = (usedPercent, windowDurationMins = 300) => ({ usedPercent, windowDurationMins, resetsAt: now + 100 });
@@ -13,6 +13,18 @@ test('leaves a small finalization reserve in both usage windows', () => {
   assert.equal(quotaBoundary(quota(98), now).stop, true);
   assert.equal(quotaBoundary(quota(20, 98), now).stop, true);
   assert.equal(quotaBoundary(quota(100), now).resetsAt, now + 100);
+  const weeklyLimit = quotaBoundary(quota(24, 98), now);
+  assert.deepEqual(weeklyLimit.windows.map(({ bucketIndex, slot, durationMinutes, usedPercent }) => (
+    { bucketIndex, slot, durationMinutes, usedPercent }
+  )), [
+    { bucketIndex: 1, slot: 'primary', durationMinutes: 300, usedPercent: 24 },
+    { bucketIndex: 1, slot: 'secondary', durationMinutes: 10_080, usedPercent: 98 },
+  ]);
+  assert.deepEqual(weeklyLimit.guardSignals, {
+    windowThresholdReached: true,
+    rateLimitReached: false,
+    spendControlReached: false,
+  });
 });
 
 test('quota telemetry fails closed on missing, invalid, or expired windows', () => {
@@ -30,6 +42,24 @@ test('checks every returned bucket and explicit server limits', () => {
   value.rateLimitsByLimitId = { codex: value.rateLimits, other: { credits:{hasCredits:false,unlimited:false}, primary: window(99, 60) } };
   assert.equal(quotaBoundary(value, now).stop, true);
   assert.equal(quotaBoundary({rateLimits:{...quota().rateLimits, spendControlReached:true}}, now).stop, true);
+  const serverLimited = quota(24, 62);
+  serverLimited.rateLimits.rateLimitReachedType = 'secondary';
+  const result = quotaBoundary(serverLimited, now);
+  assert.equal(result.usedPercent, 62);
+  assert.deepEqual(result.guardSignals, {
+    windowThresholdReached: false,
+    rateLimitReached: true,
+    spendControlReached: false,
+  });
+});
+
+test('formats sanitized per-window quota details for runner logs', () => {
+  const diagnostics = formatQuotaDiagnostics(quotaBoundary(quota(24, 98), now));
+  assert.match(diagnostics, /highest-window usage 98%/);
+  assert.match(diagnostics, /bucket 1 primary: 300m at 24%, resets 2027-/);
+  assert.match(diagnostics, /bucket 1 secondary: 10080m at 98%, resets 2027-/);
+  assert.match(diagnostics, /window threshold=true; rate-limit=false; spend-control=false/);
+  assert.doesNotMatch(diagnostics, /codex|limitId/i);
 });
 
 test('refuses model execution when credit spillover is possible or unknown', () => {
@@ -42,13 +72,14 @@ test('refuses model execution when credit spillover is possible or unknown', () 
 
 test('requires the exact requested models and reasoning efforts', () => {
   const models = [
-    {id:'gpt-5.6-sol', supportedReasoningEfforts:[{reasoningEffort:'high'}]},
-    {id:'gpt-5.6-luna', supportedReasoningEfforts:[{reasoningEffort:'max'}]},
+    {id:'gpt-6-sol', model:'gpt-6-sol', supportedReasoningEfforts:[{reasoningEffort:'high'}]},
+    {id:'gpt-6-luna', model:'gpt-6-luna', supportedReasoningEfforts:[{reasoningEffort:'medium'}]},
+    {id:'gpt-6-luna-catalog-entry', model:'gpt-6-luna', supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'max'}]},
   ];
   verifyModels(models);
-  assert.throws(() => verifyModels(models.slice(0, 1)), /gpt-5.6-luna/);
-  models[1].supportedReasoningEfforts = [{reasoningEffort:'high'}];
-  assert.throws(() => verifyModels(models), /max/);
+  assert.throws(() => verifyModels(models.slice(0, 1)), /gpt-6-luna/);
+  models[2].supportedReasoningEfforts = [{reasoningEffort:'low'}];
+  assert.throws(() => verifyModels(models), /gpt-6-luna\/max/);
 });
 
 test('model processes do not inherit publishing, API, or Actions credentials', () => {

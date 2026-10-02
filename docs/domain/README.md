@@ -29,6 +29,19 @@ records cross-cutting controls. The runner's
 execution state records resumable operations and is not a replacement for any
 of those GitHub values.
 
+The source-issue `Codex session` and pull-request `architecture review
+session` are separate records with different owners and resume conditions. A
+semantic review fingerprint identifies the evidence behind a reusable Harness
+result. It includes exact-head check outcomes and verified workflow identity,
+but excludes run-specific IDs, links and timestamps so a deterministic rerun
+with the same evidence can reuse a completed result. An interrupted review
+thread resumes only for the same full fingerprint; changed evidence gets an
+isolated thread and state directory. Expired state, including the directory
+selected for the current review, is pruned before reuse. Transient runner
+preflight status, quota counters and the Harness review check itself are also
+excluded. The review-session identity includes the Codex CLI version and model
+profile.
+
 ## Repository boundary
 
 The repository currently hosts two transitional bounded contexts. `agentic-delivery-governance` covers repository rules and reusable delivery primitives for proposing, reviewing, validating and recording work. `agentic-delivery-control-plane` covers the organization-aware executable controller, its signed event boundary, participant enrollment, lifecycle contracts, orchestration policy and controlled GitHub write-back. The latter is intentionally being extracted into the permanent Control Plane boundary; it must not absorb Architecture Authority or canonical Primitive implementation.

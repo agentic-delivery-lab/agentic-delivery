@@ -43,12 +43,21 @@ export async function runArchitectureReview(options) {
   });
 
   if (options.semantic) {
-    const { runSemanticReview } = await import('./lib/architecture-review-agent.mjs');
-    review.semantic = await runSemanticReview({
-      repositoryRoot: options.repositoryRoot ?? process.cwd(),
-      review,
-      eventPath: options.event,
-    });
+    if (review.status === 'fail') {
+      review.semantic = {
+        status: 'not-run',
+        findings: [],
+        sessionId: null,
+        skippedReason: 'Deterministic architecture violations were found; no semantic model turn was started.',
+      };
+    } else {
+      const { runSemanticReview } = await import('./lib/architecture-review-agent.mjs');
+      review.semantic = await runSemanticReview({
+        repositoryRoot: options.repositoryRoot ?? process.cwd(),
+        review,
+        eventPath: options.event,
+      });
+    }
   }
 
   const markdown = formatReviewMarkdown(review);

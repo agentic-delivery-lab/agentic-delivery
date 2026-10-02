@@ -7,8 +7,8 @@ authority:
   unknown: hold
 
 models:
-  gpt-5.6-sol: [high]
-  gpt-5.6-luna: [max]
+  gpt-6-luna: [low, medium, max]
+  gpt-6-sol: [high]
 
 permissions:
   - delivery-plan
@@ -60,8 +60,8 @@ mcp_servers:
 profiles:
   router:
     purpose: Interpret the issue and propose an allowed route.
-    model: gpt-5.6-sol
-    reasoning: high
+    model: gpt-6-luna
+    reasoning: low
     mode: plan
     permissions: delivery-plan
     skills: [delivery-workflow]
@@ -70,8 +70,8 @@ profiles:
     mutates_repository: false
   discovery:
     purpose: Gather repository evidence and identify unknowns.
-    model: gpt-5.6-sol
-    reasoning: high
+    model: gpt-6-luna
+    reasoning: medium
     mode: plan
     permissions: delivery-research
     skills: [ubiquitous-language, plain-language-communication]
@@ -80,8 +80,8 @@ profiles:
     mutates_repository: false
   research:
     purpose: Gather approved external and repository evidence.
-    model: gpt-5.6-sol
-    reasoning: high
+    model: gpt-6-luna
+    reasoning: medium
     mode: plan
     permissions: delivery-research
     skills: [ubiquitous-language, plain-language-communication]
@@ -90,8 +90,8 @@ profiles:
     mutates_repository: false
   requirements:
     purpose: Turn evidence and intent into requirements and acceptance criteria.
-    model: gpt-5.6-sol
-    reasoning: high
+    model: gpt-6-luna
+    reasoning: medium
     mode: plan
     permissions: delivery-plan
     skills: [ubiquitous-language, plain-language-communication]
@@ -100,7 +100,7 @@ profiles:
     mutates_repository: false
   architecture-decision:
     purpose: Compare significant choices and prepare a provisional ADR.
-    model: gpt-5.6-sol
+    model: gpt-6-sol
     reasoning: high
     mode: plan
     permissions: delivery-plan
@@ -110,7 +110,7 @@ profiles:
     mutates_repository: false
   planner:
     purpose: Produce a decision-complete implementation plan when needed.
-    model: gpt-5.6-sol
+    model: gpt-6-sol
     reasoning: high
     mode: plan
     permissions: delivery-plan
@@ -120,7 +120,7 @@ profiles:
     mutates_repository: false
   implementer:
     purpose: Execute an authorized plan and preserve existing implementation work.
-    model: gpt-5.6-luna
+    model: gpt-6-luna
     reasoning: max
     mode: default
     permissions: delivery-edit
@@ -129,9 +129,9 @@ profiles:
     mcp: []
     mutates_repository: true
   validator:
-    purpose: Independently validate deterministic evidence and acceptance criteria.
-    model: gpt-5.6-sol
-    reasoning: high
+    purpose: Run a read-only first pass over verification evidence and acceptance criteria.
+    model: gpt-6-luna
+    reasoning: max
     mode: default
     permissions: delivery-review
     skills: [delivery-workflow, ubiquitous-language, plain-language-communication]
@@ -140,8 +140,8 @@ profiles:
     mutates_repository: false
   coordinator:
     purpose: Inspect lineage children and prepare a parent for acceptance.
-    model: gpt-5.6-sol
-    reasoning: high
+    model: gpt-6-luna
+    reasoning: medium
     mode: plan
     permissions: delivery-plan
     skills: [delivery-workflow, plain-language-communication]
@@ -150,7 +150,7 @@ profiles:
     mutates_repository: false
   harness-reviewer:
     purpose: Review architecture conformance independently of implementation.
-    model: gpt-5.6-sol
+    model: gpt-6-sol
     reasoning: high
     mode: default
     permissions: delivery-review

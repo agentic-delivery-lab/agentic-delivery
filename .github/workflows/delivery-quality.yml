@@ -5,23 +5,29 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Open pull request whose candidate should be validated
+        required: true
+        type: number
 
 permissions:
   contents: read
   issues: read
+  pull-requests: read
 
 jobs:
   quality:
-    # This private repository executes checked-in validation on the dedicated
-    # runner. Fork PRs do not run repository code on that runner.
+    # Run deterministic validation on an ephemeral hosted runner so it can
+    # finish while Harness occupies the single persistent Codex runner.
+    # Fork PRs do not execute repository code until their trust boundary is
+    # explicitly supported.
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64, omarchy]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-      HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - name: Check out the repository
@@ -30,10 +36,20 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Validate issue-linked branch
-        if: github.event_name == 'pull_request'
+      - name: Resolve the dispatched pull request
+        id: target
+        if: github.event_name == 'workflow_dispatch'
         env:
-          BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST_NUMBER: ${{ inputs.pull_request_number }}
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: node scripts/resolve-pull-request-context.mjs
+
+      - name: Validate issue-linked branch
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        env:
+          BRANCH_NAME: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || steps.target.outputs.head_ref }}
           GH_TOKEN: ${{ github.token }}
         run: node scripts/validate-pull-request-branch.mjs
 
@@ -51,16 +67,22 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Validate pull-request title
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
         env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_TITLE: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || steps.target.outputs.title }}
         run: node scripts/validate-pull-request-title.mjs
 
       - name: Validate commit range
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'push' && github.event.before || steps.target.outputs.base_sha }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: node scripts/validate-commit-range.mjs "$BASE_SHA" "$HEAD_SHA"
 
       - name: Validate direct pushes to main
         if: github.event_name == 'push'
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
         run: node scripts/validate-main-history.mjs "$BASE_SHA" "$HEAD_SHA"
 
       - name: Run repository tests
@@ -110,8 +132,8 @@ jobs:
     # Fork pull requests stay outside the trust boundary until they have a safe
     # workflow that does not execute checked-in code with repository secrets.
     if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
+      github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:

@@ -4,37 +4,102 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review, edited]
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Open pull request to review after runner preflight succeeds
+        required: true
+        type: number
 
 permissions:
+  checks: read
   contents: read
   issues: read
   pull-requests: read
   actions: read
-  checks: read
 
 concurrency:
-  group: harness-architecture-review-${{ github.event.pull_request.number }}
+  group: harness-architecture-review-${{ github.event.pull_request.number || inputs.pull_request_number }}
   cancel-in-progress: true
 
 jobs:
+  classify_updater:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login == 'agentic-delivery-lab-invoker-7f3a[bot]' &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.base.repo.full_name == github.repository &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'chore/issue-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      suppress_review: ${{ steps.classify.outputs.suppress_review }}
+    steps:
+      - name: Check out the trusted base revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Verify the Codex CLI updater pull request
+        id: classify
+        env:
+          EVENT_PATH: ${{ github.event_path }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/classify-codex-cli-updater-review.mjs
+
   review:
-    # This repository already limits checked-in code on the dedicated runner
-    # to internal pull requests. Forks remain outside this trust boundary.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    needs: classify_updater
+    # Fork PRs remain outside the dedicated-runner trust boundary. The updater
+    # classifier runs from base and suppresses only a fully verified release
+    # PR; classifier errors and mismatches run ordinary Harness review.
+    if: >-
+      always() &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.base.repo.full_name == github.repository &&
+          (
+            needs.classify_updater.result != 'success' ||
+            needs.classify_updater.outputs.suppress_review != 'true'
+          )
+        )
+      )
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 30
     env:
       CODEX_AUTH_HOME: /var/lib/github-runner/.codex
-      BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       GH_TOKEN: ${{ github.token }}
       CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
+      CODEX_REVIEW_STATE_DIR: /var/lib/github-runner/.codex/harness-reviews
     steps:
       - name: Check out the review candidate
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Resolve the dispatched pull request
+        id: target
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          PULL_REQUEST_NUMBER: ${{ inputs.pull_request_number }}
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: node scripts/resolve-pull-request-context.mjs
 
       - name: Resolve the immutable Architecture Authority pin
         id: architecture-pin
@@ -76,14 +141,27 @@ jobs:
           pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Set up pinned Codex CLI
+        id: codex
         run: node scripts/setup-runner-codex.mjs
+
+      - name: Check Codex model, account, Plan mode, and quota without a model turn
+        id: preflight
+        continue-on-error: true
+        env:
+          CODEX_PREFLIGHT_REPORT_PATH: ${{ runner.temp }}/codex-preflight-report.json
+        run: node scripts/codex-preflight.mjs
+
+      - name: Check actual sandbox isolation without a model turn
+        id: sandbox
+        continue-on-error: true
+        run: node scripts/codex-sandbox-check.mjs
 
       - name: Run deterministic and semantic architecture review
         run: >-
           node scripts/harness-architecture-review.mjs
           --base "$BASE_SHA"
           --head "$HEAD_SHA"
-          --event "$GITHUB_EVENT_PATH"
+          --event "$EVENT_PATH"
           --architecture-root architecture-authority
           --architecture-commit "${{ steps.architecture-pin.outputs.commit }}"
           --architecture-digest "${{ steps.architecture-pin.outputs.digest }}"
@@ -91,3 +169,10 @@ jobs:
           --output "$RUNNER_TEMP/harness-architecture-review.json"
           --summary "$GITHUB_STEP_SUMMARY"
           --semantic
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || steps.target.outputs.base_sha }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || steps.target.outputs.head_sha }}
+          EVENT_PATH: ${{ github.event_name == 'pull_request' && github.event_path || steps.target.outputs.event_path }}
+          CODEX_PREFLIGHT_REPORT_PATH: ${{ runner.temp }}/codex-preflight-report.json
+          RUNNER_PREFLIGHT_OUTCOME: ${{ steps.preflight.outcome }}
+          RUNNER_SANDBOX_OUTCOME: ${{ steps.sandbox.outcome }}

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
+import { modelForProfile } from '../../scripts/lib/codex-client.mjs';
 import {
   availableCapabilities,
   selectOrchestration,
@@ -44,6 +45,11 @@ test('orchestration policy is versioned and every profile declares least-privile
     assert.ok(Array.isArray(profile.skills));
     assert.ok(Array.isArray(profile.capabilities));
     assert.ok(Array.isArray(profile.mcp));
+  }
+  for (const [profileId, profile] of Object.entries(policy.profiles)) {
+    const runtime = modelForProfile(profileId);
+    assert.equal(profile.model, runtime.model, `${profileId} model matches the runtime assignment`);
+    assert.equal(profile.reasoning, runtime.effort, `${profileId} reasoning matches the runtime assignment`);
   }
 });
 
