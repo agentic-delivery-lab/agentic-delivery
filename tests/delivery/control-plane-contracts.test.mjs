@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { promisify } from 'node:util';
 
 import { invocationEnvelope } from '../../scripts/lib/agent-invocation.mjs';
 import {
@@ -14,6 +17,7 @@ import {
 import { validateControllerRelease as validateReleaseManifest } from '../../scripts/validate-controller-release.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
+const execFileAsync = promisify(execFile);
 
 test('contract schemas are present and self-identifying', async () => {
   for (const file of ['event-envelope.v1.schema.json', 'event-catalog.v1.schema.json', 'participant-registry.v1.schema.json', 'controller-release.v1.schema.json', 'controller-release.v2.schema.json', 'github-app-contract.v1.schema.json', 'github-app-contract.v2.schema.json', 'primitive-selection.v1.schema.json']) {
@@ -25,13 +29,13 @@ test('contract schemas are present and self-identifying', async () => {
   }
 });
 
-test('the checked-in controller release pins every enrolled participant', async () => {
+test('the checked-in controller release pins every enrolled participant and required runtime asset', async () => {
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
   assert.equal(release.schemaVersion, 2);
   assert.equal(release.$schema, '../schemas/controller-release.v2.schema.json');
-  assert.equal(release.version, '0.2.0-draft.44');
-  assert.equal(release.commit, '331c433345519f00ecc15be0bd843a45651147f2');
+  assert.equal(release.version, '0.2.0-draft.45');
+  assert.equal(release.commit, 'eed2505edaf4e1f839030697973dcaaf0c1b1bea');
   assert.equal(release.bootstrapCommit, 'a5f92943ce0407f5c6e53edd4360bca06df58576');
   assert.equal(release.githubAppContractVersion, '2.0.0');
   assert.equal(release.compatibility.githubAppContractVersion, '2.0.0');
@@ -68,6 +72,25 @@ test('the checked-in controller release pins every enrolled participant', async 
     contracts: release.contracts,
     dependencies: release.dependencies,
   }), true);
+});
+
+test('controller release validation rejects a primary release pin missing the intake masker', async (t) => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-release-masker-'));
+  t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+  await execFileAsync('git', ['clone', '--quiet', '--shared', '--no-checkout', repositoryRoot, temporaryRoot], { encoding: 'utf8' });
+  await mkdir(path.join(temporaryRoot, 'config'), { recursive: true });
+  for (const file of ['controller-release.json', 'participants.yml']) {
+    await cp(path.join(repositoryRoot, 'config', file), path.join(temporaryRoot, 'config', file));
+  }
+  const releasePath = path.join(temporaryRoot, 'config', 'controller-release.json');
+  const release = JSON.parse(await readFile(releasePath, 'utf8'));
+  release.commit = '331c433345519f00ecc15be0bd843a45651147f2';
+  await writeFile(releasePath, `${JSON.stringify(release, null, 2)}\n`, 'utf8');
+
+  await assert.rejects(
+    validateReleaseManifest({ repositoryRoot: temporaryRoot }),
+    /missing required runtime file scripts\/mask-issue-field-bindings\.mjs/,
+  );
 });
 
 test('controller release support policy fails closed for incomplete compatibility metadata', async () => {
