@@ -116,6 +116,7 @@ test('organization issue-field binding components are masked before each consume
   const sourceDelivery = deliverySteps.findIndex((step) => step.name === 'Run source issue delivery');
   const secretRef = '${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}';
 
+  assert.ok(intakeBootstrap >= 0 && intakeBootstrap < intakeMask);
   assert.ok(intakeMask >= 0 && intakeMask < classifier);
   assert.ok(deliveryBootstrap >= 0 && deliveryBootstrap < deliveryMask);
   assert.ok(deliveryMask >= 0 && deliveryMask < sourceDelivery);
