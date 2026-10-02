@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -14,7 +14,10 @@ import {
   validateControllerRelease,
   validateEventEnvelope,
 } from '../../scripts/lib/control-plane-contracts.mjs';
+import { parseParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
+import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 import { validateControllerRelease as validateReleaseManifest } from '../../scripts/validate-controller-release.mjs';
+import { validateSelectedControllerRuntime } from '../../scripts/validate-selected-controller-runtime.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const execFileAsync = promisify(execFile);
@@ -74,22 +77,38 @@ test('the checked-in controller release pins every enrolled participant and requ
   }), true);
 });
 
-test('controller release validation rejects a selected pin missing the intake masker', async (t) => {
+test('selected controller runtime validation rejects a participant pin missing the intake masker', async (t) => {
+  const bootstrapCommit = 'a5f92943ce0407f5c6e53edd4360bca06df58576';
+  const { stdout: bootstrapRegistryYaml } = await execFileAsync('git', [
+    '-C', repositoryRoot, 'show', `${bootstrapCommit}:config/participants.yml`,
+  ], { encoding: 'utf8' });
+  const bootstrapRegistry = parseParticipantRegistry(parseRepositoryYaml(bootstrapRegistryYaml, 'config/participants.yml'));
+  assert.equal(bootstrapRegistry.valid, true);
+  const centralParticipant = [...bootstrapRegistry.participants.values()].find((participant) => (
+    participant.expectedFullName === 'agentic-delivery-lab/agentic-delivery'
+  ));
+  assert.equal(centralParticipant.controller.version, '0.2.0-draft.44');
+  assert.equal(centralParticipant.controller.commit, '331c433345519f00ecc15be0bd843a45651147f2');
+
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-release-masker-'));
   t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
-  await execFileAsync('git', ['clone', '--quiet', '--shared', '--no-checkout', repositoryRoot, temporaryRoot], { encoding: 'utf8' });
-  await mkdir(path.join(temporaryRoot, 'config'), { recursive: true });
-  for (const file of ['controller-release.json', 'participants.yml']) {
-    await cp(path.join(repositoryRoot, 'config', file), path.join(temporaryRoot, 'config', file));
-  }
-  const releasePath = path.join(temporaryRoot, 'config', 'controller-release.json');
-  const release = JSON.parse(await readFile(releasePath, 'utf8'));
-  release.commit = '331c433345519f00ecc15be0bd843a45651147f2';
-  await writeFile(releasePath, `${JSON.stringify(release, null, 2)}\n`, 'utf8');
+  await execFileAsync('git', ['clone', '--quiet', '--shared', repositoryRoot, temporaryRoot], { encoding: 'utf8' });
+
+  const currentControllerCommit = 'eed2505edaf4e1f839030697973dcaaf0c1b1bea';
+  await execFileAsync('git', ['-C', temporaryRoot, 'checkout', '--quiet', '--detach', currentControllerCommit], { encoding: 'utf8' });
+  assert.deepEqual(await validateSelectedControllerRuntime({
+    repositoryRoot: temporaryRoot,
+    selectedControllerCommit: currentControllerCommit,
+  }), { commit: currentControllerCommit });
+
+  await execFileAsync('git', ['-C', temporaryRoot, 'checkout', '--quiet', '--detach', centralParticipant.controller.commit], { encoding: 'utf8' });
 
   await assert.rejects(
-    validateReleaseManifest({ repositoryRoot: temporaryRoot }),
-    /missing required runtime file scripts\/mask-issue-field-bindings\.mjs/,
+    validateSelectedControllerRuntime({
+      repositoryRoot: temporaryRoot,
+      selectedControllerCommit: centralParticipant.controller.commit,
+    }),
+    /is missing required runtime file scripts\/mask-issue-field-bindings\.mjs/,
   );
 });
 
