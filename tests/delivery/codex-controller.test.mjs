@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -33,10 +34,10 @@ async function fixture(t) {
   const workspace = path.join(issueRoot, 'workspace');
   const eventFile = path.join(root, 'event.json');
   await writeFile(eventFile, JSON.stringify({repository:{id:101,full_name:'fixture/repo',owner:{login:'maintainer'}}}));
-  const env = {...process.env, GH_TOKEN:'fixture-token', PUBLISH_TOKEN:'fixture-publish-token', GITHUB_EVENT_PATH:eventFile, RUNNER_WORKSPACE:root,
-    CODEX_DELIVERY_STATE_DIR:stateRoot, GITHUB_REPOSITORY:'fixture/repo', GITHUB_ACTOR:'maintainer',
-    GITHUB_EVENT_NAME:'workflow_dispatch', GITHUB_RUN_ID:'1', SOURCE_ISSUE:'7'};
-  const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], publishHeaders:[], pushHeaders:[], clients:0, closes:0};
+  const env = {...process.env, GITHUB_ACTIONS:'false', GH_TOKEN:'fixture-token', PUBLISH_TOKEN:'fixture-publish-token', GITHUB_EVENT_PATH:eventFile, RUNNER_WORKSPACE:root,
+    CODEX_DELIVERY_STATE_DIR:stateRoot, GITHUB_REPOSITORY:'fixture/repo', GITHUB_ACTOR:'maintainer', PARTICIPANT_MODE:'active',
+    GITHUB_EVENT_NAME:'workflow_call', READ_ONLY_RUN:'false', GITHUB_RUN_ID:'1', SOURCE_ISSUE:'7'};
+  const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], publishHeaders:[], pushHeaders:[], accessTokenRequests:[], clients:0, closes:0};
   const faults = {
     permission:'write', sourceState:'open', sourceTitle:'Add a file', sourceBody:'Create result.txt', sourceComments:[],
     sourceLabels:['type:task', 'state:ready-for-plan'], sourceNativeType:'Task',
@@ -81,6 +82,10 @@ async function fixture(t) {
   });
   const dependencies = {
     fetch:async (url, options) => {
+      if (url.endsWith('/access_tokens')) {
+        calls.accessTokenRequests.push(JSON.parse(options.body));
+        return new Response(JSON.stringify({token:'fixture-installation-token', expires_at:'2099-01-01T00:00:00Z'}), {status:201});
+      }
       const route = url.replace('https://api.github.com/repos/fixture/repo', '');
       const body = options.body ? JSON.parse(options.body) : undefined;
       if (route.startsWith('/pulls')) calls.publishHeaders.push(options.headers.Authorization);
@@ -240,6 +245,49 @@ test('rejects an origin repository ID that differs from the authenticated event 
   assert.equal(f.calls.prs.length, 0);
 });
 
+test('delivery mints an origin-scoped App token with the declared organization metadata reads', async (t) => {
+  const f = await fixture(t);
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  f.env.CODEX_DELIVERY_APP_ID = '5011055';
+  f.env.CODEX_DELIVERY_APP_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' });
+  f.env.CODEX_DELIVERY_APP_INSTALLATION_ID = '163255060';
+  delete f.env.PUBLISH_TOKEN;
+
+  await f.run();
+
+  assert.deepEqual(f.calls.accessTokenRequests, [{
+    permissions: {
+      contents: 'write', issues: 'write', pull_requests: 'write',
+      issue_fields: 'read', issue_types: 'read',
+    },
+    repository_ids: ['101'],
+  }]);
+});
+
+test('delivery rejects read-only and missing run policy before token creation and model startup', async (t) => {
+  for (const scenario of [
+    { name: 'read-only run', value: 'true' },
+    { name: 'missing run policy', value: undefined },
+  ]) {
+    await t.test(scenario.name, async (subtest) => {
+      const f = await fixture(subtest);
+      const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+      f.env.CODEX_DELIVERY_APP_ID = '5011055';
+      f.env.CODEX_DELIVERY_APP_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' });
+      f.env.CODEX_DELIVERY_APP_INSTALLATION_ID = '163255060';
+      delete f.env.PUBLISH_TOKEN;
+      if (scenario.value === undefined) delete f.env.READ_ONLY_RUN;
+      else f.env.READ_ONLY_RUN = scenario.value;
+
+      await assert.rejects(f.run(), /explicitly non-read-only run/);
+      assert.equal(f.calls.accessTokenRequests.length, 0);
+      assert.equal(f.calls.clients, 0);
+      assert.equal(f.calls.turns.length, 0);
+      assert.equal(f.calls.prs.length, 0);
+    });
+  }
+});
+
 test('does not start a model turn when the source issue is not ready for planning', async (t) => {
   const f = await fixture(t);
   f.faults.sourceNativeType = 'Idea';
@@ -359,11 +407,33 @@ test('requires the dedicated publication credential before model execution', asy
   assert.equal(f.calls.clients,0);
 });
 
+test('GitHub Actions delivery refuses publication-token fallbacks when App credentials are missing', async (t) => {
+  const f = await fixture(t);
+  f.env.GITHUB_ACTIONS = 'true';
+
+  await assert.rejects(f.run(), /GitHub Actions delivery requires the organization-installed GitHub App credentials; refusing PUBLISH_TOKEN or GH_TOKEN fallback/);
+  assert.equal(f.calls.accessTokenRequests.length, 0);
+  assert.equal(f.calls.clients, 0);
+  assert.equal(f.calls.turns.length, 0);
+  assert.equal(f.calls.prs.length, 0);
+});
+
 test('rejects delivery execution for a shadow participant before model startup', async (t) => {
   const f = await fixture(t);
-  f.env.CONTROL_PLANE_MODE = 'shadow';
+  f.env.PARTICIPANT_MODE = 'shadow';
   await assert.rejects(f.run(), /Shadow participants are read-only/);
   assert.equal(f.calls.clients, 0);
+});
+
+test('rejects missing or invalid participant mode before delivery startup', async (t) => {
+  for (const mode of [undefined, 'unknown']) {
+    const f = await fixture(t);
+    if (mode === undefined) delete f.env.PARTICIPANT_MODE;
+    else f.env.PARTICIPANT_MODE = mode;
+    await assert.rejects(f.run(), /requires an active participant mode resolved during intake/);
+    assert.equal(f.calls.accessTokenRequests.length, 0);
+    assert.equal(f.calls.clients, 0);
+  }
 });
 
 test('publication retry cannot push a clean but unverified replacement commit', async (t) => {
@@ -586,6 +656,7 @@ test('manual dispatch remains available for a waiting continuation', async (t) =
   assert.equal((await f.run()).status,'awaiting-human');
   f.faults.questions = false;
   f.env.GITHUB_EVENT_NAME = 'workflow_dispatch';
+  f.env.READ_ONLY_RUN = 'false';
   f.env.GITHUB_RUN_ID = '2';
   assert.equal((await f.run())?.status, undefined);
   assert.equal((await f.state()).status,'ready');

@@ -59,8 +59,9 @@ without pretending that model judgment is mathematical proof.
 The repository will run a dedicated internal pull-request workflow. It loads
 official ADRs from the base revision, provisional ADR changes from the head,
 the merge-base-to-head diff, the generated ADR-to-primitive traceability index,
-the domain register, the architecture impact map, the source issue and safe
-runtime evidence when available. It produces one
+the domain register, the architecture impact map, the source issue, the
+sanitized pull-request body, current check-run statuses for the exact head SHA,
+and safe runtime evidence when available. It produces one
 machine-readable result and one concise check summary. It does not post issue
 comments, modify the pull request, merge, close issues or silently repair
 findings.
@@ -88,6 +89,26 @@ inspect the first completed result alongside its quota evidence.
 When the runner's model catalog rejects a required approved model-effort pair,
 the evidence names that pair without publishing raw runner errors. Other
 unknown runner failures remain redacted.
+
+An edited pull request reruns the review so an author can attach current-head
+verification links after the workflow checks complete. The check-run snapshot
+is read-only and filtered to the reviewed head. The current Harness run's own
+pending check is expected and is not evidence against the pull request. A
+post-merge canary explicitly scheduled in the pull-request body remains a
+pending operational evidence gap before merge; its expected absence alone
+does not prevent the semantic reviewer from assessing code and architecture
+conformance. A missing Codex session or runner-state record is not a gap when
+the deterministic evidence check classifies a human-created pull request as
+not applicable for agent-session evidence.
+
+This amendment follows the review of issue #66 / pull request #67 on
+2026-09-30. The previous evidence bundle omitted the PR body and current-head
+check results, which caused the semantic review to report avoidable evidence
+gaps. A read-only check-run snapshot and a rerun on PR edits provide that
+evidence without adding a comment-writing workflow. The alternatives were to
+leave the review dependent on the webhook snapshot or ask a person to restate
+the PR body and check results in another evidence channel; both make the
+review less complete or duplicate information that GitHub already stores.
 
 Agent-created pull requests carry a versioned evidence projection derived from
 persisted delivery state. The projection contains source issue, workflow run,
@@ -223,14 +244,16 @@ approved shared-store decision before resumable reviews can span hosts.
 Tests must cover impact-map coverage, evidence-schema validation, redaction,
 publication retry idempotency, deterministic failure codes, exact GPT-6 Sol
 High review settings, denied model network, cited semantic findings,
-inconclusive quota/evidence handling, no-model execution for deterministic
+inconclusive quota/evidence handling, pull-request-body inclusion and redaction,
+exact-head check-run snapshots, no-model execution for deterministic
 violations and incomplete checks, exclusion of the current Harness check only
 after exact workflow provenance, exact-fingerprint cache reuse, interrupted
 thread resume only for unchanged evidence, fresh-thread behavior after
 evidence changes, pruning of expired current and non-current state, state-file
-permissions, workflow permissions, and no-comment behavior. A
-human reviewer must inspect whether the baseline and semantic findings cite
-evidence rather than treating tests or documentation as runtime proof.
+permissions, workflow permissions, edited-event reruns, and no-comment
+behavior. A human reviewer must inspect whether the baseline and semantic
+findings cite evidence rather than treating tests or documentation as runtime
+proof.
 
 ## Pros and Cons of the Options
 
@@ -265,7 +288,7 @@ evidence rather than treating tests or documentation as runtime proof.
 - Baseline: [`docs/architecture/harness-conformance-review.md`](../architecture/harness-conformance-review.md)
 - Domain register: [`ubiquitous-language.yml`](../domain/ubiquitous-language.yml)
 - Related decisions: [ADR-0001](0001-use-madr-for-architecture-decisions.md), [ADR-0003](0003-use-context-scoped-ubiquitous-language.md), [ADR-0009](0009-run-codex-from-source-issues-with-a-budget-boundary.md), [ADR-0012](0012-use-github-as-the-lifecycle-control-plane.md), and [ADR-0013](0013-derive-adr-traceability-from-agentic-primitives.md)
-- Amendment source: [issue #32](https://github.com/agentic-delivery-lab/agentic-delivery/issues/32)
+- Amendment sources: [issue #32](https://github.com/agentic-delivery-lab/agentic-delivery/issues/32) and [issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
 - Model profile amendment: [issue #70](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70)
 - This decision is provisional on its feature branch and becomes official only
   after its review pull request is merged into `main`.

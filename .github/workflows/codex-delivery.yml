@@ -19,15 +19,6 @@ on:
         required: false
         default: ''
         type: string
-      participant_mode:
-        description: Central participant mode resolved during intake
-        required: false
-        default: ''
-        type: string
-      controller_commit:
-        description: Immutable controller commit resolved from the participant registry
-        required: true
-        type: string
       route:
         description: Authorized orchestration route selected by the intake policy
         required: true
@@ -91,41 +82,90 @@ on:
         description: Open source issue number to start or resume
         required: true
         type: string
-      controller_commit:
-        description: Immutable controller commit for this manual recovery run
-        required: true
-        type: string
+      force_read_only:
+        description: Keep this recovery run read-only; the participant registry mode cannot be overridden
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      participant_mode: ${{ steps.participant-policy.outputs.participant_mode }}
+      controller_commit: ${{ steps.participant-policy.outputs.controller_commit }}
+      read_only_run: ${{ steps.participant-policy.outputs.read_only_run }}
+    steps:
+      - name: Check out trusted participant registry bootstrap
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # Bootstrap pin: config/controller-release.json bootstrapCommit.
+          ref: a5f92943ce0407f5c6e53edd4360bca06df58576
+          path: trusted-bootstrap
+          persist-credentials: false
+
+      - name: Set up Node.js and pnpm
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Install trusted bootstrap validation dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: trusted-bootstrap
+
+      - name: Resolve caller and participant policy from trusted inputs
+        id: participant-policy
+        working-directory: trusted-bootstrap
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GIT_REF: ${{ github.ref }}
+          CALLER_WORKFLOW_REF: ${{ github.workflow_ref }}
+          ROUTE: ${{ inputs.route }}
+          ORIGIN_REPOSITORY: ${{ inputs.origin_repository || github.repository }}
+          ORIGIN_REPOSITORY_ID: ${{ inputs.origin_repository_id || github.event.repository.id }}
+          FORCE_READ_ONLY: ${{ github.event_name == 'workflow_dispatch' && format('{0}', github.event.inputs.force_read_only) || 'unset' }}
+          EVENT_PAYLOAD_PATH: ${{ github.event_path }}
+        run: node scripts/lib/resolve-delivery-participant.mjs >> "$GITHUB_OUTPUT"
+
   deliver:
+    needs: resolve
+    if: >-
+      needs.resolve.result == 'success' &&
+      needs.resolve.outputs.participant_mode == 'active' &&
+      needs.resolve.outputs.read_only_run == 'false'
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 350
-    env:
-      CODEX_AUTH_HOME: /var/lib/github-runner/.codex
-      ORIGIN_REPOSITORY: ${{ inputs.origin_repository }}
-      ORIGIN_REPOSITORY_ID: ${{ inputs.origin_repository_id }}
-      CONTROL_PLANE_MODE: ${{ inputs.participant_mode }}
-      CONTROL_PLANE_COMMIT: ${{ inputs.controller_commit }}
-      GITHUB_EVENT_NAME: ${{ inputs.invocation_event_name == 'issues' && 'issues' || (inputs.invocation_event_name != '' && 'issue_comment' || github.event_name) }}
-      GITHUB_TRIGGERING_ACTOR: ${{ inputs.invocation_actor || github.triggering_actor || github.actor }}
     permissions:
       contents: read
       issues: write
+    env:
+      CODEX_AUTH_HOME: /var/lib/github-runner/.codex
+      ORIGIN_REPOSITORY: ${{ inputs.origin_repository || github.repository }}
+      ORIGIN_REPOSITORY_ID: ${{ inputs.origin_repository_id || github.event.repository.id }}
+      PARTICIPANT_MODE: ${{ needs.resolve.outputs.participant_mode }}
+      READ_ONLY_RUN: ${{ needs.resolve.outputs.read_only_run }}
+      CONTROL_PLANE_COMMIT: ${{ needs.resolve.outputs.controller_commit }}
+      GITHUB_EVENT_NAME: ${{ inputs.invocation_event_name == 'issues' && 'issues' || (inputs.invocation_event_name != '' && 'issue_comment' || github.event_name) }}
+      GITHUB_TRIGGERING_ACTOR: ${{ inputs.invocation_actor || github.triggering_actor || github.actor }}
     steps:
-      - name: Validate the immutable controller commit
+      - name: Validate resolved controller pin
         env:
-          CONTROLLER_COMMIT: ${{ inputs.controller_commit }}
+          CONTROLLER_COMMIT: ${{ needs.resolve.outputs.controller_commit }}
         run: |
           set -euo pipefail
-          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]
 
-      - name: Check out trusted controller
+      - name: Check out pinned controller
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ inputs.controller_commit }}
+          ref: ${{ needs.resolve.outputs.controller_commit }}
           persist-credentials: false
 
       - name: Set up pnpm and Node.js

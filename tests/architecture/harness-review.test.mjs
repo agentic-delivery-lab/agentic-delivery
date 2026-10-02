@@ -545,6 +545,7 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
   await writeFile(eventPath, JSON.stringify(event));
   const review = await deterministicReview({ repositoryRoot, base: revision, head: revision, eventPath });
   let bundleText = '';
+  let promptText = '';
   let capabilityReads = 0;
   let modelTurns = 0;
   let threadStarts = 0;
@@ -573,8 +574,9 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
       close: async () => {},
       readableFiles,
     }),
-    runTurnImpl: async ({ client }) => {
+    runTurnImpl: async ({ client, prompt }) => {
       modelTurns += 1;
+      promptText = prompt;
       bundleText = await readFile(client.readableFiles[0], 'utf8');
       return { status: 'completed', text: JSON.stringify({
         status: 'aligned',
@@ -602,6 +604,8 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
   assert.match(bundleText, /"id": 654327/);
   assert.match(bundleText, /Keep this unrelated review visible\./);
   assert.match(bundleText, /quota telemetry is recorded by the runner/i);
+  assert.match(promptText, /acceptance canary after merge/i);
+  assert.match(promptText, /expected absence before merge alone does not prevent/i);
   const quotaFields = /highestWindowUsedPercent|allowanceAvailable|durationMinutes|windowThresholdReached/;
   const quotaFieldMatch = quotaFields.exec(bundleText);
   assert.equal(quotaFieldMatch, null, quotaFieldMatch
@@ -840,7 +844,7 @@ test('the baseline report contains one required matrix row for every official AD
 
 test('architecture-review workflow is pinned, read-only, resumable, and does not publish comments', async () => {
   const workflow = await readFile(path.join(repositoryRoot, '.github/workflows/harness-architecture-review.yml'), 'utf8');
-  for (const phrase of ['pull_request:', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', 'CODEX_REVIEW_STATE_DIR: /var/lib/github-runner/.codex/harness-reviews', 'classify-codex-cli-updater-review.mjs', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
+  for (const phrase of ['pull_request:', 'types: [opened, synchronize, reopened, ready_for_review, edited]', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', 'CODEX_REVIEW_STATE_DIR: /var/lib/github-runner/.codex/harness-reviews', 'classify-codex-cli-updater-review.mjs', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
     assert.ok(workflow.includes(phrase), `missing workflow control: ${phrase}`);
   }
   const classifierGate = /classify_updater:\r?\n\s+if: >-\r?\n\s+github\.event_name == 'pull_request' &&\r?\n\s+github\.event\.pull_request\.user\.login == 'agentic-delivery-lab-invoker-7f3a\[bot\]'/;

@@ -136,6 +136,31 @@ function equal(errors, label, actual, expected) {
   if (actual !== expected) errors.push(`${label}: expected ${expected}, got ${actual ?? '<missing>'}`);
 }
 
+export function validateBootstrapWorkflowPins({ bootstrapCommit, issueIntakeWorkflow, codexDeliveryWorkflow } = {}) {
+  const errors = [];
+  for (const [name, workflow, file] of [
+    ['issue-intake', issueIntakeWorkflow, '.github/workflows/issue-intake.yml'],
+    ['codex-delivery', codexDeliveryWorkflow, '.github/workflows/codex-delivery.yml'],
+  ]) {
+    let document;
+    try { document = parseRepositoryYaml(workflow, file); } catch { document = null; }
+    const bootstrapRefs = Object.values(document?.jobs ?? {})
+      .flatMap((job) => Array.isArray(job?.steps) ? job.steps : [])
+      .filter((step) => ['trusted-intake', 'trusted-bootstrap'].includes(step?.with?.path))
+      .map((step) => step?.with?.ref);
+    if (bootstrapRefs.length === 0 || bootstrapRefs.some((ref) => ref !== bootstrapCommit)) {
+      errors.push(`${name} bootstrap must pin the release bootstrap commit`);
+    }
+  }
+  if (/^\s*ref:\s*main\s*$/m.test(String(issueIntakeWorkflow ?? ''))) {
+    errors.push('issue-intake must not check out a moving main ref');
+  }
+  if (String(codexDeliveryWorkflow ?? '').includes("|| 'main'")) {
+    errors.push('codex delivery must not fall back to a moving main ref');
+  }
+  return errors;
+}
+
 function sourceById(sources, id) {
   return (sources ?? []).find((source) => source.id === id);
 }
@@ -173,6 +198,18 @@ export async function validateReleaseChain({
   const controllerRepository = appContract.controller?.repository;
   const organization = appContract.organization?.login;
   const controller = await readJson(path.join(controlPlaneRoot, 'config/controller-release.json'));
+  if (controller.schemaVersion === 2 && SHA1.test(controller.commit ?? '')) {
+    try {
+      const releaseAppContract = await readJsonAtCommit(
+        controlPlaneRoot,
+        controller.commit,
+        'config/github-app-contract.json',
+      );
+      equal(errors, 'Controller release GitHub App contract version', controller.githubAppContractVersion, releaseAppContract.contractVersion);
+    } catch (error) {
+      errors.push(`Controller release GitHub App contract could not be read at the pinned controller commit: ${error.message}`);
+    }
+  }
   const architectureDependency = controller.dependencies?.architecture;
   const primitiveDependency = controller.dependencies?.primitives;
   if (!architectureDependency || !primitiveDependency) errors.push('controller release must declare Architecture and Primitive dependencies');
@@ -270,6 +307,8 @@ export async function validateReleaseChain({
   for (const relativePath of [
     'scripts/authorize-issue-event.mjs',
     'scripts/prepare-agent-invocation.mjs',
+    'scripts/validate-intake-caller.mjs',
+    'scripts/lib/intake-caller-provenance.mjs',
     'scripts/lib/participant-registry.mjs',
     'config/participants.yml',
     'package.json',
@@ -286,7 +325,9 @@ export async function validateReleaseChain({
   for (const relativePath of [
     'config/event-catalog.yml',
     'config/github-app-contract.json',
+    'schemas/github-app-contract.v2.schema.json',
     'scripts/lib/event-catalog.mjs',
+    'scripts/lib/resolve-delivery-participant.mjs',
   ]) {
     await assertPathAtCommit(
       controlPlaneRoot,
@@ -366,9 +407,11 @@ export async function validateReleaseChain({
     }
   }
 
-  if (!issueIntakeWorkflow.includes(`ref: ${controller.bootstrapCommit}`)) errors.push('issue-intake bootstrap must pin the release bootstrap commit');
-  if (/^\s*ref:\s*main\s*$/m.test(issueIntakeWorkflow)) errors.push('issue-intake must not check out a moving main ref');
-  if (codexDeliveryWorkflow.includes("|| 'main'")) errors.push('codex delivery must not fall back to a moving main ref');
+  errors.push(...validateBootstrapWorkflowPins({
+    bootstrapCommit: controller.bootstrapCommit,
+    issueIntakeWorkflow,
+    codexDeliveryWorkflow,
+  }));
 
   equal(errors, 'Private surface repository name', privateSurface.repositoryName, '.github-private');
   equal(errors, 'Private surface visibility', privateSurface.requiredVisibility, 'private');

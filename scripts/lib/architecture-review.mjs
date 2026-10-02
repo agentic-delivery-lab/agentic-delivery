@@ -356,7 +356,7 @@ export async function deterministicReview({
   checks.push(missingRegisters.length
     ? check('domain-register-structure', 'fail', `A mapped bounded context is missing its register: ${missingRegisters.join(', ')}.`, ['docs/domain/ubiquitous-language.yml', 'docs/architecture/harness-review.yml'])
     : check('domain-register-structure', 'pass', 'Every mapped bounded context has a register in the reviewed revision.', ['docs/domain/ubiquitous-language.yml', 'docs/architecture/harness-review.yml']));
-  checks.push(check('runtime-context-minimal', 'pass', 'Traceability metadata is kept separate from runtime context selection; semantic review receives only affected decision evidence.', ['docs/architecture/adr-primitive-index.json', 'scripts/lib/architecture-review-agent.mjs']));
+  checks.push(check('runtime-context-minimal', 'pass', 'Traceability metadata is kept separate from runtime context selection; semantic review receives affected decision evidence plus the sanitized pull-request body and exact-head check snapshot.', ['docs/architecture/adr-primitive-index.json', 'scripts/lib/architecture-review-agent.mjs']));
 
   const evidence = validateEvidence(parseEvidenceMarker(pullRequest.body), { repository, issueNumber, head });
   checks.push(check('delivery-evidence', evidence.status, evidence.message, evidence.evidence));
@@ -367,7 +367,7 @@ export async function deterministicReview({
       checks.push(check('review-workflow-boundary', 'fail', 'The architecture-review workflow was removed from the reviewed revision.', [reviewWorkflow]));
     } else {
       const workflow = await gitShow(repositoryRoot, head, reviewWorkflow);
-      const forbiddenPermissions = /(?:contents|issues|pull-requests|actions):\s*write/i.test(workflow);
+      const forbiddenPermissions = /(?:contents|issues|pull-requests|actions|checks):\s*write/i.test(workflow);
       const mutationCommand = /(?:gh\s+(?:issue|pr)\s+(?:comment|close)|pulls\/.*PATCH|git\s+(?:push|commit))/i.test(workflow);
       checks.push(forbiddenPermissions || mutationCommand
         ? check('review-workflow-boundary', 'fail', 'The architecture-review workflow grants write access or contains a mutation command.', [reviewWorkflow])

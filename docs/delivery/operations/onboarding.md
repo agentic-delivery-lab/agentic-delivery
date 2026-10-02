@@ -12,8 +12,10 @@ fails closed.
 3. Grant the organization GitHub App selected-repository access through the
    operator-owned GitHub settings.
 4. Add a reviewed entry to `config/participants.yml` with `mode: shadow`, an
-   immutable controller commit, contract versions, Architecture and Primitive
-   release pins, and the required event catalog.
+   immutable controller commit, participant contract versions for the event
+   envelope, lifecycle, state machine, and evidence, Architecture and Primitive
+   release pins, and the required event catalog. The controller release
+   manifest pins the controller-wide GitHub App contract version.
 5. Add the optional Distribution caller only when repository-local Actions
    execution is required. Do not add App credentials or copy lifecycle logic.
 6. Run `pnpm metadata:check`, `pnpm control-plane:check`,

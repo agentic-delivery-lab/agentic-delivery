@@ -1,9 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 import actorCatalog from '../config/agent-actors.json' with { type: 'json' };
 import { invocationEventSupported, observationEventSupported } from './lib/agent-invocation.mjs';
+import { GITHUB_APP_TOKEN_PERMISSION_PROFILES } from './lib/github-app.mjs';
 import { parseRepositoryYaml } from './lib/yaml.mjs';
 import { validateEventCatalog } from './lib/event-catalog.mjs';
 
@@ -42,7 +44,9 @@ export function validateGithubAppContract(contract, catalog = actorCatalog, even
     const catalogResult = validateEventCatalog(eventCatalog);
     if (!catalogResult.valid) errors.push(...catalogResult.errors.map((error) => `event catalog: ${error}`));
   }
-  if (contract.schemaVersion !== 1) errors.push('schemaVersion must be 1');
+  if (contract.schemaVersion !== 2) errors.push('schemaVersion must be 2');
+  if (contract.contractVersion !== '2.0.0') errors.push('contractVersion must be 2.0.0');
+  if (contract.$schema !== '../schemas/github-app-contract.v2.schema.json') errors.push('$schema must reference github-app-contract.v2.schema.json');
   if (contract.organization?.login !== 'agentic-delivery-lab') errors.push('organization.login must be agentic-delivery-lab');
   if (!numericIdentity.test(String(contract.organization?.id ?? ''))) errors.push('organization.id must be a positive numeric identity');
   if (contract.installation?.access !== 'selected-repositories') errors.push('installation.access must be selected-repositories');
@@ -67,6 +71,8 @@ export function validateGithubAppContract(contract, catalog = actorCatalog, even
   if (permissions.metadata !== 'read') errors.push('permissions.metadata must be read');
   if (permissions.contents !== 'write') errors.push('permissions.contents must be write');
   if (permissions.issues !== 'write') errors.push('permissions.issues must be write');
+  if (permissions.issue_fields !== 'read') errors.push('permissions.issue_fields must be read');
+  if (permissions.issue_types !== 'read') errors.push('permissions.issue_types must be read');
   if (permissions.pull_requests !== 'write') errors.push('permissions.pull_requests must be write');
   if (permissions.workflows !== 'none') errors.push('permissions.workflows must be none');
   if (contract.credentials?.privateKey !== 'central-deployment-only') errors.push('credentials.privateKey must remain central-deployment-only');
@@ -74,9 +80,20 @@ export function validateGithubAppContract(contract, catalog = actorCatalog, even
   if (contract.credentials?.dispatchSecret !== 'central-gateway-and-controller-only') errors.push('credentials.dispatchSecret must remain central-gateway-and-controller-only');
   if (contract.credentials?.storage !== 'central-secret-store') errors.push('credentials.storage must be central-secret-store');
   if (contract.tokenScopes?.origin?.repositoryIds !== 'origin-event-repository') errors.push('origin token must be origin-event-repository scoped');
-  if (contract.tokenScopes?.origin?.permissions !== 'read-minimum') errors.push('origin token must use read-minimum permissions');
+  const originProfiles = contract.tokenScopes?.origin?.profiles;
+  const expectedProfileNames = Object.keys(GITHUB_APP_TOKEN_PERMISSION_PROFILES).sort();
+  const actualProfileNames = Object.keys(originProfiles ?? {}).sort();
+  if (!isDeepStrictEqual(actualProfileNames, expectedProfileNames)) {
+    errors.push(`origin token profiles must be exactly ${expectedProfileNames.join(', ')}`);
+  }
+  for (const [name, expected] of Object.entries(GITHUB_APP_TOKEN_PERMISSION_PROFILES)) {
+    if (!isDeepStrictEqual(originProfiles?.[name], expected)) {
+      errors.push(`origin token profile ${name} must exactly match its runtime permission map`);
+    }
+  }
   if (contract.tokenScopes?.controller?.repositoryIds !== 'controller-repository') errors.push('controller token must be controller-repository scoped');
   if (contract.tokenScopes?.controller?.permissions !== 'contents-write-dispatch-only') errors.push('controller token must be contents-write-dispatch-only');
+  if (contract.tokenScopes?.controller?.organizationPermissions !== undefined) errors.push('controller token must not request organization permissions');
   return { valid: errors.length === 0, errors };
 }
 

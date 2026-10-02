@@ -14,7 +14,7 @@ import { validateCommitRange } from './validate-commit-range.mjs';
 import { validateBranchName } from './validate-branch-name.mjs';
 import { deterministicReview, validateEvidenceRecord } from './lib/architecture-review.mjs';
 import { validateTransition } from './lib/lifecycle-transitions.mjs';
-import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
+import { appConfiguration, githubAppTokenPermissions, GithubAppTokenProvider } from './lib/github-app.mjs';
 import { bodyDigest } from './lib/agent-invocation.mjs';
 import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType, validateOrganizationIssueFields } from './lib/issue-field-api.mjs';
 import { issueMetadata, issueFieldMutation, validateFieldMutation } from './lib/issue-metadata.mjs';
@@ -362,7 +362,13 @@ export async function deliver(env = process.env, dependencies = {}) {
   const performTurn = dependencies.runTurn ?? runTurn;
   const validateCommits = dependencies.validateCommits ?? validateCommitRange;
   if (!env.GH_TOKEN || !env.GITHUB_EVENT_PATH || !env.RUNNER_WORKSPACE) throw new Error('Run this controller through GitHub Actions.');
-  if (env.CONTROL_PLANE_MODE === 'shadow') throw new Error('Shadow participants are read-only and cannot start delivery execution.');
+  if (env.PARTICIPANT_MODE === 'shadow') throw new Error('Shadow participants are read-only and cannot start delivery execution.');
+  if (env.PARTICIPANT_MODE !== 'active') throw new Error('Delivery execution requires an active participant mode resolved during intake.');
+  if (env.READ_ONLY_RUN !== 'false') throw new Error('Delivery execution requires an explicitly non-read-only run.');
+  const appCredentialsConfigured = Boolean(env.CODEX_DELIVERY_APP_ID && env.CODEX_DELIVERY_APP_PRIVATE_KEY);
+  if (env.GITHUB_ACTIONS === 'true' && !appCredentialsConfigured) {
+    throw new Error('GitHub Actions delivery requires the organization-installed GitHub App credentials; refusing PUBLISH_TOKEN or GH_TOKEN fallback.');
+  }
   if (!env.PUBLISH_TOKEN && !(env.CODEX_DELIVERY_APP_ID && env.CODEX_DELIVERY_APP_PRIVATE_KEY)) throw new Error('Publication credential is missing. Configure the organization-installed GitHub App credentials or an approved publication token.');
   const rawEvent = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'));
   const event = normalizeOriginEvent(rawEvent, env);
@@ -375,15 +381,15 @@ export async function deliver(env = process.env, dependencies = {}) {
     throw new Error('Origin repository ID does not match the authenticated event repository.');
   }
   const endpoint = `https://api.github.com/repos/${repository}`;
-  const appProvider = env.CODEX_DELIVERY_APP_ID && env.CODEX_DELIVERY_APP_PRIVATE_KEY
+  const appProvider = appCredentialsConfigured
     ? new GithubAppTokenProvider({
       repository: env.GITHUB_REPOSITORY,
       ...appConfiguration(env),
       // Workflow files are never mutated by the delivery runtime. Keep the
-      // installation token aligned with config/github-app-contract.json and
-      // the least-privilege App contract: workflow distribution is a separate
-      // reviewed projection owned by the Distribution boundary.
-      permissions: { contents: 'write', issues: 'write', pull_requests: 'write' },
+      // installation token aligned with the explicit delivery profile in the
+      // versioned GitHub App contract.
+      permissions: githubAppTokenPermissions('delivery'),
+      fetchImpl: fetchApi,
     })
     : null;
   const originToken = appProvider

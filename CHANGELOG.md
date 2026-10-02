@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- agentic-primitive: {"id":"curated-changelog","kind":"instruction","enforcement":"instructional","adrs":["ADR-0006"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"curated-changelog","kind":"instruction","enforcement":"instructional","adrs":["ADR-0006","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]} -->
 
 All notable changes to this repository are documented here.
 
@@ -10,6 +10,49 @@ and releases use [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) pins the central intake bootstrap and manual recovery paths to the controller release `bootstrapCommit`; normal and recovery execution no longer fall back to a moving `main` ref.
+- The controller release advances to `0.2.0-draft.39` at
+  `53c76a68cf1a7cab2141034bd477d8cb761bf4c6`; the central participant moves
+  to that immutable pin while draft38 and draft37 remain supported for
+  rollback. The bootstrap uses commit
+  `c83fb414a0b5637bf8b8ba3d3539a7e669958512`, which contains the draft39
+  participant registry.
+- [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
+  now keeps reusable delivery policy at the workflow boundary:
+  callers cannot supply participant mode, controller pin, or read-only state;
+  a hosted resolver checks the main-branch caller and source identity, then
+  derives those values from the fixed participant-registry bootstrap.
+- The GitHub App contract advances to version `2.0.0` with a version-2 schema;
+  the draft40 controller release pins that contract version.
+- The controller release advances to `0.2.0-draft.40` at
+  `27eafd8003c4657742205e77739b4ee261482db4`; the central participant moves
+  to this immutable pin while draft39 and earlier releases remain available
+  for rollback.
+- Intake and manual recovery now use bootstrap commit
+  `b87ab48ab616e02a1cfba4b6bce57769a523c739`, which contains the draft40
+  central participant pin.
+- The controller release advances to `0.2.0-draft.41` at
+  `4f8bacfef5bcd375459756d2a39ab77b9b9be95c`; the central participant moves
+  to that pin while draft40 and earlier remain available for rollback.
+- Intake and delivery now use bootstrap commit
+  `286db47f1686becbe91e6339d90e7033015e21fa`, which contains the draft41
+  central participant pin.
+- The controller release advances to `0.2.0-draft.42` at
+  `b17a2077b645e7eb861aeb75558d77fb1c46011c`; the central participant
+  moves to this pin while draft41 and earlier remain available for rollback.
+- Intake and delivery now use bootstrap commit
+  `76ff0ff7bd35479251b9bfdf4bf420251d5738d5`, which contains the draft42
+  central participant pin.
+- The hosted intake gate now validates caller repository identity against the
+  trusted App contract and participant registry before actor authorization or
+  self-hosted classification; accepted and rejected event/workflow pairs have
+  deterministic behavior coverage.
+- The controller release advances to `0.2.0-draft.43` at
+  `c4fcfdf58379af5a0df500af7e005388af93dfb9`; the central participant moves to
+  this immutable pin while draft42 and earlier releases remain available for
+  rollback.
+- Intake and delivery now use bootstrap commit
+  `a8f11cc70fbd16e4f31498fb68bf7a9a24841cac`, which contains the draft43
+  central participant pin and caller provenance validator.
 - Private agent publication validation can now reproduce each projection from
   the exact Primitive source commit named by its provenance lock; the release
   chain checks the same byte-for-byte relationship.
@@ -36,6 +79,45 @@ Entries that reference issue #52 use it only as the persisted-plan context;
 they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
+
+- The controller release advances to `0.2.0-draft.44` at
+  `331c433345519f00ecc15be0bd843a45651147f2`; the central participant
+  moves to that immutable code pin while draft43 and earlier remain
+  available for rollback.
+- Intake and delivery now use bootstrap commit
+  `a5f92943ce0407f5c6e53edd4360bca06df58576`, which contains the draft44
+  central participant pin.
+
+- Read-only issue intake now requires the scoped `readOnlyIntake` App token and
+  fails closed if its credentials are unavailable. The classify job's workflow
+  token has repository read permissions only.
+- Active intake and delivery now require origin-scoped GitHub App credentials
+  in Actions and fail closed instead of falling back to publication or workflow
+  tokens.
+- ADR-0018 and the domain register distinguish participant contract versions
+  from controller-wide interfaces, including the GitHub App contract pinned by
+  the controller release manifest; the amendment records the alternatives and
+  rationale.
+- Origin-scoped App tokens now use explicit invocation-preflight, read-only
+  intake, active intake, and delivery permission profiles. The versioned
+  contract is validated against the code-defined permission profiles, and
+  token requests use the selected profile's map. Origin repository IDs still
+  narrow repository resources, while the approved issue-field and issue type
+  reads remain organization-wide.
+- The release-chain validator now requires both issue intake and Codex delivery
+  to check out the bootstrap commit named by the controller release manifest.
+- Harness review now includes the sanitized pull-request body and latest
+  check-run status for the reviewed head; editing a pull request reruns the
+  read-only review after its verification evidence is updated.
+- Direct intake resolves the participant mode from the pinned registry by
+  repository ID and verifies the expected repository name. A manual
+  `force_read_only` override applies only to that run and cannot change or
+  promote the registered participant mode; delivery requires an active
+  participant and a non-read-only run.
+- Direct manual intake and delivery recovery read their controller pin and
+  participant mode from the fixed bootstrap registry. They default to
+  read-only; the self-hosted delivery job receives write permissions only for
+  an active, explicitly non-read-only run.
 
 - Actions now use Codex CLI 0.159.3 pinned to the published Linux asset
   SHA-256 and its extracted package-tree digest; every runner setup verifies the

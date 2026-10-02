@@ -41,6 +41,7 @@
         "instructional"
       ],
       "primitives": [
+        "delivery-state-domain-language",
         "domain-language-validator",
         "repository-governance-instructions"
       ]
@@ -287,11 +288,17 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
+        "curated-changelog",
+        "delivery-participant-policy-resolver",
+        "delivery-state-domain-language",
         "event-catalog",
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
+        "intake-caller-provenance-guard",
+        "intake-participation-policy",
         "issue-field-controller-boundary",
+        "organization-metadata-runbook",
         "organization-webhook-ingress",
         "participant-registry",
         "participant-registry-validator",
@@ -335,11 +342,17 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
+        "curated-changelog",
+        "delivery-participant-policy-resolver",
+        "delivery-state-domain-language",
         "event-catalog",
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
+        "intake-caller-provenance-guard",
+        "intake-participation-policy",
         "issue-field-controller-boundary",
+        "organization-metadata-runbook",
         "organization-webhook-ingress",
         "participant-registry",
         "participant-registry-validator",
@@ -611,10 +624,25 @@
       "kind": "instruction",
       "enforcement": "instructional",
       "adrs": [
-        "ADR-0006"
+        "ADR-0006",
+        "ADR-0018"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "delivery-participant-policy-resolver",
+      "path": "scripts/lib/resolve-delivery-participant.mjs",
+      "location": "scripts/lib/resolve-delivery-participant.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {
@@ -624,9 +652,12 @@
       "kind": "customization",
       "enforcement": "semantic",
       "adrs": [
+        "ADR-0003",
+        "ADR-0018",
         "ADR-0019"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },
@@ -725,6 +756,32 @@
       ],
       "domains": [
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "intake-caller-provenance-guard",
+      "path": "scripts/lib/intake-caller-provenance.mjs",
+      "location": "scripts/lib/intake-caller-provenance.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "intake-participation-policy",
+      "path": "scripts/lib/intake-policy.mjs",
+      "location": "scripts/lib/intake-policy.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {
@@ -909,9 +966,11 @@
         "ADR-0015",
         "ADR-0016",
         "ADR-0017",
+        "ADR-0018",
         "ADR-0019"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },

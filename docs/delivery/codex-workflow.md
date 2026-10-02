@@ -97,17 +97,32 @@ participant's immutable controller commit from the signed event envelope before
 loading its registry and validator. It never follows a moving `main` ref for
 observation validation and it has no App private-key or webhook-secret input.
 The issue-intake bootstrap uses the `bootstrapCommit` in the controller release
-manifest for its trusted authorization and preflight checkout. The delivery
-checkout and manual recovery input both require a 40-character controller SHA;
-neither path falls back to `main`.
+manifest for its trusted authorization and preflight checkout. Direct manual
+intake and recovery resolve participant mode and controller pin from the
+registry loaded at the fixed bootstrap commit after checking the event
+repository ID and expected name. They do not accept a caller-selected
+controller SHA. `force_read_only` defaults to `true`. The standalone delivery
+workflow resolves policy in a hosted job with contents-read permission only;
+its self-hosted delivery job runs only for an active participant with an
+effective non-read-only run. Reusable delivery checks out the immutable
+controller SHA selected from the registry. Its hosted resolver also verifies
+the main-branch caller and source repository, then re-reads participant mode
+and the controller pin from the fixed bootstrap registry. The reusable workflow
+does not accept those policy values from its caller. Neither path falls back
+to a moving `main` ref.
 
 The Vercel ingress mints a repository-scoped read token for origin actor and
 source checks, then a separate controller token narrowed to the controller
 repository with only Contents write for the `repository_dispatch` handoff.
 The runner's publication token follows the organization-wide ADR-0018
 Contents, Issues, and Pull requests boundary; Actions `workflows:write` is not
-required by the App contract. The Vercel ingress uses these Production
-environment variables: `AGENTIC_DELIVERY_WEBHOOK_SECRET`,
+required by the App contract. Origin intake and delivery tokens also request
+`issue_fields: read` and `issue_types: read` to validate organization
+metadata. These tokens remain narrowed to the originating repository ID; the
+repository ID restriction applies to repository resources; organization
+catalog reads remain organization-wide. The controller dispatch token requests
+only `contents: write`. The Vercel ingress uses these Production environment variables:
+`AGENTIC_DELIVERY_WEBHOOK_SECRET`,
 `AGENTIC_DELIVERY_APP_ID`, `AGENTIC_DELIVERY_APP_PRIVATE_KEY`,
 `AGENTIC_DELIVERY_APP_INSTALLATION_ID`, `AGENTIC_DELIVERY_DISPATCH_SECRET`,
 `AGENTIC_DELIVERY_ORGANIZATION`, `AGENTIC_DELIVERY_ORGANIZATION_ID`, and
@@ -318,14 +333,15 @@ issue edits.
   to the runner service user and back it up as operational data.
 - Repository Actions variables `CODEX_DELIVERY_APP_ID` and, optionally,
   `CODEX_DELIVERY_APP_INSTALLATION_ID`; Actions secret
-  `CODEX_DELIVERY_APP_PRIVATE_KEY`. Install the App only on this repository
-  with Metadata read plus Issues, Contents, Pull requests, and Workflows write.
-  Issue intake uses a repository-scoped installation token to read the issue
-  and organization issue-field contract and to perform validated issue
-  write-back. Delivery uses a repository-scoped token for its authorized issue
-  and pull-request operations. The private key and tokens stay in memory,
-  are redacted, and are never exposed to Codex. The workflow token still
-  supports Actions-level authorization and controller-repository operations;
+  `CODEX_DELIVERY_APP_PRIVATE_KEY`. Install the central App with selected-
+  repository access, repository Metadata read plus Contents, Issues, and Pull
+  requests write, and organization Issue Fields and Issue Types read. Do not
+  grant Workflows write. Issue intake uses a repository-scoped installation
+  token to read the issue and organization issue-field contract and to perform
+  validated issue write-back. Delivery uses a repository-scoped token for its
+  authorized issue and pull-request operations. The private key and tokens
+  stay in memory, are redacted, and are never exposed to Codex. The workflow
+  token still supports Actions-level authorization and controller-repository operations;
   it cannot replace the installed App token for organization issue-field
   access.
 

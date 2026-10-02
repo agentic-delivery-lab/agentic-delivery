@@ -1,6 +1,55 @@
 // agentic-primitive: {"id":"github-app-token-provider","kind":"script","enforcement":"deterministic","adrs":["ADR-0018"],"domains":["agentic-delivery-control-plane"]}
 import { createPrivateKey, createSign } from 'node:crypto';
 
+const ORGANIZATION_ISSUE_METADATA_READ_PERMISSIONS = Object.freeze({
+  issue_fields: 'read',
+  issue_types: 'read',
+});
+
+export const GITHUB_APP_TOKEN_PERMISSION_PROFILES = Object.freeze({
+  invocationPreflight: Object.freeze({
+    repositoryPermissions: Object.freeze({
+      contents: 'read',
+      issues: 'read',
+      pull_requests: 'read',
+      metadata: 'read',
+    }),
+    organizationPermissions: Object.freeze({}),
+  }),
+  readOnlyIntake: Object.freeze({
+    repositoryPermissions: Object.freeze({
+      contents: 'read',
+      issues: 'read',
+      pull_requests: 'read',
+      metadata: 'read',
+    }),
+    organizationPermissions: ORGANIZATION_ISSUE_METADATA_READ_PERMISSIONS,
+  }),
+  activeIntake: Object.freeze({
+    repositoryPermissions: Object.freeze({
+      contents: 'read',
+      issues: 'write',
+      pull_requests: 'read',
+      metadata: 'read',
+    }),
+    organizationPermissions: ORGANIZATION_ISSUE_METADATA_READ_PERMISSIONS,
+  }),
+  delivery: Object.freeze({
+    repositoryPermissions: Object.freeze({
+      contents: 'write',
+      issues: 'write',
+      pull_requests: 'write',
+    }),
+    organizationPermissions: ORGANIZATION_ISSUE_METADATA_READ_PERMISSIONS,
+  }),
+});
+
+export function githubAppTokenPermissions(profileName) {
+  const profile = GITHUB_APP_TOKEN_PERMISSION_PROFILES[profileName];
+  if (!profile) throw new Error(`Unknown GitHub App token permission profile: ${profileName}`);
+  return { ...profile.repositoryPermissions, ...profile.organizationPermissions };
+}
+
 function base64url(value) {
   return Buffer.from(value).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }

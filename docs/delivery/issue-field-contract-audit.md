@@ -101,13 +101,16 @@ repository Actions variable; it is not copied into this report.
   Field writes remain behind the deterministic controller.
 - The maintainer session has `repo`, `read:org`, and `workflow` scopes; it does
   not have `admin:org`. No write request was made.
-- The installed Agentic Delivery Lab App currently reports repository
-  permissions including `issues:write`, but no Organization `Issue Fields`
-  read permission. GitHub's REST documentation requires that organization
-  permission for App installation tokens that list field definitions. The
-  live pinning query was verified with the maintainer session, not with the
-  installed App token. App-token access to the new pin fields therefore still
-  needs runtime verification before this acceptance criterion is complete.
+- At the time of this audit, the installed Agentic Delivery Lab App reported
+  repository permissions including `issues:write`, but no Organization
+  `Issue Fields` read permission. The organization later approved `Issue
+  Fields: read` and `Issue Types: read`; issue #66 records that grant and adds
+  both permissions to the versioned App contract and origin-token requests.
+  This code change does not by itself prove the runtime read path. The live
+  pinning query above used the maintainer session, not the App token. A normal
+  read-only intake of canary issue #62 must still confirm that the pinned
+  fields, Issue Types, and issue values are readable without an access error
+  and that no issue-field value changes.
 
 The repository now reads live type pins and no-type pins in the shared query
 and validates them before intake routing, delivery, or metadata migration can
@@ -126,13 +129,14 @@ publish those responses in this repository.
 
 ## Deferred proof and dependencies
 
-Issue #60 permits a read-only audit and reviewable proposals at this point. It
-does not authorize changes to organization settings or issue values before the
-applicable review and authorization. No issue-field value was written, changed,
-or cleared, and no live permission was added.
+The audit itself did not authorize changes to organization settings or issue
+values. No issue-field value was written, changed, or cleared during the audit.
+The organization later approved the two read permissions, tracked in issue #66.
+Runtime verification with the updated immutable controller pin remains
+outstanding. Controlled write and rollback evidence on test issues in two
+repositories is still outstanding as separate work.
 
-Controlled write and rollback evidence on test issues in two repositories is
-therefore still outstanding. After review and explicit operator authorization,
+After review and explicit operator authorization,
 use dedicated test issues, record the before and after responses, test invalid
 and missing values, and restore the original values. Do not use an empty
 replacement array when other field values must be retained; GitHub documents
