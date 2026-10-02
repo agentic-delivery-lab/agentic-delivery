@@ -9,15 +9,6 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-
-- The controller release manifest and central participant registry now target
-  `0.2.0-draft.45` at
-  `eed2505edaf4e1f839030697973dcaaf0c1b1bea`, retaining draft44 for rollback.
-  Runtime intake uses the new pin after a separate reviewed bootstrap advance.
-- Controller release validation now checks that the pinned release contains
-  the issue-field binding masker used by intake before semantic classification.
-
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) pins the central intake bootstrap and manual recovery paths to the controller release `bootstrapCommit`; normal and recovery execution no longer fall back to a moving `main` ref.
 - The controller release advances to `0.2.0-draft.39` at
   `53c76a68cf1a7cab2141034bd477d8cb761bf4c6`; the central participant moves
@@ -89,6 +80,12 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- The controller release manifest and central participant registry now target
+  `0.2.0-draft.45` at
+  `eed2505edaf4e1f839030697973dcaaf0c1b1bea`, retaining draft44 for rollback.
+  Runtime intake uses the new pin after a separate reviewed bootstrap advance.
+- Controller release validation now checks that the pinned release contains
+  the issue-field binding masker used by intake before semantic classification.
 - The controller release advances to `0.2.0-draft.44` at
   `331c433345519f00ecc15be0bd843a45651147f2`; the central participant
   moves to that immutable code pin while draft43 and earlier remain
