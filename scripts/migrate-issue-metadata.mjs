@@ -84,7 +84,7 @@ export async function runMigration({ env = process.env, argv = process.argv, roo
     verify: () => verifyEventually(async () => {
       const observed = await readIssueControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
       const metadata = issueMetadata(observed, boundConfig);
-      const targetType = issueTypes(boundConfig).find((type) => type.id === plan.target.issueType);
+      const targetType = issueTypes(config).find((type) => type.id === plan.target.issueType);
       if (targetType && (metadata.issueType.source !== 'native' || metadata.issueType.id !== targetType.id)) {
         throw new Error(`Native issue type ${targetType.native_name} was not observed after migration.`);
       }
