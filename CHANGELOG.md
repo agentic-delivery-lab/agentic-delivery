@@ -38,13 +38,16 @@ they do not authorize migration, alter that issue's scope, or close it.
 ### Changed
 
 - Actions now use Codex CLI 0.159.3 pinned to the published Linux asset
-  SHA-256; a weekly updater verifies candidate assets, creates a release-specific
-  Task issue, and opens review PRs with a repository-scoped App token so normal
+  SHA-256 and its extracted package-tree digest; every runner setup verifies the
+  cached or newly extracted package contents. A weekly updater verifies
+  candidate assets, records both digests, creates a release-specific Task
+  issue, and opens review PRs with a repository-scoped App token so normal
   PR checks start automatically. The updater waits for exact-head body,
   quality, portability, and applicable ADR-quality checks before dispatching
   the no-generation runner smoke, then starts Harness only after that smoke
-  passes. It validates the exact smoke workflow run ID, head SHA, dispatch
-  event, and `codex=true` run name. A base-revision classifier verifies that
+  passes. It refetches and verifies the PR and Task immediately before smoke
+  and again before Harness dispatch. It validates the exact smoke workflow run
+  ID, head SHA, dispatch event, and `codex=true` run name. A base-revision classifier verifies that
   only a fully matching updater PR and source Task, including the Task's native
   issue type, can delay automatic Harness review; mismatches and unavailable
   evidence run normal review. The updater and Harness verify that required
@@ -56,8 +59,9 @@ they do not authorize migration, alter that issue's scope, or close it.
   exceed the GitHub Search API limit. Reusing an open updater PR or dispatching
   its runner smoke requires refetching the exact PR and verifying its
   registered App author, branch, title, marker, source line, release URL, and
-  digest against the verified candidate and linked native Task. The GitHub-hosted
-  classifier applies the same URL and digest match before delaying automatic
+  archive and package-tree digests against the verified candidate and linked
+  native Task. The GitHub-hosted classifier applies the same release identity
+  and digest match before delaying automatic
   Harness review; a copied marker or same-looking branch cannot suppress it.
   A closed update PR no longer blocks later releases after its linked Task
   issue is resolved.

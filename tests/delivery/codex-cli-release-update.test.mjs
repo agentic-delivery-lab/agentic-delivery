@@ -13,6 +13,7 @@ import {
   reviewCheckReadiness,
   resolveClosedUpdateIssueStates,
   resolveSourceIssue,
+  reverifyReleasePullRequest,
   selectPendingUpdatePullRequest,
   verifyDownload,
   verifyReusableUpdatePullRequest,
@@ -23,6 +24,7 @@ import { getNativeIssueType } from '../../scripts/lib/github-native-issue-type.m
 
 const repository = 'agentic-delivery-lab/agentic-delivery';
 const assetName = 'codex-package-x86_64-unknown-linux-musl.tar.gz';
+const PACKAGE_TREE_SHA256 = 'b'.repeat(64);
 
 function graphqlIssueType(name = 'Task') {
   return { ok: true, json: async () => ({ data: { repository: { issue: { issueType: name ? { name } : null } } } }) };
@@ -48,11 +50,19 @@ function release(version, { prerelease = false, digest = 'a'.repeat(64), size = 
   };
 }
 
+function releaseCandidate(version, options) {
+  return {
+    ...checkedRelease(release(version, options), RELEASE.version),
+    packageTreeSha256: PACKAGE_TREE_SHA256,
+  };
+}
+
 function sourceTaskBody(version, digest = 'a'.repeat(64)) {
   return [
     `<!-- codex-cli-release-update:v1:${version} -->`,
     `- Official Codex release: [${version}](https://github.com/openai/codex/releases/tag/rust-v${version}).`,
     `- Verified Linux x64 asset SHA-256: \`${digest}\`.`,
+    `- Verified Linux x64 package-tree SHA-256: \`${PACKAGE_TREE_SHA256}\`.`,
   ].join('\n');
 }
 
@@ -82,6 +92,7 @@ function updatePullRequest({ version, issueNumber = 742, number = 815, sha = 'a'
       '',
       `- Official release: [${version}](${releaseUrl})`,
       `- Official Linux x64 asset SHA-256: \`${digest}\``,
+      `- Verified Linux x64 package-tree SHA-256: \`${PACKAGE_TREE_SHA256}\``,
     ].join('\n'),
     ...overrides,
   };
@@ -106,7 +117,7 @@ test('verifies the downloaded archive bytes against the official digest and size
     url: candidate.url,
     arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
   };
-  await verifyDownload(candidate, async () => response);
+  assert.equal(await verifyDownload(candidate, async () => response, async () => PACKAGE_TREE_SHA256), PACKAGE_TREE_SHA256);
   await assert.rejects(verifyDownload({ ...candidate, sha256: 'b'.repeat(64) }, async () => response), /official SHA-256 digest/);
 });
 
@@ -131,7 +142,7 @@ test('reuses one open update pull request and blocks unresolved duplicate decisi
 
 test('reuses an open update PR only after its registered identity and exact release Task are verified', async () => {
   const version = nextPatchVersion(RELEASE.version);
-  const candidate = checkedRelease(release(version), RELEASE.version);
+  const candidate = releaseCandidate(version);
   const pullRequest = updatePullRequest({ version, sha: 'a'.repeat(40) });
   const pending = selectPendingUpdatePullRequest([pullRequest], repository, version.replaceAll('.', '-'));
   const sourceIssue = {
@@ -164,6 +175,22 @@ test('reuses an open update PR only after its registered identity and exact rele
     'https://api.github.com/graphql',
   ]);
 
+  const reverified = await reverifyReleasePullRequest({
+    pullRequestNumber: 815,
+    branch: pending.branch,
+    expectedSha: pullRequest.head.sha,
+    issueNumber: 742,
+    candidate,
+    repository,
+    token: 'test-token',
+    fetchImpl: async (url) => String(url).endsWith('/pulls/815')
+      ? { ok: true, json: async () => pullRequest }
+      : String(url).endsWith('/issues/742')
+        ? { ok: true, json: async () => sourceIssue }
+        : graphqlIssueType(),
+  });
+  assert.equal(reverified.issueNumber, 742);
+
   await assert.rejects(verifyReusableUpdatePullRequest({
     pending,
     candidate,
@@ -185,6 +212,20 @@ test('reuses an open update PR only after its registered identity and exact rele
       json: async () => ({
         ...pullRequest,
         body: pullRequest.body.replace('a'.repeat(64), 'b'.repeat(64)),
+      }),
+    }),
+  }), /does not match the registered updater, candidate release, or source issue/);
+
+  await assert.rejects(verifyReusableUpdatePullRequest({
+    pending,
+    candidate,
+    repository,
+    token: 'test-token',
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        ...pullRequest,
+        body: pullRequest.body.replace(PACKAGE_TREE_SHA256, 'c'.repeat(64)),
       }),
     }),
   }), /does not match the registered updater, candidate release, or source issue/);
@@ -462,7 +503,7 @@ test('does not treat a short paginated check-run response as complete evidence',
 
 test('reuses a matching open release issue and creates a typed task when no issue exists', async () => {
   const version = nextPatchVersion(RELEASE.version);
-  const candidate = checkedRelease(release(version), RELEASE.version);
+  const candidate = releaseCandidate(version);
   const title = `Task: Update pinned Codex CLI to ${version}`;
   const marker = `<!-- codex-cli-release-update:v1:${version} -->`;
   let createCount = 0;
@@ -484,7 +525,13 @@ test('reuses a matching open release issue and creates a typed task when no issu
   assert.deepEqual(reused, { number: 742, url: `https://github.com/${repository}/issues/742`, title, created: false });
   assert.equal(createCount, 0);
 
-  for (const body of [sourceTaskBody(version, 'b'.repeat(64)), sourceTaskBody(version).replace('openai/codex/releases/tag/rust-v', 'openai/codex/releases/tag/rust-v0.0.0-'), sourceTaskBody(version).replace(/- Verified Linux x64 asset SHA-256: .*/, '')]) {
+  for (const body of [
+    sourceTaskBody(version, 'c'.repeat(64)),
+    sourceTaskBody(version).replace('openai/codex/releases/tag/rust-v', 'openai/codex/releases/tag/rust-v0.0.0-'),
+    sourceTaskBody(version).replace(/- Verified Linux x64 asset SHA-256: .*/, ''),
+    sourceTaskBody(version).replace(PACKAGE_TREE_SHA256, 'c'.repeat(64)),
+    sourceTaskBody(version).replace(/- Verified Linux x64 package-tree SHA-256: .*/, ''),
+  ]) {
     await assert.rejects(resolveSourceIssue({
       candidate,
       repository,
@@ -499,7 +546,7 @@ test('reuses a matching open release issue and creates a typed task when no issu
           html_url: `https://github.com/${repository}/issues/742`,
         }] }) },
       createIssue: async () => { createCount += 1; },
-    }), /does not record the verified release URL and SHA-256 digest/);
+    }), /does not record the verified release URL, SHA-256, and package-tree digest/);
   }
   assert.equal(createCount, 0);
 
@@ -555,7 +602,7 @@ test('reuses a matching open release issue and creates a typed task when no issu
 
 test('release source issue discovery paginates and fails closed on incomplete or capped search results', async () => {
   const version = nextPatchVersion(RELEASE.version);
-  const candidate = checkedRelease(release(version), RELEASE.version);
+  const candidate = releaseCandidate(version);
   const title = `Task: Update pinned Codex CLI to ${version}`;
   const pages = [];
   const fetchImpl = async (url) => {
@@ -697,6 +744,7 @@ test('the updater uses a restricted App token for PR events and dispatches runne
   assert.match(workflow, /CODEX_RELEASE_SLUG: \$\{\{ steps\.release\.outputs\.slug \}\}/);
   assert.match(workflow, /CODEX_RELEASE_CANDIDATE_PATH: \$\{\{ runner\.temp \}\}\/codex-release-candidate\.json/);
   assert.match(workflow, /CODEX_VERSION: \$\{\{ steps\.release\.outputs\.version \}\}/);
+  assert.match(workflow, /CODEX_PACKAGE_TREE_SHA256: \$\{\{ steps\.release\.outputs\.package_tree_sha256 \}\}/);
   assert.match(workflow, /PR_TITLE: "chore\(delivery\): 🔧 update pinned Codex CLI to \$\{\{ steps\.release\.outputs\.version \}\}"/);
   assert.match(workflow, /pnpm branch:start chore "\$SOURCE_ISSUE"/);
   assert.match(workflow, /Source issue: Closes #\$PR_SOURCE_ISSUE/);
@@ -709,6 +757,9 @@ test('the updater uses a restricted App token for PR events and dispatches runne
   assert.match(workflow, /Wait for exact-head deterministic checks/);
   assert.match(workflow, /steps\.static\.outputs\.checks_ready == 'true'/);
   assert.match(workflow, /--smoke-preflight/);
+  assert.match(workflow, /steps\.reverify-release\.outputs\.verified == 'true'/);
+  assert.ok(workflow.indexOf('--reverify-release-pr') < workflow.indexOf('--smoke-preflight'));
+  assert.ok(workflow.lastIndexOf('--reverify-release-pr') < workflow.indexOf('gh workflow run .github/workflows/harness-architecture-review.yml'));
   assert.doesNotMatch(workflow, /gh run list .*self-hosted-runner-smoke/);
   assert.match(smokeWorkflow, /run-name: Self-hosted runner smoke \(codex=\$\{\{ inputs\.codex \}\}\)/);
   assert.doesNotMatch(workflow, /Repository Actions setting must permit this workflow token/);

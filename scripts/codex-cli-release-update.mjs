@@ -17,7 +17,7 @@ import {
   verifyReviewCheckRunProducers,
 } from './lib/pull-request-check-readiness.mjs';
 import { getNativeIssueType } from './lib/github-native-issue-type.mjs';
-import { RELEASE } from './setup-runner-codex.mjs';
+import { packageTreeSha256FromArchive, RELEASE } from './setup-runner-codex.mjs';
 
 export { adrQualityWorkflowAppliesToFiles, reviewCheckReadiness } from './lib/pull-request-check-readiness.mjs';
 
@@ -276,7 +276,7 @@ export async function listSearchIssues(query, token, fetchImpl = globalThis.fetc
   throw new Error(`GitHub issue search exceeds the supported ${MAX_GITHUB_SEARCH_PAGES}-page bound; no release source issue will be created.`);
 }
 
-export async function verifyDownload(candidate, fetchImpl = globalThis.fetch) {
+export async function verifyDownload(candidate, fetchImpl = globalThis.fetch, digestArchive = packageTreeSha256FromArchive) {
   const response = await fetchImpl(candidate.url, { signal: AbortSignal.timeout(120_000), redirect: 'follow' });
   if (!response.ok) throw new Error(`Codex release asset download failed (HTTP ${response.status}).`);
   const finalHost = new URL(response.url).hostname;
@@ -289,6 +289,11 @@ export async function verifyDownload(candidate, fetchImpl = globalThis.fetch) {
   }
   const actual = createHash('sha256').update(bytes).digest('hex');
   if (actual !== candidate.sha256) throw new Error('Codex release asset did not match the official SHA-256 digest.');
+  const packageTreeSha256 = await digestArchive(bytes);
+  if (!/^[a-f0-9]{64}$/.test(packageTreeSha256 ?? '')) {
+    throw new Error('Verified Codex package did not produce a valid installed-package digest.');
+  }
+  return packageTreeSha256;
 }
 
 async function appendOutput(name, value) {
@@ -379,7 +384,8 @@ function sourceIssueMarker(version) {
 }
 
 function checkedStoredCandidate(candidate) {
-  if (!candidate || typeof candidate !== 'object') return null;
+  if (!candidate || typeof candidate !== 'object'
+    || !/^[a-f0-9]{64}$/.test(candidate.packageTreeSha256 ?? '')) return null;
   const verified = checkedRelease({
     draft: false,
     prerelease: false,
@@ -393,7 +399,7 @@ function checkedStoredCandidate(candidate) {
   }, RELEASE.version);
   if (!verified || ['version', 'tag', 'url', 'sha256', 'releaseUrl', 'assetName', 'assetSize']
     .some((key) => verified[key] !== candidate[key])) return null;
-  return verified;
+  return verified ? { ...verified, packageTreeSha256: candidate.packageTreeSha256 } : null;
 }
 
 function sourceIssueBody(candidate, repository) {
@@ -407,11 +413,11 @@ function sourceIssueBody(candidate, repository) {
     '',
     '## Context',
     '',
-    `This release-specific task follows the ongoing runner maintenance policy in issue #70. The weekly updater verified the official release metadata and Linux x64 asset digest before opening this issue.`,
+    `This release-specific task follows the ongoing runner maintenance policy in issue #70. The weekly updater verified the official release metadata, Linux x64 asset digest, and extracted package-tree digest before opening this issue.`,
     '',
     '## Acceptance criteria',
     '',
-    '- The pull request updates the single central CLI version, official asset URL, and SHA-256 digest.',
+    '- The pull request updates the central CLI version, official asset URL and archive SHA-256, and extracted package-tree SHA-256.',
     '- The exact candidate passes ChatGPT authentication, Plan mode, sandbox isolation, quota, and configured model-effort checks without a model turn before semantic review.',
     '- Delivery-quality, ADR-quality, pull-request body, and Harness review checks are recorded on the exact pull-request head.',
     '- The pull request remains open for human review and closes this release-specific issue only when merged.',
@@ -421,6 +427,7 @@ function sourceIssueBody(candidate, repository) {
     `- Ongoing runner maintenance and model-profile policy: [issue #70](${repositoryUrl}/issues/70).`,
     `- Official Codex release: [${candidate.version}](${candidate.releaseUrl}).`,
     `- Verified Linux x64 asset SHA-256: \`${candidate.sha256}\`.`,
+    `- Verified Linux x64 package-tree SHA-256: \`${candidate.packageTreeSha256}\`.`,
   ].join('\n');
 }
 
@@ -472,8 +479,9 @@ export async function resolveSourceIssue({
       version: candidate.version,
       releaseUrl: candidate.releaseUrl,
       sha256: candidate.sha256,
+      packageTreeSha256: candidate.packageTreeSha256,
     })) {
-      throw new Error(`Open Codex CLI source Task #${issue.number} does not record the verified release URL and SHA-256 digest for ${candidate.version}.`);
+      throw new Error(`Open Codex CLI source Task #${issue.number} does not record the verified release URL, SHA-256, and package-tree digest for ${candidate.version}.`);
     }
     return { number: issue.number, url: issue.html_url, title, created: false };
   }
@@ -555,7 +563,8 @@ export async function verifyReusableUpdatePullRequest({
     || releaseIdentity.issueNumber !== Number(pending.issueNumber)
     || releaseIdentity.version !== candidate.version
     || releaseIdentity.releaseUrl !== candidate.releaseUrl
-    || releaseIdentity.sha256 !== candidate.sha256) {
+    || releaseIdentity.sha256 !== candidate.sha256
+    || releaseIdentity.packageTreeSha256 !== candidate.packageTreeSha256) {
     throw new Error(`Open Codex CLI update pull request #${pending.pullRequest.number} does not match the registered updater, candidate release, or source issue; no runner smoke will be dispatched.`);
   }
 
@@ -582,6 +591,36 @@ export async function verifyReusableUpdatePullRequest({
   return { pullRequest, issueNumber: releaseIdentity.issueNumber };
 }
 
+export async function reverifyReleasePullRequest({
+  pullRequestNumber,
+  branch,
+  expectedSha,
+  issueNumber,
+  candidate,
+  repository,
+  token,
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  if (!Number.isSafeInteger(pullRequestNumber) || pullRequestNumber < 1
+    || !Number.isSafeInteger(Number(issueNumber)) || Number(issueNumber) < 1
+    || !/^[0-9a-f]{40}$/.test(expectedSha ?? '')
+    || typeof branch !== 'string') {
+    throw new Error('An exact updater PR number, branch, head SHA, and source Task issue are required for release re-verification.');
+  }
+  return verifyReusableUpdatePullRequest({
+    pending: {
+      sameCandidate: true,
+      pullRequest: { number: pullRequestNumber, head: { sha: expectedSha } },
+      branch,
+      issueNumber: String(issueNumber),
+    },
+    candidate,
+    repository,
+    token,
+    fetchImpl,
+  });
+}
+
 async function checkRelease() {
   const token = process.env.GH_TOKEN;
   const candidatePath = process.env.CODEX_RELEASE_CANDIDATE_PATH;
@@ -593,12 +632,14 @@ async function checkRelease() {
     process.stdout.write(`Pinned Codex CLI ${RELEASE.version} is current; no model turn was started.\n`);
     return;
   }
-  await verifyDownload(candidate, globalThis.fetch);
-  await writeFile(candidatePath, `${JSON.stringify(candidate, null, 2)}\n`, { mode: 0o600 });
+  const packageTreeSha256 = await verifyDownload(candidate, globalThis.fetch);
+  const verifiedCandidate = { ...candidate, packageTreeSha256 };
+  await writeFile(candidatePath, `${JSON.stringify(verifiedCandidate, null, 2)}\n`, { mode: 0o600 });
   await appendOutput('update', 'true');
   await appendOutput('version', candidate.version);
   await appendOutput('slug', candidate.version.replaceAll('.', '-'));
   await appendOutput('sha256', candidate.sha256);
+  await appendOutput('package_tree_sha256', packageTreeSha256);
   process.stdout.write(`Verified official Codex ${candidate.version} Linux x64 release asset; no model turn was started.\n`);
 }
 
@@ -717,6 +758,29 @@ async function runCodexSmokePreflight() {
   });
 }
 
+async function reverifyWorkflowPullRequest() {
+  const token = process.env.GH_TOKEN;
+  const repository = process.env.GITHUB_REPOSITORY;
+  const candidatePath = process.env.CODEX_RELEASE_CANDIDATE_PATH;
+  const candidate = candidatePath
+    ? checkedStoredCandidate(JSON.parse(await readFile(candidatePath, 'utf8')))
+    : null;
+  if (!token || !repository || !candidate) {
+    throw new Error('GH_TOKEN, GITHUB_REPOSITORY, and a verified release candidate are required before dispatch.');
+  }
+  const result = await reverifyReleasePullRequest({
+    pullRequestNumber: Number(process.env.PR_NUMBER),
+    branch: process.env.PR_BRANCH,
+    expectedSha: process.env.EXPECTED_SHA,
+    issueNumber: Number(process.env.SOURCE_ISSUE_NUMBER),
+    candidate,
+    repository,
+    token,
+  });
+  await appendOutput('verified', 'true');
+  process.stdout.write(`Re-verified pull request #${result.pullRequest.number} and release Task #${result.issueNumber} against Codex CLI ${candidate.version} immediately before dispatch.\n`);
+}
+
 async function ensureSourceIssue(candidatePath) {
   const token = process.env.GH_TOKEN;
   const repository = process.env.GITHUB_REPOSITORY;
@@ -731,18 +795,8 @@ async function ensureSourceIssue(candidatePath) {
 
 async function applyRelease(candidatePath) {
   const candidate = JSON.parse(await readFile(candidatePath, 'utf8'));
-  const verified = checkedRelease({
-    draft: false,
-    prerelease: false,
-    tag_name: candidate.tag,
-    assets: [{
-      name: candidate.assetName,
-      browser_download_url: candidate.url,
-      digest: `sha256:${candidate.sha256}`,
-      size: candidate.assetSize,
-    }],
-  }, RELEASE.version);
-  if (!verified || verified.version !== candidate.version || verified.releaseUrl !== candidate.releaseUrl) {
+  const verified = checkedStoredCandidate(candidate);
+  if (!verified) {
     throw new Error('The verified Codex release candidate changed before the pin update.');
   }
 
@@ -751,13 +805,15 @@ async function applyRelease(candidatePath) {
   const versionLine = `version: '${RELEASE.version}'`;
   const urlLine = `url: '${RELEASE.url}'`;
   const digestLine = `sha256: '${RELEASE.sha256}'`;
-  if ([versionLine, urlLine, digestLine].some((line) => current.split(line).length !== 2)) {
+  const packageTreeDigestLine = `packageTreeSha256: '${RELEASE.packageTreeSha256}'`;
+  if ([versionLine, urlLine, digestLine, packageTreeDigestLine].some((line) => current.split(line).length !== 2)) {
     throw new Error('The central Codex pin does not match the release expected by the update workflow.');
   }
   const updated = current
     .replace(versionLine, `version: '${verified.version}'`)
     .replace(urlLine, `url: '${verified.url}'`)
-    .replace(digestLine, `sha256: '${verified.sha256}'`);
+    .replace(digestLine, `sha256: '${verified.sha256}'`)
+    .replace(packageTreeDigestLine, `packageTreeSha256: '${verified.packageTreeSha256}'`);
   await writeFile(setupPath, updated);
 
   const changelogPath = path.resolve('CHANGELOG.md');
@@ -780,9 +836,10 @@ if (isMainModule) {
     else if (process.argv[2] === '--pending-pr' && process.argv.length === 3) await findPendingPullRequest();
     else if (process.argv[2] === '--wait-checks' && process.argv.length === 3) await waitForPullRequestChecks();
     else if (process.argv[2] === '--smoke-preflight' && process.argv.length === 3) await runCodexSmokePreflight();
+    else if (process.argv[2] === '--reverify-release-pr' && process.argv.length === 3) await reverifyWorkflowPullRequest();
     else if (process.argv[2] === '--ensure-source-issue' && process.argv[3]) await ensureSourceIssue(process.argv[3]);
     else if (process.argv[2] === '--apply' && process.argv[3]) await applyRelease(process.argv[3]);
-    else throw new Error('Usage: codex-cli-release-update.mjs --check | --pending-pr | --wait-checks | --smoke-preflight | --ensure-source-issue <candidate-json> | --apply <candidate-json>');
+    else throw new Error('Usage: codex-cli-release-update.mjs --check | --pending-pr | --wait-checks | --smoke-preflight | --reverify-release-pr | --ensure-source-issue <candidate-json> | --apply <candidate-json>');
   } catch (error) {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = 1;

@@ -41,15 +41,24 @@ export function updaterReviewCandidate({ event, repository }) {
   const digestLines = body.split(/\r?\n/).filter((line) => line.startsWith('- Official Linux x64 asset SHA-256: '));
   const digestMatch = digestLines[0]?.match(/^- Official Linux x64 asset SHA-256: `([a-f0-9]{64})`$/);
   if (digestLines.length !== 1 || !digestMatch) return null;
+  const packageTreeLines = body.split(/\r?\n/).filter((line) => line.startsWith('- Verified Linux x64 package-tree SHA-256: '));
+  const packageTreeMatch = packageTreeLines[0]?.match(/^- Verified Linux x64 package-tree SHA-256: `([a-f0-9]{64})`$/);
+  if (packageTreeLines.length !== 1 || !packageTreeMatch) return null;
 
   const expectedSourceLine = `- Source issue: Closes #${issueNumber} — [Task: Update pinned Codex CLI to ${version}](https://github.com/${repository}/issues/${issueNumber})`;
   const sourceLines = body.split(/\r?\n/).filter((line) => line.startsWith('- Source issue:'));
   if (sourceLines.length !== 1 || sourceLines[0] !== expectedSourceLine) return null;
 
-  return { issueNumber, version, releaseUrl, sha256: digestMatch[1] };
+  return {
+    issueNumber,
+    version,
+    releaseUrl,
+    sha256: digestMatch[1],
+    packageTreeSha256: packageTreeMatch[1],
+  };
 }
 
-export function releaseTaskDetailsMatch({ issue, issueNumber, repository, version, releaseUrl, sha256 }) {
+export function releaseTaskDetailsMatch({ issue, issueNumber, repository, version, releaseUrl, sha256, packageTreeSha256 }) {
   if (!issue || issue.number !== issueNumber || issue.pull_request
     || issue.html_url !== `https://github.com/${repository}/issues/${issueNumber}`
     || issue.title !== `Task: Update pinned Codex CLI to ${version}`) return false;
@@ -60,19 +69,24 @@ export function releaseTaskDetailsMatch({ issue, issueNumber, repository, versio
   const expectedReleaseLine = `- Official Codex release: [${version}](${officialReleaseUrl}).`;
   const digestLines = body.split(/\r?\n/).filter((line) => line.startsWith('- Verified Linux x64 asset SHA-256: '));
   const digestMatch = digestLines[0]?.match(/^- Verified Linux x64 asset SHA-256: `([a-f0-9]{64})`\.$/);
+  const packageTreeLines = body.split(/\r?\n/).filter((line) => line.startsWith('- Verified Linux x64 package-tree SHA-256: '));
+  const packageTreeMatch = packageTreeLines[0]?.match(/^- Verified Linux x64 package-tree SHA-256: `([a-f0-9]{64})`\.$/);
   return markerCount(body) === 1
     && body.includes(expectedMarker)
     && releaseLines.length === 1
     && releaseLines[0] === expectedReleaseLine
     && digestLines.length === 1
     && Boolean(digestMatch)
-    && (sha256 === undefined || digestMatch[1] === sha256);
+    && (sha256 === undefined || digestMatch[1] === sha256)
+    && packageTreeLines.length === 1
+    && Boolean(packageTreeMatch)
+    && (packageTreeSha256 === undefined || packageTreeMatch[1] === packageTreeSha256);
 }
 
-export function releaseTaskMatches({ issue, nativeIssueType, issueNumber, repository, version, releaseUrl, sha256 }) {
+export function releaseTaskMatches({ issue, nativeIssueType, issueNumber, repository, version, releaseUrl, sha256, packageTreeSha256 }) {
   return nativeIssueType === 'Task'
     && issue?.state === 'open'
-    && releaseTaskDetailsMatch({ issue, issueNumber, repository, version, releaseUrl, sha256 });
+    && releaseTaskDetailsMatch({ issue, issueNumber, repository, version, releaseUrl, sha256, packageTreeSha256 });
 }
 
 export async function classifyUpdaterReview({ event, repository, token, fetchImpl = globalThis.fetch } = {}) {

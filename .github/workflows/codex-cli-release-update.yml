@@ -118,6 +118,7 @@ jobs:
           CODEX_VERSION: ${{ steps.release.outputs.version }}
           CODEX_RELEASE_URL: https://github.com/openai/codex/releases/tag/rust-v${{ steps.release.outputs.version }}
           CODEX_ASSET_SHA256: ${{ steps.release.outputs.sha256 }}
+          CODEX_PACKAGE_TREE_SHA256: ${{ steps.release.outputs.package_tree_sha256 }}
           PR_SOURCE_ISSUE: ${{ steps.source.outputs.issue_number }}
           PR_SOURCE_ISSUE_URL: ${{ steps.source.outputs.issue_url }}
           PR_BRANCH: ${{ steps.push.outputs.branch }}
@@ -146,7 +147,7 @@ jobs:
 
           ## Changes
 
-          - Updated the one central Codex CLI version, Linux x64 package URL, and SHA-256 digest.
+          - Updated the central Codex CLI version, Linux x64 package URL and archive SHA-256, and extracted package-tree SHA-256.
           - Added a curated changelog entry. No runtime `latest` lookup, in-place runner update, or automatic merge was introduced.
 
           ## Verification
@@ -159,6 +160,7 @@ jobs:
 
           - Official release: [$CODEX_VERSION]($CODEX_RELEASE_URL)
           - Official Linux x64 asset SHA-256: `$CODEX_ASSET_SHA256`
+          - Verified Linux x64 package-tree SHA-256: `$CODEX_PACKAGE_TREE_SHA256`
 
           ## Risk and delivery
 
@@ -171,15 +173,15 @@ jobs:
 
           ## Review guidance
 
-          - Review focus: Verify the release tag and digest, central pin, narrowly scoped App token, no-generation runner preflight, automatic checks, and rollback value.
+          - Review focus: Verify the release tag and both digests, central pin, narrowly scoped App token, no-generation runner preflight, automatic checks, and rollback value.
           - Suggested review order: release metadata and pin; runner smoke; delivery-quality and ADR-quality; Harness semantic review.
           - Out of scope: Changing model assignments, quota thresholds, account or billing settings, or merging this pull request.
 
           ## Author checklist
 
-          - [x] The official release metadata, asset URL, size, and SHA-256 digest were verified before this PR was opened.
+          - [x] The official release metadata and archive digest were verified before this PR was opened; the package-tree digest was derived from that verified archive.
           - [x] The release-specific source issue and ongoing policy issue are linked above.
-          - [x] Verification distinguishes the release-artifact digest check from candidate runner and pull-request checks; GitHub shows current check status.
+          - [x] Verification records the release-artifact and installed package-tree digests; GitHub shows current pull-request check status.
           - [x] Security, compatibility, deployment, and rollback effects are documented for review.
           EOF
           gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$PR_BRANCH" --title "$PR_TITLE" --body-file "$RUNNER_TEMP/codex-cli-update-pr.md"
@@ -210,9 +212,22 @@ jobs:
           EXPECTED_SHA: ${{ steps.pending.outputs.head_sha || steps.push.outputs.head_sha }}
         run: node scripts/codex-cli-release-update.mjs --wait-checks
 
+      - name: Re-verify the release PR and Task before runner smoke
+        id: reverify-release
+        if: steps.release.outputs.update == 'true' && steps.pending.outputs.rejected != 'true' && steps.static.outputs.checks_ready == 'true' && ((steps.pending.outputs.pending != 'true') || (steps.pending.outputs.pending == 'true' && steps.pending.outputs.reuse == 'true' && inputs.retry_open_pr))
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CODEX_RELEASE_CANDIDATE_PATH: ${{ runner.temp }}/codex-release-candidate.json
+          PR_NUMBER: ${{ steps.pending.outputs.number || steps.create-pr.outputs.number }}
+          PR_BRANCH: ${{ steps.pending.outputs.branch || steps.create-pr.outputs.branch }}
+          EXPECTED_SHA: ${{ steps.pending.outputs.head_sha || steps.push.outputs.head_sha }}
+          SOURCE_ISSUE_NUMBER: ${{ steps.pending.outputs.issue_number || steps.source.outputs.issue_number }}
+        run: node scripts/codex-cli-release-update.mjs --reverify-release-pr
+
       - name: Dispatch and wait for no-generation runner preflight
         id: smoke
-        if: steps.release.outputs.update == 'true' && steps.pending.outputs.rejected != 'true' && steps.static.outputs.checks_ready == 'true' && ((steps.pending.outputs.pending != 'true') || (steps.pending.outputs.pending == 'true' && steps.pending.outputs.reuse == 'true' && inputs.retry_open_pr))
+        if: steps.release.outputs.update == 'true' && steps.pending.outputs.rejected != 'true' && steps.static.outputs.checks_ready == 'true' && steps.reverify-release.outputs.verified == 'true' && ((steps.pending.outputs.pending != 'true') || (steps.pending.outputs.pending == 'true' && steps.pending.outputs.reuse == 'true' && inputs.retry_open_pr))
         env:
           GH_TOKEN: ${{ github.token }}
           PR_BRANCH: ${{ steps.pending.outputs.branch || steps.create-pr.outputs.branch }}
@@ -220,9 +235,17 @@ jobs:
         run: node scripts/codex-cli-release-update.mjs --smoke-preflight
 
       - name: Dispatch Harness semantic review after preflight passes
-        if: steps.release.outputs.update == 'true' && steps.pending.outputs.rejected != 'true' && steps.static.outputs.checks_ready == 'true' && ((steps.pending.outputs.pending != 'true') || (steps.pending.outputs.pending == 'true' && steps.pending.outputs.reuse == 'true' && inputs.retry_open_pr)) && steps.smoke.outcome == 'success'
+        if: steps.release.outputs.update == 'true' && steps.pending.outputs.rejected != 'true' && steps.static.outputs.checks_ready == 'true' && steps.reverify-release.outputs.verified == 'true' && ((steps.pending.outputs.pending != 'true') || (steps.pending.outputs.pending == 'true' && steps.pending.outputs.reuse == 'true' && inputs.retry_open_pr)) && steps.smoke.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CODEX_RELEASE_CANDIDATE_PATH: ${{ runner.temp }}/codex-release-candidate.json
           PR_NUMBER: ${{ steps.pending.outputs.number || steps.create-pr.outputs.number }}
           PR_BRANCH: ${{ steps.pending.outputs.branch || steps.create-pr.outputs.branch }}
-        run: gh workflow run .github/workflows/harness-architecture-review.yml --repo "$GITHUB_REPOSITORY" --ref "$PR_BRANCH" -f "pull_request_number=$PR_NUMBER"
+          EXPECTED_SHA: ${{ steps.pending.outputs.head_sha || steps.push.outputs.head_sha }}
+          SOURCE_ISSUE_NUMBER: ${{ steps.pending.outputs.issue_number || steps.source.outputs.issue_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/codex-cli-release-update.mjs --reverify-release-pr
+          gh workflow run .github/workflows/harness-architecture-review.yml --repo "$GITHUB_REPOSITORY" --ref "$PR_BRANCH" -f "pull_request_number=$PR_NUMBER"
