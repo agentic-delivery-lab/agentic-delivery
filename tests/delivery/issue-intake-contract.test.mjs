@@ -4,6 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
+import { issueFieldBindingMaskCommands } from '../../scripts/mask-issue-field-bindings.mjs';
 import {
   EXPECTED_ORGANIZATION_ISSUE_FORMS,
   loadOrganizationIssueForms,
@@ -79,6 +80,46 @@ test('trusted intake jobs resolve pnpm from the nested bootstrap manifest', asyn
     assert.ok(setup, `${jobName} sets up its trusted runtime`);
     assert.equal(setup.with['package-json-file'], 'trusted-intake/package.json');
   }
+});
+
+test('organization issue-field bindings use Actions secrets through reusable workflows', async () => {
+  const intake = parseRepositoryYaml(await text('.github/workflows/issue-intake.yml'), 'issue intake workflow');
+  const invocation = parseRepositoryYaml(await text('.github/workflows/agent-invocation.yml'), 'agent invocation workflow');
+  const delivery = parseRepositoryYaml(await text('.github/workflows/codex-delivery.yml'), 'codex delivery workflow');
+  const secretRef = '${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}';
+  const intakeSource = await text('.github/workflows/issue-intake.yml');
+  const deliverySource = await text('.github/workflows/codex-delivery.yml');
+  const classifier = intake.jobs.classify.steps.find((step) => step.name === 'Reason about and validate issue routing');
+  const sourceDelivery = delivery.jobs.deliver.steps.find((step) => step.name === 'Run source issue delivery');
+
+  assert.equal(intake.on.workflow_call.secrets.ISSUE_FIELD_BINDINGS_JSON.required, true);
+  assert.equal(invocation.jobs.intake.secrets.ISSUE_FIELD_BINDINGS_JSON, secretRef);
+  assert.equal(classifier.env.ISSUE_FIELD_BINDINGS_JSON, secretRef);
+  assert.equal(intake.jobs.deliver.secrets.ISSUE_FIELD_BINDINGS_JSON, secretRef);
+  assert.equal(delivery.on.workflow_call.secrets.ISSUE_FIELD_BINDINGS_JSON.required, true);
+  assert.equal(sourceDelivery.env.ISSUE_FIELD_BINDINGS_JSON, secretRef);
+  assert.doesNotMatch(intakeSource, /vars\.ISSUE_FIELD_BINDINGS_JSON/);
+  assert.doesNotMatch(deliverySource, /vars\.ISSUE_FIELD_BINDINGS_JSON/);
+});
+
+test('organization issue-field binding components are masked before each consumer runs', async () => {
+  const intake = parseRepositoryYaml(await text('.github/workflows/issue-intake.yml'), 'issue intake workflow');
+  const delivery = parseRepositoryYaml(await text('.github/workflows/codex-delivery.yml'), 'codex delivery workflow');
+  const intakeSteps = intake.jobs.classify.steps;
+  const deliverySteps = delivery.jobs.deliver.steps;
+  const intakeMask = intakeSteps.findIndex((step) => step.name === 'Mask organization issue-field binding components');
+  const deliveryMask = deliverySteps.findIndex((step) => step.name === 'Mask organization issue-field binding components');
+  const classifier = intakeSteps.findIndex((step) => step.name === 'Reason about and validate issue routing');
+  const sourceDelivery = deliverySteps.findIndex((step) => step.name === 'Run source issue delivery');
+  const secretRef = '${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}';
+
+  assert.ok(intakeMask >= 0 && intakeMask < classifier);
+  assert.ok(deliveryMask >= 0 && deliveryMask < sourceDelivery);
+  assert.equal(intakeSteps[intakeMask].env.ISSUE_FIELD_BINDINGS_JSON, secretRef);
+  assert.equal(deliverySteps[deliveryMask].env.ISSUE_FIELD_BINDINGS_JSON, secretRef);
+  assert.equal(issueFieldBindingMaskCommands(JSON.stringify({ fields: {
+    lifecycle_stage: { id: 'field-id', options: { ready: 'option-id' } },
+  } })), '::add-mask::field-id\n::add-mask::option-id\n');
 });
 
 test('issue events invoke intake and only an authorized route invokes reusable delivery', async () => {

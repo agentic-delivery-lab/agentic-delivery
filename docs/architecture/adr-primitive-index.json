@@ -173,6 +173,7 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "issue-classifier",
+        "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "issue-metadata-contract",
         "issue-metadata-migration",
@@ -297,6 +298,7 @@
         "github-app-token-provider",
         "intake-caller-provenance-guard",
         "intake-participation-policy",
+        "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "organization-metadata-runbook",
         "organization-webhook-ingress",
@@ -351,6 +353,7 @@
         "github-app-token-provider",
         "intake-caller-provenance-guard",
         "intake-participation-policy",
+        "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "organization-metadata-runbook",
         "organization-webhook-ingress",
@@ -406,6 +409,7 @@
         "issue-branch-name-validator",
         "issue-classifier",
         "issue-event-authorization",
+        "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "issue-metadata-contract",
         "issue-metadata-migration",
@@ -820,6 +824,21 @@
         "ADR-0017"
       ],
       "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "issue-field-binding-log-masking",
+      "path": "scripts/mask-issue-field-bindings.mjs",
+      "location": "scripts/mask-issue-field-bindings.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0012",
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },

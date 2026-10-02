@@ -506,6 +506,7 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Security
 
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) stores organization-specific issue-field and option IDs in an Actions repository secret, then masks each runtime ID separately in every consuming job before use.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) fails closed when the central GitHub App installation ID is absent instead of relying on a stale deployment default; tests must provide the verified installation explicitly.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) makes unscoped GitHub App installation tokens an explicit non-production test opt-in; every production token path must provide the originating or controller repository ID.
 - Subscription-only delivery pauses when credit spillover is possible or credit telemetry is unavailable, in addition to the 98-percent usage boundary.

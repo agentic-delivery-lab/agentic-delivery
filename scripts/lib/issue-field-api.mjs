@@ -314,7 +314,7 @@ export function validateOrganizationIssueFields({
  * Bind operator-observed GitHub node IDs to the versioned logical contract.
  * The repository catalog deliberately keeps stable logical IDs so it can be
  * reviewed without organization-specific IDs; Actions may supply this small
- * binding as a repository variable when GitHub has provisioned the fields.
+ * binding as a repository secret after GitHub has provisioned the fields.
  */
 export function bindIssueMetadataConfig(config, bindings = {}) {
   let value = bindings;
