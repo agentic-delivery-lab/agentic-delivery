@@ -83,6 +83,9 @@ they do not authorize migration, alter that issue's scope, or close it.
 - Read-only issue intake now requires the scoped `readOnlyIntake` App token and
   fails closed if its credentials are unavailable. The classify job's workflow
   token has repository read permissions only.
+- Active intake and delivery now require origin-scoped GitHub App credentials
+  in Actions and fail closed instead of falling back to publication or workflow
+  tokens.
 - ADR-0018 and the domain register distinguish participant contract versions
   from controller-wide interfaces, including the GitHub App contract pinned by
   the controller release manifest; the amendment records the alternatives and

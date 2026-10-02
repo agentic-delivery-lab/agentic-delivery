@@ -103,6 +103,10 @@ read-only token selection, and compatibility tracking:
   token; or split classification into separate read-only and active jobs. A
   fallback can inherit issue-write permission from a workflow job, while two
   jobs duplicate routing boundaries that must stay aligned.
+- For active intake and delivery, keep App credentials optional and fall back
+  to a publication or workflow token; or require the origin-scoped App profile
+  and stop when App credentials are unavailable. A fallback can bypass the
+  selected-installation and repository-narrowing boundary.
 - For the App interface, advance only the schema number; or advance a SemVer
   contract version and pin that version from the immutable controller release.
   A schema number alone does not state compatibility across deployed controller
@@ -155,7 +159,9 @@ request write. `repository_ids` continues to restrict repository resources to
 the originating numeric repository. The classify job's workflow token is
 limited to repository reads. A read-only execution requires the
 `readOnlyIntake` App profile; if App credentials are unavailable, intake stops
-without falling back to `PUBLISH_TOKEN` or the workflow token. Controller
+without falling back to `PUBLISH_TOKEN` or the workflow token. Active intake
+and delivery also require their origin-scoped App profiles in GitHub Actions;
+they stop rather than falling back to a publication or workflow token. Controller
 dispatch tokens request only `contents: write`; the App has no organization
 write or administration permission. [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
 tracks this implementation and the read-only canary that must verify it after

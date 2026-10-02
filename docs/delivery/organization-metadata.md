@@ -45,7 +45,9 @@ with their operation-specific repository permissions and narrow each token to
 the originating repository ID for repository resources. The organization
 catalog reads themselves are organization-wide and are not narrowed by that
 repository ID. The controller-only dispatch token requests `Contents: write`
-and no organization permissions.
+and no organization permissions. Active intake and delivery stop in GitHub
+Actions when the App credentials are missing; they do not fall back to
+`PUBLISH_TOKEN` or the workflow token.
 
 The installation permission grant does not prove that a token can read the
 catalog. The versioned contract gives each App token request an explicit

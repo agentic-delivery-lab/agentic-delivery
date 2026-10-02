@@ -34,7 +34,7 @@ async function fixture(t) {
   const workspace = path.join(issueRoot, 'workspace');
   const eventFile = path.join(root, 'event.json');
   await writeFile(eventFile, JSON.stringify({repository:{id:101,full_name:'fixture/repo',owner:{login:'maintainer'}}}));
-  const env = {...process.env, GH_TOKEN:'fixture-token', PUBLISH_TOKEN:'fixture-publish-token', GITHUB_EVENT_PATH:eventFile, RUNNER_WORKSPACE:root,
+  const env = {...process.env, GITHUB_ACTIONS:'false', GH_TOKEN:'fixture-token', PUBLISH_TOKEN:'fixture-publish-token', GITHUB_EVENT_PATH:eventFile, RUNNER_WORKSPACE:root,
     CODEX_DELIVERY_STATE_DIR:stateRoot, GITHUB_REPOSITORY:'fixture/repo', GITHUB_ACTOR:'maintainer', PARTICIPANT_MODE:'active',
     GITHUB_EVENT_NAME:'workflow_call', READ_ONLY_RUN:'false', GITHUB_RUN_ID:'1', SOURCE_ISSUE:'7'};
   const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], publishHeaders:[], pushHeaders:[], accessTokenRequests:[], clients:0, closes:0};
@@ -405,6 +405,17 @@ test('requires the dedicated publication credential before model execution', asy
 
   await assert.rejects(f.run(),/Publication credential/);
   assert.equal(f.calls.clients,0);
+});
+
+test('GitHub Actions delivery refuses publication-token fallbacks when App credentials are missing', async (t) => {
+  const f = await fixture(t);
+  f.env.GITHUB_ACTIONS = 'true';
+
+  await assert.rejects(f.run(), /GitHub Actions delivery requires the organization-installed GitHub App credentials; refusing PUBLISH_TOKEN or GH_TOKEN fallback/);
+  assert.equal(f.calls.accessTokenRequests.length, 0);
+  assert.equal(f.calls.clients, 0);
+  assert.equal(f.calls.turns.length, 0);
+  assert.equal(f.calls.prs.length, 0);
 });
 
 test('rejects delivery execution for a shadow participant before model startup', async (t) => {

@@ -266,6 +266,8 @@ export async function classifyAndRoute({
     originToken = await appProvider.token({ repositoryIds: [env.ORIGIN_REPOSITORY_ID] });
   } else if (readOnlyRun) {
     throw new Error('Read-only intake requires a GitHub App token from the readOnlyIntake profile; refusing PUBLISH_TOKEN or GH_TOKEN fallback.');
+  } else if (env.GITHUB_ACTIONS === 'true') {
+    throw new Error('Active GitHub Actions intake requires an origin-scoped GitHub App token; refusing PUBLISH_TOKEN or GH_TOKEN fallback.');
   } else {
     originToken = env.PUBLISH_TOKEN || env.GH_TOKEN;
   }

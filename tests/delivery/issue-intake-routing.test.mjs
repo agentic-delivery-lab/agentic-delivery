@@ -211,6 +211,33 @@ test('shadow intake fails closed instead of using write-capable token fallbacks 
   assert.equal(fixture.calls.length, 0);
 });
 
+test('active GitHub Actions intake refuses publication-token fallbacks when App credentials are missing', async () => {
+  const origin = 'agentic-delivery-lab/service-a';
+  const fixture = apiFixture({
+    state: 'open', title: 'Task: active routing', body: 'Evaluate this route.',
+    labels: [{ name: 'type:task' }, { name: 'state:requirements' }],
+  }, 'write', [], origin);
+  await assert.rejects(classifyAndRoute({
+    env: {
+      GITHUB_ACTIONS: 'true',
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      ORIGIN_REPOSITORY: origin,
+      ORIGIN_REPOSITORY_ID: '777777777',
+      SOURCE_ISSUE: '17',
+      PUBLISH_TOKEN: 'write-capable-publish-token',
+      GH_TOKEN: 'write-capable-workflow-token',
+      GITHUB_ACTOR: 'maintainer',
+      PARTICIPANT_MODE: 'active',
+      READ_ONLY_RUN: 'false',
+    },
+    event: { action: 'edited', issue: {}, repository: { full_name: origin } },
+    fetchImpl: fixture.fetchImpl,
+    config,
+    reasonRoute: modelRoute('plan', 'task', 'ready-for-plan'),
+  }), /Active GitHub Actions intake requires an origin-scoped GitHub App token; refusing PUBLISH_TOKEN or GH_TOKEN fallback/);
+  assert.equal(fixture.calls.length, 0);
+});
+
 test('shadow participant intake requests read-only origin App permissions', async () => {
   const origin = 'agentic-delivery-lab/service-a';
   const fixture = apiFixture({
