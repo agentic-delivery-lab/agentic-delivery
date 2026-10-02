@@ -23,11 +23,12 @@ participant registry from `bootstrapCommit`. Update the central participant
 pin in one reviewed pull request while retaining the current bootstrap. After
 that pull request merges, use a second reviewed pull request to advance
 `bootstrapCommit` and the matching workflow checkout refs to the first merge
-commit. In that second change, add a post-checkout call to
-`scripts/validate-selected-controller-runtime.mjs` from the updated trusted
-bootstrap. It verifies that the checked-out commit matches the selected
-controller pin and contains the required runtime assets before masking or
-semantic classification. Until the second change merges, intake continues to
+commit. In that second change, run the issue-field masker from the updated
+trusted bootstrap checkout (`working-directory: trusted-intake`) before
+semantic classification. The bootstrap then provides one versioned masker to
+every supported participant pin, preserving compatibility and rollback. The
+workflow contract test should verify that the masker runs from `trusted-intake`
+before classification. Until the second change merges, intake continues to
 resolve the old participant pin.
 
 Incompatible changes use expand/migrate/contract. A security withdrawal may
