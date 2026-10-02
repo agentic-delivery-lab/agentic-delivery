@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"issue-field-binding-log-masking","kind":"script","enforcement":"deterministic","adrs":["ADR-0012","ADR-0018"],"domains":["agentic-delivery-control-plane"]}
+// agentic-primitive: {"id":"issue-field-binding-log-masking","kind":"script","enforcement":"deterministic","adrs":["ADR-0012","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
