@@ -36,7 +36,7 @@ test('the checked-in controller release pins every enrolled participant and requ
   assert.equal(release.$schema, '../schemas/controller-release.v2.schema.json');
   assert.equal(release.version, '0.2.0-draft.45');
   assert.equal(release.commit, 'eed2505edaf4e1f839030697973dcaaf0c1b1bea');
-  assert.equal(release.bootstrapCommit, 'a5f92943ce0407f5c6e53edd4360bca06df58576');
+  assert.equal(release.bootstrapCommit, 'e0b2f0719e00ac49aaab305ea10065c5f5197cb1');
   assert.equal(release.githubAppContractVersion, '2.0.0');
   assert.equal(release.compatibility.githubAppContractVersion, '2.0.0');
   assert.deepEqual(release.support.githubAppContractVersions, ['2.0.0']);
@@ -74,7 +74,7 @@ test('the checked-in controller release pins every enrolled participant and requ
   }), true);
 });
 
-test('controller release validation rejects a primary release pin missing the intake masker', async (t) => {
+test('controller release validation rejects release and bootstrap pins missing the intake masker', async (t) => {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-release-masker-'));
   t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
   await execFileAsync('git', ['clone', '--quiet', '--shared', '--no-checkout', repositoryRoot, temporaryRoot], { encoding: 'utf8' });
@@ -90,6 +90,14 @@ test('controller release validation rejects a primary release pin missing the in
   await assert.rejects(
     validateReleaseManifest({ repositoryRoot: temporaryRoot }),
     /missing required runtime file scripts\/mask-issue-field-bindings\.mjs/,
+  );
+
+  release.commit = 'eed2505edaf4e1f839030697973dcaaf0c1b1bea';
+  release.bootstrapCommit = 'a5f92943ce0407f5c6e53edd4360bca06df58576';
+  await writeFile(releasePath, `${JSON.stringify(release, null, 2)}\n`, 'utf8');
+  await assert.rejects(
+    validateReleaseManifest({ repositoryRoot: temporaryRoot }),
+    /bootstrap commit .* is missing required runtime file scripts\/mask-issue-field-bindings\.mjs/,
   );
 });
 

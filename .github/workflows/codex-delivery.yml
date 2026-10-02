@@ -108,7 +108,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           # Bootstrap pin: config/controller-release.json bootstrapCommit.
-          ref: a5f92943ce0407f5c6e53edd4360bca06df58576
+          ref: e0b2f0719e00ac49aaab305ea10065c5f5197cb1
           path: trusted-bootstrap
           persist-credentials: false
 
@@ -182,10 +182,19 @@ jobs:
       - name: Install trusted controller dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Check out trusted issue-field masker
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # Bootstrap pin: config/controller-release.json bootstrapCommit.
+          ref: e0b2f0719e00ac49aaab305ea10065c5f5197cb1
+          path: trusted-bootstrap
+          persist-credentials: false
+
       - name: Mask organization issue-field binding components
         env:
           ISSUE_FIELD_BINDINGS_JSON: ${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}
         run: node scripts/mask-issue-field-bindings.mjs
+        working-directory: trusted-bootstrap
 
       - name: Run source issue delivery
         env:

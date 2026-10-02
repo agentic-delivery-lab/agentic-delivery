@@ -107,16 +107,26 @@ test('organization issue-field binding components are masked before each consume
   const delivery = parseRepositoryYaml(await text('.github/workflows/codex-delivery.yml'), 'codex delivery workflow');
   const intakeSteps = intake.jobs.classify.steps;
   const deliverySteps = delivery.jobs.deliver.steps;
+  const release = JSON.parse(await text('config/controller-release.json'));
   const intakeMask = intakeSteps.findIndex((step) => step.name === 'Mask organization issue-field binding components');
   const deliveryMask = deliverySteps.findIndex((step) => step.name === 'Mask organization issue-field binding components');
+  const intakeBootstrap = intakeSteps.findIndex((step) => step.name === 'Check out trusted intake');
+  const deliveryBootstrap = deliverySteps.findIndex((step) => step.name === 'Check out trusted issue-field masker');
   const classifier = intakeSteps.findIndex((step) => step.name === 'Reason about and validate issue routing');
   const sourceDelivery = deliverySteps.findIndex((step) => step.name === 'Run source issue delivery');
   const secretRef = '${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}';
 
+  assert.ok(intakeBootstrap >= 0 && intakeBootstrap < intakeMask);
   assert.ok(intakeMask >= 0 && intakeMask < classifier);
+  assert.ok(deliveryBootstrap >= 0 && deliveryBootstrap < deliveryMask);
   assert.ok(deliveryMask >= 0 && deliveryMask < sourceDelivery);
   assert.equal(intakeSteps[intakeMask].env.ISSUE_FIELD_BINDINGS_JSON, secretRef);
   assert.equal(deliverySteps[deliveryMask].env.ISSUE_FIELD_BINDINGS_JSON, secretRef);
+  assert.equal(intakeSteps[intakeMask]['working-directory'], 'trusted-intake');
+  assert.equal(deliverySteps[deliveryMask]['working-directory'], 'trusted-bootstrap');
+  assert.equal(intakeSteps[intakeBootstrap].with.ref, release.bootstrapCommit);
+  assert.equal(deliverySteps[deliveryBootstrap].with.path, 'trusted-bootstrap');
+  assert.equal(deliverySteps[deliveryBootstrap].with.ref, release.bootstrapCommit);
   assert.equal(issueFieldBindingMaskCommands(JSON.stringify({ fields: {
     lifecycle_stage: { id: 'field-id', options: { ready: 'option-id' } },
   } })), '::add-mask::field-id\n::add-mask::option-id\n');
@@ -148,7 +158,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.match(intakeSource, /steps\.invocation\.outputs\.controller_commit \|\| steps\.participant\.outputs\.controller_commit/);
   assert.doesNotMatch(intakeSource, /inputs\.controller_commit|github\.event\.client_payload\.controller/);
   assert.match(intakeSource, /Check out the validated controller release/);
-  assert.match(intakeSource, /ref: a5f92943ce0407f5c6e53edd4360bca06df58576/);
+  assert.match(intakeSource, /ref: e0b2f0719e00ac49aaab305ea10065c5f5197cb1/);
   assert.doesNotMatch(intakeSource, /ref: main/);
   assert.ok(intakeSource.indexOf('Validate and normalize explicit agent invocation')
     < intakeSource.indexOf('Check out the validated controller release'));
@@ -280,7 +290,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   const manualBootstrap = resolver.steps.find((step) => step.name === 'Check out trusted participant registry bootstrap');
   assert.equal(manualBootstrap.if, undefined);
   assert.equal(manualBootstrap.with.path, 'trusted-bootstrap');
-  assert.equal(manualBootstrap.with.ref, 'a5f92943ce0407f5c6e53edd4360bca06df58576');
+  assert.equal(manualBootstrap.with.ref, 'e0b2f0719e00ac49aaab305ea10065c5f5197cb1');
   const participantPolicy = resolver.steps.find((step) => step.name === 'Resolve caller and participant policy from trusted inputs');
   assert.equal(participantPolicy.id, 'participant-policy');
   assert.equal(participantPolicy.env.CALLER_WORKFLOW_REF, '${{ github.workflow_ref }}');
