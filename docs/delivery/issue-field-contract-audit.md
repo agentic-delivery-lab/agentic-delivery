@@ -168,17 +168,20 @@ repositories.
 
 Invalid-option and missing-target controller checks were also run. Both were
 rejected before a GraphQL mutation call (`graphqlCalls: 0`). The shadow canary
-separately confirmed that issues missing an Issue Type or Lifecycle Stage stay
-held and do not start delivery.
+returned `hold`, skipped delivery, and left #62 unchanged. Because its GPT-6
+turn failed without a recorded cause, this run does not establish whether the
+missing issue metadata caused the hold.
 
 The live write probe used the maintainer's GitHub CLI credential through the
-deterministic migration controller; it did not use a GitHub App token. This
-proves the controller's validated write and exact rollback against both
-repository identities, but it does not prove App-scoped writes or App-token
-event delivery from `.github`. The GitHub App proof currently covers the
-central read path only. The initial REST snapshots and post-rollback responses
-share the same digest because all four returned `[]`; the restricted evidence
-index records each source file hash.
+deterministic migration controller; it did not use a GitHub App token. The
+maintainer's restricted records report the controller writes, independent REST
+reads, and exact restoration against both repository identities. Reviewers
+cannot independently verify those responses from this public report. This
+probe does not establish App-scoped writes or App-token event delivery from
+`.github`. The GitHub App evidence currently covers the central read path only.
+The initial REST snapshots and post-rollback responses share the same digest
+because all four returned `[]`; the restricted evidence index records each
+source file hash.
 
 ## Deferred proof and dependencies
 

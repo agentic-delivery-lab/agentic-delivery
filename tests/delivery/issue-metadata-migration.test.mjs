@@ -39,6 +39,57 @@ function liveBindings() {
   };
 }
 
+async function assertMigrationReadbackRejected({ issueNumber, transformObservedFields }) {
+  const issue = { id: `I_${issueNumber}`, number: issueNumber, state: 'OPEN', title: 'Disposable', body: '', issueType: null, parent: null, subIssues: { nodes: [] } };
+  const observedFields = [];
+  const restCalls = [];
+  let fieldMutationCalls = 0;
+  const graphql = async (query, variables) => {
+    if (query.includes('setIssueFieldValue')) {
+      fieldMutationCalls += 1;
+      const writtenValues = variables.input.issueFields.map((input) => {
+        const field = liveCatalog().find((candidate) => candidate.id === input.fieldId);
+        const option = field.options.find((candidate) => candidate.id === input.singleSelectOptionId);
+        return {
+          id: `value-${field.id}`,
+          name: option.name,
+          value: option.name,
+          optionId: option.id,
+          field: { id: field.id, name: field.name, dataType: field.dataType },
+        };
+      });
+      observedFields.push(...transformObservedFields(writtenValues));
+      return { setIssueFieldValue: { issue: { id: issue.id } } };
+    }
+    return {
+      repository: { issue: { ...issue, issueFieldValues: { nodes: observedFields } } },
+      organization: {
+        issueTypes: { nodes: liveIssueTypes() },
+        issueFields: { nodes: liveCatalog() },
+        pinnedIssueFields: { nodes: liveCatalog() },
+      },
+    };
+  };
+
+  await assert.rejects(() => runMigration({
+    env: {
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      GH_TOKEN: 'test-token',
+      ISSUE_FIELD_BINDINGS_JSON: JSON.stringify(liveBindings()),
+    },
+    argv: ['node', 'scripts/migrate-issue-metadata.mjs', '--apply', '--issue', String(issue.number)],
+    root,
+    fetchImpl: async (url, init = {}) => {
+      restCalls.push({ url: String(url), method: init.method ?? 'GET' });
+      return { ok: true, status: 200, json: async () => ({ ...issue, state: 'open', labels: [{ name: 'state:needs-triage' }] }) };
+    },
+    graphqlImpl: graphql,
+  }), /Issue fields were not observed after migration\./);
+
+  assert.equal(fieldMutationCalls, 1);
+  assert.ok(restCalls.every(({ url, method }) => !(method === 'PUT' && url.endsWith('/labels'))));
+}
+
 test('migration manifests preserve the four separate metadata concepts', () => {
   const manifest = organizationMetadataManifest(config);
   assert.equal(manifest.organization, 'agentic-delivery-lab');
@@ -250,90 +301,25 @@ test('migration verifies field writes using the bound runtime field IDs', async 
   assert.equal(observed.readiness, 'not-ready');
 });
 
-test('migration requires observed fields when a legacy label matches the target values', async () => {
-  const issue = { id: 'I_16', number: 16, state: 'OPEN', title: 'Disposable', body: '', issueType: null, parent: null, subIssues: { nodes: [] } };
-  const restCalls = [];
-  let fieldMutationCalls = 0;
-  const graphql = async (query) => {
-    if (query.includes('setIssueFieldValue')) {
-      fieldMutationCalls += 1;
-      return { setIssueFieldValue: { issue: { id: issue.id } } };
-    }
-    return {
-      repository: { issue: { ...issue, issueFieldValues: { nodes: [] } } },
-      organization: {
-        issueTypes: { nodes: liveIssueTypes() },
-        issueFields: { nodes: liveCatalog() },
-        pinnedIssueFields: { nodes: liveCatalog() },
-      },
-    };
-  };
+test('migration rejects legacy fallback values when both fields are absent', () => assertMigrationReadbackRejected({
+  issueNumber: 16,
+  transformObservedFields: () => [],
+}));
 
-  await assert.rejects(() => runMigration({
-    env: {
-      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
-      GH_TOKEN: 'test-token',
-      ISSUE_FIELD_BINDINGS_JSON: JSON.stringify(liveBindings()),
-    },
-    argv: ['node', 'scripts/migrate-issue-metadata.mjs', '--apply', '--issue', String(issue.number)],
-    root,
-    fetchImpl: async (url, init = {}) => {
-      restCalls.push({ url: String(url), method: init.method ?? 'GET' });
-      return { ok: true, status: 200, json: async () => ({ ...issue, state: 'open', labels: [{ name: 'state:needs-triage' }] }) };
-    },
-    graphqlImpl: graphql,
-  }), /Issue fields were not observed after migration\./);
+test('migration rejects readback when one required field is absent', () => assertMigrationReadbackRejected({
+  issueNumber: 17,
+  transformObservedFields: (fields) => fields.filter((field) => field.field.name !== 'Lifecycle Stage'),
+}));
 
-  assert.equal(fieldMutationCalls, 1);
-  assert.ok(restCalls.every(({ url, method }) => !(method === 'PUT' && url.endsWith('/labels'))));
-});
+test('migration rejects field values attached to the wrong live field IDs', () => assertMigrationReadbackRejected({
+  issueNumber: 18,
+  transformObservedFields: (fields) => fields.map((field) => ({
+    ...field,
+    field: { ...field.field, id: `wrong-${field.field.id}` },
+  })),
+}));
 
-test('migration rejects the expected field name when its live option ID is wrong', async () => {
-  const issue = { id: 'I_17', number: 17, state: 'OPEN', title: 'Disposable', body: '', issueType: null, parent: null, subIssues: { nodes: [] } };
-  const fields = [];
-  const restCalls = [];
-  let fieldMutationCalls = 0;
-  const graphql = async (query, variables) => {
-    if (query.includes('setIssueFieldValue')) {
-      fieldMutationCalls += 1;
-      for (const input of variables.input.issueFields) {
-        const field = liveCatalog().find((candidate) => candidate.id === input.fieldId);
-        const option = field.options.find((candidate) => candidate.id === input.singleSelectOptionId);
-        fields.push({
-          id: `value-${field.id}`,
-          name: option.name,
-          value: option.name,
-          optionId: `wrong-${option.id}`,
-          field: { id: field.id, name: field.name, dataType: field.dataType },
-        });
-      }
-      return { setIssueFieldValue: { issue: { id: issue.id } } };
-    }
-    return {
-      repository: { issue: { ...issue, issueFieldValues: { nodes: fields } } },
-      organization: {
-        issueTypes: { nodes: liveIssueTypes() },
-        issueFields: { nodes: liveCatalog() },
-        pinnedIssueFields: { nodes: liveCatalog() },
-      },
-    };
-  };
-
-  await assert.rejects(() => runMigration({
-    env: {
-      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
-      GH_TOKEN: 'test-token',
-      ISSUE_FIELD_BINDINGS_JSON: JSON.stringify(liveBindings()),
-    },
-    argv: ['node', 'scripts/migrate-issue-metadata.mjs', '--apply', '--issue', String(issue.number)],
-    root,
-    fetchImpl: async (url, init = {}) => {
-      restCalls.push({ url: String(url), method: init.method ?? 'GET' });
-      return { ok: true, status: 200, json: async () => ({ ...issue, state: 'open', labels: [{ name: 'state:needs-triage' }] }) };
-    },
-    graphqlImpl: graphql,
-  }), /Issue fields were not observed after migration\./);
-
-  assert.equal(fieldMutationCalls, 1);
-  assert.ok(restCalls.every(({ url, method }) => !(method === 'PUT' && url.endsWith('/labels'))));
-});
+test('migration rejects the expected field name when its live option ID is wrong', () => assertMigrationReadbackRejected({
+  issueNumber: 19,
+  transformObservedFields: (fields) => fields.map((field) => ({ ...field, optionId: `wrong-${field.optionId}` })),
+}));
