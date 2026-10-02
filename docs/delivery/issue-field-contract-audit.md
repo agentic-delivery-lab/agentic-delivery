@@ -102,17 +102,14 @@ report.
   issue's native type and field values along with the organization catalogs.
   Field writes remain behind the deterministic controller.
 - The maintainer session has `repo`, `read:org`, and `workflow` scopes; it does
-  not have `admin:org`. No write request was made.
+  not have `admin:org`. No write request was made during this 2026-09-25 audit.
 - At the time of this audit, the installed Agentic Delivery Lab App reported
   repository permissions including `issues:write`, but no Organization
   `Issue Fields` read permission. The organization later approved `Issue
   Fields: read` and `Issue Types: read`; issue #66 records that grant and adds
   both permissions to the versioned App contract and origin-token requests.
-  This code change does not by itself prove the runtime read path. The live
-  pinning query above used the maintainer session, not the App token. A normal
-  read-only intake of canary issue #62 must still confirm that the pinned
-  fields, Issue Types, and issue values are readable without an access error
-  and that no issue-field value changes.
+  At the time of this audit, the live pinning query used the maintainer session,
+  not the App token. The canary result below records the subsequent runtime read.
 
 The repository now reads live type pins and no-type pins in the shared query
 and validates them before intake routing, delivery, or metadata migration can
@@ -121,13 +118,72 @@ delivery and metadata migration abort with an error before any issue-field
 write. These callers do not convert that failure into an explicit held route
 or update the issue's Delivery State.
 
-This report is a redacted operator record, not a retained raw-response artifact
-or immutable response digest. The listed query can be rerun by an authorized
-organization reader, but a reviewer cannot independently reproduce the exact
-field/option identity comparison or the issue-value reads from this public file
-alone. Keep the raw, Organization-only responses in an approved restricted
-evidence store if later acceptance requires that level of reproduction; do not
-publish those responses in this repository.
+This report is redacted. The 2026-10-02 maintainer-token catalog response and
+the complete test snapshots are retained in a maintainer-only local evidence
+store. The evidence index has SHA-256
+`03bd8fdcc2a029e0a1affb270ee95d0ca04b295796fbd978c40654376452ef8a`; the raw
+Organization-only responses are not committed to this public repository. A
+reviewer cannot download those restricted files from the PR, so the public
+record remains digest-only. The Actions log proves the central App-token read,
+but its raw GraphQL response was not retained.
+
+## Runtime and controlled write evidence — 2026-10-02
+
+The normal central `issues.edited` intake ran after PR #72 merged at
+`001b0673a80197f27cd95d0d30a148a9fa3e567b`. [Actions run
+37008188017](https://github.com/agentic-delivery-lab/agentic-delivery/actions/runs/37008188017)
+used the registered `shadow` participant and read-only run policy. The hosted
+authorization and self-hosted classification jobs passed. The trusted
+`pnpm/setup` action read `trusted-intake/package.json` and installed pnpm
+12.3.4. The App-token classifier passed the fail-closed organization field,
+Issue Type, and pinning validation and reached semantic routing without a
+metadata permission error.
+
+Issue #62 had no native Issue Type or issue-field values before or after the
+canary (`issueType: null`, `issueFieldValues: []`). The result was `hold` and
+the delivery job was skipped. The GPT-6 routing turn ended with status
+`failed`; the run contains no underlying failure reason. This establishes the
+central App metadata read and read-only behavior, but not a successful
+semantic-routing turn or the `.github` App-event path.
+
+The deterministic `migrate-issue-metadata.mjs --apply` controller was then used
+for one controlled write on each designated disposable issue: central #62 and
+public adapter `.github` #11. The controller wrote the two configured
+single-select fields to their deterministic migration defaults. An independent
+REST read observed both values in each repository. The complete before
+snapshots were empty arrays; the documented `PUT` endpoint restored those full
+snapshots, and a second REST read returned `[]` for both issues. Both issue
+types remained unset. No organization field definitions, options, pins,
+production issues, or participant modes changed.
+
+The first migration attempt exposed a controller verification bug: it wrote the
+fields, then resolved the GraphQL values against the unbound logical config
+instead of the live field IDs. The controller therefore reported a failed
+readback even though the REST API showed both values. The values were restored
+immediately and verified as `[]`. The regression tests reproduce the failure
+caused by resolving live IDs against the logical config, reject the expected
+option name when its live option ID differs, and ensure a matching legacy label
+cannot stand in for an observed issue-field value. The fix binds the observed
+field and option IDs and requires both fields to be present before readback
+succeeds; the second live write/read/restore cycle succeeded in both
+repositories.
+
+Invalid-option and missing-target controller checks were also run. Both were
+rejected before a GraphQL mutation call (`graphqlCalls: 0`). The shadow canary
+returned `hold`, skipped delivery, and left #62 unchanged. Because its GPT-6
+turn failed without a recorded cause, this run does not establish whether the
+missing issue metadata caused the hold.
+
+The live write probe used the maintainer's GitHub CLI credential through the
+deterministic migration controller; it did not use a GitHub App token. The
+maintainer's restricted records report the controller writes, independent REST
+reads, and exact restoration against both repository identities. Reviewers
+cannot independently verify those responses from this public report. This
+probe does not establish App-scoped writes or App-token event delivery from
+`.github`. The GitHub App evidence currently covers the central read path only.
+The initial REST snapshots and post-rollback responses share the same digest
+because all four returned `[]`; the restricted evidence index records each
+source file hash.
 
 ## Public Actions log remediation — 2026-10-02
 
@@ -147,18 +203,18 @@ read-only run confirms that the bindings do not appear in logs.
 
 ## Deferred proof and dependencies
 
-The audit itself did not authorize changes to organization settings or issue
-values. No issue-field value was written, changed, or cleared during the audit.
-The organization later approved the two read permissions, tracked in issue #66.
-Runtime verification with the updated immutable controller pin remains
-outstanding. Controlled write and rollback evidence on test issues in two
-repositories is still outstanding as separate work.
+The original 2026-09-25 audit made no issue-field writes. The later test writes
+above were explicitly limited to canary #62 and `.github` #11 and both exact
+empty snapshots were restored. The live test used maintainer credentials, so an
+App-token event/read path for `.github` remains open; the current webhook replay
+adapter work is tracked separately in issue #64. The normal central intake's
+GPT-6 turn failure also remains unexplained and needs diagnostic evidence before
+claiming successful semantic routing.
 
-After review and explicit operator authorization,
-use dedicated test issues, record the before and after responses, test invalid
-and missing values, and restore the original values. Do not use an empty
-replacement array when other field values must be retained; GitHub documents
-that operation as clearing all existing field values.
+The GitHub `PUT /repos/{owner}/{repo}/issues/{issue_number}/issue-field-values`
+endpoint replaces the complete field-value set. It was used only because both
+recorded before snapshots were empty; do not use an empty replacement array
+when other field values must be retained.
 
 Architecture PR #4 is merged, but the Architecture Authority repository
 currently has no GitHub release or tag. The latest content remains a draft, so

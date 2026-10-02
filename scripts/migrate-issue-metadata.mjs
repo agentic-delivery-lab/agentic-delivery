@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadLifecycleConfig, githubApi } from './issue-intake.mjs';
-import { githubGraphqlApi, readIssueControlPlane } from './lib/issue-field-api.mjs';
+import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane } from './lib/issue-field-api.mjs';
 import { applyIssueMetadataMigration, organizationMetadataManifest, planIssueMetadataMigration } from './lib/issue-metadata-migration.mjs';
 import { issueMetadata, issueTypes } from './lib/issue-metadata.mjs';
 
@@ -48,6 +48,20 @@ async function verifyEventually(verify, attempts = 4) {
   throw lastError;
 }
 
+function boundFieldOption(config, fieldKey, logicalOptionId) {
+  const field = config?.fields?.[fieldKey];
+  const option = field?.options?.find((candidate) => candidate.id === logicalOptionId);
+  return {
+    fieldId: field?.runtime_id ?? field?.github_id ?? null,
+    optionId: option?.runtime_id ?? option?.github_id ?? null,
+  };
+}
+
+function observedFieldOptionId(issue, fieldId) {
+  const values = issue?.issueFieldValues?.nodes ?? issue?.issueFieldValues ?? [];
+  return values.find((value) => value?.field?.id === fieldId)?.optionId ?? null;
+}
+
 export async function runMigration({ env = process.env, argv = process.argv, root = repositoryRoot, fetchImpl = fetch, graphqlImpl } = {}) {
   const options = args(argv);
   const config = await loadLifecycleConfig(root);
@@ -56,6 +70,7 @@ export async function runMigration({ env = process.env, argv = process.argv, roo
   if (!/^[^/\s]+\/[^/\s]+$/.test(repository ?? '') || !env.GH_TOKEN) throw new Error('GITHUB_REPOSITORY and GH_TOKEN are required.');
   const issueNumber = requireIssue(options.issue);
   const runtimeBindings = bindings(env);
+  const boundConfig = bindIssueMetadataConfig(config, runtimeBindings);
   const api = githubApi({ repository, token: env.GH_TOKEN, fetchImpl });
   const restIssue = await api(`/issues/${issueNumber}`);
   const graphql = graphqlImpl ?? githubGraphqlApi({ token: env.GH_TOKEN, fetchImpl });
@@ -82,12 +97,24 @@ export async function runMigration({ env = process.env, argv = process.argv, roo
     actor: 'controller',
     verify: () => verifyEventually(async () => {
       const observed = await readIssueControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
-      const metadata = issueMetadata(observed, config);
+      const metadata = issueMetadata(observed, boundConfig);
       const targetType = issueTypes(config).find((type) => type.id === plan.target.issueType);
+      const expectedFields = [
+        ['lifecycle_stage', plan.target.lifecycleStage],
+        ['readiness', plan.target.readiness],
+      ];
+      const fieldOptionsMatch = expectedFields.every(([fieldKey, logicalOptionId]) => {
+        const expected = boundFieldOption(boundConfig, fieldKey, logicalOptionId);
+        return expected.fieldId && expected.optionId
+          && observedFieldOptionId(observed, expected.fieldId) === expected.optionId;
+      });
       if (targetType && (metadata.issueType.source !== 'native' || metadata.issueType.id !== targetType.id)) {
         throw new Error(`Native issue type ${targetType.native_name} was not observed after migration.`);
       }
-      if (metadata.lifecycleStage !== plan.target.lifecycleStage || metadata.readiness !== plan.target.readiness) {
+      if (!metadata.fieldPresence?.lifecycleStage || !metadata.fieldPresence?.readiness
+        || !fieldOptionsMatch
+        || metadata.lifecycleStage !== plan.target.lifecycleStage
+        || metadata.readiness !== plan.target.readiness) {
         throw new Error('Issue fields were not observed after migration.');
       }
     }),
