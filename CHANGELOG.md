@@ -80,6 +80,10 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
+  advances `bootstrapCommit` to the merged controller snapshot. Issue intake
+  and delivery now mask organization field and option IDs from the trusted
+  bootstrap, so supported participant pins do not need to carry the masker.
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.45` at
   `eed2505edaf4e1f839030697973dcaaf0c1b1bea`, retaining draft44 for rollback.
