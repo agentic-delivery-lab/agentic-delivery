@@ -297,6 +297,20 @@ test('normal issue intake reads metadata with the registered shadow profile and 
     isEnabled: true,
     pinnedFields: organizationFields,
   }));
+  const issueFieldValues = [
+    ['lifecycle_stage', 'planning'],
+    ['readiness', 'ready'],
+  ].map(([key, optionId]) => {
+    const field = config.fields[key];
+    const option = field.options.find((candidate) => candidate.id === optionId);
+    return {
+      id: `IFSV_${optionId}`,
+      name: option.name,
+      value: option.name,
+      optionId,
+      field: { id: field.id, name: field.name, dataType: 'SINGLE_SELECT' },
+    };
+  });
   const fetchImpl = async (url, options) => {
     if (url === 'https://api.github.com/graphql') {
       const request = JSON.parse(options.body);
@@ -307,7 +321,7 @@ test('normal issue intake reads metadata with the registered shadow profile and 
             issue: {
               id: 'I_17', number: 17, state: 'OPEN', title: 'Task: read-only intake',
               body: 'Check the organization metadata without changing this issue.',
-              issueType: null, issueFieldValues: { nodes: [] }, parent: null, subIssues: { nodes: [] },
+              issueType: null, issueFieldValues: { nodes: issueFieldValues }, parent: null, subIssues: { nodes: [] },
             },
           },
           organization: {
@@ -356,6 +370,10 @@ test('normal issue intake reads metadata with the registered shadow profile and 
   assert.equal(result.metadata.readOnlyRun, true);
   assert.equal(result.fields.changed, false);
   assert.equal(result.fields.readOnlyRun, true);
+  assert.equal(result.metadata.fieldAuthority, 'organization-issue-field');
+  assert.deepEqual(result.metadata.fieldPresence, { lifecycleStage: true, readiness: true });
+  assert.equal(result.metadata.lifecycleStage, 'planning');
+  assert.equal(result.metadata.readiness, 'ready');
   assert.deepEqual(tokenRequests[0], {
     repository_ids: ['777777777'],
     permissions: {
