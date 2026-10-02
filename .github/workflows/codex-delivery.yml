@@ -76,6 +76,8 @@ on:
     secrets:
       CODEX_DELIVERY_APP_PRIVATE_KEY:
         required: true
+      ISSUE_FIELD_BINDINGS_JSON:
+        required: true
   workflow_dispatch:
     inputs:
       issue:
@@ -201,6 +203,6 @@ jobs:
           INVOCATION_AUTHORIZED: ${{ inputs.invocation_authorized }}
           INVOCATION_BODY_DIGEST: ${{ inputs.invocation_body_digest }}
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
-          ISSUE_FIELD_BINDINGS_JSON: ${{ vars.ISSUE_FIELD_BINDINGS_JSON }}
+          ISSUE_FIELD_BINDINGS_JSON: ${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}
           CODEX_MCP_SERVERS: ${{ vars.CODEX_MCP_SERVERS }}
         run: node scripts/codex-delivery.mjs

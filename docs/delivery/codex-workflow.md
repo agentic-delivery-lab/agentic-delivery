@@ -136,11 +136,14 @@ In the central controller repository's Actions settings, store
 `CODEX_DELIVERY_APP_ID` and, optionally,
 `CODEX_DELIVERY_APP_INSTALLATION_ID` as repository variables. Store
 `CODEX_DELIVERY_APP_PRIVATE_KEY` and `CODEX_DELIVERY_DISPATCH_SECRET` as
-Actions secrets. The issue-intake and delivery workflows read the IDs through
-the `vars` context and receive the private key and dispatch secret through
-explicit secret inputs. Rotate the webhook secret, dispatch secret, and
-private key through their respective Vercel or Actions secret stores; never
-commit them.
+Actions secrets. Store `ISSUE_FIELD_BINDINGS_JSON` as a repository Actions
+secret as well. Its organization-specific field and option IDs are
+configuration rather than credentials, but they must not appear in public
+workflow logs. The issue-intake and delivery workflows pass this secret
+explicitly through their reusable-workflow calls. Remove the old repository
+variable after the workflow changes use the secret. Rotate the webhook secret,
+dispatch secret, and private key through their respective Vercel or Actions
+secret stores; never commit them.
 
 The ingress verifies the webhook signature and delivery ID, checks the exact
 actor catalog, signs the complete dispatch envelope with the separate dispatch

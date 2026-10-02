@@ -15,6 +15,8 @@ on:
         required: true
       CODEX_DELIVERY_DISPATCH_SECRET:
         required: true
+      ISSUE_FIELD_BINDINGS_JSON:
+        required: true
   workflow_dispatch:
     inputs:
       issue:
@@ -232,7 +234,7 @@ jobs:
           CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
           CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ vars.CODEX_DELIVERY_APP_INSTALLATION_ID }}
           GITHUB_GRAPHQL: 'true'
-          ISSUE_FIELD_BINDINGS_JSON: ${{ vars.ISSUE_FIELD_BINDINGS_JSON }}
+          ISSUE_FIELD_BINDINGS_JSON: ${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
           CODEX_MCP_SERVERS: ${{ vars.CODEX_MCP_SERVERS }}
           SOURCE_ISSUE: ${{ steps.invocation.outputs.source_issue || inputs.issue || github.event.inputs.issue || github.event.issue.number }}
@@ -288,3 +290,4 @@ jobs:
       invocation_body_digest: ${{ needs.classify.outputs.invocation_body_digest }}
     secrets:
       CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
+      ISSUE_FIELD_BINDINGS_JSON: ${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}

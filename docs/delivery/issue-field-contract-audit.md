@@ -85,7 +85,9 @@ query {
 
 The option names and option identities returned by the REST and GraphQL
 catalogs match the configured option bindings. The live binding remains in the
-repository Actions variable; it is not copied into this report.
+repository Actions secret; the exposed repository variable remains temporarily
+until the workflow migration is merged. Neither value is copied into this
+report.
 
 ## API and permission boundaries
 
@@ -126,6 +128,20 @@ field/option identity comparison or the issue-value reads from this public file
 alone. Keep the raw, Organization-only responses in an approved restricted
 evidence store if later acceptance requires that level of reproduction; do not
 publish those responses in this repository.
+
+## Public Actions log remediation — 2026-10-02
+
+The central canary run `37008188017` printed the repository variable
+`ISSUE_FIELD_BINDINGS_JSON` in the classifier step environment, exposing
+organization-only field and option IDs in this public repository's Actions
+log. The log archive was deleted after the exposure was identified; the run
+record remains, but its step logs are no longer available for independent
+review. The binding value is now stored as the repository Actions secret of the
+same name. This branch changes intake and delivery workflows, including their
+reusable-workflow hand-offs, to read the secret. The old repository variable
+must be removed after this change is merged. Do not run another canary until
+the old variable is removed and a read-only run confirms that Actions masks
+the secret.
 
 ## Deferred proof and dependencies
 

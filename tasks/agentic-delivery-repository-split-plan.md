@@ -168,7 +168,7 @@ repository-local implementation with some repository-generic internals.
 | Lifecycle definitions | `.github/issue-metadata.yml` |
 | Routing/orchestration definitions | `.github/orchestration-policy.yml` |
 | Agent configuration | `.github/agent-actors.json` plus repository-local agents and skills |
-| Issue-field bindings | Repository variable `ISSUE_FIELD_BINDINGS_JSON` |
+| Issue-field bindings | Repository Actions secret `ISSUE_FIELD_BINDINGS_JSON` (organization-only IDs; not credentials) |
 | App identity and installation | Repository variables `CODEX_DELIVERY_APP_ID` and `CODEX_DELIVERY_APP_INSTALLATION_ID` |
 | App credential | Repository secret `CODEX_DELIVERY_APP_PRIVATE_KEY` |
 | Legacy publication credential | Repository secret `CODEX_DELIVERY_PUBLISH_TOKEN` still exists |
