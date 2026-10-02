@@ -250,7 +250,7 @@ test('migration verifies field writes using the bound runtime field IDs', async 
   assert.equal(observed.readiness, 'not-ready');
 });
 
-test('migration keeps legacy labels when field readback does not confirm the write', async () => {
+test('migration requires observed fields when a legacy label matches the target values', async () => {
   const issue = { id: 'I_16', number: 16, state: 'OPEN', title: 'Disposable', body: '', issueType: null, parent: null, subIssues: { nodes: [] } };
   const restCalls = [];
   let fieldMutationCalls = 0;
@@ -279,7 +279,7 @@ test('migration keeps legacy labels when field readback does not confirm the wri
     root,
     fetchImpl: async (url, init = {}) => {
       restCalls.push({ url: String(url), method: init.method ?? 'GET' });
-      return { ok: true, status: 200, json: async () => ({ ...issue, state: 'open', labels: [{ name: 'state:ready-for-plan' }] }) };
+      return { ok: true, status: 200, json: async () => ({ ...issue, state: 'open', labels: [{ name: 'state:needs-triage' }] }) };
     },
     graphqlImpl: graphql,
   }), /Issue fields were not observed after migration\./);

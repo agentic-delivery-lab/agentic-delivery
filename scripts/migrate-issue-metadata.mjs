@@ -88,7 +88,9 @@ export async function runMigration({ env = process.env, argv = process.argv, roo
       if (targetType && (metadata.issueType.source !== 'native' || metadata.issueType.id !== targetType.id)) {
         throw new Error(`Native issue type ${targetType.native_name} was not observed after migration.`);
       }
-      if (metadata.lifecycleStage !== plan.target.lifecycleStage || metadata.readiness !== plan.target.readiness) {
+      if (!metadata.fieldPresence?.lifecycleStage || !metadata.fieldPresence?.readiness
+        || metadata.lifecycleStage !== plan.target.lifecycleStage
+        || metadata.readiness !== plan.target.readiness) {
         throw new Error('Issue fields were not observed after migration.');
       }
     }),
