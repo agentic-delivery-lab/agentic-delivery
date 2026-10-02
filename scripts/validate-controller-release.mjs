@@ -52,6 +52,14 @@ export async function validateControllerRelease({ repositoryRoot = path.resolve(
     }
     const bootstrapCommit = await git(repositoryRoot, ['cat-file', '-t', release.bootstrapCommit]);
     if (bootstrapCommit !== 'commit') errors.push(`bootstrap pin ${release.bootstrapCommit} is not a commit in this repository`);
+    for (const runtimeFile of ['scripts/mask-issue-field-bindings.mjs']) {
+      try {
+        const runtimeFileType = await git(repositoryRoot, ['cat-file', '-t', `${release.commit}:${runtimeFile}`]);
+        if (runtimeFileType !== 'blob') errors.push(`controller release ${release.version} is missing required runtime file ${runtimeFile}`);
+      } catch {
+        errors.push(`controller release ${release.version} is missing required runtime file ${runtimeFile}`);
+      }
+    }
   }
   if (errors.length > 0) throw new ControllerReleaseValidationError(`${errors.map((error) => `Controller release check: ${error}`).join('\n')}\nController release check failed with ${errors.length} error(s).`);
   return release;
