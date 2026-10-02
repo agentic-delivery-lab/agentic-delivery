@@ -72,6 +72,15 @@ test('repository has no local issue-form override', async () => {
   );
 });
 
+test('trusted intake jobs resolve pnpm from the nested bootstrap manifest', async () => {
+  const intakeWorkflow = parseRepositoryYaml(await text('.github/workflows/issue-intake.yml'), 'issue intake workflow');
+  for (const jobName of ['authorize', 'classify']) {
+    const setup = intakeWorkflow.jobs[jobName].steps.find((step) => step.name === 'Set up pnpm and Node.js');
+    assert.ok(setup, `${jobName} sets up its trusted runtime`);
+    assert.equal(setup.with['package-json-file'], 'trusted-intake/package.json');
+  }
+});
+
 test('issue events invoke intake and only an authorized route invokes reusable delivery', async () => {
   const intakeWorkflow = parseRepositoryYaml(await text('.github/workflows/issue-intake.yml'), 'issue intake workflow');
   const deliveryWorkflow = parseRepositoryYaml(await text('.github/workflows/codex-delivery.yml'), 'codex delivery workflow');

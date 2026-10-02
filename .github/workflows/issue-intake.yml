@@ -63,6 +63,7 @@ jobs:
         with:
           runtime: node@24
           install: false
+          package-json-file: trusted-intake/package.json
 
       - name: Install trusted authorization dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -140,6 +141,7 @@ jobs:
         with:
           runtime: node@24
           install: false
+          package-json-file: trusted-intake/package.json
 
       - name: Install intake dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
