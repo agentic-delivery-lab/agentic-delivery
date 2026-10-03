@@ -260,11 +260,27 @@ test('pending redelivery work blocks scan checkpoint advancement', async () => {
   });
 
   assert.equal(await store.hasPendingRedeliveryRequests(), true);
-  assert.match(calls[0].statement, /WITH exhausted_requests AS/);
-  assert.match(calls[0].statement, /LIMIT 100\s+FOR UPDATE SKIP LOCKED/);
-  assert.match(calls[1].statement, /request_status IN \('queued', 'requesting', 'exhausted'\)/);
-  assert.match(calls[1].statement, /LIMIT 1/);
-  assert.deepEqual(calls[1].values, []);
+  assert.match(calls[0].statement, /request_status IN \('queued', 'requesting', 'exhausted'\)/);
+  assert.match(calls[0].statement, /request_status = 'accepted'\s+AND attempt_count >= \$1\s+AND next_attempt_at <= clock_timestamp\(\)/);
+  assert.match(calls[0].statement, /LIMIT 1/);
+  assert.deepEqual(calls[0].values, [CONTROLLER_MAX_ATTEMPTS]);
+});
+
+test('Neon exhausts due final accepted attempts and reports each state transition', async () => {
+  let call;
+  const guid = '98765432-1234-4234-8234-123456789012';
+  const store = new NeonReplayStore({
+    client: { async query(statement, values) { call = { statement, values }; return [{ delivery_guid: guid }]; } },
+  });
+
+  assert.equal(await store.exhaustExpiredRedeliveryRequests(), 1);
+  assert.match(call.statement, /WITH exhausted_requests AS/);
+  assert.match(call.statement, /request_status IN \('requesting', 'accepted'\)/);
+  assert.match(call.statement, /attempt_count >= \$1/);
+  assert.match(call.statement, /next_attempt_at <= clock_timestamp\(\)/);
+  assert.match(call.statement, /LIMIT 100\s+FOR UPDATE SKIP LOCKED/);
+  assert.match(call.statement, /RETURNING requests\.delivery_guid/);
+  assert.deepEqual(call.values, [CONTROLLER_MAX_ATTEMPTS]);
 });
 
 test('Neon marks an accepted final-attempt request as accepted rather than unaccepted exhaustion', async () => {
@@ -440,6 +456,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
   const linkedReceiptKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const exhaustedReceiptKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const queuedGuid = randomUUID();
+  const acceptedFinalGuid = randomUUID();
   const unlinkedReceiptKeys = Array.from({ length: 250 }, () => replayKey({ installationId: '163255060', deliveryId: randomUUID() }));
   const leaseToken = `integration:${randomUUID()}`;
 
@@ -561,12 +578,57 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
       SET request_status = 'requesting', attempt_count = $2, next_attempt_at = clock_timestamp() - interval '1 second'
       WHERE delivery_guid = $1
     `, [queuedGuid, CONTROLLER_MAX_ATTEMPTS]);
-    assert.equal(await store.hasPendingRedeliveryRequests(), true, 'an exhausted unaccepted request continues to hold the checkpoint');
+    assert.equal(await store.exhaustExpiredRedeliveryRequests(), 1, 'an expired final ambiguous request becomes exhausted');
+    assert.equal(await store.hasPendingRedeliveryRequests(), true, 'an exhausted request continues to hold the checkpoint');
     const exhaustedQueueRow = await sql.query(
       'SELECT request_status FROM public.webhook_redelivery_requests WHERE delivery_guid = $1',
       [queuedGuid],
     );
     assert.equal(exhaustedQueueRow[0].request_status, 'exhausted');
+    await sql.query(`
+      UPDATE public.webhook_redelivery_requests
+      SET request_status = 'accepted', attempt_count = $2, next_attempt_at = clock_timestamp() - interval '1 second'
+      WHERE delivery_guid = $1
+    `, [queuedGuid, CONTROLLER_MAX_ATTEMPTS]);
+    assert.equal(await store.exhaustExpiredRedeliveryRequests(), 1, 'an accepted final attempt becomes exhausted after its cooldown when no successful history removed it');
+    const exhaustedAcceptedRow = await sql.query(
+      'SELECT request_status FROM public.webhook_redelivery_requests WHERE delivery_guid = $1',
+      [queuedGuid],
+    );
+    assert.equal(exhaustedAcceptedRow[0].request_status, 'exhausted');
+    await store.completeRedelivery(queuedGuid);
+
+    await store.queueRedeliveryRequests([{ guid: acceptedFinalGuid, githubDeliveryId: '987654324' }]);
+    for (let attempt = 0; attempt < CONTROLLER_MAX_ATTEMPTS; attempt += 1) {
+      assert.deepEqual(await store.claimRedeliveryRequest(acceptedFinalGuid, '987654324'), { claimed: true });
+      await store.markRedeliveryAccepted(acceptedFinalGuid, '987654324');
+      if (attempt + 1 < CONTROLLER_MAX_ATTEMPTS) {
+        await sql.query(`
+          UPDATE public.webhook_redelivery_requests
+          SET next_attempt_at = clock_timestamp() - interval '1 second'
+          WHERE delivery_guid = $1
+        `, [acceptedFinalGuid]);
+      }
+    }
+    const finalAcceptedRow = await sql.query(
+      'SELECT request_status, attempt_count FROM public.webhook_redelivery_requests WHERE delivery_guid = $1',
+      [acceptedFinalGuid],
+    );
+    assert.equal(finalAcceptedRow[0].request_status, 'accepted');
+    assert.equal(Number(finalAcceptedRow[0].attempt_count), CONTROLLER_MAX_ATTEMPTS);
+    assert.equal(await store.hasPendingRedeliveryRequests(), false, 'the accepted final request can complete its current scan');
+    await sql.query(`
+      UPDATE public.webhook_redelivery_requests
+      SET next_attempt_at = clock_timestamp() - interval '1 second'
+      WHERE delivery_guid = $1
+    `, [acceptedFinalGuid]);
+    assert.equal(await store.exhaustExpiredRedeliveryRequests(), 1);
+    assert.equal(await store.hasPendingRedeliveryRequests(), true, 'a final accepted request without successful history becomes visible and blocks later progress');
+    const recoveredFinalRow = await sql.query(
+      'SELECT request_status FROM public.webhook_redelivery_requests WHERE delivery_guid = $1',
+      [acceptedFinalGuid],
+    );
+    assert.equal(recoveredFinalRow[0].request_status, 'exhausted');
 
     const claimColumns = await sql.query(`
       SELECT column_name
@@ -664,7 +726,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
   } finally {
     await store.release(key);
     await store.release(lostResponseKey);
-    await sql.query('DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = $1', [queuedGuid]);
+    await sql.query('DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = ANY($1::text[])', [[queuedGuid, acceptedFinalGuid]]);
     for (const receiptKey of [key, lostResponseKey, linkedReceiptKey, exhaustedReceiptKey]) {
       await sql.query('DELETE FROM public.webhook_controller_receipts WHERE replay_key = $1', [receiptKey]);
     }

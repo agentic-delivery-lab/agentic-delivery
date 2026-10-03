@@ -359,6 +359,7 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
       else skippedCooldown += 1;
     }
 
+    exhausted += await activeStore.exhaustExpiredRedeliveryRequests();
     const redeliveryQueuePending = await activeStore.hasPendingRedeliveryRequests();
     const scanHighWater = checkpointHighWater ?? highWater;
     if (nextCursor) {

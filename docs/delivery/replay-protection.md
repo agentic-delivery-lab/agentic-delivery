@@ -106,10 +106,12 @@ redelivery queue. It then requests at most 250 queued or due redeliveries per
 invocation. With the current daily schedule, the upper bound is 250 redelivery
 API attempts per day, and rate limits or retries can lower actual throughput.
 The history checkpoint stays in place while any request is queued, has an
-uncertain `requesting` outcome, or is `exhausted` without acceptance. Later runs
-drain queued work; the checkpoint advances only after GitHub accepts every
-redelivery request. An exhausted request stays durable and holds the checkpoint
-until an operator diagnoses the cause and requeues it.
+uncertain `requesting` outcome, or is `exhausted`. GitHub acceptance lets the
+current scan advance, while the accepted request stays durable for follow-up.
+If the eighth accepted attempt's cooldown expires without a successful history
+result, the reconciler marks it `exhausted` before its next checkpoint update.
+That unresolved row stays durable and blocks further checkpoint progress until
+an operator diagnoses the cause and requeues it.
 It also redelivers due controller receipts even when GitHub recorded the
 original webhook delivery as successful. Before advancing its checkpoint, the
 reconciler links every observed delivery GUID's numeric GitHub API ID to a
@@ -121,17 +123,18 @@ receipt even after its original webhook delivery is older than the history
 checkpoint. The reconciler stores a timestamp and delivery ID
 checkpoint only after the full bounded scan and after each failed delivery's
 redelivery request is accepted. Each invocation claims at
-most 250 queued or due requests. An accepted request and an ambiguous
-`requesting` outcome remain in Neon and become due again after the cooldown,
-even if their original delivery is older than the history checkpoint. A
-queued request or an uncertain `requesting` outcome holds the checkpoint until
-a later run resolves it. Rate-limited responses use `Retry-After` or the
-primary rate-limit reset time when available, in addition to the 15-minute
-cooldown. GitHub may report rate limits as HTTP 403 or 429; a 403 is treated as
-rate-limited when its headers or response message say so. Other definitive
-GitHub client errors mark the request `exhausted` and hold the checkpoint; they
-do not delete attempt state or retry forever. After fixing the cause, requeue
-that delivery explicitly:
+most 250 queued or due requests. Accepted attempts below the limit and
+ambiguous `requesting` outcomes remain in Neon and become due again after the
+cooldown, even if their original delivery is older than the history checkpoint.
+After the eighth accepted attempt, an unresolved delivery becomes `exhausted`
+when the cooldown expires. A queued request, an uncertain `requesting` outcome,
+or an exhausted request holds the checkpoint. Rate-limited responses use
+`Retry-After` or the primary rate-limit reset time when available, in addition
+to the 15-minute cooldown. GitHub may report rate limits as HTTP 403 or 429; a
+403 is treated as rate-limited when its headers or response message say so.
+Other definitive GitHub client errors mark the request `exhausted` and hold the
+checkpoint; they do not delete attempt state or retry forever. After fixing the
+cause, requeue that delivery explicitly:
 
 ```sql
 UPDATE public.webhook_redelivery_requests
@@ -147,8 +150,10 @@ Confirm that exactly one row was updated. The next scheduled run retries the
 request and advances the checkpoint only after GitHub accepts it. Network errors,
 5xx responses, timeouts, and rate limits keep the request retryable. The retry
 limit is eight attempts. An exhausted request needs operator diagnosis before
-a manual retry. The response's `redelivery_queue_pending` field reports when
-later Cron invocations still need to drain queued work. A run that reports
+a manual retry. `exhausted_redeliveries` counts requests newly exhausted by a
+definitive rejection or an unresolved final attempt; `redelivery_queue_pending`
+reports queued, uncertain, exhausted, or due final accepted requests that hold
+a checkpoint. A run that reports
 both `redelivery_requests: 250` and `redelivery_queue_pending: true` has
 saturated the per-run batch; any remainder stays durable for the next run.
 Escalate if the queue is still pending after two consecutive successful daily
@@ -169,10 +174,10 @@ and the checkpoint did not advance. In GitHub App settings, inspect recent
 webhook deliveries for repeated non-2xx responses. In Neon, monitor receipt
 counts by status; `exhausted` controller receipts have reached eight claimed
 attempts without durable completion and need operator diagnosis before any
-manual retry. Redelivery requests retain
-an `exhausted` status when they reach eight attempts or GitHub definitively
-rejects the request, so operators can diagnose these separately from transient
-failures:
+manual retry. Redelivery requests retain an `exhausted` status when GitHub
+definitively rejects a request or eight accepted/ambiguous attempts fail to
+produce a successful history result by the final cooldown. Operators can
+diagnose these separately from transient failures:
 
 ```sql
 SELECT status, count(*)

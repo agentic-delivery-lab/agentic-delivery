@@ -3,6 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 
 import { reconcileWebhookDeliveries } from '../../api/cron/reconcile-webhooks.mjs';
+import { CONTROLLER_MAX_ATTEMPTS } from '../../scripts/lib/neon-replay-store.mjs';
 
 const { privateKey } = generateKeyPairSync('rsa', {
   modulusLength: 2048,
@@ -87,11 +88,26 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
     async dueRedeliveryRequests({ limit = 250 } = {}) {
       const completed = new Set(this.completed);
       const queued = [...this.redeliveryQueue.values()]
-        .filter((request) => request.request_status === 'queued' || request.due === true);
+        .filter((request) => (request.request_status === 'queued' || request.due === true)
+          && Number(request.attempt_count ?? 0) < CONTROLLER_MAX_ATTEMPTS);
       return [
-        ...this.dueRedeliveries.filter((request) => !completed.has(request.delivery_guid)),
+        ...this.dueRedeliveries.filter((request) => !completed.has(request.delivery_guid)
+          && Number(request.attempt_count ?? 0) < CONTROLLER_MAX_ATTEMPTS),
         ...queued,
       ].slice(0, limit);
+    },
+    async exhaustExpiredRedeliveryRequests() {
+      let exhausted = 0;
+      for (const request of this.redeliveryQueue.values()) {
+        if (['requesting', 'accepted'].includes(request.request_status)
+          && Number(request.attempt_count ?? 0) >= CONTROLLER_MAX_ATTEMPTS
+          && request.due === true) {
+          request.request_status = 'exhausted';
+          request.due = false;
+          exhausted += 1;
+        }
+      }
+      return exhausted;
     },
     async hasPendingRedeliveryRequests() {
       return [...this.redeliveryQueue.values()].some((request) => ['queued', 'requesting', 'exhausted'].includes(request.request_status));
@@ -361,6 +377,37 @@ test('reconciler holds the checkpoint when an authorization 403 exhausts a redel
   assert.equal(store.requested[0].deferred, undefined);
   assert.equal(store.redeliveryQueue.get(deliveryA).request_status, 'exhausted');
   assert.equal(await store.hasPendingRedeliveryRequests(), true);
+  assert.equal(store.advanced.length, 0);
+});
+
+test('reconciler reports and holds an expired accepted final attempt when history still has no success', async () => {
+  const scanNow = Date.now();
+  const store = makeStore();
+  store.redeliveryQueue.set(deliveryA, {
+    guid: deliveryA,
+    githubDeliveryId: '204',
+    attempt_count: CONTROLLER_MAX_ATTEMPTS,
+    request_status: 'accepted',
+    due: true,
+  });
+  const fetchImpl = async (url, options) => {
+    assert.notEqual(options.method, 'POST', 'the final accepted attempt must not exceed the retry limit');
+    return response(200, [{
+      id: 205,
+      guid: deliveryA,
+      delivered_at: new Date(scanNow - 5_000).toISOString(),
+      status: 'FAIL',
+      installation_id: '163255060',
+    }]);
+  };
+  const res = output();
+
+  await reconcileWebhookDeliveries({ req: cronRequest(), res, env: cronEnv(), fetchImpl, store, now: () => scanNow });
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(store.redeliveryQueue.get(deliveryA).request_status, 'exhausted');
+  assert.equal(JSON.parse(res.body).exhausted_redeliveries, 1);
+  assert.equal(JSON.parse(res.body).redelivery_queue_pending, true);
   assert.equal(store.advanced.length, 0);
 });
 

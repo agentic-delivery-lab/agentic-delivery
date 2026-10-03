@@ -10,7 +10,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds Neon-backed dispatch leases and controller receipts, persists cursors for bounded delivery-history scans, stores GitHub delivery IDs before advancing checkpoints, aggregates attempt outcomes across scan segments, and keeps active or uncertain webhook outcomes retryable.
-- Failed deliveries are queued durably and drained 250 at a time. The history checkpoint waits for every redelivery request to be accepted; ambiguous and exhausted requests remain durable and block progress, and rate-limited 403 responses honor GitHub's retry guidance.
+- Failed deliveries are queued durably and drained 250 at a time. Accepted requests retry after a cooldown; unresolved final attempts and definitive rejections become exhausted and hold checkpoint progress until operator diagnosis and explicit retry. Rate-limited 403 responses honor GitHub's retry guidance.
 - Expired controller receipts at the eight-attempt limit become exhausted before bounded due selection; interrupted runs can no longer make a receipt reselectable forever.
 - Architecture conformance review now includes only external ADRs cited by the pull request from its validated immutable Architecture Authority release, and the replay runbook records the daily 250-request limit and escalation threshold.
 - The Harness fetches the complete history at its immutable Architecture Authority pin so release validation can verify the manifest's source commit.
@@ -22,7 +22,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 - The controller release advances to `0.2.0-draft.60` at `d3036197be223efa2050e9d795dac87c6b8df68c`; the central participant moves to that immutable pin while draft59 remains available for rollback.
 - The controller release advances to `0.2.0-draft.59` at `2ab8bbe20c2ae01616af91ee224dcb1da881ed0c`; the central participant moves to that immutable pin while draft58 remains available for rollback.
 - Reconciliation links every observed webhook attempt to its matching controller receipt before checkpointing, including receipts that are not due yet. Due-receipt batches exclude unlinked rows before applying the limit, preventing stale rows from starving eligible retries.
-- Definitive GitHub redelivery API errors remain as exhausted requests and hold the checkpoint until an operator diagnoses the cause and explicitly retries them. Rate-limited 403 responses remain retryable.
+- Definitive GitHub errors and final attempts without observed success remain as exhausted requests for operator diagnosis and explicit retry. Rate-limited 403 responses remain retryable.
 - Review follow-up pins invocation finalization to the validated participant controller commit and makes webhook ingress fail closed instead of selecting a configured local file store. Migration 0004 retains temporary webhook delivery observations until the full scan reaches its checkpoint.
 - The controller release advances to `0.2.0-draft.58` at `cbf54a4e96643e5098c8478f1fb4219fed23774c`; the central participant moves to that immutable pin while draft57 remains available for rollback.
 - The controller release advances to `0.2.0-draft.57` at `8483b16d2b106133538ecca5f642e781d0fdfcd8`; the central participant moves to that immutable pin while draft56 and earlier remain available for rollback.

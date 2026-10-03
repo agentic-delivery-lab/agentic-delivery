@@ -665,30 +665,40 @@ export class NeonReplayStore {
     );
   }
 
-  async hasPendingRedeliveryRequests() {
-    await this.#query(
+  async exhaustExpiredRedeliveryRequests() {
+    const rows = await this.#query(
       `WITH exhausted_requests AS (
          SELECT delivery_guid
          FROM public.webhook_redelivery_requests
-         WHERE request_status = 'requesting'
+         WHERE request_status IN ('requesting', 'accepted')
            AND attempt_count >= $1
            AND next_attempt_at <= clock_timestamp()
          ORDER BY next_attempt_at ASC
          LIMIT ${REPLAY_CLEANUP_BATCH_SIZE}
          FOR UPDATE SKIP LOCKED
+       ), updated_requests AS (
+         UPDATE public.webhook_redelivery_requests AS requests
+         SET request_status = 'exhausted'
+         FROM exhausted_requests
+         WHERE requests.delivery_guid = exhausted_requests.delivery_guid
+         RETURNING requests.delivery_guid
        )
-       UPDATE public.webhook_redelivery_requests AS requests
-       SET request_status = 'exhausted'
-       FROM exhausted_requests
-       WHERE requests.delivery_guid = exhausted_requests.delivery_guid`,
+       SELECT delivery_guid FROM updated_requests`,
       [CONTROLLER_MAX_ATTEMPTS],
     );
+    return rows.length;
+  }
+
+  async hasPendingRedeliveryRequests() {
     const rows = await this.#query(
       `SELECT delivery_guid
        FROM public.webhook_redelivery_requests
        WHERE request_status IN ('queued', 'requesting', 'exhausted')
+          OR (request_status = 'accepted'
+            AND attempt_count >= $1
+            AND next_attempt_at <= clock_timestamp())
        LIMIT 1`,
-      [],
+      [CONTROLLER_MAX_ATTEMPTS],
     );
     return rows.length > 0;
   }
