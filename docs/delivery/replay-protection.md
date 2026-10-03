@@ -24,6 +24,15 @@ Actions concurrency keyed by the delivery GUID serializes repeated dispatches.
 Neither table stores webhook bodies, credentials, private keys, or model
 output.
 
+The reconciler processes at most five 100-delivery pages per run. When it
+reaches that bound before the previous checkpoint, it stores the opaque GitHub
+pagination cursor and the scan's original high-water mark. The next run resumes
+from that cursor. After it reaches the last completed checkpoint, the
+reconciler commits the saved high-water mark and clears the cursor; newer
+deliveries that arrived during the catch-up scan are found by the next fresh
+scan. Each fresh scan overlaps the prior checkpoint by five minutes to include
+delivery-history entries that arrive late.
+
 `AGENTIC_DELIVERY_REPLAY_DATABASE_URL` selects the shared Neon store. Use the
 same pooled Neon connection string in the Vercel production environment and as
 a repository Actions secret in the central controller repository. Its
@@ -33,7 +42,7 @@ controller repository secret.
 
 ## Migration and configuration
 
-Apply both migrations to the selected Neon database with a direct, unpooled
+Apply all three migrations to the selected Neon database with a direct, unpooled
 connection before deploying code that uses the new schema:
 
 ```sh
@@ -41,10 +50,12 @@ psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
   -f api/github/migrations/0001-webhook-replay-claims.sql
 psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
   -f api/github/migrations/0002-recoverable-webhook-delivery.sql
+psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
+  -f api/github/migrations/0003-resumable-webhook-scan.sql
 ```
 
 Run them from a protected terminal. Never print the connection string or add
-it to source control. Both migrations are safe to run more than once.
+it to source control. All migrations are safe to run more than once.
 
 Configure these protected values before production activation:
 
@@ -116,6 +127,6 @@ compatible with the earlier claim-only adapter.
 
 The optional isolated integration test uses
 `AGENTIC_DELIVERY_REPLAY_TEST_DATABASE_URL`. Point it only at a separate Neon
-database where both migrations have been applied. The live Vercel deployment,
+database where all three migrations have been applied. The live Vercel deployment,
 GitHub App credentials, Neon production schema, and scheduled execution remain
 unverified until an operator configures and activates them.

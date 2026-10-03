@@ -89,7 +89,14 @@ export class InMemoryReplayStore {
     const dispatchCanResume = existing && typeof existing === 'object'
       && existing.dispatchStatus === 'dispatching'
       && existing.leaseExpiresAt <= now;
-    if (existing && !dispatchCanResume) return { claimed: false, leaseToken: null };
+    if (existing && !dispatchCanResume) {
+      return {
+        claimed: false,
+        leaseToken: null,
+        status: typeof existing === 'object' ? existing.dispatchStatus : 'unknown',
+        leaseActive: typeof existing === 'object' && existing.dispatchStatus === 'dispatching' && existing.leaseExpiresAt > now,
+      };
+    }
     const leaseToken = randomUUID();
     this.#entries.set(key, {
       expiresAt: now + ttlMs,
@@ -113,8 +120,6 @@ export class InMemoryReplayStore {
     const entry = this.#entries.get(key);
     if (entry && typeof entry === 'object' && entry.leaseToken === leaseToken) this.#entries.delete(key);
   }
-
-  async markDispatched() {}
 
   async ensureControllerReceipt(key) {
     if (!this.#receipts.has(key)) this.#receipts.set(key, { status: 'pending', leaseExpiresAt: null, attempts: 0 });

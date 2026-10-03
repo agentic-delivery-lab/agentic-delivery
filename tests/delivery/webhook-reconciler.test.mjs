@@ -43,6 +43,7 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
     linked: [],
     completed: [],
     advanced: [],
+    scanProgress: [],
     async reconcilerCheckpoint() { return this.checkpoint; },
     async dueControllerReceipts() { return this.dueReceipts; },
     async dueRedeliveryRequests() { return this.dueRedeliveries; },
@@ -54,7 +55,26 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
     async markRedeliveryAccepted(guid, id) { this.requested.at(-1).accepted = { guid, id }; },
     async releaseRedeliveryRequest(guid) { this.requested.at(-1).released = guid; },
     async completeRedelivery(guid) { this.completed.push(guid); },
-    async advanceReconcilerCheckpoint(value) { this.advanced.push(value); },
+    async saveReconcilerScan(value) {
+      this.scanProgress.push(value);
+      this.checkpoint = {
+        ...this.checkpoint,
+        scan_cursor: value.cursor,
+        scan_high_water_at: value.highWaterAt,
+        scan_high_water_delivery_id: value.highWaterDeliveryId,
+      };
+    },
+    async advanceReconcilerCheckpoint(value) {
+      this.advanced.push(value);
+      this.checkpoint = {
+        ...this.checkpoint,
+        checkpoint_at: value.deliveredAt,
+        checkpoint_delivery_id: value.deliveryId,
+        scan_cursor: null,
+        scan_high_water_at: null,
+        scan_high_water_delivery_id: null,
+      };
+    },
   };
 }
 
@@ -92,9 +112,9 @@ test('reconciler paginates, groups attempts by GUID, redelivers failures and sta
         { id: 101, guid: deliveryA, delivered_at: at(10), status: 'FAIL', installation_id: '163255060' },
         { id: 100, guid: deliveryB, delivered_at: at(11), status: 'OK', installation_id: '163255060' },
         { id: 99, guid: deliveryC, delivered_at: at(12), status: 'OK', installation_id: '163255060' },
-      ], { link: '<https://api.github.com/app/hook/deliveries?per_page=100&page=2>; rel="next"' });
+      ], { link: '<https://api.github.com/app/hook/deliveries?per_page=100&cursor=page-2>; rel="next"' });
     }
-    if (String(url).includes('page=2')) {
+    if (String(url).includes('cursor=page-2')) {
       return response(200, [
         { id: 98, guid: deliveryA, delivered_at: at(13), status: 'FAIL', installation_id: '163255060' },
         { id: 90, guid: deliveryB, delivered_at: at(30 * 60), status: 'OK', installation_id: '163255060' },
@@ -127,6 +147,58 @@ test('reconciler leaves its checkpoint unchanged when GitHub rate limits redeliv
   assert.deepEqual(store.advanced, []);
   assert.equal(store.requested.length, 1);
   assert.equal(store.requested[0].released, undefined);
+});
+
+test('reconciler overlaps the prior checkpoint to find late delivery-history entries', async () => {
+  const scanNow = Date.now();
+  const checkpointAt = new Date(scanNow - 60_000).toISOString();
+  const store = makeStore({ checkpoint: { checkpoint_at: checkpointAt, checkpoint_delivery_id: '999' } });
+  const posts = [];
+  const fetchImpl = async (url, options) => {
+    if (options.method === 'POST') {
+      posts.push(String(url));
+      return response(202);
+    }
+    return response(200, [{
+      id: 998,
+      guid: deliveryA,
+      delivered_at: new Date(scanNow - 120_000).toISOString(),
+      status: 'FAIL',
+      installation_id: '163255060',
+    }]);
+  };
+  const res = output();
+
+  await reconcileWebhookDeliveries({ req: cronRequest(), res, env: cronEnv(), fetchImpl, store, now: () => scanNow });
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(posts.length, 1);
+  assert.match(posts[0], /\/998\/attempts$/);
+});
+
+test('reconciler does not re-request a due redelivery after successful history resolves its GUID', async () => {
+  const scanNow = Date.now();
+  const store = makeStore({
+    dueRedeliveries: [{ delivery_guid: deliveryA, github_delivery_id: '201', attempt_count: 1 }],
+  });
+  const fetchImpl = async (url, options) => {
+    if (options.method === 'POST') throw new Error('resolved delivery must not be redelivered again');
+    return response(200, [{
+      id: 202,
+      guid: deliveryA,
+      delivered_at: new Date(scanNow - 5_000).toISOString(),
+      status: 'OK',
+      installation_id: '163255060',
+    }]);
+  };
+  const res = output();
+
+  await reconcileWebhookDeliveries({ req: cronRequest(), res, env: cronEnv(), fetchImpl, store, now: () => scanNow });
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(store.completed, [deliveryA]);
+  assert.deepEqual(store.requested, []);
+  assert.equal(store.advanced.length, 1);
 });
 
 test('reconciler links a pending controller receipt before checkpointing successful webhook history', async () => {
@@ -193,6 +265,63 @@ test('reconciler resumes due redeliveries beyond its delivery-history checkpoint
   assert.equal(res.statusCode, 200);
   assert.equal(posts.length, 1);
   assert.match(posts[0], /\/42\/attempts$/);
+});
+
+test('reconciler resumes a page-limited history scan from its persisted cursor', async () => {
+  const scanNow = Date.now();
+  const guid = deliveryA;
+  const store = makeStore();
+  const firstFetch = async (url, options) => {
+    assert.equal(options.method, 'GET');
+    const cursor = new URL(String(url)).searchParams.get('cursor');
+    const page = cursor ? Number(cursor.replace('page-', '')) : 1;
+    assert.ok(page >= 1 && page <= 5);
+    const items = Array.from({ length: 100 }, (_, index) => {
+      const offset = ((page - 1) * 100) + index;
+      return {
+        id: String(20_000 - offset),
+        guid,
+        delivered_at: new Date(scanNow - (offset * 1_000)).toISOString(),
+        status: 'OK',
+      };
+    });
+    const headers = page < 6
+      ? { link: `<https://api.github.com/app/hook/deliveries?per_page=100&cursor=page-${page + 1}>; rel="next"` }
+      : {};
+    return response(200, items, headers);
+  };
+  const firstRes = output();
+  await reconcileWebhookDeliveries({ req: cronRequest(), res: firstRes, env: cronEnv(), fetchImpl: firstFetch, store, now: () => scanNow });
+
+  assert.equal(firstRes.statusCode, 200);
+  assert.equal(JSON.parse(firstRes.body).scanned_pages, 5);
+  assert.equal(JSON.parse(firstRes.body).scan_continuation_pending, true);
+  assert.equal(store.scanProgress.length, 1);
+  assert.equal(store.scanProgress[0].cursor, 'page-6');
+  assert.equal(store.scanProgress[0].highWaterDeliveryId, '20000');
+  assert.equal(store.advanced.length, 0);
+
+  let resumedUrl;
+  const secondFetch = async (url, options) => {
+    resumedUrl = String(url);
+    assert.equal(options.method, 'GET');
+    assert.equal(new URL(resumedUrl).searchParams.get('cursor'), 'page-6');
+    return response(200, [{
+      id: 10_000,
+      guid,
+      delivered_at: new Date(scanNow - (10_000 * 1_000)).toISOString(),
+      status: 'OK',
+    }]);
+  };
+  const secondRes = output();
+  await reconcileWebhookDeliveries({ req: cronRequest(), res: secondRes, env: cronEnv(), fetchImpl: secondFetch, store, now: () => scanNow + 1_000 });
+
+  assert.equal(secondRes.statusCode, 200);
+  assert.equal(JSON.parse(secondRes.body).scan_continuation_pending, false);
+  assert.match(resumedUrl, /cursor=page-6/);
+  assert.equal(store.advanced.length, 1);
+  assert.equal(store.advanced[0].deliveryId, '20000');
+  assert.equal(store.checkpoint.scan_cursor, null);
 });
 
 test('reconciler rejects missing and incorrect Cron bearer credentials before accessing storage', async () => {

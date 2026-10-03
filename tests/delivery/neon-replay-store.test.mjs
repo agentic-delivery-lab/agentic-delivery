@@ -43,6 +43,13 @@ function fakeDatabase({ now = () => Date.now(), entries = new Map(), queryError,
         }
         return [{ replay_key: key }];
       }
+      if (statement.includes('SELECT dispatch_status')) {
+        const entry = entries.get(values[0]);
+        return entry ? [{
+          dispatch_status: entry.dispatchStatus,
+          lease_active: entry.dispatchStatus === 'dispatching' && entry.leaseExpiresAt > now(),
+        }] : [];
+      }
       if (statement.includes('UPDATE public.webhook_replay_claims')) {
         const entry = entries.get(values[0]);
         if (entry?.dispatchStatus !== 'dispatching' || entry.leaseToken !== values[1]) return [];
@@ -78,6 +85,23 @@ test('Neon replay adapter maps atomic upsert results to one successful claim', a
   assert.match(claim.statement, /dispatch_lease_token = \$5/);
 });
 
+test('duplicate dispatch claims distinguish a completed dispatch from an active lease', async () => {
+  const database = fakeDatabase();
+  const store = new NeonReplayStore({ client: database.client });
+  const key = '163255060:98765432-1234-4234-8234-123456789012';
+
+  const initial = await store.claimWithLease(key);
+  assert.equal(initial.claimed, true);
+  assert.equal((await store.claimWithLease(key)).leaseActive, true);
+  await store.markDispatched(key, initial.leaseToken);
+  assert.deepEqual(await store.claimWithLease(key), {
+    claimed: false,
+    leaseToken: null,
+    status: 'dispatched',
+    leaseActive: false,
+  });
+});
+
 test('Neon replay claims can be reclaimed after expiry and released after dispatch failure', async () => {
   let now = 1_000;
   const database = fakeDatabase({ now: () => now });
@@ -100,7 +124,10 @@ test('a committed claim with a lost HTTP response stays retryable until its leas
   const key = '163255060:lost-response-key';
 
   await assert.rejects(store.claimWithLease(key), /durable replay database operation failed/);
-  assert.equal((await store.claimWithLease(key)).claimed, false);
+  const active = await store.claimWithLease(key);
+  assert.equal(active.claimed, false);
+  assert.equal(active.status, 'dispatching');
+  assert.equal(active.leaseActive, true);
   now += 30_001;
   const reclaimed = await store.claimWithLease(key);
   assert.equal(reclaimed.claimed, true);
@@ -163,6 +190,7 @@ test('Neon replay store fails closed and does not expose connection errors', asy
 test('replay migrations store only minimal lease, receipt, and checkpoint metadata', async () => {
   const initialMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0001-webhook-replay-claims.sql'), 'utf8');
   const recoveryMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0002-recoverable-webhook-delivery.sql'), 'utf8');
+  const scanMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0003-resumable-webhook-scan.sql'), 'utf8');
 
   assert.match(initialMigration, /CREATE TABLE IF NOT EXISTS public\.webhook_replay_claims\s*\(\s*replay_key text PRIMARY KEY,\s*expires_at timestamptz NOT NULL\s*\)/);
   assert.match(initialMigration, /ON public\.webhook_replay_claims \(expires_at\)/);
@@ -171,12 +199,15 @@ test('replay migrations store only minimal lease, receipt, and checkpoint metada
   assert.match(recoveryMigration, /CREATE TABLE IF NOT EXISTS public\.webhook_controller_receipts/);
   assert.match(recoveryMigration, /lease_token text/);
   assert.match(recoveryMigration, /CREATE TABLE IF NOT EXISTS public\.webhook_reconciler_state/);
-  const migrationSql = (initialMigration + recoveryMigration).replace(/^\s*--.*$/gm, '');
+  assert.match(scanMigration, /ADD COLUMN IF NOT EXISTS scan_cursor text/);
+  assert.match(scanMigration, /scan_high_water_at timestamptz/);
+  assert.match(scanMigration, /scan_high_water_delivery_id bigint/);
+  const migrationSql = (initialMigration + recoveryMigration + scanMigration).replace(/^\s*--.*$/gm, '');
   assert.doesNotMatch(migrationSql, /\b(?:body|payload|api_token|private_key|model_output)\b/i);
 });
 
 test('Neon replay integration proves claim, lost-response recovery, expiry, release and stored columns', {
-  skip: testDatabaseUrl ? false : 'Set AGENTIC_DELIVERY_REPLAY_TEST_DATABASE_URL to an isolated Neon database with the replay migration applied.',
+  skip: testDatabaseUrl ? false : 'Set AGENTIC_DELIVERY_REPLAY_TEST_DATABASE_URL to an isolated Neon database with all replay migrations applied.',
 }, async () => {
   const store = new NeonReplayStore({ connectionString: testDatabaseUrl });
   const sql = neon(testDatabaseUrl);
@@ -191,6 +222,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     const owner = concurrentClaims.find((claim) => claim.claimed);
     await store.markDispatched(key, owner.leaseToken);
     assert.equal(await store.claim(key), false);
+    assert.equal((await store.claimWithLease(key)).status, 'dispatched');
 
     await store.release(key);
     assert.equal(await store.claim(key), true);
@@ -211,7 +243,10 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     });
     const lostResponseLease = { ttlMs: 300_000, leaseMs: 300_000 };
     await assert.rejects(lostResponseStore.claimWithLease(lostResponseKey, lostResponseLease), /durable replay database operation failed/);
-    assert.deepEqual(await store.claimWithLease(lostResponseKey, lostResponseLease), { claimed: false, leaseToken: null });
+    const activeLostResponse = await store.claimWithLease(lostResponseKey, lostResponseLease);
+    assert.equal(activeLostResponse.claimed, false);
+    assert.equal(activeLostResponse.status, 'dispatching');
+    assert.equal(activeLostResponse.leaseActive, true);
     await sql.query(`
       UPDATE public.webhook_replay_claims
       SET dispatch_lease_expires_at = now() - interval '1 second'
@@ -221,6 +256,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     assert.equal(recovered.claimed, true);
     await store.markDispatched(lostResponseKey, recovered.leaseToken);
     assert.equal(await store.claim(lostResponseKey), false);
+    assert.equal((await store.claimWithLease(lostResponseKey, lostResponseLease)).status, 'dispatched');
 
     assert.equal(await store.claim(key, { ttlMs: 25 }), true);
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -265,11 +301,46 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
       'replay_key',
       'status',
     ]);
+
+    const previousCheckpoint = await store.reconcilerCheckpoint();
+    assert.equal(previousCheckpoint?.scan_cursor ?? null, null, 'the isolated database must not have a pending scan');
+    const previousCheckpointTime = Date.parse(String(previousCheckpoint?.checkpoint_at ?? ''));
+    const highWaterAt = new Date(Math.max(Date.now(), Number.isFinite(previousCheckpointTime) ? previousCheckpointTime : 0) + 1_000).toISOString();
+    const scanCursor = `integration:${randomUUID()}`;
+    const expectedCheckpoint = {
+      expectedCursor: previousCheckpoint?.scan_cursor ?? null,
+      expectedCheckpointAt: previousCheckpoint?.checkpoint_at ?? null,
+      expectedCheckpointDeliveryId: previousCheckpoint?.checkpoint_delivery_id ?? null,
+    };
+    await store.saveReconcilerScan({
+      cursor: scanCursor,
+      highWaterAt,
+      highWaterDeliveryId: '987654322',
+      ...expectedCheckpoint,
+    });
+    const pendingScan = await store.reconcilerCheckpoint();
+    assert.equal(pendingScan.scan_cursor, scanCursor);
+    assert.equal(pendingScan.scan_high_water_delivery_id, '987654322');
+    const expectedPendingScan = {
+      expectedCursor: pendingScan.scan_cursor,
+      expectedCheckpointAt: pendingScan.checkpoint_at ?? null,
+      expectedCheckpointDeliveryId: pendingScan.checkpoint_delivery_id ?? null,
+    };
+    await store.advanceReconcilerCheckpoint({
+      deliveredAt: highWaterAt,
+      deliveryId: '987654322',
+      ...expectedPendingScan,
+    });
+    const completedScan = await store.reconcilerCheckpoint();
+    assert.equal(completedScan.checkpoint_delivery_id, '987654322');
+    assert.equal(completedScan.scan_cursor, null);
+    assert.equal(completedScan.scan_high_water_at, null);
   } finally {
     await store.release(key);
     await store.release(lostResponseKey);
     for (const receiptKey of [key, lostResponseKey, linkedReceiptKey]) {
       await sql.query('DELETE FROM public.webhook_controller_receipts WHERE replay_key = $1', [receiptKey]);
     }
+    await sql.query("DELETE FROM public.webhook_reconciler_state WHERE state_key = 'github-app-deliveries'");
   }
 });

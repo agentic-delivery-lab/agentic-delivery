@@ -237,6 +237,39 @@ test('webhook dispatches enrolled pull-request observations without granting inv
   assert.equal(dispatch.client_payload.source.kind, 'pull_request');
   assert.equal(dispatch.client_payload.source.pull_request_number, 44);
   assert.equal(await replayStore.controllerReceipt('163255060:12345678-1234-4234-8234-123456789012'), null);
+
+  const duplicate = result();
+  await handleWebhook(request({ body, event: 'pull_request', signature }), duplicate, {
+    env: webhookEnv(),
+    replayStore,
+    fetchImpl: async () => { throw new Error('a completed observation duplicate must not dispatch again'); },
+    tokenProvider: { token: async () => 'installation-token' },
+  });
+  assert.equal(duplicate.statusCode, 200);
+  assert.match(duplicate.body, /"completed":true/);
+});
+
+test('webhook keeps an active pull-request observation retryable without a receipt', async () => {
+  const body = JSON.stringify(githubPayload({
+    action: 'synchronize',
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    pull_request: { number: 44, body: 'A pull-request change.' },
+    sender: { login: 'external-contributor', type: 'User' },
+  }));
+  const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
+  const replayStore = new InMemoryReplayStore();
+  await replayStore.claimWithLease('163255060:12345678-1234-4234-8234-123456789012');
+  const output = result();
+
+  await handleWebhook(request({ body, event: 'pull_request', signature }), output, {
+    env: webhookEnv(),
+    replayStore,
+    fetchImpl: async () => { throw new Error('an active observation lease must not dispatch again'); },
+    tokenProvider: { token: async () => 'installation-token' },
+  });
+
+  assert.equal(output.statusCode, 503);
+  assert.match(output.body, /"retryable":true/);
 });
 
 test('webhook fails closed when the central controller repository is not configured', async () => {

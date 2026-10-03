@@ -205,7 +205,20 @@ export class NeonReplayStore {
     positiveDuration(leaseMs, 'The dispatch lease must be positive.');
     const leaseToken = randomUUID();
     const rows = await this.#query(CLAIM_SQL, [key, REPLAY_CLEANUP_BATCH_SIZE, ttlMs, leaseMs, leaseToken]);
-    return { claimed: rows.length === 1, leaseToken: rows.length === 1 ? leaseToken : null };
+    if (rows.length === 1) return { claimed: true, leaseToken, status: 'dispatching', leaseActive: true };
+    const existing = await this.#query(
+      `SELECT dispatch_status,
+              dispatch_status = 'dispatching' AND dispatch_lease_expires_at > clock_timestamp() AS lease_active
+       FROM public.webhook_replay_claims
+       WHERE replay_key = $1`,
+      [key],
+    );
+    return {
+      claimed: false,
+      leaseToken: null,
+      status: existing[0]?.dispatch_status ?? 'unknown',
+      leaseActive: existing[0]?.lease_active === true,
+    };
   }
 
   async markDispatched(key, leaseToken) {
@@ -340,7 +353,7 @@ export class NeonReplayStore {
 
   async reconcilerCheckpoint() {
     const rows = await this.#query(
-      `SELECT checkpoint_at, checkpoint_delivery_id
+      `SELECT checkpoint_at, checkpoint_delivery_id, scan_cursor, scan_high_water_at, scan_high_water_delivery_id
        FROM public.webhook_reconciler_state
        WHERE state_key = 'github-app-deliveries'`,
       [],
@@ -348,22 +361,77 @@ export class NeonReplayStore {
     return rows[0] ?? null;
   }
 
-  async advanceReconcilerCheckpoint({ deliveredAt, deliveryId }) {
+  async saveReconcilerScan({ cursor, highWaterAt, highWaterDeliveryId, expectedCursor = null, expectedCheckpointAt = null, expectedCheckpointDeliveryId = null }) {
+    const scanCursor = String(cursor ?? '');
+    const highWaterTimestamp = Date.parse(String(highWaterAt ?? ''));
+    if (!scanCursor || scanCursor.length > 4096 || /[\u0000-\u001f\u007f]/.test(scanCursor)) {
+      throw new ReplayProtectionError('The webhook scan cursor is invalid.');
+    }
+    if (!Number.isFinite(highWaterTimestamp) || !/^[1-9][0-9]*$/.test(String(highWaterDeliveryId ?? ''))) {
+      throw new ReplayProtectionError('The webhook scan high-water mark is invalid.');
+    }
+    if (expectedCursor !== null && (typeof expectedCursor !== 'string' || !expectedCursor || expectedCursor.length > 4096 || /[\u0000-\u001f\u007f]/.test(expectedCursor))) {
+      throw new ReplayProtectionError('The expected webhook scan cursor is invalid.');
+    }
+    if ((expectedCheckpointAt === null) !== (expectedCheckpointDeliveryId === null)
+      || (expectedCheckpointAt !== null && (!Number.isFinite(Date.parse(String(expectedCheckpointAt))) || !/^[1-9][0-9]*$/.test(String(expectedCheckpointDeliveryId))))) {
+      throw new ReplayProtectionError('The expected webhook checkpoint is invalid.');
+    }
+    const rows = await this.#query(
+      `INSERT INTO public.webhook_reconciler_state
+         (state_key, checkpoint_at, checkpoint_delivery_id, scan_cursor, scan_high_water_at, scan_high_water_delivery_id, updated_at)
+       VALUES ('github-app-deliveries', $4::timestamptz, $5::bigint, $1, $2::timestamptz, $3::bigint, clock_timestamp())
+       ON CONFLICT (state_key) DO UPDATE
+       SET scan_cursor = EXCLUDED.scan_cursor,
+           scan_high_water_at = EXCLUDED.scan_high_water_at,
+           scan_high_water_delivery_id = EXCLUDED.scan_high_water_delivery_id,
+           updated_at = clock_timestamp()
+       WHERE webhook_reconciler_state.scan_cursor IS NOT DISTINCT FROM $6
+         AND webhook_reconciler_state.checkpoint_at IS NOT DISTINCT FROM $4::timestamptz
+         AND webhook_reconciler_state.checkpoint_delivery_id IS NOT DISTINCT FROM $5::bigint
+       RETURNING state_key`,
+      [scanCursor, new Date(highWaterTimestamp).toISOString(), String(highWaterDeliveryId), expectedCheckpointAt, expectedCheckpointDeliveryId, expectedCursor],
+    );
+    if (rows.length !== 1) throw storageError();
+  }
+
+  async advanceReconcilerCheckpoint({ deliveredAt, deliveryId, expectedCursor = null, expectedCheckpointAt = null, expectedCheckpointDeliveryId = null }) {
     if (!Number.isFinite(Date.parse(String(deliveredAt ?? ''))) || !/^[1-9][0-9]*$/.test(String(deliveryId ?? ''))) {
       throw new ReplayProtectionError('The reconciler checkpoint is invalid.');
     }
-    await this.#query(
+    if (expectedCursor !== null && (typeof expectedCursor !== 'string' || !expectedCursor || expectedCursor.length > 4096 || /[\u0000-\u001f\u007f]/.test(expectedCursor))) {
+      throw new ReplayProtectionError('The expected webhook scan cursor is invalid.');
+    }
+    if ((expectedCheckpointAt === null) !== (expectedCheckpointDeliveryId === null)
+      || (expectedCheckpointAt !== null && (!Number.isFinite(Date.parse(String(expectedCheckpointAt))) || !/^[1-9][0-9]*$/.test(String(expectedCheckpointDeliveryId))))) {
+      throw new ReplayProtectionError('The expected webhook checkpoint is invalid.');
+    }
+    const rows = await this.#query(
       `INSERT INTO public.webhook_reconciler_state
          (state_key, checkpoint_at, checkpoint_delivery_id, updated_at)
        VALUES ('github-app-deliveries', $1::timestamptz, $2, clock_timestamp())
        ON CONFLICT (state_key) DO UPDATE
-       SET checkpoint_at = EXCLUDED.checkpoint_at,
-           checkpoint_delivery_id = EXCLUDED.checkpoint_delivery_id,
+       SET checkpoint_at = CASE
+             WHEN webhook_reconciler_state.checkpoint_at IS NULL
+               OR (webhook_reconciler_state.checkpoint_at, webhook_reconciler_state.checkpoint_delivery_id)
+                 <= (EXCLUDED.checkpoint_at, EXCLUDED.checkpoint_delivery_id)
+             THEN EXCLUDED.checkpoint_at ELSE webhook_reconciler_state.checkpoint_at END,
+           checkpoint_delivery_id = CASE
+             WHEN webhook_reconciler_state.checkpoint_at IS NULL
+               OR (webhook_reconciler_state.checkpoint_at, webhook_reconciler_state.checkpoint_delivery_id)
+                 <= (EXCLUDED.checkpoint_at, EXCLUDED.checkpoint_delivery_id)
+             THEN EXCLUDED.checkpoint_delivery_id ELSE webhook_reconciler_state.checkpoint_delivery_id END,
+           scan_cursor = NULL,
+           scan_high_water_at = NULL,
+           scan_high_water_delivery_id = NULL,
            updated_at = clock_timestamp()
-       WHERE (webhook_reconciler_state.checkpoint_at, webhook_reconciler_state.checkpoint_delivery_id)
-         <= (EXCLUDED.checkpoint_at, EXCLUDED.checkpoint_delivery_id)`,
-      [new Date(deliveredAt).toISOString(), String(deliveryId)],
+       WHERE webhook_reconciler_state.scan_cursor IS NOT DISTINCT FROM $3
+         AND webhook_reconciler_state.checkpoint_at IS NOT DISTINCT FROM $4::timestamptz
+         AND webhook_reconciler_state.checkpoint_delivery_id IS NOT DISTINCT FROM $5::bigint
+       RETURNING state_key`,
+      [new Date(deliveredAt).toISOString(), String(deliveryId), expectedCursor, expectedCheckpointAt, expectedCheckpointDeliveryId],
     );
+    if (rows.length !== 1) throw storageError();
   }
 
   async claimRedeliveryRequest(guid, githubDeliveryId, { cooldownMs = REDELIVERY_COOLDOWN_MS } = {}) {

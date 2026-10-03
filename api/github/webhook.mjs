@@ -271,7 +271,10 @@ export async function handleWebhook(req, res, {
     : { claimed: await claimDelivery(activeReplayStore, { installationId: config.installationId, deliveryId, ...claimOptions }), leaseToken: null };
   if (!claim.claimed) {
     if (durableReceipts) return reply(res, 503, { accepted: false, retryable: true, delivery_id: deliveryId, repository_id: repositoryId });
-    return reply(res, 200, { accepted: false, duplicate: true, delivery_id: deliveryId, repository_id: repositoryId });
+    if (claim.status === 'dispatched') {
+      return reply(res, 200, { accepted: false, duplicate: true, completed: true, delivery_id: deliveryId, repository_id: repositoryId });
+    }
+    return reply(res, 503, { accepted: false, retryable: true, delivery_id: deliveryId, repository_id: repositoryId });
   }
 
   try {
