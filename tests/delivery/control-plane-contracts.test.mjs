@@ -34,8 +34,8 @@ test('the checked-in controller release pins every enrolled participant and requ
   assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
   assert.equal(release.schemaVersion, 2);
   assert.equal(release.$schema, '../schemas/controller-release.v2.schema.json');
-  assert.equal(release.version, '0.2.0-draft.61');
-  assert.equal(release.commit, '3f7efb8f1f51ba981dc17dd4cf6a74c579df0a6e');
+  assert.equal(release.version, '0.2.0-draft.62');
+  assert.equal(release.commit, '0145f5394eb6cb2cb080d609bb271fd5e308c932');
   assert.equal(release.bootstrapCommit, '054a2cc4ff6d5368d5f8c12300ca53d6bf81a877');
   assert.equal(release.githubAppContractVersion, '2.0.0');
   assert.equal(release.compatibility.githubAppContractVersion, '2.0.0');
@@ -141,7 +141,7 @@ test('the current controller release pins immutable Architecture and Primitive c
     assert.match(dependency.commit, /^[0-9a-f]{40}$/);
     assert.match(dependency.contentSha256, /^[0-9a-f]{64}$/);
   }
-  assert.equal(release.dependencies.architecture.version, '0.1.0-draft.8');
+  assert.equal(release.dependencies.architecture.version, '0.1.0-draft.18');
   assert.equal(release.dependencies.primitives.version, '0.1.0-draft.4');
 });
 
