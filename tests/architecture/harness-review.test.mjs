@@ -916,6 +916,8 @@ test('architecture-review workflow is pinned, read-only, resumable, and does not
   for (const phrase of ['pull_request:', 'types: [opened, synchronize, reopened, ready_for_review, edited]', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', 'CODEX_REVIEW_STATE_DIR: /var/lib/github-runner/.codex/harness-reviews', 'classify-codex-cli-updater-review.mjs', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
     assert.ok(workflow.includes(phrase), `missing workflow control: ${phrase}`);
   }
+  const architectureCheckout = /- name: Check out the pinned Architecture Authority([\s\S]*?)(?=\n      - name:)/.exec(workflow)?.[1] ?? '';
+  assert.match(architectureCheckout, /fetch-depth: 0/, 'the immutable Architecture pin validator requires the source commit in full history');
   const classifierGate = /classify_updater:\r?\n\s+if: >-\r?\n\s+github\.event_name == 'pull_request' &&\r?\n\s+github\.event\.pull_request\.user\.login == 'agentic-delivery-lab-invoker-7f3a\[bot\]'/;
   assert.match(workflow, classifierGate);
   assert.match(workflow.replace(/\r?\n/g, '\r\n'), classifierGate);

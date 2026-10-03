@@ -13,6 +13,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 - Failed deliveries are now queued durably and drained 250 at a time. The history checkpoint waits until queued requests are accepted or exhausted; stale ambiguous requests remain retryable, and rate-limited 403 responses honor GitHub's retry guidance.
 - Expired controller receipts at the eight-attempt limit become exhausted before bounded due selection; interrupted runs can no longer make a receipt reselectable forever.
 - Architecture conformance review now includes only external ADRs cited by the pull request from its validated immutable Architecture Authority release, and the replay runbook records the daily 250-request limit and escalation threshold.
+- The Harness fetches the complete history at its immutable Architecture Authority pin so release validation can verify the manifest's source commit.
 - The controller release advances to `0.2.0-draft.62` at `0145f5394eb6cb2cb080d609bb271fd5e308c932`; Architecture Authority draft `0.1.0-draft.18` supplies the cited ADR evidence, and draft61 remains available for rollback.
 - Intake and delivery now use bootstrap commit `02e49824fe7886e1b73ee8be9a5a39daf6263fa3`, which pins draft62's participant registry and immutable Architecture Authority evidence source.
 - The controller release advances to `0.2.0-draft.61` at `3f7efb8f1f51ba981dc17dd4cf6a74c579df0a6e`; the central participant moves to that immutable pin while draft60 remains available for rollback.

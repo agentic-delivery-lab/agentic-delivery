@@ -125,6 +125,7 @@ jobs:
         with:
           repository: agentic-delivery-lab/agentic-delivery-architecture
           ref: ${{ steps.architecture-pin.outputs.commit }}
+          fetch-depth: 0
           path: architecture-authority
           persist-credentials: false
 
