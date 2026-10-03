@@ -34,8 +34,8 @@ test('the checked-in controller release pins every enrolled participant and requ
   assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
   assert.equal(release.schemaVersion, 2);
   assert.equal(release.$schema, '../schemas/controller-release.v2.schema.json');
-  assert.equal(release.version, '0.2.0-draft.55');
-  assert.equal(release.commit, '6eeb5d1d7c31f9f63586560528f4f327ced5e60c');
+  assert.equal(release.version, '0.2.0-draft.56');
+  assert.equal(release.commit, 'aa9ba34ba73cc69ed8c6a3fb5b590ec70168c5de');
   assert.equal(release.bootstrapCommit, 'bd51590f84c9776d81e873aab0e9be510dc3709d');
   assert.equal(release.githubAppContractVersion, '2.0.0');
   assert.equal(release.compatibility.githubAppContractVersion, '2.0.0');
