@@ -258,6 +258,57 @@ export function formatRefinementComment(outcome) {
   return lines.join('\n');
 }
 
+const CODEX_TURN_ERROR_CODES = new Set([
+  'bad_request', 'context_window_exceeded', 'cyber_policy', 'flex_unavailable',
+  'http_connection_failed', 'internal_server_error', 'misalignment_policy_violation',
+  'other', 'rate_limit_exceeded', 'response_stream_connection_failed',
+  'response_stream_disconnected', 'response_too_many_failed_attempts', 'sandbox_error',
+  'server_overloaded', 'session_budget_exceeded', 'thread_rollback_failed',
+  'too_many_denials', 'unauthorized', 'usage_limit_exceeded',
+]);
+
+function normalizedCodexErrorCode(value) {
+  if (typeof value !== 'string' || !/^[A-Za-z][A-Za-z0-9_]*$/.test(value)) return null;
+  const normalized = value.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+  return CODEX_TURN_ERROR_CODES.has(normalized) ? normalized : null;
+}
+
+function safeTurnError(error) {
+  if (!error || typeof error !== 'object' || Array.isArray(error)) return null;
+  // App-server messages and additional details may contain credentials. Publish
+  // only a known protocol code, a validated HTTP status, or a fixed hint.
+  const info = error.codexErrorInfo;
+  const candidates = typeof info === 'string'
+    ? [info]
+    : info && typeof info === 'object' && !Array.isArray(info)
+      ? [info.type, info.code, ...Object.keys(info)]
+      : [];
+  const code = candidates.map(normalizedCodexErrorCode).find(Boolean);
+  const infoKey = info && typeof info === 'object' && !Array.isArray(info)
+    ? Object.keys(info).find((key) => normalizedCodexErrorCode(key) === code)
+    : null;
+  const nested = infoKey ? info[infoKey] : null;
+  const status = [error.httpStatusCode, info?.httpStatusCode, nested?.httpStatusCode]
+    .find((value) => Number.isSafeInteger(value) && value >= 100 && value <= 599);
+  const diagnostic = error.message === 'workspace routing discovery failed'
+    ? 'workspace_routing_discovery_failed'
+    : null;
+  const details = [
+    ...(code ? [`codex_error=${code}`] : []),
+    ...(diagnostic ? [`diagnostic=${diagnostic}`] : []),
+    ...(status ? [`http_status=${status}`] : []),
+  ];
+  return details.length ? details.join(', ') : null;
+}
+
+function turnFailureReason(status, diagnostic) {
+  const safeStatus = ['failed', 'interrupted', 'completed'].includes(status) ? status : 'unknown';
+  const details = diagnostic
+    ? ` (${diagnostic})`
+    : safeStatus === 'failed' ? ' (safe error details unavailable)' : '';
+  return `Codex turn ended with status ${safeStatus}.${details}`;
+}
+
 export async function runTurn({ client, threadId, phase, prompt, onProgress, signal, schema = outcomeSchema(phase), stallTimeoutMs = 20 * 60_000, pollMs = 15_000 }) {
   let budget;
   try { budget = quotaBoundary(await client.request('account/rateLimits/read')); }
@@ -269,6 +320,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
   let stopped;
   let settled = false;
   let finalText = '';
+  let lastTurnError;
   let progress = Promise.resolve();
   let interruptTimer;
   let stallTimer;
@@ -311,7 +363,12 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     finally { polling = false; }
   };
   const onAbort = () => stop('Workflow cancelled; saved work can be resumed.');
-  const onFailure = () => finish(stopped ?? { status: 'paused', reason: 'Codex app-server disconnected.' });
+  const onFailure = () => finish(stopped ?? {
+    status: 'paused',
+    reason: lastTurnError
+      ? `Codex app-server disconnected after a turn error (${lastTurnError}).`
+      : 'Codex app-server disconnected.',
+  });
   const onMessage = (message) => {
     const p = message.params ?? {};
     if (message.method === 'account/rateLimits/updated') {
@@ -325,6 +382,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     if (turnId && messageTurnId && messageTurnId !== turnId) return;
     if (message.method === 'turn/started') turnId = p.turn.id;
     if (p.threadId === threadId && message.method !== 'turn/completed') recordActivity();
+    if (message.method === 'error' && p.error) lastTurnError = safeTurnError(p.error) ?? lastTurnError;
     if (message.id !== undefined && message.method) {
       turnId ??= p.turnId;
       const questions = p.questions?.map((q) => `${q.question}${q.options?.length ? ` Options: ${q.options.map((o) => `${o.label}: ${o.description}`).join('; ')}` : ''}`);
@@ -336,9 +394,10 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     }
     if (message.method === 'turn/completed') {
       // Wait for mandatory progress publication before considering the turn complete.
+      const diagnostic = safeTurnError(p.turn?.error) ?? lastTurnError;
       progress.then(() => finish(stopped ?? (p.turn.status === 'completed'
         ? { status: 'completed', text: finalText }
-        : { status: 'paused', reason: `Codex turn ended with status ${p.turn.status}.` })));
+        : { status: 'paused', reason: turnFailureReason(p.turn.status, diagnostic) })));
     }
   };
   const pollTimer = setInterval(checkBudget, pollMs);
