@@ -67,10 +67,10 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
   const entries = mappedIsRecord && mapped
     ? Object.entries(mapped).map(([limitId, value]) => ({ limitId, value }))
     : [];
-  if (mappedIsRecord && response?.rateLimits) {
+  if (response?.rateLimits != null) {
     const legacy = response.rateLimits;
     const legacyLimitId = typeof legacy.limitId === 'string' ? legacy.limitId : null;
-    const mirrored = entries.some(({ limitId, value }) => value === legacy
+    const mirrored = mappedIsRecord && entries.some(({ limitId, value }) => value === legacy
       || (legacyLimitId && (limitId === legacyLimitId || value?.limitId === legacyLimitId)
         && isDeepStrictEqual(value, legacy)));
     if (!mirrored) entries.push({ limitId: legacyLimitId ?? 'legacy', value: legacy });
@@ -111,17 +111,9 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
     serverBlocks,
     nextEligibleAt,
   });
-  const decision = (reasonCode, reason, triggerReasons = [reasonCode]) => ({
-    stop: true,
-    reasonCode,
-    reason,
-    diagnostics: diagnostics(reasonCode, triggerReasons),
-  });
-
-  if (!mappedIsRecord || buckets.some(({ value }) => !value || typeof value !== 'object' || Array.isArray(value) || !value.primary
-    || (value.secondary != null && (typeof value.secondary !== 'object' || Array.isArray(value.secondary))))) {
-    return decision(QUOTA_REASON.invalidBucket, 'Quota telemetry contains an invalid bucket.');
-  }
+  const hasInvalidBucket = !mappedIsRecord || buckets.some(({ value }) => !value || typeof value !== 'object' || Array.isArray(value)
+    || value.primary == null || typeof value.primary !== 'object' || Array.isArray(value.primary)
+    || (value.secondary != null && (typeof value.secondary !== 'object' || Array.isArray(value.secondary))));
   const creditReasons = new Set();
   for (const { value } of buckets) {
     const credits = value.credits;
@@ -135,6 +127,7 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
   const rateLimited = serverBlocks.some((bucket) => bucket.rateLimitReached);
   const spendControlled = serverBlocks.some((bucket) => bucket.spendControlReached);
   const triggerReasons = [
+    ...(hasInvalidBucket ? [QUOTA_REASON.invalidBucket] : []),
     ...[QUOTA_REASON.creditSpillover, QUOTA_REASON.unlimitedCredits, QUOTA_REASON.creditTelemetryUnavailable]
       .filter((reasonCode) => creditReasons.has(reasonCode)),
     ...(missingOrInvalidWindow ? [QUOTA_REASON.missingOrInvalidWindow] : []),
@@ -145,6 +138,7 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
   const blocked = triggerReasons.length > 0;
   const reasonCode = triggerReasons[0] ?? QUOTA_REASON.available;
   const reasons = {
+    [QUOTA_REASON.invalidBucket]: 'Quota telemetry contains an invalid bucket.',
     [QUOTA_REASON.creditSpillover]: 'Spendable credits are available; subscription-only execution is required.',
     [QUOTA_REASON.unlimitedCredits]: 'Unlimited credits are available; subscription-only execution is required.',
     [QUOTA_REASON.creditTelemetryUnavailable]: 'Credit telemetry is missing or incomplete; subscription-only execution is required.',
