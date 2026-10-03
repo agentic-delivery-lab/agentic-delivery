@@ -40,7 +40,10 @@ test('Architecture review pins the exact release, digest, policy, and model sour
     architectureVersion: release.dependencies.architecture.version,
   });
   assert.equal(result.status, 'passed');
+  assert.equal(result.schemaVersion, 2);
   assert.equal(result.commit, release.dependencies.architecture.commit);
+  assert.equal(result.sourceCommit, '4d089b17e8c7ef9b2e6f61151a3beaad3c98c16d');
+  assert.ok(result.decisionIds.includes('ADR-0022'));
   assert.equal(result.contentSha256, release.dependencies.architecture.contentSha256);
   assert.equal(result.reproducedDigest, result.contentSha256);
 });

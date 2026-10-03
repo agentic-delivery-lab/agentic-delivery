@@ -154,11 +154,20 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   );
   assert.ok(intakeWorkflow.jobs.classify.outputs.controller_version);
   assert.ok(intakeWorkflow.jobs.classify.outputs.controller_commit);
+  const finalizer = intakeWorkflow.jobs['finalize-invocation'];
+  assert.ok(finalizer.needs.includes('classify'));
+  const finalizerSteps = finalizer.steps;
+  const finalizerPinValidation = finalizerSteps.find((step) => step.name === 'Validate the participant controller pin');
+  const finalizerCheckout = finalizerSteps.find((step) => step.name === 'Check out the controller');
+  assert.equal(finalizerPinValidation.env.CONTROLLER_COMMIT, '${{ needs.classify.outputs.controller_commit }}');
+  assert.match(finalizerPinValidation.run, /\^\[0-9a-f\]\{40\}\$/);
+  assert.equal(finalizerCheckout.with.ref, '${{ needs.classify.outputs.controller_commit }}');
+  assert.ok(finalizerSteps.indexOf(finalizerPinValidation) < finalizerSteps.indexOf(finalizerCheckout));
   const intakeSource = await text('.github/workflows/issue-intake.yml');
   assert.match(intakeSource, /steps\.invocation\.outputs\.controller_commit \|\| steps\.participant\.outputs\.controller_commit/);
   assert.doesNotMatch(intakeSource, /inputs\.controller_commit|github\.event\.client_payload\.controller/);
   assert.match(intakeSource, /Check out the validated controller release/);
-  assert.match(intakeSource, /ref: 7f71508ea4cf4ff881b8d1b7628dc5722fca24b5/);
+  assert.match(intakeSource, /ref: 02e49824fe7886e1b73ee8be9a5a39daf6263fa3/);
   assert.doesNotMatch(intakeSource, /ref: main/);
   assert.ok(intakeSource.indexOf('Validate and normalize explicit agent invocation')
     < intakeSource.indexOf('Check out the validated controller release'));
@@ -293,7 +302,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   const manualBootstrap = resolver.steps.find((step) => step.name === 'Check out trusted participant registry bootstrap');
   assert.equal(manualBootstrap.if, undefined);
   assert.equal(manualBootstrap.with.path, 'trusted-bootstrap');
-  assert.equal(manualBootstrap.with.ref, '7f71508ea4cf4ff881b8d1b7628dc5722fca24b5');
+  assert.equal(manualBootstrap.with.ref, '02e49824fe7886e1b73ee8be9a5a39daf6263fa3');
   const participantPolicy = resolver.steps.find((step) => step.name === 'Resolve caller and participant policy from trusted inputs');
   assert.equal(participantPolicy.id, 'participant-policy');
   assert.equal(participantPolicy.env.CALLER_WORKFLOW_REF, '${{ github.workflow_ref }}');

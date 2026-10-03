@@ -9,6 +9,23 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds Neon-backed dispatch leases and controller receipts, persists cursors for bounded delivery-history scans, stores GitHub delivery IDs before advancing checkpoints, aggregates attempt outcomes across scan segments, and keeps active or uncertain webhook outcomes retryable.
+- Failed deliveries are now queued durably and drained 250 at a time. The history checkpoint waits until queued requests are accepted or exhausted; stale ambiguous requests remain retryable, and rate-limited 403 responses honor GitHub's retry guidance.
+- Expired controller receipts at the eight-attempt limit become exhausted before bounded due selection; interrupted runs can no longer make a receipt reselectable forever.
+- Architecture conformance review now includes only external ADRs cited by the pull request from its validated immutable Architecture Authority release, and the replay runbook records the daily 250-request limit and escalation threshold.
+- The Harness fetches the complete history at its immutable Architecture Authority pin so release validation can verify the manifest's source commit.
+- The controller release advances to `0.2.0-draft.62` at `0145f5394eb6cb2cb080d609bb271fd5e308c932`; Architecture Authority draft `0.1.0-draft.18` supplies the cited ADR evidence, and draft61 remains available for rollback.
+- Intake and delivery now use bootstrap commit `02e49824fe7886e1b73ee8be9a5a39daf6263fa3`, which pins draft62's participant registry and immutable Architecture Authority evidence source.
+- The controller release advances to `0.2.0-draft.61` at `3f7efb8f1f51ba981dc17dd4cf6a74c579df0a6e`; the central participant moves to that immutable pin while draft60 remains available for rollback.
+- The controller release advances to `0.2.0-draft.60` at `d3036197be223efa2050e9d795dac87c6b8df68c`; the central participant moves to that immutable pin while draft59 remains available for rollback.
+- The controller release advances to `0.2.0-draft.59` at `2ab8bbe20c2ae01616af91ee224dcb1da881ed0c`; the central participant moves to that immutable pin while draft58 remains available for rollback.
+- Reconciliation links every observed webhook attempt to its matching controller receipt before checkpointing, including receipts that are not due yet. Due-receipt batches exclude unlinked rows before applying the limit, preventing stale rows from starving eligible retries.
+- Definitive GitHub redelivery API errors are retained as exhausted requests instead of deleting their attempt state and leaving the scan checkpoint stuck in an unlimited retry loop. Rate-limited 403 responses remain retryable.
+- Review follow-up pins invocation finalization to the validated participant controller commit and makes webhook ingress fail closed instead of selecting a configured local file store. Migration 0004 retains temporary webhook delivery observations until the full scan reaches its checkpoint.
+- The controller release advances to `0.2.0-draft.58` at `cbf54a4e96643e5098c8478f1fb4219fed23774c`; the central participant moves to that immutable pin while draft57 remains available for rollback.
+- The controller release advances to `0.2.0-draft.57` at `8483b16d2b106133538ecca5f642e781d0fdfcd8`; the central participant moves to that immutable pin while draft56 and earlier remain available for rollback.
+- Draft57 used bootstrap commit `ea0148b5f8bb42b3e989f823c1892d5363948aac` for its webhook recovery code and participant registry.
+- Intake and delivery now use bootstrap commit `054a2cc4ff6d5368d5f8c12300ca53d6bf81a877`, which pins draft61's webhook recovery code and participant registry.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) pins the central intake bootstrap and manual recovery paths to the controller release `bootstrapCommit`; normal and recovery execution no longer fall back to a moving `main` ref.
 - The controller release advances to `0.2.0-draft.39` at
   `53c76a68cf1a7cab2141034bd477d8cb761bf4c6`; the central participant moves
@@ -464,6 +481,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) aligns the invocation identity with the registered `Agentic Delivery Lab Invoker 7F3A` GitHub App name, slug, mention, and bot login across the actor catalog, code, tests, and agentic documentation.
 
 ### Added
+
+- [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds a Neon-backed atomic webhook replay store, a repeatable minimal schema migration, and bounded cleanup of expired claims.
 
 - Added a redacted, read-only GitHub organization inventory command and v1
   evidence schema. It records repository boundaries, rulesets, workflows,

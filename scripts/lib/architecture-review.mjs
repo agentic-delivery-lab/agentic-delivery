@@ -437,7 +437,7 @@ export async function deterministicReview({
   checks.push(missingRegisters.length
     ? check('domain-register-structure', 'fail', `A mapped bounded context is missing its register: ${missingRegisters.join(', ')}.`, ['docs/domain/ubiquitous-language.yml', 'docs/architecture/harness-review.yml'])
     : check('domain-register-structure', 'pass', 'Every mapped bounded context has a register in the reviewed revision.', ['docs/domain/ubiquitous-language.yml', 'docs/architecture/harness-review.yml']));
-  checks.push(check('runtime-context-minimal', 'pass', 'Traceability metadata is kept separate from runtime context selection; semantic review receives affected decision evidence plus the sanitized pull-request body and exact-head check snapshot.', ['docs/architecture/adr-primitive-index.json', 'scripts/lib/architecture-review-agent.mjs']));
+  checks.push(check('runtime-context-minimal', 'pass', 'Traceability metadata is kept separate from runtime context selection; semantic review receives affected local ADR evidence and only external ADRs cited in the sanitized pull-request body from the validated Architecture Authority pin.', ['docs/architecture/adr-primitive-index.json', 'scripts/lib/architecture-review-agent.mjs']));
 
   const evidence = validateEvidence(parseEvidenceMarker(pullRequest.body), { repository, issueNumber, head });
   checks.push(check('delivery-evidence', evidence.status, evidence.message, evidence.evidence));

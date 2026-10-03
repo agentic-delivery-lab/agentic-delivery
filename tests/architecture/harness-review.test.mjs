@@ -17,6 +17,8 @@ import {
   projectQuotaDiagnostics,
   excludeVerifiedHarnessReviewChecks,
   isHarnessReviewCheck,
+  citedAdrIds,
+  pinnedArchitectureDecisionEvidence,
   pruneExpiredReviewState,
   runSemanticReview,
   safeDiffText,
@@ -75,6 +77,56 @@ test('semantic review diff includes changed configuration and changelog paths', 
 test('semantic review refuses a diff that would exceed its evidence limit', () => {
   assert.equal(safeDiffText('x'.repeat(500_000)).length, 500_000);
   assert.equal(safeDiffText('x'.repeat(500_001)), null);
+});
+
+test('Harness bundles only PR-cited external ADRs from the validated immutable Architecture Authority pin', async (t) => {
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-authority-evidence-'));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const run = promisify(execFile);
+  const git = (...args) => run('git', ['-C', fixture, ...args], { encoding: 'utf8' });
+  await git('init', '--quiet');
+  await git('config', 'user.name', 'Harness test');
+  await git('config', 'user.email', 'harness-test@example.invalid');
+  await mkdir(path.join(fixture, 'decisions'), { recursive: true });
+  await writeFile(path.join(fixture, 'decisions/0022-use-neon.md'), '# ADR-0022\n\nPinned Neon decision evidence.\n');
+  await writeFile(path.join(fixture, 'decisions/0023-unrelated.md'), '# ADR-0023\n\nDo not include this record.\n');
+  await git('add', 'decisions');
+  await git('commit', '--quiet', '-m', 'authority fixture');
+  const { stdout } = await git('rev-parse', 'HEAD');
+  const commit = stdout.trim();
+  const architecturePin = {
+    status: 'passed',
+    schemaVersion: 2,
+    repository: 'agentic-delivery-lab/agentic-delivery-architecture',
+    commit,
+    sourceCommit: 'b'.repeat(40),
+    contentSha256: 'c'.repeat(64),
+    version: '0.1.0-draft.18',
+    decisionIds: ['ADR-0022', 'ADR-0023'],
+  };
+
+  assert.deepEqual(citedAdrIds('See ADR-0022 and ADR-0022. Ignore ADR-0023 in code.'), ['ADR-0022', 'ADR-0023']);
+  const evidence = JSON.parse(await pinnedArchitectureDecisionEvidence({
+    architectureRoot: fixture,
+    architecturePin,
+    decisionIds: ['ADR-0022'],
+  }));
+  assert.equal(evidence.releaseCommit, commit);
+  assert.equal(evidence.records.length, 1);
+  assert.equal(evidence.records[0].id, 'ADR-0022');
+  assert.equal(evidence.records[0].url, `https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/${commit}/decisions/0022-use-neon.md`);
+  assert.match(evidence.records[0].content, /Pinned Neon decision evidence/);
+  assert.deepEqual(evidence.unavailable, []);
+  assert.doesNotMatch(JSON.stringify(evidence), /Do not include this record/);
+
+  const missing = JSON.parse(await pinnedArchitectureDecisionEvidence({
+    architectureRoot: fixture,
+    architecturePin,
+    decisionIds: ['ADR-0024'],
+  }));
+  assert.deepEqual(missing.unavailable, ['ADR-0024']);
 });
 
 test('semantic review fingerprints check meaning while ignoring replay-specific run identifiers', () => {
@@ -864,6 +916,8 @@ test('architecture-review workflow is pinned, read-only, resumable, and does not
   for (const phrase of ['pull_request:', 'types: [opened, synchronize, reopened, ready_for_review, edited]', 'contents: read', 'issues: read', 'pull-requests: read', 'actions: read', 'cancel-in-progress: true', 'CODEX_REVIEW_STATE_DIR: /var/lib/github-runner/.codex/harness-reviews', 'classify-codex-cli-updater-review.mjs', 'agentic-delivery-architecture', 'architecture-authority', '--architecture-root', '--architecture-commit', '--architecture-digest', '--semantic']) {
     assert.ok(workflow.includes(phrase), `missing workflow control: ${phrase}`);
   }
+  const architectureCheckout = /- name: Check out the pinned Architecture Authority([\s\S]*?)(?=\n      - name:)/.exec(workflow)?.[1] ?? '';
+  assert.match(architectureCheckout, /fetch-depth: 0/, 'the immutable Architecture pin validator requires the source commit in full history');
   const classifierGate = /classify_updater:\r?\n\s+if: >-\r?\n\s+github\.event_name == 'pull_request' &&\r?\n\s+github\.event\.pull_request\.user\.login == 'agentic-delivery-lab-invoker-7f3a\[bot\]'/;
   assert.match(workflow, classifierGate);
   assert.match(workflow.replace(/\r?\n/g, '\r\n'), classifierGate);

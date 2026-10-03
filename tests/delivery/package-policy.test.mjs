@@ -205,7 +205,7 @@ test('rejects a younger direct dependency from a local registry', async (t) => {
   await withRegistry(t, {
     'young-direct': {
       version: '1.0.0',
-      publishedAt: new Date(Date.now() + 60 * 1000).toISOString(),
+      publishedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     },
   }, async ({ registry, createRoot }) => {
     const repositoryRoot = await createRoot({
@@ -228,7 +228,7 @@ test('rejects a younger transitive dependency from a local registry', async (t) 
     },
     'young-transitive': {
       version: '1.0.0',
-      publishedAt: new Date(Date.now() + 60 * 1000).toISOString(),
+      publishedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     },
   }, async ({ registry, createRoot }) => {
     const repositoryRoot = await createRoot({
@@ -264,7 +264,7 @@ test('rechecks a frozen lockfile created under a weaker policy', async (t) => {
   await withRegistry(t, {
     'young-frozen': {
       version: '1.0.0',
-      publishedAt: new Date(Date.now() + 60 * 1000).toISOString(),
+      publishedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     },
   }, async ({ registry, createRoot }) => {
     const repositoryRoot = await createRoot({

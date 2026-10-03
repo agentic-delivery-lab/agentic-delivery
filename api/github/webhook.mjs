@@ -22,7 +22,8 @@ import {
 } from '../../scripts/lib/participant-registry.mjs';
 import { assertEventEnvelope } from '../../scripts/lib/control-plane-contracts.mjs';
 import { GithubAppTokenProvider } from '../../scripts/lib/github-app.mjs';
-import { FileReplayStore, InMemoryReplayStore, ReplayProtectionError, claimDelivery, releaseDelivery } from '../../scripts/lib/replay-protection.mjs';
+import { InMemoryReplayStore, ReplayProtectionError, claimDelivery, releaseDelivery, replayKey } from '../../scripts/lib/replay-protection.mjs';
+import { NeonReplayStore } from '../../scripts/lib/neon-replay-store.mjs';
 
 export const config = { api: { bodyParser: false } };
 
@@ -63,15 +64,15 @@ function environment(env = process.env) {
     installationId: env.AGENTIC_DELIVERY_APP_INSTALLATION_ID || env.CODEX_DELIVERY_APP_INSTALLATION_ID,
     webhookSecret: env.AGENTIC_DELIVERY_WEBHOOK_SECRET,
     dispatchSecret: env.AGENTIC_DELIVERY_DISPATCH_SECRET || env.CODEX_DELIVERY_DISPATCH_SECRET,
-    replayStateDirectory: env.AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY,
+    replayDatabaseUrl: env.AGENTIC_DELIVERY_REPLAY_DATABASE_URL,
     replayWindowMs: Number(env.AGENTIC_DELIVERY_REPLAY_WINDOW_MS || 300_000),
   };
 }
 
 function replayStoreFor(env, config) {
-  if (config.replayStateDirectory) return new FileReplayStore({ directory: config.replayStateDirectory });
+  if (config.replayDatabaseUrl) return new NeonReplayStore({ connectionString: config.replayDatabaseUrl });
   if (env?.AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY === 'true') return new InMemoryReplayStore();
-  throw new ReplayProtectionError('A durable replay store is required; configure AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY or inject a replayStore adapter.', 2);
+  throw new ReplayProtectionError('A shared Neon replay store is required; configure AGENTIC_DELIVERY_REPLAY_DATABASE_URL or inject a replayStore adapter.', 2);
 }
 
 function appActor(payload) {
@@ -221,14 +222,6 @@ export async function handleWebhook(req, res, {
     });
   if (!authorization.allowed) return reply(res, 403, { error: authorization.reason });
 
-  const activeReplayStore = replayStore ?? replayStoreFor(env, config);
-  const claimed = await claimDelivery(activeReplayStore, {
-    installationId: config.installationId,
-    deliveryId,
-    ttlMs: config.replayWindowMs,
-  });
-  if (!claimed) return reply(res, 200, { accepted: false, duplicate: true, delivery_id: deliveryId, repository_id: repositoryId });
-
   const envelope = invocationEnvelope({
     deliveryId,
     eventName,
@@ -248,11 +241,41 @@ export async function handleWebhook(req, res, {
     dispatchTimestamp: now(),
   });
   assertEventEnvelope(envelope);
+  let controllerToken;
   try {
-    const controllerToken = await provider.token({
+    controllerToken = await provider.token({
       repositoryIds: [config.controllerRepositoryId],
       permissions: { contents: 'write' },
     });
+  } catch {
+    return reply(res, 403, { error: 'The GitHub App installation cannot dispatch to the controller repository.' });
+  }
+
+  const activeReplayStore = replayStore ?? replayStoreFor(env, config);
+  const key = replayKey({ installationId: config.installationId, deliveryId });
+  const durableReceipts = !observationEvent
+    && typeof activeReplayStore.ensureControllerReceipt === 'function'
+    && typeof activeReplayStore.controllerReceipt === 'function';
+  if (durableReceipts) {
+    await activeReplayStore.ensureControllerReceipt(key);
+    const receipt = await activeReplayStore.controllerReceipt(key);
+    if (receipt?.status === 'completed') {
+      return reply(res, 200, { accepted: false, duplicate: true, completed: true, delivery_id: deliveryId, repository_id: repositoryId });
+    }
+  }
+  const claimOptions = { ttlMs: config.replayWindowMs };
+  const claim = typeof activeReplayStore.claimWithLease === 'function'
+    ? await activeReplayStore.claimWithLease(key, claimOptions)
+    : { claimed: await claimDelivery(activeReplayStore, { installationId: config.installationId, deliveryId, ...claimOptions }), leaseToken: null };
+  if (!claim.claimed) {
+    if (durableReceipts) return reply(res, 503, { accepted: false, retryable: true, delivery_id: deliveryId, repository_id: repositoryId });
+    if (claim.status === 'dispatched') {
+      return reply(res, 200, { accepted: false, duplicate: true, completed: true, delivery_id: deliveryId, repository_id: repositoryId });
+    }
+    return reply(res, 503, { accepted: false, retryable: true, delivery_id: deliveryId, repository_id: repositoryId });
+  }
+
+  try {
     await repositoryApi({
       repository: config.controllerRepository,
       token: controllerToken,
@@ -264,8 +287,13 @@ export async function handleWebhook(req, res, {
       },
       fetchImpl,
     });
+    if (typeof activeReplayStore.markDispatched === 'function') await activeReplayStore.markDispatched(key, claim.leaseToken);
   } catch (error) {
-    await releaseDelivery(activeReplayStore, { installationId: config.installationId, deliveryId });
+    // A rejection below 500 proves GitHub did not accept the dispatch. Network
+    // failures and 5xx responses are ambiguous, so keep the bounded lease.
+    if (error.status && error.status < 500 && error.status !== 408) {
+      await releaseDelivery(activeReplayStore, { installationId: config.installationId, deliveryId, leaseToken: claim.leaseToken });
+    }
     throw error;
   }
   return reply(res, 202, { accepted: true, delivery_id: deliveryId, repository_id: repositoryId });
