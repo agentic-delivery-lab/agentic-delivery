@@ -262,9 +262,23 @@ test('pending redelivery work blocks scan checkpoint advancement', async () => {
   assert.equal(await store.hasPendingRedeliveryRequests(), true);
   assert.match(calls[0].statement, /WITH exhausted_requests AS/);
   assert.match(calls[0].statement, /LIMIT 100\s+FOR UPDATE SKIP LOCKED/);
-  assert.match(calls[1].statement, /request_status IN \('queued', 'requesting'\)/);
+  assert.match(calls[1].statement, /request_status IN \('queued', 'requesting', 'exhausted'\)/);
   assert.match(calls[1].statement, /LIMIT 1/);
   assert.deepEqual(calls[1].values, []);
+});
+
+test('Neon marks an accepted final-attempt request as accepted rather than unaccepted exhaustion', async () => {
+  let call;
+  const store = new NeonReplayStore({
+    client: { async query(statement, values) { call = { statement, values }; return [{ delivery_guid: values[0] }]; } },
+  });
+  const guid = '98765432-1234-4234-8234-123456789012';
+
+  await store.markRedeliveryAccepted(guid, '301');
+
+  assert.match(call.statement, /SET request_status = 'accepted'/);
+  assert.doesNotMatch(call.statement, /request_status = CASE WHEN attempt_count/);
+  assert.deepEqual(call.values, [guid.toLowerCase(), '301', REDELIVERY_COOLDOWN_MS]);
 });
 
 test('redelivery queue insertion splits large candidate sets into bounded SQL batches', async () => {
@@ -547,7 +561,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
       SET request_status = 'requesting', attempt_count = $2, next_attempt_at = clock_timestamp() - interval '1 second'
       WHERE delivery_guid = $1
     `, [queuedGuid, CONTROLLER_MAX_ATTEMPTS]);
-    assert.equal(await store.hasPendingRedeliveryRequests(), false, 'expired final ambiguous attempts become exhausted');
+    assert.equal(await store.hasPendingRedeliveryRequests(), true, 'an exhausted unaccepted request continues to hold the checkpoint');
     const exhaustedQueueRow = await sql.query(
       'SELECT request_status FROM public.webhook_redelivery_requests WHERE delivery_guid = $1',
       [queuedGuid],

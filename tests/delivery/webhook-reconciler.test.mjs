@@ -94,7 +94,7 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
       ].slice(0, limit);
     },
     async hasPendingRedeliveryRequests() {
-      return [...this.redeliveryQueue.values()].some((request) => ['queued', 'requesting'].includes(request.request_status));
+      return [...this.redeliveryQueue.values()].some((request) => ['queued', 'requesting', 'exhausted'].includes(request.request_status));
     },
     async linkGithubDeliveries(links) {
       this.linkBatches.push(links.length);
@@ -234,11 +234,12 @@ test('reconciler leaves its checkpoint unchanged and records a cooldown when Git
   assert.ok(Number.isFinite(Date.parse(store.requested[0].deferred.retryAt)));
 });
 
-test('reconciler records definitive redelivery rejection and advances its checkpoint', async () => {
+test('reconciler holds the checkpoint after a definitive rejection until an accepted manual retry', async () => {
   const scanNow = Date.now();
   const store = makeStore();
+  let rejectRedelivery = true;
   const fetchImpl = async (url, options) => {
-    if (options.method === 'POST') return response(404);
+    if (options.method === 'POST') return rejectRedelivery ? response(404) : response(202);
     return response(200, [{
       id: 202,
       guid: deliveryA,
@@ -253,9 +254,26 @@ test('reconciler records definitive redelivery rejection and advances its checkp
 
   assert.equal(res.statusCode, 200);
   assert.deepEqual(store.requested, [{ guid: deliveryA, id: '202', rejected: { guid: deliveryA, id: '202' } }]);
-  assert.equal(store.advanced.length, 1);
+  assert.equal(store.advanced.length, 0);
   assert.equal(JSON.parse(res.body).exhausted_redeliveries, 1);
+  assert.equal(JSON.parse(res.body).redelivery_queue_pending, true);
   assert.equal(JSON.parse(res.body).cooldown_skips, 0);
+
+  const exhaustedRequest = store.redeliveryQueue.get(deliveryA);
+  assert.equal(exhaustedRequest.request_status, 'exhausted');
+  assert.equal(await store.hasPendingRedeliveryRequests(), true);
+
+  exhaustedRequest.request_status = 'queued';
+  exhaustedRequest.attempt_count = 0;
+  rejectRedelivery = false;
+  const retryRes = output();
+  await reconcileWebhookDeliveries({ req: cronRequest(), res: retryRes, env: cronEnv(), fetchImpl, store, now: () => scanNow + 60_000 });
+
+  assert.equal(retryRes.statusCode, 200);
+  assert.deepEqual(store.requested[1].accepted, { guid: deliveryA, id: '202' });
+  assert.equal(store.redeliveryQueue.get(deliveryA).request_status, 'accepted');
+  assert.equal(JSON.parse(retryRes.body).redelivery_queue_pending, false);
+  assert.equal(store.advanced.length, 1);
 });
 
 test('reconciler defers a rate-limited GitHub 403 until Retry-After', async () => {
@@ -321,7 +339,7 @@ test('reconciler retries an ambiguous network failure from durable requesting st
   assert.equal(store.advanced.length, 1);
 });
 
-test('reconciler treats an authorization 403 as definitive without a rate-limit signal', async () => {
+test('reconciler holds the checkpoint when an authorization 403 exhausts a redelivery', async () => {
   const scanNow = Date.now();
   const store = makeStore();
   const fetchImpl = async (url, options) => {
@@ -341,7 +359,9 @@ test('reconciler treats an authorization 403 as definitive without a rate-limit 
   assert.equal(res.statusCode, 200);
   assert.deepEqual(store.requested[0].rejected, { guid: deliveryA, id: '204' });
   assert.equal(store.requested[0].deferred, undefined);
-  assert.equal(store.advanced.length, 1);
+  assert.equal(store.redeliveryQueue.get(deliveryA).request_status, 'exhausted');
+  assert.equal(await store.hasPendingRedeliveryRequests(), true);
+  assert.equal(store.advanced.length, 0);
 });
 
 test('reconciler overlaps the prior checkpoint to find late delivery-history entries', async () => {

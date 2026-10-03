@@ -616,12 +616,12 @@ export class NeonReplayStore {
     if (typeof guid !== 'string' || !/^[0-9a-f-]{20,}$/i.test(guid)) throw new ReplayProtectionError('The delivery GUID is invalid.');
     const rows = await this.#query(
       `UPDATE public.webhook_redelivery_requests
-       SET request_status = CASE WHEN attempt_count >= $3 THEN 'exhausted' ELSE 'accepted' END,
+       SET request_status = 'accepted',
            requested_at = clock_timestamp(), github_delivery_id = $2,
-           next_attempt_at = clock_timestamp() + ($4::double precision * INTERVAL '1 millisecond')
+           next_attempt_at = clock_timestamp() + ($3::double precision * INTERVAL '1 millisecond')
        WHERE delivery_guid = $1 AND request_status = 'requesting'
        RETURNING delivery_guid`,
-      [guid.toLowerCase(), String(githubDeliveryId), CONTROLLER_MAX_ATTEMPTS, REDELIVERY_COOLDOWN_MS],
+      [guid.toLowerCase(), String(githubDeliveryId), REDELIVERY_COOLDOWN_MS],
     );
     if (rows.length !== 1) throw storageError();
   }
@@ -686,7 +686,7 @@ export class NeonReplayStore {
     const rows = await this.#query(
       `SELECT delivery_guid
        FROM public.webhook_redelivery_requests
-       WHERE request_status IN ('queued', 'requesting')
+       WHERE request_status IN ('queued', 'requesting', 'exhausted')
        LIMIT 1`,
       [],
     );
