@@ -328,7 +328,7 @@ export class NeonReplayStore {
     const rows = await this.#query(
       `UPDATE public.webhook_controller_receipts AS receipts
        SET github_delivery_id = deliveries.github_delivery_id
-       FROM jsonb_to_recordset($1::jsonb) AS deliveries(replay_key text, github_delivery_id text)
+       FROM jsonb_to_recordset($1::jsonb) AS deliveries(replay_key text, github_delivery_id bigint)
        WHERE receipts.replay_key = deliveries.replay_key
          AND receipts.status IN ('pending', 'running', 'retryable')
          AND receipts.github_delivery_id IS DISTINCT FROM deliveries.github_delivery_id

@@ -122,6 +122,7 @@ test('Neon replay receipts link a batch of webhook delivery IDs before the scan 
 
   assert.equal(await store.linkGithubDeliveries(links), 1);
   assert.match(call.statement, /jsonb_to_recordset\(\$1::jsonb\)/);
+  assert.match(call.statement, /github_delivery_id bigint/);
   assert.match(call.statement, /status IN \('pending', 'running', 'retryable'\)/);
   assert.match(call.statement, /github_delivery_id IS DISTINCT FROM deliveries\.github_delivery_id/);
   assert.deepEqual(JSON.parse(call.values[0]), [{ replay_key: links[0].replayKey, github_delivery_id: links[0].githubDeliveryId }]);
@@ -208,10 +209,15 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
         },
       },
     });
-    await assert.rejects(lostResponseStore.claimWithLease(lostResponseKey, { ttlMs: 300_000, leaseMs: 25 }), /durable replay database operation failed/);
-    assert.deepEqual(await store.claimWithLease(lostResponseKey, { ttlMs: 300_000, leaseMs: 25 }), { claimed: false, leaseToken: null });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    const recovered = await store.claimWithLease(lostResponseKey, { ttlMs: 300_000, leaseMs: 25 });
+    const lostResponseLease = { ttlMs: 300_000, leaseMs: 300_000 };
+    await assert.rejects(lostResponseStore.claimWithLease(lostResponseKey, lostResponseLease), /durable replay database operation failed/);
+    assert.deepEqual(await store.claimWithLease(lostResponseKey, lostResponseLease), { claimed: false, leaseToken: null });
+    await sql.query(`
+      UPDATE public.webhook_replay_claims
+      SET dispatch_lease_expires_at = now() - interval '1 second'
+      WHERE replay_key = $1
+    `, [lostResponseKey]);
+    const recovered = await store.claimWithLease(lostResponseKey, lostResponseLease);
     assert.equal(recovered.claimed, true);
     await store.markDispatched(lostResponseKey, recovered.leaseToken);
     assert.equal(await store.claim(lostResponseKey), false);
