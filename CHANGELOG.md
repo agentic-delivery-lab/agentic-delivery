@@ -12,7 +12,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds Neon-backed dispatch leases and controller receipts, persists cursors for bounded delivery-history scans, stores GitHub delivery IDs before advancing checkpoints, aggregates attempt outcomes across scan segments, and keeps active or uncertain webhook outcomes retryable.
 - Review follow-up pins invocation finalization to the validated participant controller commit and makes webhook ingress fail closed instead of selecting a configured local file store. Migration 0004 retains temporary webhook delivery observations until the full scan reaches its checkpoint.
 - The controller release advances to `0.2.0-draft.57` at `8483b16d2b106133538ecca5f642e781d0fdfcd8`; the central participant moves to that immutable pin while draft56 and earlier remain available for rollback.
-- Intake and delivery now use bootstrap commit `676102199c1f558156081e3966793c57aee545de`, which pins draft56's bounded and resumable webhook reconciliation code.
+- Intake and delivery now use bootstrap commit `ea0148b5f8bb42b3e989f823c1892d5363948aac`, which pins draft57's webhook recovery code and participant registry.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) pins the central intake bootstrap and manual recovery paths to the controller release `bootstrapCommit`; normal and recovery execution no longer fall back to a moving `main` ref.
 - The controller release advances to `0.2.0-draft.39` at
   `53c76a68cf1a7cab2141034bd477d8cb761bf4c6`; the central participant moves
