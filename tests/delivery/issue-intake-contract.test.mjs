@@ -183,9 +183,12 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   });
   const authorizationSteps = intakeWorkflow.jobs.authorize.steps;
   const trustedAuthorizationCheckout = authorizationSteps.find((step) => step.name === 'Check out trusted authorization');
+  const bootstrapCommit = JSON.parse(await text('config/controller-release.json')).bootstrapCommit;
   const setupAuthorizationRuntime = authorizationSteps.find((step) => step.name === 'Set up pnpm and Node.js');
   const installAuthorizationDependencies = authorizationSteps.find((step) => step.name === 'Install trusted authorization dependencies');
   const actorAuthorization = authorizationSteps.find((step) => step.name === 'Authorize the issue event actor before self-hosted intake');
+  assert.ok(trustedAuthorizationCheckout);
+  assert.equal(trustedAuthorizationCheckout.with.ref, bootstrapCommit);
   assert.ok(authorizationSteps.indexOf(trustedAuthorizationCheckout) < authorizationSteps.indexOf(setupAuthorizationRuntime));
   assert.ok(authorizationSteps.indexOf(setupAuthorizationRuntime) < authorizationSteps.indexOf(installAuthorizationDependencies));
   assert.ok(authorizationSteps.indexOf(installAuthorizationDependencies) < authorizationSteps.indexOf(intakeCallerCheck));
