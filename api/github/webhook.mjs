@@ -23,6 +23,7 @@ import {
 import { assertEventEnvelope } from '../../scripts/lib/control-plane-contracts.mjs';
 import { GithubAppTokenProvider } from '../../scripts/lib/github-app.mjs';
 import { FileReplayStore, InMemoryReplayStore, ReplayProtectionError, claimDelivery, releaseDelivery } from '../../scripts/lib/replay-protection.mjs';
+import { NeonReplayStore } from '../../scripts/lib/neon-replay-store.mjs';
 
 export const config = { api: { bodyParser: false } };
 
@@ -63,15 +64,17 @@ function environment(env = process.env) {
     installationId: env.AGENTIC_DELIVERY_APP_INSTALLATION_ID || env.CODEX_DELIVERY_APP_INSTALLATION_ID,
     webhookSecret: env.AGENTIC_DELIVERY_WEBHOOK_SECRET,
     dispatchSecret: env.AGENTIC_DELIVERY_DISPATCH_SECRET || env.CODEX_DELIVERY_DISPATCH_SECRET,
+    replayDatabaseUrl: env.AGENTIC_DELIVERY_REPLAY_DATABASE_URL,
     replayStateDirectory: env.AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY,
     replayWindowMs: Number(env.AGENTIC_DELIVERY_REPLAY_WINDOW_MS || 300_000),
   };
 }
 
 function replayStoreFor(env, config) {
+  if (config.replayDatabaseUrl) return new NeonReplayStore({ connectionString: config.replayDatabaseUrl });
   if (config.replayStateDirectory) return new FileReplayStore({ directory: config.replayStateDirectory });
   if (env?.AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY === 'true') return new InMemoryReplayStore();
-  throw new ReplayProtectionError('A durable replay store is required; configure AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY or inject a replayStore adapter.', 2);
+  throw new ReplayProtectionError('A durable replay store is required; configure AGENTIC_DELIVERY_REPLAY_DATABASE_URL or AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY, or inject a replayStore adapter.', 2);
 }
 
 function appActor(payload) {

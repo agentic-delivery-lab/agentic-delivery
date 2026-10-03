@@ -22,6 +22,7 @@ import {
 } from '../../scripts/lib/agent-invocation.mjs';
 import { handleWebhook } from '../../api/github/webhook.mjs';
 import { prepareAgentInvocation } from '../../scripts/prepare-agent-invocation.mjs';
+import { NeonReplayStore } from '../../scripts/lib/neon-replay-store.mjs';
 import { parseParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
 import { InMemoryReplayStore, validateReceivedAt } from '../../scripts/lib/replay-protection.mjs';
 
@@ -440,6 +441,32 @@ test('webhook claims a delivery once and releases the claim when dispatch fails'
     fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : response(204)),
   });
   assert.equal(retried.statusCode, 202);
+});
+
+test('webhook does not dispatch when durable replay storage fails', async () => {
+  const payload = githubPayload({
+    action: 'created',
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    issue: { number: 44 },
+    comment: { id: 78, body: '@agentic-delivery-lab-invoker-7f3a continue', user: { login: 'sjefsharp', type: 'User' } },
+    sender: { login: 'sjefsharp', type: 'User' },
+  });
+  const body = JSON.stringify(payload);
+  const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
+  const replayStore = new NeonReplayStore({ client: { query: async () => { throw new Error('postgresql://user:secret@host/replay'); } } });
+  let dispatches = 0;
+
+  await assert.rejects(handleWebhook(request({ body, signature }), result(), {
+    env: webhookEnv(),
+    replayStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    fetchImpl: async (url) => {
+      if (url.includes('/permission')) return response(200, { permission: 'write' });
+      dispatches += 1;
+      return response(204);
+    },
+  }), /durable replay database operation failed/i);
+  assert.equal(dispatches, 0);
 });
 
 test('received-at validation rejects stale and future event envelopes', () => {

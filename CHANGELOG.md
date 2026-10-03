@@ -465,6 +465,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Added
 
+- [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds a Neon-backed atomic webhook replay store, a repeatable minimal schema migration, and bounded cleanup of expired claims.
+
 - Added a redacted, read-only GitHub organization inventory command and v1
   evidence schema. It records repository boundaries, rulesets, workflows,
   open work, labels, cross-repository references, and capability gaps without

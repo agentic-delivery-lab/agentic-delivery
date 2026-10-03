@@ -26,19 +26,55 @@ releases the claim so GitHub can retry the same delivery. Runner-local markers
 remain a second, origin-scoped idempotency boundary; they are not a replacement
 for gateway protection.
 
-`AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY` selects the file-backed claim store.
-It is suitable only for a single process or a shared filesystem. A
-multi-instance deployment must provide an equivalent durable atomic claim
-store through the `replayStore` adapter before activation; a process-local
-memory store is intended for tests and explicitly isolated single-process
-operation only. The default handler fails closed when neither a durable
-directory nor an injected adapter is available. Tests may set
+`AGENTIC_DELIVERY_REPLAY_DATABASE_URL` selects the Neon-backed claim store.
+Set it to a pooled Neon connection string whose endpoint hostname includes
+`-pooler`. The handler uses the `@neondatabase/serverless` HTTP driver and one
+parameterized SQL statement for each claim. A primary key and atomic upsert
+allow only one concurrent claim; an expired claim can be replaced using the
+database clock. Each claim also removes at most 100 other expired rows, so
+cleanup is bounded and does not need a separate scheduled job.
+
+Before setting this runtime secret, apply
+[`api/github/migrations/0001-webhook-replay-claims.sql`](../../api/github/migrations/0001-webhook-replay-claims.sql)
+to the selected Neon database using a direct, unpooled connection. The
+migration creates only the replay key and expiry columns, plus an expiry
+index. It is safe to run more than once. For example, from a protected local
+terminal with `psql` installed:
+
+```sh
+psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
+  -f api/github/migrations/0001-webhook-replay-claims.sql
+```
+
+Do not print the connection string or add it to source control. The gateway
+does not log database errors or credentials.
+
+`AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY` remains available for a single
+process or a shared filesystem. When both settings are present, the Neon
+database is selected. A multi-instance deployment must not rely on a local
+function filesystem. The process-local memory store is intended for tests and
+explicitly isolated single-process operation only. The default handler fails
+closed when no durable store or injected adapter is available. Tests may set
 `AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY=true`; that flag is not a production
 fallback.
 
-Replay markers contain only the installation/delivery key and expiry. They do
+For rollout, apply the migration first, then configure the protected runtime
+secret with the pooled URL, and deploy through the separately approved
+deployment process. Confirm a controlled duplicate delivery is rejected and
+that a failed dispatch can be retried. This code change does not configure the
+secret or activate the production webhook.
+
+If Neon is unavailable, the handler fails closed and GitHub can retry. A
+rollback to file-backed state is safe only when the deployed gateway uses one
+process or a shared filesystem. On a multi-instance deployment, restore a
+previously verified shared store or keep dispatch disabled until Neon is
+available; local function storage is not a safe rollback target.
+
+Replay rows contain only the installation/delivery key and expiry. They do
 not contain App private keys, installation tokens, issue bodies, or model
-output.
+output. The optional integration test uses
+`AGENTIC_DELIVERY_REPLAY_TEST_DATABASE_URL`; point it only at an isolated Neon
+database where this migration has already been applied.
 
 The gateway also binds every supported event to the configured organization
 login, numeric organization ID, and App installation ID before it mints an
