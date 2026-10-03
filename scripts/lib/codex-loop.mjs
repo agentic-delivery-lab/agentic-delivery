@@ -364,12 +364,17 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     finally { polling = false; }
   };
   const onAbort = () => stop('Workflow cancelled; saved work can be resumed.');
-  const onFailure = () => finish(stopped ?? {
-    status: 'paused',
-    reason: lastTurnError
-      ? `Codex app-server disconnected after a turn error (${lastTurnError}).`
-      : 'Codex app-server disconnected.',
-  });
+  const onFailure = (error) => {
+    const failureDiagnostic = safeTurnError(error);
+    finish(stopped ?? {
+      status: 'paused',
+      reason: lastTurnError
+        ? `Codex app-server disconnected after a turn error (${lastTurnError}).`
+        : failureDiagnostic
+          ? `Codex app-server disconnected (${failureDiagnostic}).`
+          : 'Codex app-server disconnected.',
+    });
+  };
   const onMessage = (message) => {
     const p = message.params ?? {};
     if (message.method === 'account/rateLimits/updated') {

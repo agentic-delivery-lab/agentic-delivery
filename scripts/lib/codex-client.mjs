@@ -86,6 +86,13 @@ export function appServerFailure(code, signal, stderr = '') {
   return String(stderr).trim() ? `${stopped} Diagnostic: ${safeCodexDiagnostic(stderr)}` : stopped;
 }
 
+function appServerFailureError(code, signal, stderr = '') {
+  const error = new Error(appServerFailure(code, signal, stderr));
+  const diagnosticCode = safeCodexDiagnosticCode(stderr);
+  if (diagnosticCode) Object.defineProperty(error, 'codexDiagnostic', {value: diagnosticCode});
+  return error;
+}
+
 export function quotaBoundary(response, now = Date.now() / 1000) {
   const mapped = response?.rateLimitsByLimitId;
   const mappedIsRecord = mapped == null || (typeof mapped === 'object' && !Array.isArray(mapped));
@@ -371,7 +378,7 @@ export class CodexClient extends EventEmitter {
     this.child.stderr.on('data', (chunk) => {
       this.stderr = `${this.stderr}${chunk.toString()}`.slice(-4000);
     });
-    this.child.on('close', (code, signal) => this.fail(new Error(appServerFailure(code, signal, this.stderr))));
+    this.child.on('close', (code, signal) => this.fail(appServerFailureError(code, signal, this.stderr)));
     this.child.stdin.on('error', () => this.fail(new Error('Codex input pipe closed.')));
     this.lines = createInterface({ input: this.child.stdout });
     this.lines.on('line', (line) => {
