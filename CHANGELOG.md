@@ -11,7 +11,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds Neon-backed dispatch leases and controller receipts, stores GitHub delivery IDs before advancing scan checkpoints, and recovers failed webhook and interrupted Actions deliveries.
 - The controller release advances to `0.2.0-draft.54` at `7ad6d200fd99483f931b2f57335387a68c70f820`; the central participant moves to that immutable pin while draft53 and earlier remain available for rollback.
-- Intake and delivery now use bootstrap commit `2463516aea6c6c24ccada6f18f8188b242d7536b`, which contains draft53's durable receipt preflight and Neon runtime dependency.
+- Intake and delivery now use bootstrap commit `df7a0caa3c4050af86b4bf70270758abd64627f9`, which pins draft54's controller release and its durable webhook recovery code.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) pins the central intake bootstrap and manual recovery paths to the controller release `bootstrapCommit`; normal and recovery execution no longer fall back to a moving `main` ref.
 - The controller release advances to `0.2.0-draft.39` at
   `53c76a68cf1a7cab2141034bd477d8cb761bf4c6`; the central participant moves
