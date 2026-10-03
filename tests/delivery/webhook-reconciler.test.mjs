@@ -44,7 +44,29 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
     completed: [],
     advanced: [],
     scanProgress: [],
+    observations: new Map(),
     async reconcilerCheckpoint() { return this.checkpoint; },
+    async mergeReconcilerObservations(values) {
+      for (const value of values) {
+        const existing = this.observations.get(value.guid);
+        if (existing && existing.installation_id != null && value.installationId != null
+          && String(existing.installation_id) !== String(value.installationId)) {
+          throw new Error('conflicting installation IDs');
+        }
+        const newer = !existing
+          || Date.parse(value.deliveredAt) > Date.parse(existing.newest_delivery_at)
+          || (Date.parse(value.deliveredAt) === Date.parse(existing.newest_delivery_at)
+            && BigInt(value.deliveryId) > BigInt(existing.newest_delivery_id));
+        this.observations.set(value.guid, {
+          delivery_guid: value.guid,
+          newest_delivery_at: newer ? value.deliveredAt : existing.newest_delivery_at,
+          newest_delivery_id: newer ? value.deliveryId : existing.newest_delivery_id,
+          has_success: Boolean(existing?.has_success || value.hasSuccess),
+          installation_id: existing?.installation_id ?? value.installationId,
+        });
+      }
+    },
+    async reconcilerObservations() { return [...this.observations.values()]; },
     async dueControllerReceipts() { return this.dueReceipts; },
     async dueRedeliveryRequests() { return this.dueRedeliveries; },
     async linkGithubDeliveries(links) { this.linked.push(...links.map(({ replayKey, githubDeliveryId }) => ({ key: replayKey, id: githubDeliveryId }))); },
@@ -74,6 +96,7 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
         scan_high_water_at: null,
         scan_high_water_delivery_id: null,
       };
+      this.observations.clear();
     },
   };
 }
@@ -280,9 +303,9 @@ test('reconciler resumes a page-limited history scan from its persisted cursor',
       const offset = ((page - 1) * 100) + index;
       return {
         id: String(20_000 - offset),
-        guid,
+        guid: offset === 499 ? guid : deliveryB,
         delivered_at: new Date(scanNow - (offset * 1_000)).toISOString(),
-        status: 'OK',
+        status: offset === 499 ? 'FAIL' : 'OK',
       };
     });
     const headers = page < 6
@@ -296,9 +319,12 @@ test('reconciler resumes a page-limited history scan from its persisted cursor',
   assert.equal(firstRes.statusCode, 200);
   assert.equal(JSON.parse(firstRes.body).scanned_pages, 5);
   assert.equal(JSON.parse(firstRes.body).scan_continuation_pending, true);
+  assert.equal(JSON.parse(firstRes.body).matched_deliveries, 2);
   assert.equal(store.scanProgress.length, 1);
   assert.equal(store.scanProgress[0].cursor, 'page-6');
   assert.equal(store.scanProgress[0].highWaterDeliveryId, '20000');
+  assert.equal(store.observations.get(guid).has_success, false);
+  assert.deepEqual(store.requested, [], 'history-based redelivery waits for the full scan');
   assert.equal(store.advanced.length, 0);
 
   let resumedUrl;
@@ -319,9 +345,11 @@ test('reconciler resumes a page-limited history scan from its persisted cursor',
   assert.equal(secondRes.statusCode, 200);
   assert.equal(JSON.parse(secondRes.body).scan_continuation_pending, false);
   assert.match(resumedUrl, /cursor=page-6/);
+  assert.deepEqual(store.requested, [], 'the successful attempt on the resumed segment prevents a stale redelivery');
   assert.equal(store.advanced.length, 1);
   assert.equal(store.advanced[0].deliveryId, '20000');
   assert.equal(store.checkpoint.scan_cursor, null);
+  assert.equal(store.observations.size, 0);
 });
 
 test('reconciler rejects missing and incorrect Cron bearer credentials before accessing storage', async () => {

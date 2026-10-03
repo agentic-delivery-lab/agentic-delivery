@@ -191,6 +191,7 @@ test('replay migrations store only minimal lease, receipt, and checkpoint metada
   const initialMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0001-webhook-replay-claims.sql'), 'utf8');
   const recoveryMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0002-recoverable-webhook-delivery.sql'), 'utf8');
   const scanMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0003-resumable-webhook-scan.sql'), 'utf8');
+  const observationsMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0004-aggregate-webhook-scan-observations.sql'), 'utf8');
 
   assert.match(initialMigration, /CREATE TABLE IF NOT EXISTS public\.webhook_replay_claims\s*\(\s*replay_key text PRIMARY KEY,\s*expires_at timestamptz NOT NULL\s*\)/);
   assert.match(initialMigration, /ON public\.webhook_replay_claims \(expires_at\)/);
@@ -202,7 +203,11 @@ test('replay migrations store only minimal lease, receipt, and checkpoint metada
   assert.match(scanMigration, /ADD COLUMN IF NOT EXISTS scan_cursor text/);
   assert.match(scanMigration, /scan_high_water_at timestamptz/);
   assert.match(scanMigration, /scan_high_water_delivery_id bigint/);
-  const migrationSql = (initialMigration + recoveryMigration + scanMigration).replace(/^\s*--.*$/gm, '');
+  assert.match(observationsMigration, /CREATE TABLE IF NOT EXISTS public\.webhook_reconciler_observations/);
+  assert.match(observationsMigration, /newest_delivery_at timestamptz NOT NULL/);
+  assert.match(observationsMigration, /has_success boolean NOT NULL/);
+  assert.match(observationsMigration, /installation_id bigint/);
+  const migrationSql = (initialMigration + recoveryMigration + scanMigration + observationsMigration).replace(/^\s*--.*$/gm, '');
   assert.doesNotMatch(migrationSql, /\b(?:body|payload|api_token|private_key|model_output)\b/i);
 });
 
@@ -307,11 +312,23 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     const previousCheckpointTime = Date.parse(String(previousCheckpoint?.checkpoint_at ?? ''));
     const highWaterAt = new Date(Math.max(Date.now(), Number.isFinite(previousCheckpointTime) ? previousCheckpointTime : 0) + 1_000).toISOString();
     const scanCursor = `integration:${randomUUID()}`;
+    const observationGuid = randomUUID();
     const expectedCheckpoint = {
       expectedCursor: previousCheckpoint?.scan_cursor ?? null,
       expectedCheckpointAt: previousCheckpoint?.checkpoint_at ?? null,
       expectedCheckpointDeliveryId: previousCheckpoint?.checkpoint_delivery_id ?? null,
     };
+    await store.mergeReconcilerObservations([{
+      guid: observationGuid,
+      deliveredAt: highWaterAt,
+      deliveryId: '987654322',
+      hasSuccess: false,
+      installationId: '163255060',
+    }], {
+      expectedCursor: previousCheckpoint?.scan_cursor ?? null,
+      expectedCheckpointAt: previousCheckpoint?.checkpoint_at ?? null,
+      expectedCheckpointDeliveryId: previousCheckpoint?.checkpoint_delivery_id ?? null,
+    });
     await store.saveReconcilerScan({
       cursor: scanCursor,
       highWaterAt,
@@ -321,6 +338,22 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     const pendingScan = await store.reconcilerCheckpoint();
     assert.equal(pendingScan.scan_cursor, scanCursor);
     assert.equal(pendingScan.scan_high_water_delivery_id, '987654322');
+    const firstObservation = (await store.reconcilerObservations()).find((row) => row.delivery_guid === observationGuid);
+    assert.equal(firstObservation.has_success, false);
+    await store.mergeReconcilerObservations([{
+      guid: observationGuid,
+      deliveredAt: new Date(Date.parse(highWaterAt) - 1_000).toISOString(),
+      deliveryId: '987654321',
+      hasSuccess: true,
+      installationId: '163255060',
+    }], {
+      expectedCursor: pendingScan.scan_cursor,
+      expectedCheckpointAt: pendingScan.checkpoint_at ?? null,
+      expectedCheckpointDeliveryId: pendingScan.checkpoint_delivery_id ?? null,
+    });
+    const combinedObservation = (await store.reconcilerObservations()).find((row) => row.delivery_guid === observationGuid);
+    assert.equal(combinedObservation.has_success, true);
+    assert.equal(String(combinedObservation.newest_delivery_id), '987654322');
     const expectedPendingScan = {
       expectedCursor: pendingScan.scan_cursor,
       expectedCheckpointAt: pendingScan.checkpoint_at ?? null,
@@ -335,12 +368,14 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     assert.equal(completedScan.checkpoint_delivery_id, '987654322');
     assert.equal(completedScan.scan_cursor, null);
     assert.equal(completedScan.scan_high_water_at, null);
+    assert.equal((await store.reconcilerObservations()).some((row) => row.delivery_guid === observationGuid), false);
   } finally {
     await store.release(key);
     await store.release(lostResponseKey);
     for (const receiptKey of [key, lostResponseKey, linkedReceiptKey]) {
       await sql.query('DELETE FROM public.webhook_controller_receipts WHERE replay_key = $1', [receiptKey]);
     }
+    await sql.query('DELETE FROM public.webhook_reconciler_observations');
     await sql.query("DELETE FROM public.webhook_reconciler_state WHERE state_key = 'github-app-deliveries'");
   }
 });

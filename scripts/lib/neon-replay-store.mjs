@@ -361,6 +361,100 @@ export class NeonReplayStore {
     return rows[0] ?? null;
   }
 
+  async mergeReconcilerObservations(observations, {
+    expectedCursor = null,
+    expectedCheckpointAt = null,
+    expectedCheckpointDeliveryId = null,
+  } = {}) {
+    if (!Array.isArray(observations)) throw new ReplayProtectionError('The webhook scan observations are invalid.');
+    if (observations.length === 0) return 0;
+    if (expectedCursor !== null && (typeof expectedCursor !== 'string' || !expectedCursor || expectedCursor.length > 4096 || /[\u0000-\u001f\u007f]/.test(expectedCursor))) {
+      throw new ReplayProtectionError('The expected webhook scan cursor is invalid.');
+    }
+    if ((expectedCheckpointAt === null) !== (expectedCheckpointDeliveryId === null)
+      || (expectedCheckpointAt !== null && (!Number.isFinite(Date.parse(String(expectedCheckpointAt))) || !/^[1-9][0-9]*$/.test(String(expectedCheckpointDeliveryId))))) {
+      throw new ReplayProtectionError('The expected webhook checkpoint is invalid.');
+    }
+    const normalized = observations.map((item) => {
+      const guid = String(item?.guid ?? '').toLowerCase();
+      const deliveryId = String(item?.deliveryId ?? '');
+      if (!/^[0-9a-f-]{20,}$/.test(guid)
+        || !Number.isFinite(Date.parse(String(item?.deliveredAt ?? '')))
+        || !/^[1-9][0-9]*$/.test(deliveryId)
+        || typeof item?.hasSuccess !== 'boolean'
+        || (item.installationId != null && !/^[1-9][0-9]*$/.test(String(item.installationId)))) {
+        throw new ReplayProtectionError('A webhook scan observation is invalid.');
+      }
+      return {
+        guid,
+        delivered_at: new Date(item.deliveredAt).toISOString(),
+        delivery_id: deliveryId,
+        has_success: item.hasSuccess,
+        installation_id: item.installationId == null ? null : String(item.installationId),
+      };
+    });
+    const rows = await this.#query(
+      `WITH locked_state AS MATERIALIZED (
+         SELECT state_key, scan_cursor, checkpoint_at, checkpoint_delivery_id
+         FROM public.webhook_reconciler_state
+         WHERE state_key = 'github-app-deliveries'
+         FOR UPDATE
+       ), scan_state AS (
+         SELECT state_key
+         FROM locked_state
+         WHERE scan_cursor IS NOT DISTINCT FROM $2
+           AND checkpoint_at IS NOT DISTINCT FROM $3::timestamptz
+           AND checkpoint_delivery_id IS NOT DISTINCT FROM $4::bigint
+         UNION ALL
+         SELECT 'github-app-deliveries'
+         WHERE $2::text IS NULL
+           AND $3::timestamptz IS NULL
+           AND $4::bigint IS NULL
+           AND NOT EXISTS (SELECT 1 FROM locked_state)
+       ), incoming AS (
+         SELECT guid, delivered_at::timestamptz AS delivered_at,
+                delivery_id::bigint AS delivery_id, has_success,
+                installation_id::bigint AS installation_id
+         FROM jsonb_to_recordset($1::jsonb) AS item(
+           guid text, delivered_at text, delivery_id text,
+           has_success boolean, installation_id text
+         )
+       )
+       INSERT INTO public.webhook_reconciler_observations AS stored
+         (delivery_guid, newest_delivery_at, newest_delivery_id, has_success, installation_id)
+       SELECT incoming.guid, incoming.delivered_at, incoming.delivery_id,
+              incoming.has_success, incoming.installation_id
+       FROM incoming CROSS JOIN scan_state
+       ON CONFLICT (delivery_guid) DO UPDATE
+       SET newest_delivery_at = CASE
+             WHEN (stored.newest_delivery_at, stored.newest_delivery_id)
+                  < (EXCLUDED.newest_delivery_at, EXCLUDED.newest_delivery_id)
+             THEN EXCLUDED.newest_delivery_at ELSE stored.newest_delivery_at END,
+           newest_delivery_id = CASE
+             WHEN (stored.newest_delivery_at, stored.newest_delivery_id)
+                  < (EXCLUDED.newest_delivery_at, EXCLUDED.newest_delivery_id)
+             THEN EXCLUDED.newest_delivery_id ELSE stored.newest_delivery_id END,
+           has_success = stored.has_success OR EXCLUDED.has_success,
+           installation_id = COALESCE(stored.installation_id, EXCLUDED.installation_id)
+       WHERE stored.installation_id IS NULL
+          OR EXCLUDED.installation_id IS NULL
+          OR stored.installation_id = EXCLUDED.installation_id
+       RETURNING delivery_guid`,
+      [JSON.stringify(normalized), expectedCursor, expectedCheckpointAt, expectedCheckpointDeliveryId],
+    );
+    if (rows.length !== normalized.length) throw storageError();
+    return rows.length;
+  }
+
+  async reconcilerObservations() {
+    return this.#query(
+      `SELECT delivery_guid, newest_delivery_at, newest_delivery_id, has_success, installation_id
+       FROM public.webhook_reconciler_observations
+       ORDER BY delivery_guid`,
+      [],
+    );
+  }
+
   async saveReconcilerScan({ cursor, highWaterAt, highWaterDeliveryId, expectedCursor = null, expectedCheckpointAt = null, expectedCheckpointDeliveryId = null }) {
     const scanCursor = String(cursor ?? '');
     const highWaterTimestamp = Date.parse(String(highWaterAt ?? ''));
@@ -407,7 +501,8 @@ export class NeonReplayStore {
       throw new ReplayProtectionError('The expected webhook checkpoint is invalid.');
     }
     const rows = await this.#query(
-      `INSERT INTO public.webhook_reconciler_state
+      `WITH advanced AS (
+       INSERT INTO public.webhook_reconciler_state
          (state_key, checkpoint_at, checkpoint_delivery_id, updated_at)
        VALUES ('github-app-deliveries', $1::timestamptz, $2, clock_timestamp())
        ON CONFLICT (state_key) DO UPDATE
@@ -428,7 +523,13 @@ export class NeonReplayStore {
        WHERE webhook_reconciler_state.scan_cursor IS NOT DISTINCT FROM $3
          AND webhook_reconciler_state.checkpoint_at IS NOT DISTINCT FROM $4::timestamptz
          AND webhook_reconciler_state.checkpoint_delivery_id IS NOT DISTINCT FROM $5::bigint
-       RETURNING state_key`,
+       RETURNING state_key
+       ), cleared AS (
+         DELETE FROM public.webhook_reconciler_observations
+         WHERE EXISTS (SELECT 1 FROM advanced)
+         RETURNING delivery_guid
+       )
+       SELECT state_key FROM advanced`,
       [new Date(deliveredAt).toISOString(), String(deliveryId), expectedCursor, expectedCheckpointAt, expectedCheckpointDeliveryId],
     );
     if (rows.length !== 1) throw storageError();

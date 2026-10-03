@@ -314,9 +314,17 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Validate the participant controller pin
+        env:
+          CONTROLLER_COMMIT: ${{ needs.classify.outputs.controller_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+
       - name: Check out the controller
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
+          ref: ${{ needs.classify.outputs.controller_commit }}
           persist-credentials: false
 
       - name: Set up Node.js and pnpm

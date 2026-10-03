@@ -13,16 +13,24 @@ future clock-skew allowance. New webhook deliveries always include it. The
 gateway also signs the complete `repository_dispatch` client payload with the
 separate `AGENTIC_DELIVERY_DISPATCH_SECRET` using HMAC-SHA256.
 
-The Neon store keeps two small state boundaries. `webhook_replay_claims` keeps
-the five-minute gateway replay window, dispatch state, and lease. The separate
-`webhook_controller_receipts` table keeps a 30-day status and lease for the
-controller run: pending, running, retryable, completed, or exhausted. The
-controller claims the receipt before intake, and a final Actions job records
-completion only after classification and any selected delivery workflow
-finish. Failed or interrupted runs become retryable after their lease expires.
-Actions concurrency keyed by the delivery GUID serializes repeated dispatches.
-Neither table stores webhook bodies, credentials, private keys, or model
-output.
+Neon stores the five-minute gateway replay window and dispatch lease in
+`webhook_replay_claims`. `webhook_controller_receipts` keeps a 30-day status and
+lease for controller runs: pending, running, retryable, completed, or
+exhausted. The controller claims the receipt before intake, and a final Actions
+job records completion only after classification and any selected delivery
+workflow finish. The finalizer checks out the same validated controller pin
+used for intake before it records completion or retryability. Failed or
+interrupted runs become retryable after their lease expires. Actions
+concurrency keyed by the delivery GUID serializes repeated dispatches.
+
+`webhook_reconciler_state` holds the completed history checkpoint and any
+pending GitHub cursor. A `webhook delivery observation` in
+`webhook_reconciler_observations` accumulates one GUID's newest attempt,
+whether any attempt succeeded, and its installation ID across five-page run
+segments. History-based retry decisions wait until the scan reaches its
+previous checkpoint. The observations are deleted atomically when the
+checkpoint advances. The tables store delivery identity and coordination
+metadata, not webhook bodies, credentials, private keys, or model output.
 
 The reconciler processes at most five 100-delivery pages per run. When it
 reaches that bound before the previous checkpoint, it stores the opaque GitHub
@@ -42,7 +50,7 @@ controller repository secret.
 
 ## Migration and configuration
 
-Apply all three migrations to the selected Neon database with a direct, unpooled
+Apply all four migrations to the selected Neon database with a direct, unpooled
 connection before deploying code that uses the new schema:
 
 ```sh
@@ -52,6 +60,8 @@ psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
   -f api/github/migrations/0002-recoverable-webhook-delivery.sql
 psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
   -f api/github/migrations/0003-resumable-webhook-scan.sql
+psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
+  -f api/github/migrations/0004-aggregate-webhook-scan-observations.sql
 ```
 
 Run them from a protected terminal. Never print the connection string or add
@@ -80,9 +90,12 @@ deploy, or activate the App webhook.
 GitHub does not automatically redeliver failed App webhook deliveries. The
 scheduled route creates an App JWT, pages through delivery history, groups
 attempts by stable GUID, and requests redelivery when no attempt succeeded.
-Its first scan reads the available delivery history. Each scan is capped at 100
-pages and 1,000 redelivery requests; hitting either cap returns 503 and leaves
-the checkpoint unchanged instead of silently truncating the scan.
+Each run reads at most five 100-delivery pages. If more history remains before
+the prior checkpoint, it saves the opaque cursor and accumulated GUID outcomes
+for the next run; it does not make history-based retry decisions from a partial
+scan. The cursor is resumed until the prior checkpoint is reached. A run that
+would exceed 1,000 redelivery requests returns 503 and leaves the checkpoint
+unchanged.
 It also redelivers due controller receipts even when GitHub recorded the
 original webhook delivery as successful. Before advancing its checkpoint, the
 reconciler links each observed delivery GUID's numeric GitHub API ID to any
@@ -118,15 +131,15 @@ GROUP BY request_status
 ORDER BY request_status;
 ```
 
-If Neon is unavailable, the gateway fails closed. A rollback to file-backed
-state is safe only for one process or a shared filesystem. A multi-instance
-deployment must keep dispatch disabled until the shared database is restored;
-local function storage cannot preserve these semantics. To roll back the
-controller code, keep the schema in place; the additive migration is backward
-compatible with the earlier claim-only adapter.
+If Neon is unavailable, the gateway fails closed. The webhook gateway does not
+select file-backed replay state from a configured directory; local file and
+in-memory adapters are limited to explicit test or development use. Keep
+dispatch disabled until the shared database is restored. To roll back the
+controller code, keep the schema in place; the additive migrations are
+backward compatible with earlier controller releases.
 
 The optional isolated integration test uses
 `AGENTIC_DELIVERY_REPLAY_TEST_DATABASE_URL`. Point it only at a separate Neon
-database where all three migrations have been applied. The live Vercel deployment,
+database where all four migrations have been applied. The live Vercel deployment,
 GitHub App credentials, Neon production schema, and scheduled execution remain
 unverified until an operator configures and activates them.

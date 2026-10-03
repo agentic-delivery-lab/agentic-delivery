@@ -181,6 +181,37 @@ async function collectDeliveryAttempts({ checkpoint, scanCursor = null, jwt, fet
   return { grouped, highWater, pages, nextCursor };
 }
 
+function observationsFromGroups(groups) {
+  return [...groups.values()].map((group) => {
+    const tuple = deliveryTuple(group.newest);
+    if (!tuple) throw new Error('GitHub returned an invalid newest webhook delivery attempt.');
+    const installations = [...group.installations];
+    if (installations.length > 1) throw new Error('GitHub returned conflicting installation IDs for one delivery GUID.');
+    return {
+      guid: group.guid,
+      deliveredAt: group.newest.delivered_at,
+      deliveryId: String(group.newest.id),
+      hasSuccess: group.hasSuccess,
+      installationId: installations[0] ?? null,
+    };
+  });
+}
+
+function groupsFromObservations(observations) {
+  return new Map(observations.map((observation) => {
+    const guid = String(observation.delivery_guid ?? '').toLowerCase();
+    return [guid, {
+      guid,
+      newest: {
+        id: String(observation.newest_delivery_id),
+        delivered_at: observation.newest_delivery_at,
+      },
+      hasSuccess: Boolean(observation.has_success),
+      installations: new Set(observation.installation_id == null ? [] : [String(observation.installation_id)]),
+    }];
+  }));
+}
+
 async function requestRedelivery({ deliveryId, guid, jwt, fetchImpl, store }) {
   const claim = await store.claimRedeliveryRequest(guid, deliveryId, { cooldownMs: REDELIVERY_COOLDOWN_MS });
   if (!claim.claimed) {
@@ -227,7 +258,15 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
     if (checkpointHighWater && (!Number.isFinite(Date.parse(String(checkpointHighWater.deliveredAt ?? ''))) || !/^[1-9][0-9]*$/.test(checkpointHighWater.deliveryId))) {
       throw new Error('The stored webhook scan high-water mark is invalid.');
     }
-    const { grouped, highWater, pages, nextCursor } = await collectDeliveryAttempts({ checkpoint, scanCursor, jwt, fetchImpl });
+    const { grouped: segmentGroups, highWater, pages, nextCursor } = await collectDeliveryAttempts({ checkpoint, scanCursor, jwt, fetchImpl });
+    const expectedCheckpoint = {
+      expectedCursor: scanCursor,
+      expectedCheckpointAt: checkpoint?.checkpoint_at ?? null,
+      expectedCheckpointDeliveryId: checkpoint?.checkpoint_delivery_id ?? null,
+    };
+    await activeStore.mergeReconcilerObservations(observationsFromGroups(segmentGroups), expectedCheckpoint);
+    const observedGroups = groupsFromObservations(await activeStore.reconcilerObservations());
+    const grouped = nextCursor ? new Map() : observedGroups;
     const dueReceipts = await activeStore.dueControllerReceipts({ limit: CONTROLLER_RECEIPT_LIMIT });
     const dueRedeliveries = await activeStore.dueRedeliveryRequests({ limit: CONTROLLER_RECEIPT_LIMIT });
     const dueByGuid = new Map();
@@ -290,11 +329,6 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
       if (result.reason === 'exhausted') exhausted += 1;
     }
 
-    const expectedCheckpoint = {
-      expectedCursor: scanCursor,
-      expectedCheckpointAt: checkpoint?.checkpoint_at ?? null,
-      expectedCheckpointDeliveryId: checkpoint?.checkpoint_delivery_id ?? null,
-    };
     const scanHighWater = checkpointHighWater ?? highWater;
     if (nextCursor) {
       if (!scanHighWater) throw new Error('The webhook scan cannot persist a cursor without a high-water mark.');
@@ -311,7 +345,7 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
         ...expectedCheckpoint,
       });
     }
-    return response(res, 200, { scanned_pages: pages, scan_continuation_pending: Boolean(nextCursor), matched_deliveries: grouped.size, redelivery_requests: requested, cooldown_skips: skippedCooldown, exhausted_redeliveries: exhausted });
+    return response(res, 200, { scanned_pages: pages, scan_continuation_pending: Boolean(nextCursor), matched_deliveries: observedGroups.size, redelivery_requests: requested, cooldown_skips: skippedCooldown, exhausted_redeliveries: exhausted });
   } catch (error) {
     const status = !error.status || error.status === 429 || error.status >= 500 || error.status === 408 ? 503 : 502;
     return response(res, status, { error: 'Webhook delivery reconciliation failed; the checkpoint was not advanced.' });

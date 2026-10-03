@@ -154,6 +154,15 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   );
   assert.ok(intakeWorkflow.jobs.classify.outputs.controller_version);
   assert.ok(intakeWorkflow.jobs.classify.outputs.controller_commit);
+  const finalizer = intakeWorkflow.jobs['finalize-invocation'];
+  assert.ok(finalizer.needs.includes('classify'));
+  const finalizerSteps = finalizer.steps;
+  const finalizerPinValidation = finalizerSteps.find((step) => step.name === 'Validate the participant controller pin');
+  const finalizerCheckout = finalizerSteps.find((step) => step.name === 'Check out the controller');
+  assert.equal(finalizerPinValidation.env.CONTROLLER_COMMIT, '${{ needs.classify.outputs.controller_commit }}');
+  assert.match(finalizerPinValidation.run, /\^\[0-9a-f\]\{40\}\$/);
+  assert.equal(finalizerCheckout.with.ref, '${{ needs.classify.outputs.controller_commit }}');
+  assert.ok(finalizerSteps.indexOf(finalizerPinValidation) < finalizerSteps.indexOf(finalizerCheckout));
   const intakeSource = await text('.github/workflows/issue-intake.yml');
   assert.match(intakeSource, /steps\.invocation\.outputs\.controller_commit \|\| steps\.participant\.outputs\.controller_commit/);
   assert.doesNotMatch(intakeSource, /inputs\.controller_commit|github\.event\.client_payload\.controller/);

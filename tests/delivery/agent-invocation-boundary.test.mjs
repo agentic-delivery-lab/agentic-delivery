@@ -326,7 +326,7 @@ test('webhook fails closed when the central controller repository ID is invalid'
   assert.match(output.body, /central controller repository ID is not configured/);
 });
 
-test('webhook requires a durable replay store unless ephemeral mode is explicit', async () => {
+test('webhook requires the shared replay store unless ephemeral mode is explicit', async () => {
   const payload = githubPayload({
     action: 'created',
     repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
@@ -336,17 +336,20 @@ test('webhook requires a durable replay store unless ephemeral mode is explicit'
   });
   const body = JSON.stringify(payload);
   const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
-  await assert.rejects(handleWebhook(request({ body, signature }), result(), {
-    env: {
-      AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
-      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
-      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '1358455028',
-      AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
-      AGENTIC_DELIVERY_DISPATCH_SECRET: 'dispatch-secret',
-    },
-    fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : response(204)),
-    tokenProvider: { token: async () => 'installation-token' },
-  }), /durable replay store is required/);
+  const baseEnv = {
+    AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
+    AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+    AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '1358455028',
+    AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
+    AGENTIC_DELIVERY_DISPATCH_SECRET: 'dispatch-secret',
+  };
+  for (const env of [baseEnv, { ...baseEnv, AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY: '/tmp/local-replay' }]) {
+    await assert.rejects(handleWebhook(request({ body, signature }), result(), {
+      env,
+      fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : response(204)),
+      tokenProvider: { token: async () => 'installation-token' },
+    }), /shared Neon replay store is required/);
+  }
 });
 
 test('webhook rejects self-authored and unknown bot invocations', async () => {
