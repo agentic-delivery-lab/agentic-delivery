@@ -82,14 +82,14 @@ decisions without retaining obsolete architectural context on `main`.
 
 The template intentionally lives beside README.md and the numbered records. Every record keeps a source-issue link, including when a separate ADR tracking issue is used.
 
-ADR-0018 references Issue #52 for its initial plan-persistence decision and
-Issue #66 tracks the earlier control-plane amendment delivered by PR #67;
-Issue #68 and PR #69 track the controller-local schema amendment. That schema
-amendment remains provisional until PR #69 is merged into `main`. ADR-0019
-continues to reference Issue #52. Issue #52 is not implementation
-authorization and must not be closed by an ADR or migration change. ADR-0019's
-official review and acceptance still require a separately authorized
-successor issue and pull request.
+ADR-0018 references Issue #52 for its initial plan-persistence decision.
+Issue #66 is the authorized successor tracking the ADR-0018 amendment in PR
+#67. Issue #68 and PR #69 track the later controller-local schema amendment;
+it remains provisional until PR #69 is merged into `main`. ADR-0019 continues
+to reference Issue #52. Issue #52 is not implementation authorization and must
+not be closed by an ADR or migration change. ADR-0019's official review and
+acceptance still require a separately authorized successor issue and pull
+request.
 
 | Number | Decision | Source | Review/implementation |
 | --- | --- | --- | --- |
