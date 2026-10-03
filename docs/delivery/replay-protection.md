@@ -19,9 +19,12 @@ lease for controller runs: pending, running, retryable, completed, or
 exhausted. The controller claims the receipt before intake, and a final Actions
 job records completion only after classification and any selected delivery
 workflow finish. The finalizer checks out the same validated controller pin
-used for intake before it records completion or retryability. Failed or
-interrupted runs become retryable after their lease expires. Actions
-concurrency keyed by the delivery GUID serializes repeated dispatches.
+used for intake before it records completion or retryability. Failed runs become
+retryable with backoff. An interrupted run can be reclaimed after its lease
+expires while it remains below the attempt limit. Expired final-attempt
+receipts are marked exhausted before redelivery selection and are not claimed
+again automatically. Actions concurrency keyed by the delivery GUID serializes
+repeated dispatches.
 
 `webhook_reconciler_state` holds the completed history checkpoint and any
 pending GitHub cursor. A `webhook delivery observation` in
@@ -137,8 +140,9 @@ each scheduled run. A 200 response reports scanned pages, matched deliveries,
 requested redeliveries, and cooldown skips. A 503 means GitHub or Neon failed
 and the checkpoint did not advance. In GitHub App settings, inspect recent
 webhook deliveries for repeated non-2xx responses. In Neon, monitor receipt
-counts by status; `exhausted` controller receipts mean eight attempts failed
-and need operator diagnosis before any manual retry. Redelivery requests retain
+counts by status; `exhausted` controller receipts have reached eight claimed
+attempts without durable completion and need operator diagnosis before any
+manual retry. Redelivery requests retain
 an `exhausted` status when they reach eight attempts or GitHub definitively
 rejects the request, so operators can diagnose these separately from transient
 failures:

@@ -10,6 +10,7 @@ function replayFileKey(key) {
 
 export const DEFAULT_REPLAY_WINDOW_MS = 5 * 60 * 1000;
 export const DEFAULT_FUTURE_SKEW_MS = 30 * 1000;
+export const DEFAULT_CONTROLLER_MAX_ATTEMPTS = 8;
 
 export class ReplayProtectionError extends Error {
   constructor(message, exitCode = 1) {
@@ -135,6 +136,12 @@ export class InMemoryReplayStore {
     if (receipt.status === 'completed' || receipt.status === 'exhausted') return { status: receipt.status };
     if (receipt.status === 'running' && receipt.leaseExpiresAt > this.now()) return { status: 'busy' };
     if (receipt.nextAttemptAt > this.now()) return { status: 'waiting' };
+    if (receipt.attempts >= DEFAULT_CONTROLLER_MAX_ATTEMPTS) {
+      receipt.status = 'exhausted';
+      receipt.leaseExpiresAt = null;
+      receipt.leaseToken = null;
+      return { status: 'exhausted' };
+    }
     receipt.status = 'running';
     receipt.leaseExpiresAt = this.now() + leaseMs;
     receipt.leaseToken = leaseToken;
@@ -150,9 +157,10 @@ export class InMemoryReplayStore {
     receipt.leaseToken = null;
   }
 
-  async retryController(key, { maxAttempts = 8, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken } = {}) {
+  async retryController(key, { maxAttempts = DEFAULT_CONTROLLER_MAX_ATTEMPTS, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken } = {}) {
     const receipt = this.#receipts.get(key);
     if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)) throw new ReplayProtectionError('The controller receipt could not be released.');
+    if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) throw new ReplayProtectionError('The controller attempt limit must be a positive integer.');
     receipt.status = receipt.attempts >= maxAttempts ? 'exhausted' : 'retryable';
     receipt.leaseExpiresAt = null;
     receipt.leaseToken = null;
@@ -257,6 +265,13 @@ export class FileReplayStore {
     if (receipt.status === 'completed' || receipt.status === 'exhausted') return { status: receipt.status };
     if (receipt.status === 'running' && Number(receipt.leaseExpiresAt) > this.now()) return { status: 'busy' };
     if (Number(receipt.nextAttemptAt) > this.now()) return { status: 'waiting' };
+    if (Number(receipt.attempts ?? 0) >= DEFAULT_CONTROLLER_MAX_ATTEMPTS) {
+      receipt.status = 'exhausted';
+      receipt.leaseExpiresAt = null;
+      receipt.leaseToken = null;
+      await this.#writeReceipt(key, receipt);
+      return { status: 'exhausted' };
+    }
     receipt.status = 'running';
     receipt.leaseExpiresAt = this.now() + leaseMs;
     receipt.leaseToken = leaseToken;
@@ -274,9 +289,10 @@ export class FileReplayStore {
     await this.#writeReceipt(key, receipt);
   }
 
-  async retryController(key, { maxAttempts = 8, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken } = {}) {
+  async retryController(key, { maxAttempts = DEFAULT_CONTROLLER_MAX_ATTEMPTS, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken } = {}) {
     const receipt = await this.#readReceipt(key);
     if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)) throw new ReplayProtectionError('The controller receipt could not be released.');
+    if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) throw new ReplayProtectionError('The controller attempt limit must be a positive integer.');
     receipt.status = Number(receipt.attempts) >= maxAttempts ? 'exhausted' : 'retryable';
     receipt.leaseExpiresAt = null;
     receipt.leaseToken = null;

@@ -140,6 +140,51 @@ test('a committed claim with a lost HTTP response stays retryable until its leas
   await store.markDispatched(key, reclaimed.leaseToken);
 });
 
+test('Neon controller receipt claims exhaust expired final attempts instead of reclaiming them', async () => {
+  const calls = [];
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        calls.push({ statement, values });
+        if (statement.includes('INSERT INTO public.webhook_controller_receipts AS stored')) {
+          return [{ status: 'exhausted' }];
+        }
+        throw new Error('Unexpected controller receipt query.');
+      },
+    },
+  });
+  const key = '163255060:98765432-1234-4234-8234-123456789012';
+  const leaseToken = 'interrupted:8';
+
+  assert.deepEqual(await store.claimController(key, { leaseToken }), { status: 'exhausted' });
+  assert.match(calls[0].statement, /SET status = CASE WHEN stored\.attempt_count >= \$5 THEN 'exhausted' ELSE 'running' END/);
+  assert.match(calls[0].statement, /WHEN stored\.attempt_count >= \$5 THEN NULL/);
+  assert.match(calls[0].statement, /attempt_count = CASE[\s\S]*WHEN stored\.attempt_count >= \$5 THEN stored\.attempt_count/);
+  assert.deepEqual(calls[0].values, [key, 6 * 60 * 60 * 1_000, 30 * 24 * 60 * 60 * 1_000, leaseToken, CONTROLLER_MAX_ATTEMPTS]);
+});
+
+test('due controller receipt selection first exhausts expired leases at the attempt limit', async () => {
+  const calls = [];
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        calls.push({ statement, values });
+        return [];
+      },
+    },
+  });
+
+  assert.deepEqual(await store.dueControllerReceipts({ limit: 25 }), []);
+  assert.match(calls[0].statement, /UPDATE public\.webhook_controller_receipts/);
+  assert.match(calls[0].statement, /SET status = 'exhausted', lease_expires_at = NULL, lease_token = NULL/);
+  assert.match(calls[0].statement, /status = 'running'[\s\S]*lease_expires_at <= clock_timestamp\(\)[\s\S]*attempt_count >= \$1/);
+  assert.match(calls[0].statement, /LIMIT 100\s+FOR UPDATE SKIP LOCKED/);
+  assert.deepEqual(calls[0].values, [CONTROLLER_MAX_ATTEMPTS]);
+  assert.match(calls[1].statement, /SELECT replay_key, status, github_delivery_id, attempt_count/);
+  assert.match(calls[1].statement, /attempt_count < \$3/);
+  assert.deepEqual(calls[1].values, [25, 15 * 60 * 1000, CONTROLLER_MAX_ATTEMPTS]);
+});
+
 test('Neon replay adapter preserves definitive redelivery failures as exhausted records', async () => {
   const calls = [];
   const store = new NeonReplayStore({
@@ -307,8 +352,9 @@ test('due controller receipt selection excludes unlinked rows before applying it
 
   assert.deepEqual(await store.dueControllerReceipts({ limit: 250 }), [eligible]);
   assert.match(call.statement, /github_delivery_id IS NOT NULL/);
+  assert.match(call.statement, /attempt_count < \$3/);
   assert.match(call.statement, /LIMIT \$1/);
-  assert.deepEqual(call.values, [250, 15 * 60 * 1000]);
+  assert.deepEqual(call.values, [250, 15 * 60 * 1000, CONTROLLER_MAX_ATTEMPTS]);
 });
 
 test('Neon replay claim cleanup deletes at most one bounded batch of expired keys', async () => {
@@ -378,6 +424,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
   const key = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const lostResponseKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const linkedReceiptKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
+  const exhaustedReceiptKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const queuedGuid = randomUUID();
   const unlinkedReceiptKeys = Array.from({ length: 250 }, () => replayKey({ installationId: '163255060', deliveryId: randomUUID() }));
   const leaseToken = `integration:${randomUUID()}`;
@@ -436,6 +483,19 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     await store.ensureControllerReceipt(linkedReceiptKey);
     assert.equal(await store.linkGithubDeliveries([{ replayKey: linkedReceiptKey, githubDeliveryId: '987654321' }]), 1);
     assert.equal((await store.controllerReceipt(linkedReceiptKey)).github_delivery_id, '987654321');
+    await store.ensureControllerReceipt(exhaustedReceiptKey);
+    await store.linkGithubDelivery(exhaustedReceiptKey, '987654320');
+    for (let attempt = 0; attempt < CONTROLLER_MAX_ATTEMPTS; attempt += 1) {
+      assert.deepEqual(await store.claimController(exhaustedReceiptKey, {
+        leaseMs: 1_000,
+        leaseToken: `integration:interrupted:${attempt}`,
+      }), { status: 'claimed' });
+      await sql.query(`
+        UPDATE public.webhook_controller_receipts
+        SET lease_expires_at = clock_timestamp() - interval '1 second'
+        WHERE replay_key = $1
+      `, [exhaustedReceiptKey]);
+    }
     await sql.query(`
       UPDATE public.webhook_controller_receipts
       SET status = 'retryable', next_attempt_at = clock_timestamp() - interval '1 hour'
@@ -451,6 +511,10 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     `, [JSON.stringify(unlinkedReceiptKeys.map((replay_key) => ({ replay_key })))]);
     const dueReceipts = await store.dueControllerReceipts({ limit: 250 });
     assert.deepEqual(dueReceipts.map((receipt) => receipt.replay_key), [linkedReceiptKey]);
+    const exhaustedReceipt = await store.controllerReceipt(exhaustedReceiptKey);
+    assert.equal(exhaustedReceipt.status, 'exhausted');
+    assert.equal(Number(exhaustedReceipt.attempt_count), CONTROLLER_MAX_ATTEMPTS);
+    assert.equal(dueReceipts.some((receipt) => receipt.replay_key === exhaustedReceiptKey), false);
 
     const redeliveryColumns = await sql.query(`
       SELECT column_name
@@ -587,7 +651,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     await store.release(key);
     await store.release(lostResponseKey);
     await sql.query('DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = $1', [queuedGuid]);
-    for (const receiptKey of [key, lostResponseKey, linkedReceiptKey]) {
+    for (const receiptKey of [key, lostResponseKey, linkedReceiptKey, exhaustedReceiptKey]) {
       await sql.query('DELETE FROM public.webhook_controller_receipts WHERE replay_key = $1', [receiptKey]);
     }
     await sql.query('DELETE FROM public.webhook_controller_receipts WHERE replay_key = ANY($1::text[])', [unlinkedReceiptKeys]);

@@ -1,14 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
 
-import { DEFAULT_REPLAY_WINDOW_MS, ReplayProtectionError } from './replay-protection.mjs';
+import {
+  DEFAULT_CONTROLLER_MAX_ATTEMPTS,
+  DEFAULT_REPLAY_WINDOW_MS,
+  ReplayProtectionError,
+} from './replay-protection.mjs';
 
 export const REPLAY_CLEANUP_BATCH_SIZE = 100;
 export const DEFAULT_DISPATCH_LEASE_MS = 30_000;
 export const DEFAULT_CONTROLLER_LEASE_MS = 6 * 60 * 60 * 1000;
 export const CONTROLLER_RECEIPT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export const CONTROLLER_PENDING_GRACE_MS = 15 * 60 * 1000;
-export const CONTROLLER_MAX_ATTEMPTS = 8;
+export const CONTROLLER_MAX_ATTEMPTS = DEFAULT_CONTROLLER_MAX_ATTEMPTS;
 export const REDELIVERY_COOLDOWN_MS = 15 * 60 * 1000;
 const MAX_GITHUB_DELIVERY_LINKS = 10_000;
 
@@ -120,17 +124,40 @@ VALUES (
   clock_timestamp() + ($3::double precision * INTERVAL '1 millisecond')
 )
 ON CONFLICT (replay_key) DO UPDATE
-SET status = 'running',
-    lease_expires_at = clock_timestamp() + ($2::double precision * INTERVAL '1 millisecond'),
-    lease_token = $4,
+SET status = CASE WHEN stored.attempt_count >= $5 THEN 'exhausted' ELSE 'running' END,
+    lease_expires_at = CASE
+      WHEN stored.attempt_count >= $5 THEN NULL
+      ELSE clock_timestamp() + ($2::double precision * INTERVAL '1 millisecond')
+    END,
+    lease_token = CASE WHEN stored.attempt_count >= $5 THEN NULL ELSE $4 END,
     next_attempt_at = clock_timestamp(),
-    attempt_count = stored.attempt_count + 1,
+    attempt_count = CASE
+      WHEN stored.attempt_count >= $5 THEN stored.attempt_count
+      ELSE stored.attempt_count + 1
+    END,
     expires_at = clock_timestamp() + ($3::double precision * INTERVAL '1 millisecond')
 WHERE stored.status <> 'completed'
   AND stored.status <> 'exhausted'
   AND stored.next_attempt_at <= clock_timestamp()
   AND (stored.status <> 'running' OR stored.lease_expires_at <= clock_timestamp())
-RETURNING replay_key`;
+RETURNING stored.status`;
+
+const EXHAUST_EXPIRED_CONTROLLER_RECEIPTS_SQL = `
+WITH expired_receipts AS (
+  SELECT replay_key
+  FROM public.webhook_controller_receipts
+  WHERE status = 'running'
+    AND lease_expires_at <= clock_timestamp()
+    AND attempt_count >= $1
+  ORDER BY lease_expires_at ASC
+  LIMIT ${REPLAY_CLEANUP_BATCH_SIZE}
+  FOR UPDATE SKIP LOCKED
+)
+UPDATE public.webhook_controller_receipts AS receipts
+SET status = 'exhausted', lease_expires_at = NULL, lease_token = NULL, next_attempt_at = clock_timestamp()
+FROM expired_receipts
+WHERE receipts.replay_key = expired_receipts.replay_key
+RETURNING receipts.replay_key`;
 
 function isPooledNeonConnectionString(value) {
   try {
@@ -260,8 +287,8 @@ export class NeonReplayStore {
     positiveDuration(leaseMs, 'The controller lease must be positive.');
     positiveDuration(retentionMs, 'The controller receipt retention must be positive.');
     if (typeof leaseToken !== 'string' || !/^[A-Za-z0-9:._-]{1,128}$/.test(leaseToken)) throw new ReplayProtectionError('The controller lease owner is invalid.');
-    const rows = await this.#query(CLAIM_CONTROLLER_SQL, [key, leaseMs, retentionMs, leaseToken]);
-    if (rows.length === 1) return { status: 'claimed' };
+    const rows = await this.#query(CLAIM_CONTROLLER_SQL, [key, leaseMs, retentionMs, leaseToken, CONTROLLER_MAX_ATTEMPTS]);
+    if (rows.length === 1) return { status: rows[0].status === 'exhausted' ? 'exhausted' : 'claimed' };
     const current = await this.controllerReceipt(key);
     if (!current || current.status === 'pending' || current.status === 'retryable') return { status: 'waiting' };
     if (current.status === 'completed' || current.status === 'exhausted') return { status: current.status };
@@ -283,6 +310,7 @@ export class NeonReplayStore {
 
   async retryController(key, { maxAttempts = CONTROLLER_MAX_ATTEMPTS, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken } = {}) {
     validKey(key);
+    if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) throw new ReplayProtectionError('The controller attempt limit must be a positive integer.');
     if (typeof leaseToken !== 'string' || !/^[A-Za-z0-9:._-]{1,128}$/.test(leaseToken)) throw new ReplayProtectionError('The controller lease owner is invalid.');
     const rows = await this.#query(
       `UPDATE public.webhook_controller_receipts
@@ -301,6 +329,7 @@ export class NeonReplayStore {
   }
 
   async dueControllerReceipts({ limit = 100, pendingGraceMs = CONTROLLER_PENDING_GRACE_MS } = {}) {
+    await this.#query(EXHAUST_EXPIRED_CONTROLLER_RECEIPTS_SQL, [CONTROLLER_MAX_ATTEMPTS]);
     const rows = await this.#query(
       `SELECT replay_key, status, github_delivery_id, attempt_count
        FROM public.webhook_controller_receipts
@@ -309,11 +338,11 @@ export class NeonReplayStore {
          AND (
            (status = 'pending' AND created_at <= clock_timestamp() - ($2::double precision * INTERVAL '1 millisecond'))
            OR (status = 'retryable' AND next_attempt_at <= clock_timestamp())
-           OR (status = 'running' AND lease_expires_at <= clock_timestamp())
-         )
+           OR (status = 'running' AND lease_expires_at <= clock_timestamp() AND attempt_count < $3)
+       )
        ORDER BY next_attempt_at ASC, created_at ASC
        LIMIT $1`,
-      [limit, pendingGraceMs],
+      [limit, pendingGraceMs, CONTROLLER_MAX_ATTEMPTS],
     );
     return rows;
   }

@@ -5,7 +5,11 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { finalizeAgentInvocation } from '../../scripts/finalize-agent-invocation.mjs';
-import { FileReplayStore, InMemoryReplayStore } from '../../scripts/lib/replay-protection.mjs';
+import {
+  DEFAULT_CONTROLLER_MAX_ATTEMPTS,
+  FileReplayStore,
+  InMemoryReplayStore,
+} from '../../scripts/lib/replay-protection.mjs';
 
 const deliveryId = '12345678-1234-4234-8234-123456789012';
 const receiptKey = `163255060:${deliveryId}`;
@@ -43,6 +47,49 @@ test('controller receipt can be reclaimed after an interrupted run lease expires
   assert.deepEqual(await store.claimController(receiptKey, { leaseMs: 100 }), { status: 'busy' });
   now += 101;
   assert.deepEqual(await store.claimController(receiptKey, { leaseMs: 100 }), { status: 'claimed' });
+});
+
+test('expired controller leases exhaust at the attempt limit instead of being reclaimed forever', async () => {
+  let now = 10_000;
+  const maxAttempts = DEFAULT_CONTROLLER_MAX_ATTEMPTS;
+  const store = new InMemoryReplayStore({ now: () => now });
+  await store.ensureControllerReceipt(receiptKey);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    assert.deepEqual(await store.claimController(receiptKey, { leaseMs: 100 }), { status: 'claimed' });
+    assert.equal((await store.controllerReceipt(receiptKey)).attempts, attempt);
+    now += 101;
+  }
+
+  assert.deepEqual(await store.claimController(receiptKey, { leaseMs: 100 }), { status: 'exhausted' });
+  const receipt = await store.controllerReceipt(receiptKey);
+  assert.equal(receipt.status, 'exhausted');
+  assert.equal(receipt.attempts, maxAttempts);
+  assert.equal(receipt.leaseExpiresAt, null);
+  assert.equal(receipt.leaseToken, null);
+  assert.deepEqual(await store.claimController(receiptKey, { leaseMs: 100 }), { status: 'exhausted' });
+});
+
+test('file-backed controller receipts exhaust expired leases at the attempt limit', async (t) => {
+  let now = 10_000;
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-controller-limit-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const store = new FileReplayStore({ directory: root, now: () => now });
+  const maxAttempts = DEFAULT_CONTROLLER_MAX_ATTEMPTS;
+  await store.ensureControllerReceipt(receiptKey);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    assert.deepEqual(await store.claimController(receiptKey, { leaseMs: 100 }), { status: 'claimed' });
+    assert.equal(Number((await store.controllerReceipt(receiptKey)).attempts), attempt);
+    now += 101;
+  }
+
+  assert.deepEqual(await store.claimController(receiptKey, { leaseMs: 100 }), { status: 'exhausted' });
+  const receipt = await store.controllerReceipt(receiptKey);
+  assert.equal(receipt.status, 'exhausted');
+  assert.equal(Number(receipt.attempts), maxAttempts);
+  assert.equal(receipt.leaseExpiresAt, null);
+  assert.equal(receipt.leaseToken, null);
 });
 
 test('an expired controller run cannot finalize a receipt claimed by a later run', async () => {
