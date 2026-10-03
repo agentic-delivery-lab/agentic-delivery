@@ -69,6 +69,9 @@ test('start rejection exposes only allowlisted error metadata', async () => {
   assert.equal(result.status, 'paused');
   assert.match(result.reason, /codex_error=unauthorized/);
   assert.match(result.reason, /http_status=401/);
+  assert.match(result.reason, /diagnostic_message=unrecognized/);
+  assert.match(result.reason, /terminal_source=turn_start_rejection/);
+  assert.match(result.reason, /failure_duration_ms=\d+/);
   assert.doesNotMatch(result.reason, /fixture-secret|access_token/);
 });
 
@@ -77,7 +80,7 @@ test('terminal error notifications require exact thread and active turn IDs', as
     {name:'missing thread', params:{turnId:'turn-1'}},
     {name:'foreign thread', params:{threadId:'another-thread',turnId:'turn-1'}},
     {name:'foreign turn', params:{threadId:'thread-1',turnId:'another-turn'}},
-    {name:'retrying turn', params:{threadId:'thread-1',turnId:'turn-1',willRetry:true}},
+    {name:'retrying turn', params:{threadId:'thread-1',turnId:'turn-1',willRetry:true}, retries:1},
     {name:'exact active turn', params:{threadId:'thread-1',turnId:'turn-1'}, expected:true},
   ];
 
@@ -95,8 +98,73 @@ test('terminal error notifications require exact thread and active turn IDs', as
     const result = await runTurn({client,threadId:'thread-1',phase:'review',prompt:'review',onProgress:async()=>{}});
     assert.equal(result.status, 'paused', testCase.name);
     assert.equal(result.reason.includes('codex_error=other'), testCase.expected ?? false, testCase.name);
+    assert.match(result.reason, new RegExp('retry_notifications=' + (testCase.retries ?? 0)), testCase.name);
     assert.doesNotMatch(result.reason, /fixture-secret|access_token/, testCase.name);
   }
+});
+
+test('turn failure reports bounded diagnostic shape without publishing error content', async () => {
+  const cases = [
+    {name:'missing message', error:{codexErrorInfo:'other'}, shape:'absent'},
+    {name:'empty message', error:{codexErrorInfo:'other',message:'  '}, shape:'empty'},
+    {name:'non-string message', error:{codexErrorInfo:'other',message:{token:'fixture-secret'}}, shape:'non_string'},
+    {
+      name:'unknown message and additional details',
+      error:{codexErrorInfo:'other',message:'access_token=fixture-secret',additionalDetails:'private-detail-secret'},
+      shape:'unrecognized',
+      details:'present',
+    },
+    {
+      name:'recognized message',
+      error:{codexErrorInfo:'other',message:'workspace routing discovery failed'},
+      shape:'recognized',
+      diagnostic:'diagnostic=workspace_routing_discovery_failed',
+    },
+  ];
+
+  for (const testCase of cases) {
+    const client = new FakeCodex((current) => {
+      current.emit('message', {
+        method:'error',
+        params:{threadId:'thread-1',turnId:'turn-1',error:testCase.error},
+      });
+      current.emit('message', {
+        method:'turn/completed',
+        params:{threadId:'thread-1',turn:{id:'turn-1',status:'failed'}},
+      });
+    });
+    const result = await runTurn({client,threadId:'thread-1',phase:'route',prompt:'route',onProgress:async()=>{}});
+    assert.equal(result.status, 'paused', testCase.name);
+    assert.match(result.reason, new RegExp('diagnostic_message=' + testCase.shape), testCase.name);
+    assert.match(result.reason, new RegExp('additional_details=' + (testCase.details ?? 'absent')), testCase.name);
+    assert.match(result.reason, /terminal_source=turn_completed/, testCase.name);
+    assert.match(result.reason, /diagnostic_source=error_notification/, testCase.name);
+    assert.match(result.reason, /retry_notifications=0/, testCase.name);
+    assert.match(result.reason, /failure_duration_ms=\d+/, testCase.name);
+    if (testCase.diagnostic) assert.match(result.reason, new RegExp(testCase.diagnostic), testCase.name);
+    assert.doesNotMatch(result.reason, /fixture-secret|private-detail-secret|access_token/, testCase.name);
+  }
+});
+
+test('turn completion errors retain only bounded shape metadata', async () => {
+  const client = new FakeCodex((current) => {
+    current.emit('message', {
+      method:'turn/completed',
+      params:{
+        threadId:'thread-1',
+        turn:{
+          id:'turn-1',
+          status:'failed',
+          error:{codexErrorInfo:'other',message:'access_token=fixture-secret',additionalDetails:'private-detail-secret'},
+        },
+      },
+    });
+  });
+  const result = await runTurn({client,threadId:'thread-1',phase:'route',prompt:'route',onProgress:async()=>{}});
+  assert.match(result.reason, /diagnostic_source=turn_completed_error/);
+  assert.match(result.reason, /diagnostic_message=unrecognized/);
+  assert.match(result.reason, /additional_details=present/);
+  assert.doesNotMatch(result.reason, /fixture-secret|private-detail-secret|access_token/);
 });
 
 test('completion events with another thread or turn cannot finish the active turn', async () => {

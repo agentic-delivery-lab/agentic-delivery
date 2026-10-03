@@ -48,7 +48,6 @@ const CODEX_DIAGNOSTIC_HINTS = Object.freeze({
   default_permission_profile_missing: 'A default permission profile is required. Check the controller startup configuration.',
   workspace_routing_discovery_failed: 'workspace_routing_discovery_failed',
 });
-
 export function safeCodexDiagnosticCode(value) {
   const message = String(value);
   if (Object.hasOwn(CODEX_DIAGNOSTIC_HINTS, message)) return message;
@@ -56,6 +55,13 @@ export function safeCodexDiagnosticCode(value) {
   if (message.includes('config defines [permissions] profiles but does not set default_permissions')) return 'default_permission_profile_missing';
   if (message === 'workspace routing discovery failed') return 'workspace_routing_discovery_failed';
   return null;
+}
+
+export function safeCodexDiagnosticMessageShape(value, hasMessage = value !== undefined) {
+  if (!hasMessage) return 'absent';
+  if (typeof value !== 'string') return 'non_string';
+  if (!value.trim()) return 'empty';
+  return safeCodexDiagnosticCode(value) ? 'recognized' : 'unrecognized';
 }
 
 export function safeCodexDiagnostic(value) {
@@ -69,9 +75,16 @@ export function safeCodexDiagnostic(value) {
 
 function appServerRequestError(method, serverError) {
   const error = new Error(`Codex ${method}: ${safeCodexDiagnostic(serverError?.message)}`);
+  const hasMessage = Boolean(serverError && typeof serverError === 'object' && Object.hasOwn(serverError, 'message'));
+  Object.defineProperty(error, 'codexDiagnosticMessageShape', {
+    value: safeCodexDiagnosticMessageShape(serverError?.message, hasMessage),
+  });
   const data = serverError?.data && typeof serverError.data === 'object' && !Array.isArray(serverError.data)
     ? serverError.data
     : {};
+  const hasAdditionalDetails = Boolean(serverError && typeof serverError === 'object'
+    && (Object.hasOwn(serverError, 'additionalDetails') || Object.hasOwn(data, 'additionalDetails')));
+  Object.defineProperty(error, 'codexAdditionalDetailsPresent', {value: hasAdditionalDetails});
   const codexErrorInfo = serverError?.codexErrorInfo ?? data.codexErrorInfo;
   const httpStatusCode = serverError?.httpStatusCode ?? data.httpStatusCode;
   if (codexErrorInfo !== undefined) Object.defineProperty(error, 'codexErrorInfo', {value: codexErrorInfo});
@@ -88,6 +101,9 @@ export function appServerFailure(code, signal, stderr = '') {
 
 function appServerFailureError(code, signal, stderr = '') {
   const error = new Error(appServerFailure(code, signal, stderr));
+  Object.defineProperty(error, 'codexDiagnosticMessageShape', {
+    value: safeCodexDiagnosticMessageShape(stderr, String(stderr).length > 0),
+  });
   const diagnosticCode = safeCodexDiagnosticCode(stderr);
   if (diagnosticCode) Object.defineProperty(error, 'codexDiagnostic', {value: diagnosticCode});
   return error;
