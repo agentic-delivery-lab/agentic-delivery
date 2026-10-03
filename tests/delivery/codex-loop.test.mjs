@@ -191,11 +191,51 @@ test('useful correlated notification metadata survives an uninformative completi
     });
   });
   const result = await runTurn({client,threadId:'thread-1',phase:'route',prompt:'route',onProgress:async()=>{}});
-  assert.match(result.reason, /codex_error=unauthorized/);
-  assert.match(result.reason, /diagnostic_message=empty/);
-  assert.match(result.reason, /additional_details=null/);
+  assert.match(result.reason, /error_notification_codex_error=unauthorized/);
+  assert.match(result.reason, /turn_completed_diagnostic_message=empty/);
+  assert.match(result.reason, /turn_completed_additional_details=null/);
   assert.match(result.reason, /diagnostic_source=turn_completed_and_error_notification/);
   assert.doesNotMatch(result.reason, /notification-secret|access_token/);
+});
+
+test('specific notification survives later generic errors with source-matched HTTP status', async () => {
+  const client = new FakeCodex((current) => {
+    current.emit('message', {
+      method:'error',
+      params:{
+        threadId:'thread-1',
+        turnId:'turn-1',
+        error:{codexErrorInfo:'unauthorized',httpStatusCode:401,message:'access_token=notification-secret'},
+      },
+    });
+    current.emit('message', {
+      method:'error',
+      params:{
+        threadId:'thread-1',
+        turnId:'turn-1',
+        error:{codexErrorInfo:'other',httpStatusCode:400,message:'later-generic-secret'},
+      },
+    });
+    current.emit('message', {
+      method:'turn/completed',
+      params:{
+        threadId:'thread-1',
+        turn:{
+          id:'turn-1',
+          status:'failed',
+          error:{codexErrorInfo:'other',httpStatusCode:400,message:'',additionalDetails:null},
+        },
+      },
+    });
+  });
+  const result = await runTurn({client,threadId:'thread-1',phase:'route',prompt:'route',onProgress:async()=>{}});
+  assert.match(result.reason, /error_notification_codex_error=unauthorized/);
+  assert.match(result.reason, /error_notification_http_status=401/);
+  assert.match(result.reason, /turn_completed_codex_error=other/);
+  assert.match(result.reason, /turn_completed_http_status=400/);
+  assert.match(result.reason, /turn_completed_diagnostic_message=empty/);
+  assert.match(result.reason, /turn_completed_additional_details=null/);
+  assert.doesNotMatch(result.reason, /notification-secret|later-generic-secret|access_token|, http_status=/);
 });
 
 test('completion events with another thread or turn cannot finish the active turn', async () => {

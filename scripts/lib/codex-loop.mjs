@@ -324,36 +324,33 @@ function safeTurnError(error) {
   return { code, diagnostic, status, messageShape, additionalDetailsShape };
 }
 
-function mergeSafeTurnErrors(terminalError, notificationError) {
-  if (!terminalError) return notificationError;
-  if (!notificationError) return terminalError;
-  const terminalCode = terminalError.code;
-  const notificationCode = notificationError.code;
-  const code = !terminalCode || terminalCode === 'other'
-    ? notificationCode ?? terminalCode
-    : terminalCode;
-  return {
-    code,
-    diagnostic: terminalError.diagnostic ?? notificationError.diagnostic,
-    status: terminalError.status ?? notificationError.status,
-    messageShape: terminalError.messageShape !== 'absent'
-      ? terminalError.messageShape
-      : notificationError.messageShape,
-    additionalDetailsShape: terminalError.additionalDetailsShape !== 'absent'
-      ? terminalError.additionalDetailsShape
-      : notificationError.additionalDetailsShape,
-  };
+function preferSpecificSafeTurnError(current, candidate) {
+  if (!current) return candidate;
+  if (!candidate) return current;
+  const currentIsSpecific = Boolean(current.code && current.code !== 'other');
+  const candidateIsSpecific = Boolean(candidate.code && candidate.code !== 'other');
+  if (currentIsSpecific !== candidateIsSpecific) return candidateIsSpecific ? candidate : current;
+  return candidate;
 }
 
-function formatSafeTurnError(error) {
+function formatSafeTurnError(error, source = null) {
   if (!error) return null;
+  const field = (name) => source ? `${source}_${name}` : name;
   return [
-    'diagnostic_message=' + error.messageShape,
-    'additional_details=' + error.additionalDetailsShape,
-    ...(error.code ? [`codex_error=${error.code}`] : []),
-    ...(error.diagnostic ? [error.diagnostic] : []),
-    ...(error.status ? [`http_status=${error.status}`] : []),
+    field('diagnostic_message') + '=' + error.messageShape,
+    field('additional_details') + '=' + error.additionalDetailsShape,
+    ...(error.code ? [`${field('codex_error')}=${error.code}`] : []),
+    ...(error.diagnostic ? [source
+      ? `${field('diagnostic')}=${error.diagnostic.replace(/^diagnostic=/, '')}`
+      : error.diagnostic] : []),
+    ...(error.status ? [`${field('http_status')}=${error.status}`] : []),
   ].join(', ');
+}
+
+function formatSafeTurnErrors(first, firstSource, second, secondSource) {
+  if (!first) return formatSafeTurnError(second);
+  if (!second) return formatSafeTurnError(first);
+  return [formatSafeTurnError(first, firstSource), formatSafeTurnError(second, secondSource)].join(', ');
 }
 
 function failureTelemetry(diagnostic, { terminalSource, diagnosticSource, retryNotifications, durationMs }) {
@@ -436,14 +433,15 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
   const onAbort = () => stop('Workflow cancelled; saved work can be resumed.');
   const onFailure = (error) => {
     const failureDiagnostic = safeTurnError(error);
-    const diagnostic = mergeSafeTurnErrors(failureDiagnostic, lastTurnError);
     const diagnosticSource = lastTurnError
       ? failureDiagnostic ? 'app_server_and_error_notification' : 'error_notification'
       : failureDiagnostic ? 'app_server_error' : 'none';
     finish(stopped ?? {
       status: 'paused',
       reason: 'Codex app-server disconnected ('
-        + failureTelemetry(formatSafeTurnError(diagnostic), failureMetadata('app_server_disconnect', diagnosticSource)) + ').',
+        + failureTelemetry(formatSafeTurnErrors(
+          failureDiagnostic, 'app_server', lastTurnError, 'error_notification',
+        ), failureMetadata('app_server_disconnect', diagnosticSource)) + ').',
     });
   };
   const onMessage = (message) => {
@@ -471,7 +469,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
       && messageTurnId === turnId;
     if (message.method === 'error' && p.error && p.threadId === threadId && correlatedTurn) {
       if (p.willRetry === true) retryNotifications = Math.min(99, retryNotifications + 1);
-      else lastTurnError = safeTurnError(p.error) ?? lastTurnError;
+      else lastTurnError = preferSpecificSafeTurnError(lastTurnError, safeTurnError(p.error));
     }
     if (message.id !== undefined && message.method) {
       turnId ??= p.turnId;
@@ -485,7 +483,6 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     if (message.method === 'turn/completed') {
       // Wait for mandatory progress publication before considering the turn complete.
       const terminalError = safeTurnError(p.turn?.error);
-      const diagnostic = mergeSafeTurnErrors(terminalError, lastTurnError);
       const diagnosticSource = terminalError && lastTurnError
         ? 'turn_completed_and_error_notification'
         : terminalError ? 'turn_completed_error'
@@ -493,7 +490,9 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
       const metadata = failureMetadata('turn_completed', diagnosticSource);
       progress.then(() => finish(stopped ?? (p.turn.status === 'completed'
         ? { status: 'completed', text: finalText }
-        : { status: 'paused', reason: turnFailureReason(p.turn.status, formatSafeTurnError(diagnostic), metadata) })));
+        : { status: 'paused', reason: turnFailureReason(p.turn.status, formatSafeTurnErrors(
+          terminalError, 'turn_completed', lastTurnError, 'error_notification',
+        ), metadata) })));
     }
   };
   const pollTimer = setInterval(checkBudget, pollMs);

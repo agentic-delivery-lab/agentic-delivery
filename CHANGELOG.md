@@ -494,12 +494,13 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60)
   preserves safe Codex error categories and HTTP status codes on failed turns
   and start rejections, reports bounded error-message and additional-detail
-  shapes, keeps specific correlated error codes when a completion error is
-  generic, records terminal source and retry count capped at 99, and caps
-  failure duration at 24 hours. Diagnostics remain scoped to the exact thread
-  and turn; raw error text and additional details stay withheld. Sanitized
-  startup hints survive app-server disconnects, and quota reset advice requires
-  stop telemetry.
+  shapes, keeps specific correlated error codes across later generic errors,
+  and reports completion and notification fields separately so each code stays
+  paired with its HTTP status. It records terminal source and retry count
+  capped at 99, and caps failure duration at 24 hours. Diagnostics remain
+  scoped to the exact thread and turn; raw error text and additional details
+  stay withheld. Sanitized startup hints survive app-server disconnects, and
+  quota reset advice requires stop telemetry.
 - [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66) registers issue-field masks before the controller checkout cleans `trusted-intake`, allowing intake to reach routing after the validated controller is checked out.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) verifies migrated issue fields and option IDs against bound live IDs and requires both values to be present, so legacy-label fallbacks cannot mask failed readback.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) makes both issue-intake jobs resolve pnpm from the nested trusted checkout manifest, so issue events can reach actor authorization and classification.

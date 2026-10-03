@@ -454,9 +454,11 @@ empty, non-string, or present), fixed `terminal_source` and
 `failure_duration_ms` from the turn-start request to failure. Retry
 notifications are capped at 99 and elapsed time at 24 hours. When both a
 terminal completion error and a correlated error notification are available,
-the safe summary preserves the more specific error code while retaining the
-terminal message and detail shapes. An unrecognized message means its content
-remains withheld, so this shape alone does not identify the root cause.
+the safe summary reports each under source-prefixed fields, keeping each error
+code paired with its own HTTP status and shape metadata. A later generic
+notification does not replace an earlier specific correlated code. An
+unrecognized message means its content remains withheld, so this shape alone
+does not identify the root cause.
 
 If issue posting fails, the outbox remains in state for another attempt. A
 hard process kill may leave `account.lock`; inspect the referenced run and
