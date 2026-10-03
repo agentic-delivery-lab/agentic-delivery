@@ -112,6 +112,11 @@ If the eighth accepted attempt's cooldown expires without a successful history
 result, the reconciler marks it `exhausted` before its next checkpoint update.
 That unresolved row stays durable and blocks further checkpoint progress until
 an operator diagnoses the cause and requeues it.
+Exhausted requests have no age-based deletion. An operator must diagnose and
+explicitly requeue them; the requeued request stays durable and holds the
+checkpoint until GitHub accepts it. If its final accepted attempt does not
+produce a successful history result before cooldown expires, it becomes
+exhausted again and continues to hold progress.
 It also redelivers due controller receipts even when GitHub recorded the
 original webhook delivery as successful. Before advancing its checkpoint, the
 reconciler links every observed delivery GUID's numeric GitHub API ID to a

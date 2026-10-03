@@ -229,6 +229,27 @@ test('Neon replay adapter queues redelivery candidates without replacing an acti
   assert.deepEqual(calls[0].values, [[guid], ['301']]);
 });
 
+test('claiming another redelivery never prunes unresolved exhausted requests', async () => {
+  let call;
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        call = { statement, values };
+        return [{ delivery_guid: values[0] }];
+      },
+    },
+  });
+  const guid = '98765432-1234-4234-8234-123456789012';
+
+  assert.deepEqual(await store.claimRedeliveryRequest(guid, '301'), { claimed: true });
+
+  assert.match(call.statement, /INSERT INTO public\.webhook_redelivery_requests AS stored/);
+  assert.match(call.statement, /attempt_count < \$4/);
+  assert.doesNotMatch(call.statement, /DELETE FROM public\.webhook_redelivery_requests/);
+  assert.doesNotMatch(call.statement, /INTERVAL '30 days'/);
+  assert.deepEqual(call.values, [guid, REDELIVERY_COOLDOWN_MS, '301', CONTROLLER_MAX_ATTEMPTS]);
+});
+
 test('due redelivery requests include queued work and expired ambiguous requests', async () => {
   let call;
   const store = new NeonReplayStore({
@@ -457,6 +478,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
   const exhaustedReceiptKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const queuedGuid = randomUUID();
   const acceptedFinalGuid = randomUUID();
+  const agedExhaustedGuid = randomUUID();
   const unlinkedReceiptKeys = Array.from({ length: 250 }, () => replayKey({ installationId: '163255060', deliveryId: randomUUID() }));
   const leaseToken = `integration:${randomUUID()}`;
 
@@ -598,9 +620,24 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     assert.equal(exhaustedAcceptedRow[0].request_status, 'exhausted');
     await store.completeRedelivery(queuedGuid);
 
+    await store.queueRedeliveryRequests([{ guid: agedExhaustedGuid, githubDeliveryId: '987654325' }]);
+    await sql.query(`
+      UPDATE public.webhook_redelivery_requests
+      SET request_status = 'exhausted', attempt_count = $2, requested_at = clock_timestamp() - interval '31 days'
+      WHERE delivery_guid = $1
+    `, [agedExhaustedGuid, CONTROLLER_MAX_ATTEMPTS]);
+    assert.equal(await store.hasPendingRedeliveryRequests(), true, 'an aged exhausted request alone continues to hold checkpoint progress');
     await store.queueRedeliveryRequests([{ guid: acceptedFinalGuid, githubDeliveryId: '987654324' }]);
     for (let attempt = 0; attempt < CONTROLLER_MAX_ATTEMPTS; attempt += 1) {
       assert.deepEqual(await store.claimRedeliveryRequest(acceptedFinalGuid, '987654324'), { claimed: true });
+      if (attempt === 0) {
+        const agedExhaustedRow = await sql.query(
+          'SELECT request_status FROM public.webhook_redelivery_requests WHERE delivery_guid = $1',
+          [agedExhaustedGuid],
+        );
+        assert.equal(agedExhaustedRow[0].request_status, 'exhausted', 'a new claim must not delete an aged unresolved request');
+        await store.completeRedelivery(agedExhaustedGuid);
+      }
       await store.markRedeliveryAccepted(acceptedFinalGuid, '987654324');
       if (attempt + 1 < CONTROLLER_MAX_ATTEMPTS) {
         await sql.query(`
@@ -726,7 +763,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
   } finally {
     await store.release(key);
     await store.release(lostResponseKey);
-    await sql.query('DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = ANY($1::text[])', [[queuedGuid, acceptedFinalGuid]]);
+    await sql.query('DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = ANY($1::text[])', [[queuedGuid, acceptedFinalGuid, agedExhaustedGuid]]);
     for (const receiptKey of [key, lostResponseKey, linkedReceiptKey, exhaustedReceiptKey]) {
       await sql.query('DELETE FROM public.webhook_controller_receipts WHERE replay_key = $1', [receiptKey]);
     }

@@ -570,22 +570,7 @@ export class NeonReplayStore {
     if (!/^[1-9][0-9]*$/.test(String(githubDeliveryId ?? ''))) throw new ReplayProtectionError('The GitHub delivery ID is invalid.');
     positiveDuration(cooldownMs, 'The redelivery cooldown must be positive.');
     const rows = await this.#query(
-      `WITH expired_requests AS (
-         SELECT delivery_guid
-         FROM public.webhook_redelivery_requests
-         WHERE request_status = 'exhausted'
-           AND requested_at <= clock_timestamp() - INTERVAL '30 days'
-           AND delivery_guid <> $1
-         ORDER BY requested_at ASC
-         LIMIT ${REPLAY_CLEANUP_BATCH_SIZE}
-         FOR UPDATE SKIP LOCKED
-       ), deleted_requests AS (
-         DELETE FROM public.webhook_redelivery_requests AS requests
-         USING expired_requests
-         WHERE requests.delivery_guid = expired_requests.delivery_guid
-         RETURNING requests.delivery_guid
-       )
-       INSERT INTO public.webhook_redelivery_requests AS stored
+      `INSERT INTO public.webhook_redelivery_requests AS stored
          (delivery_guid, requested_at, request_status, github_delivery_id, attempt_count, next_attempt_at)
        VALUES ($1, clock_timestamp(), 'requesting', $3, 1, clock_timestamp() + ($2::double precision * INTERVAL '1 millisecond'))
        ON CONFLICT (delivery_guid) DO UPDATE
