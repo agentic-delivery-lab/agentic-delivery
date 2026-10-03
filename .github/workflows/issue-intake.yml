@@ -209,6 +209,14 @@ jobs:
           set -euo pipefail
           [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
 
+      # The root controller checkout cleans trusted-intake, so register the masks first.
+      - name: Mask organization issue-field binding components
+        if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
+        env:
+          ISSUE_FIELD_BINDINGS_JSON: ${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}
+        run: node scripts/mask-issue-field-bindings.mjs
+        working-directory: trusted-intake
+
       - name: Check out the validated controller release
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -220,13 +228,6 @@ jobs:
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
         run: pnpm install --frozen-lockfile --ignore-scripts
         working-directory: .
-
-      - name: Mask organization issue-field binding components
-        if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
-        env:
-          ISSUE_FIELD_BINDINGS_JSON: ${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}
-        run: node scripts/mask-issue-field-bindings.mjs
-        working-directory: trusted-intake
 
       - name: Set up pinned Codex CLI
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.force }}
