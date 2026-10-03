@@ -21,7 +21,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 - The controller release advances to `0.2.0-draft.58` at `cbf54a4e96643e5098c8478f1fb4219fed23774c`; the central participant moves to that immutable pin while draft57 remains available for rollback.
 - The controller release advances to `0.2.0-draft.57` at `8483b16d2b106133538ecca5f642e781d0fdfcd8`; the central participant moves to that immutable pin while draft56 and earlier remain available for rollback.
 - Draft57 used bootstrap commit `ea0148b5f8bb42b3e989f823c1892d5363948aac` for its webhook recovery code and participant registry.
-- Intake and delivery now use bootstrap commit `48ebfef56104b7d1a45c1e084892aa5478689da5`, which pins draft60's webhook recovery code and participant registry.
+- Intake and delivery now use bootstrap commit `054a2cc4ff6d5368d5f8c12300ca53d6bf81a877`, which pins draft61's webhook recovery code and participant registry.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) pins the central intake bootstrap and manual recovery paths to the controller release `bootstrapCommit`; normal and recovery execution no longer fall back to a moving `main` ref.
 - The controller release advances to `0.2.0-draft.39` at
   `53c76a68cf1a7cab2141034bd477d8cb761bf4c6`; the central participant moves
