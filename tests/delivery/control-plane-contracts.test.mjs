@@ -74,8 +74,8 @@ test('the checked-in controller release pins every enrolled participant and requ
   }), true);
 });
 
-test('controller release validation rejects release and bootstrap pins missing the intake masker', async (t) => {
-  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-release-masker-'));
+test('controller release validation rejects pins missing durable invocation receipt runtime', async (t) => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-release-runtime-'));
   t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
   await execFileAsync('git', ['clone', '--quiet', '--shared', '--no-checkout', repositoryRoot, temporaryRoot], { encoding: 'utf8' });
   await mkdir(path.join(temporaryRoot, 'config'), { recursive: true });
@@ -84,20 +84,19 @@ test('controller release validation rejects release and bootstrap pins missing t
   }
   const releasePath = path.join(temporaryRoot, 'config', 'controller-release.json');
   const release = JSON.parse(await readFile(releasePath, 'utf8'));
-  release.commit = '331c433345519f00ecc15be0bd843a45651147f2';
+  release.commit = '8a2acddf07d0b70b11fc5d9c1f5143e54abf9185';
   await writeFile(releasePath, `${JSON.stringify(release, null, 2)}\n`, 'utf8');
 
   await assert.rejects(
     validateReleaseManifest({ repositoryRoot: temporaryRoot }),
-    /missing required runtime file scripts\/mask-issue-field-bindings\.mjs/,
+    /release .* is missing required runtime file scripts\/lib\/neon-replay-store\.mjs/,
   );
 
-  release.commit = 'eed2505edaf4e1f839030697973dcaaf0c1b1bea';
-  release.bootstrapCommit = 'a5f92943ce0407f5c6e53edd4360bca06df58576';
+  release.bootstrapCommit = '7f71508ea4cf4ff881b8d1b7628dc5722fca24b5';
   await writeFile(releasePath, `${JSON.stringify(release, null, 2)}\n`, 'utf8');
   await assert.rejects(
     validateReleaseManifest({ repositoryRoot: temporaryRoot }),
-    /bootstrap commit .* is missing required runtime file scripts\/mask-issue-field-bindings\.mjs/,
+    /bootstrap commit .* is missing required runtime file scripts\/lib\/neon-replay-store\.mjs/,
   );
 });
 

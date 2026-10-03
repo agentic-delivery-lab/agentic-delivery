@@ -219,8 +219,10 @@ test('webhook dispatches enrolled pull-request observations without granting inv
   const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
   const output = result();
   const calls = [];
+  const replayStore = new InMemoryReplayStore();
   await handleWebhook(request({ body, event: 'pull_request', signature }), output, {
     env: webhookEnv(),
+    replayStore,
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
       return response(204);
@@ -234,6 +236,7 @@ test('webhook dispatches enrolled pull-request observations without granting inv
   assert.equal(dispatch.client_payload.event, 'pull_request');
   assert.equal(dispatch.client_payload.source.kind, 'pull_request');
   assert.equal(dispatch.client_payload.source.pull_request_number, 44);
+  assert.equal(await replayStore.controllerReceipt('163255060:12345678-1234-4234-8234-123456789012'), null);
 });
 
 test('webhook fails closed when the central controller repository is not configured', async () => {
@@ -378,7 +381,7 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
   }).valid, true);
 });
 
-test('webhook claims a delivery once and releases the claim when dispatch fails', async () => {
+test('webhook leases a delivery, keeps incomplete work retryable, and releases definite dispatch failures', async () => {
   const replayStore = new InMemoryReplayStore();
   const payload = {
     action: 'created',
@@ -413,17 +416,31 @@ test('webhook claims a delivery once and releases the claim when dispatch fails'
   assert.equal(output.statusCode, 202);
   assert.equal(dispatches, 1);
 
-  const duplicate = result();
-  await handleWebhook(requestFor(), duplicate, {
+  const inFlightDuplicate = result();
+  await handleWebhook(requestFor(), inFlightDuplicate, {
     env,
     replayStore,
     tokenProvider: { token: async () => 'installation-token' },
     fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : (() => { throw new Error('duplicate must not dispatch'); })()),
   });
-  assert.equal(duplicate.statusCode, 200);
-  assert.match(duplicate.body, /"duplicate":true/);
+  assert.equal(inFlightDuplicate.statusCode, 503);
+  assert.match(inFlightDuplicate.body, /"retryable":true/);
 
-  const failingStore = new InMemoryReplayStore();
+  const receiptKey = '163255060:98765432-1234-4234-8234-123456789012';
+  assert.equal((await replayStore.claimController(receiptKey)).status, 'claimed');
+  await replayStore.completeController(receiptKey);
+  const completedDuplicate = result();
+  await handleWebhook(requestFor(), completedDuplicate, {
+    env,
+    replayStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : (() => { throw new Error('completed duplicate must not dispatch'); })()),
+  });
+  assert.equal(completedDuplicate.statusCode, 200);
+  assert.match(completedDuplicate.body, /"completed":true/);
+
+  let leaseNow = Date.now();
+  const failingStore = new InMemoryReplayStore({ now: () => leaseNow });
   await assert.rejects(handleWebhook(requestFor(), result(), {
     env,
     replayStore: failingStore,
@@ -434,6 +451,15 @@ test('webhook claims a delivery once and releases the claim when dispatch fails'
     },
   }));
   const retried = result();
+  const tooSoon = result();
+  await handleWebhook(requestFor(), tooSoon, {
+    env,
+    replayStore: failingStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : response(204)),
+  });
+  assert.equal(tooSoon.statusCode, 503);
+  leaseNow += 31_000;
   await handleWebhook(requestFor(), retried, {
     env,
     replayStore: failingStore,
@@ -596,6 +622,7 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
     GITHUB_OUTPUT: outputPath,
     CODEX_DELIVERY_STATE_DIR: root,
     RUNNER_TEMP: root,
+    AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
     AGENTIC_DELIVERY_ORGANIZATION_ID: '327861320',
     CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060',
   };
@@ -660,6 +687,7 @@ test('central preflight rejects a tampered signed dispatch envelope', async (t) 
     AGENTIC_DELIVERY_ORGANIZATION_ID: '327861320',
     CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060',
     CODEX_DELIVERY_DISPATCH_SECRET: 'dispatch-secret',
+    AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
   };
   const fetchImpl = async (url) => {
     if (url.endsWith('/issues/comments/7')) return response(200, { id: 7, body, user: { login: 'sjefsharp' }, author_association: 'OWNER' });
@@ -725,6 +753,7 @@ test('central preflight resolves and revalidates the originating repository from
     GITHUB_OUTPUT: outputPath,
     CODEX_DELIVERY_STATE_DIR: root,
     RUNNER_TEMP: root,
+    AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
   };
   const calls = [];
   const fetchImpl = async (url) => {
@@ -792,6 +821,7 @@ test('central preflight rejects a controller pin that differs from the participa
         GITHUB_OUTPUT: path.join(root, 'output'),
         CODEX_DELIVERY_STATE_DIR: root,
         RUNNER_TEMP: root,
+        AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
       },
       fetchImpl: async () => { throw new Error('origin API must not be called'); },
       participantRegistry: registry,
@@ -845,6 +875,7 @@ test('central preflight accepts issue lifecycle envelopes without a comment', as
     GITHUB_OUTPUT: outputPath,
     CODEX_DELIVERY_STATE_DIR: root,
     RUNNER_TEMP: root,
+    AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
   };
   const fetchImpl = async (url) => {
     if (url.endsWith('/collaborators/sjefsharp/permission')) return response(200, { permission: 'write' });

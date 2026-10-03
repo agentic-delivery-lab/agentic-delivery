@@ -287,6 +287,7 @@
       ],
       "primitives": [
         "agent-invocation-boundary",
+        "agent-invocation-finalizer",
         "agent-invocation-preflight",
         "agent-invocation-workflow",
         "codex-delivery-controller",
@@ -311,7 +312,8 @@
         "primitive-selection-validator",
         "quota-diagnostics-contract",
         "repository-governance-instructions",
-        "semantic-architecture-review"
+        "semantic-architecture-review",
+        "webhook-delivery-reconciler"
       ]
     },
     {
@@ -343,6 +345,7 @@
       ],
       "primitives": [
         "agent-invocation-boundary",
+        "agent-invocation-finalizer",
         "agent-invocation-preflight",
         "agent-invocation-workflow",
         "codex-delivery-controller",
@@ -367,7 +370,8 @@
         "primitive-selection-validator",
         "quota-diagnostics-contract",
         "repository-governance-instructions",
-        "semantic-architecture-review"
+        "semantic-architecture-review",
+        "webhook-delivery-reconciler"
       ]
     },
     {
@@ -478,6 +482,19 @@
       "domains": [
         "agentic-delivery-control-plane",
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "agent-invocation-finalizer",
+      "path": "scripts/finalize-agent-invocation.mjs",
+      "location": "scripts/finalize-agent-invocation.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {
@@ -1201,6 +1218,19 @@
       ],
       "domains": [
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "webhook-delivery-reconciler",
+      "path": "api/cron/reconcile-webhooks.mjs",
+      "location": "api/cron/reconcile-webhooks.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     }
   ]

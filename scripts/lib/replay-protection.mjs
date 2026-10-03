@@ -1,3 +1,6 @@
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+
 const DELIVERY_ID = /^[0-9a-f-]{20,}$/i;
 const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 
@@ -36,15 +39,28 @@ export function replayKey({ installationId, deliveryId } = {}) {
   return `${installation || 'unknown'}:${delivery.toLowerCase()}`;
 }
 
+export function controllerRunLeaseToken(env = process.env) {
+  const runId = String(env.GITHUB_RUN_ID || 'local');
+  const attempt = String(env.GITHUB_RUN_ATTEMPT || '1');
+  if (!/^(?:local|[1-9][0-9]*)$/.test(runId) || !/^[1-9][0-9]*$/.test(attempt)) {
+    throw new ReplayProtectionError('The controller run identity is invalid.');
+  }
+  return `${runId}:${attempt}`;
+}
+
 export class InMemoryReplayStore {
   #entries = new Map();
+  #receipts = new Map();
 
   constructor({ now = () => Date.now() } = {}) {
     this.now = now;
   }
 
   #purge(now) {
-    for (const [key, expiresAt] of this.#entries) if (expiresAt <= now) this.#entries.delete(key);
+    for (const [key, entry] of this.#entries) {
+      const expiresAt = typeof entry === 'number' ? entry : entry.expiresAt;
+      if (expiresAt <= now) this.#entries.delete(key);
+    }
   }
 
   async claim(key, { ttlMs = DEFAULT_REPLAY_WINDOW_MS } = {}) {
@@ -58,6 +74,80 @@ export class InMemoryReplayStore {
 
   async release(key) {
     this.#entries.delete(key);
+  }
+
+  async claimWithLease(key, options) {
+    const { ttlMs = DEFAULT_REPLAY_WINDOW_MS, leaseMs = 30_000 } = options ?? {};
+    if (!Number.isFinite(ttlMs) || ttlMs <= 0 || !Number.isFinite(leaseMs) || leaseMs <= 0) throw new ReplayProtectionError('The replay lease must be positive.');
+    const now = this.now();
+    this.#purge(now);
+    const existing = this.#entries.get(key);
+    const dispatchCanResume = existing && typeof existing === 'object'
+      && existing.dispatchStatus === 'dispatching'
+      && existing.leaseExpiresAt <= now;
+    if (existing && !dispatchCanResume) return { claimed: false, leaseToken: null };
+    const leaseToken = randomUUID();
+    this.#entries.set(key, {
+      expiresAt: now + ttlMs,
+      dispatchStatus: 'dispatching',
+      leaseExpiresAt: now + leaseMs,
+      leaseToken,
+    });
+    return { claimed: true, leaseToken };
+  }
+
+  async markDispatched(key, leaseToken) {
+    const entry = this.#entries.get(key);
+    if (entry && typeof entry === 'object' && entry.leaseToken === leaseToken) {
+      entry.dispatchStatus = 'dispatched';
+      entry.leaseExpiresAt = null;
+      entry.leaseToken = null;
+    }
+  }
+
+  async releaseClaim(key, leaseToken) {
+    const entry = this.#entries.get(key);
+    if (entry && typeof entry === 'object' && entry.leaseToken === leaseToken) this.#entries.delete(key);
+  }
+
+  async markDispatched() {}
+
+  async ensureControllerReceipt(key) {
+    if (!this.#receipts.has(key)) this.#receipts.set(key, { status: 'pending', leaseExpiresAt: null, attempts: 0 });
+  }
+
+  async controllerReceipt(key) {
+    return this.#receipts.get(key) ?? null;
+  }
+
+  async claimController(key, { leaseMs = 6 * 60 * 60 * 1000, leaseToken = randomUUID() } = {}) {
+    await this.ensureControllerReceipt(key);
+    const receipt = this.#receipts.get(key);
+    if (receipt.status === 'completed' || receipt.status === 'exhausted') return { status: receipt.status };
+    if (receipt.status === 'running' && receipt.leaseExpiresAt > this.now()) return { status: 'busy' };
+    if (receipt.nextAttemptAt > this.now()) return { status: 'waiting' };
+    receipt.status = 'running';
+    receipt.leaseExpiresAt = this.now() + leaseMs;
+    receipt.leaseToken = leaseToken;
+    receipt.attempts += 1;
+    return { status: 'claimed' };
+  }
+
+  async completeController(key, { leaseToken } = {}) {
+    const receipt = this.#receipts.get(key);
+    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)) throw new ReplayProtectionError('The controller receipt could not be completed.');
+    receipt.status = 'completed';
+    receipt.leaseExpiresAt = null;
+    receipt.leaseToken = null;
+  }
+
+  async retryController(key, { maxAttempts = 8, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken } = {}) {
+    const receipt = this.#receipts.get(key);
+    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)) throw new ReplayProtectionError('The controller receipt could not be released.');
+    receipt.status = receipt.attempts >= maxAttempts ? 'exhausted' : 'retryable';
+    receipt.leaseExpiresAt = null;
+    receipt.leaseToken = null;
+    receipt.nextAttemptAt = this.now() + Math.min(maxDelayMs, baseDelayMs * (2 ** Math.max(0, receipt.attempts - 1)));
   }
 }
 
@@ -110,6 +200,80 @@ export class FileReplayStore {
     const safeKey = key.replace(/[^A-Za-z0-9_.:-]/g, '_');
     try { await unlink(path.join(this.directory, `${safeKey}.json`)); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
+
+  async claimWithLease(key, options) {
+    const claimed = await this.claim(key, options);
+    return { claimed, leaseToken: claimed ? randomUUID() : null };
+  }
+
+  async releaseClaim(key) {
+    await this.release(key);
+  }
+
+  #receiptPath(key) {
+    const safeKey = key.replace(/[^A-Za-z0-9_.:-]/g, '_');
+    return path.join(this.directory, `${safeKey}.receipt.json`);
+  }
+
+  async #readReceipt(key) {
+    const { readFile } = await import('node:fs/promises');
+    try { return JSON.parse(await readFile(this.#receiptPath(key), 'utf8')); }
+    catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+  }
+
+  async #writeReceipt(key, receipt) {
+    const { mkdir, rename, writeFile } = await import('node:fs/promises');
+    await mkdir(this.directory, { recursive: true, mode: 0o700 });
+    const target = this.#receiptPath(key);
+    const temporary = path.join(this.directory, `${path.basename(target)}.${process.pid}.${Date.now()}.tmp`);
+    await writeFile(temporary, JSON.stringify(receipt), { mode: 0o600 });
+    await rename(temporary, target);
+  }
+
+  async markDispatched() {}
+
+  async ensureControllerReceipt(key) {
+    if (!await this.#readReceipt(key)) {
+      await this.#writeReceipt(key, { status: 'pending', leaseExpiresAt: null, attempts: 0, nextAttemptAt: 0 });
+    }
+  }
+
+  async controllerReceipt(key) {
+    return this.#readReceipt(key);
+  }
+
+  async claimController(key, { leaseMs = 6 * 60 * 60 * 1000, leaseToken = randomUUID() } = {}) {
+    await this.ensureControllerReceipt(key);
+    const receipt = await this.#readReceipt(key);
+    if (receipt.status === 'completed' || receipt.status === 'exhausted') return { status: receipt.status };
+    if (receipt.status === 'running' && Number(receipt.leaseExpiresAt) > this.now()) return { status: 'busy' };
+    if (Number(receipt.nextAttemptAt) > this.now()) return { status: 'waiting' };
+    receipt.status = 'running';
+    receipt.leaseExpiresAt = this.now() + leaseMs;
+    receipt.leaseToken = leaseToken;
+    receipt.attempts = Number(receipt.attempts ?? 0) + 1;
+    await this.#writeReceipt(key, receipt);
+    return { status: 'claimed' };
+  }
+
+  async completeController(key, { leaseToken } = {}) {
+    const receipt = await this.#readReceipt(key);
+    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)) throw new ReplayProtectionError('The controller receipt could not be completed.');
+    receipt.status = 'completed';
+    receipt.leaseExpiresAt = null;
+    receipt.leaseToken = null;
+    await this.#writeReceipt(key, receipt);
+  }
+
+  async retryController(key, { maxAttempts = 8, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken } = {}) {
+    const receipt = await this.#readReceipt(key);
+    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)) throw new ReplayProtectionError('The controller receipt could not be released.');
+    receipt.status = Number(receipt.attempts) >= maxAttempts ? 'exhausted' : 'retryable';
+    receipt.leaseExpiresAt = null;
+    receipt.leaseToken = null;
+    receipt.nextAttemptAt = this.now() + Math.min(maxDelayMs, baseDelayMs * (2 ** Math.max(0, Number(receipt.attempts) - 1)));
+    await this.#writeReceipt(key, receipt);
+  }
 }
 
 export async function claimDelivery(store, {
@@ -121,7 +285,9 @@ export async function claimDelivery(store, {
   return store.claim(replayKey({ installationId, deliveryId }), { ttlMs });
 }
 
-export async function releaseDelivery(store, { installationId, deliveryId } = {}) {
+export async function releaseDelivery(store, { installationId, deliveryId, leaseToken } = {}) {
   if (!store || typeof store.release !== 'function') return;
-  return store.release(replayKey({ installationId, deliveryId }));
+  const key = replayKey({ installationId, deliveryId });
+  if (leaseToken && typeof store.releaseClaim === 'function') return store.releaseClaim(key, leaseToken);
+  return store.release(key);
 }

@@ -10,6 +10,15 @@ import { parseParticipantRegistry } from './lib/participant-registry.mjs';
 
 const execFileAsync = promisify(execFile);
 
+const PINNED_RUNTIME_FILES = Object.freeze([
+  'scripts/mask-issue-field-bindings.mjs',
+  'scripts/prepare-agent-invocation.mjs',
+  'scripts/lib/replay-protection.mjs',
+  'scripts/lib/neon-replay-store.mjs',
+  'package.json',
+  'pnpm-lock.yaml',
+]);
+
 export class ControllerReleaseValidationError extends Error {
   constructor(message, exitCode = 1) {
     super(message);
@@ -52,7 +61,7 @@ export async function validateControllerRelease({ repositoryRoot = path.resolve(
     }
     const bootstrapCommit = await git(repositoryRoot, ['cat-file', '-t', release.bootstrapCommit]);
     if (bootstrapCommit !== 'commit') errors.push(`bootstrap pin ${release.bootstrapCommit} is not a commit in this repository`);
-    for (const runtimeFile of ['scripts/mask-issue-field-bindings.mjs']) {
+    for (const runtimeFile of PINNED_RUNTIME_FILES) {
       try {
         const runtimeFileType = await git(repositoryRoot, ['cat-file', '-t', `${release.commit}:${runtimeFile}`]);
         if (runtimeFileType !== 'blob') errors.push(`controller release ${release.version} is missing required runtime file ${runtimeFile}`);

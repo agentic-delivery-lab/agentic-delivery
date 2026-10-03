@@ -6,6 +6,10 @@ on:
   repository_dispatch:
     types: [agent_invocation]
 
+concurrency:
+  group: agent-invocation-${{ github.event.client_payload.delivery_id }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   issues: write
@@ -20,3 +24,4 @@ jobs:
       CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
       CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}
       ISSUE_FIELD_BINDINGS_JSON: ${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}
+      AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}

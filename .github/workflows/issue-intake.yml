@@ -17,6 +17,8 @@ on:
         required: true
       ISSUE_FIELD_BINDINGS_JSON:
         required: true
+      AGENTIC_DELIVERY_REPLAY_DATABASE_URL:
+        required: true
   workflow_dispatch:
     inputs:
       issue:
@@ -111,7 +113,7 @@ jobs:
       lifecycle_stage: ${{ steps.intake.outputs.lifecycle_stage }}
       readiness: ${{ steps.intake.outputs.readiness }}
       orchestration_pattern: ${{ steps.intake.outputs.orchestration_pattern }}
-      invocation_accepted: ${{ steps.invocation.outputs.accepted || 'true' }}
+      invocation_accepted: ${{ steps.invocation.outputs.accepted || (inputs.agent_invocation && 'false' || 'true') }}
       source_issue: ${{ steps.invocation.outputs.source_issue || steps.intake.outputs.issue }}
       origin_repository: ${{ steps.invocation.outputs.origin_repository || github.repository }}
       origin_repository_id: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
@@ -182,6 +184,7 @@ jobs:
           CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
           CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ vars.CODEX_DELIVERY_APP_INSTALLATION_ID }}
           CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}
+          AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
@@ -299,3 +302,36 @@ jobs:
     secrets:
       CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
       ISSUE_FIELD_BINDINGS_JSON: ${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}
+
+  finalize-invocation:
+    needs: [classify, deliver]
+    if: >-
+      always() &&
+      inputs.agent_invocation &&
+      needs.classify.outputs.invocation_accepted == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the controller
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js and pnpm
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+          package-json-file: package.json
+
+      - name: Install controller dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Persist invocation completion or retryability
+        env:
+          AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          INVOCATION_RESULT: ${{ needs.classify.result == 'success' && (needs.deliver.result == 'success' || needs.deliver.result == 'skipped') && 'success' || 'failure' }}
+        run: node scripts/finalize-agent-invocation.mjs

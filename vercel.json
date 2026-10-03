@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/reconcile-webhooks",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

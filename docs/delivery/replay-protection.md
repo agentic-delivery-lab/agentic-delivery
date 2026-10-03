@@ -1,102 +1,117 @@
 # Webhook delivery replay protection
 
-The organization webhook treats the GitHub delivery ID as an idempotency key.
-The claim is made only after the signed event, participant registry, event
-catalogue, origin token, and actor authorization have passed, and immediately
-before the central `repository_dispatch` mutation.
+The organization webhook treats the GitHub delivery GUID as an idempotency key.
+The claim is made after signature, organization, installation, participant,
+event, origin token, and actor checks pass. A short dispatch lease protects the
+`repository_dispatch` mutation. The lease has an owner token, so an expired
+request cannot complete or release a newer request's claim.
 
 The gateway carries `received_at` in the envelope. The central preflight
 accepts a compatible legacy envelope without that field, but validates a
 present timestamp against the five-minute replay window and a thirty-second
-future clock-skew allowance. New webhook deliveries always include it.
+future clock-skew allowance. New webhook deliveries always include it. The
+gateway also signs the complete `repository_dispatch` client payload with the
+separate `AGENTIC_DELIVERY_DISPATCH_SECRET` using HMAC-SHA256.
 
-The gateway also signs the complete `repository_dispatch` client payload with
-the separate `AGENTIC_DELIVERY_DISPATCH_SECRET` using HMAC-SHA256. The
-signature covers the immutable envelope after removing only the signature
-field, and `dispatch_timestamp` is checked against the same five-minute replay
-window (with a thirty-second future-skew allowance) by the central preflight.
-The dispatch secret is held only by the central gateway and controller
-workflow; it is never sent to an origin repository, Codex model process, or
-untrusted primitive. `CODEX_DELIVERY_DISPATCH_SECRET` is the explicitly named
-Actions secret used by the controller workflow.
+The Neon store keeps two small state boundaries. `webhook_replay_claims` keeps
+the five-minute gateway replay window, dispatch state, and lease. The separate
+`webhook_controller_receipts` table keeps a 30-day status and lease for the
+controller run: pending, running, retryable, completed, or exhausted. The
+controller claims the receipt before intake, and a final Actions job records
+completion only after classification and any selected delivery workflow
+finish. Failed or interrupted runs become retryable after their lease expires.
+Actions concurrency keyed by the delivery GUID serializes repeated dispatches.
+Neither table stores webhook bodies, credentials, private keys, or model
+output.
 
-Duplicate deliveries return a successful non-dispatch response and cannot
-create a second controller run. If dispatch fails after the claim, the gateway
-releases the claim so GitHub can retry the same delivery. Runner-local markers
-remain a second, origin-scoped idempotency boundary; they are not a replacement
-for gateway protection.
+`AGENTIC_DELIVERY_REPLAY_DATABASE_URL` selects the shared Neon store. Use the
+same pooled Neon connection string in the Vercel production environment and as
+a repository Actions secret in the central controller repository. Its
+hostname must include `-pooler`. Do not put this URL in an organization-level
+Actions secret: the reusable workflow receives it explicitly from the
+controller repository secret.
 
-`AGENTIC_DELIVERY_REPLAY_DATABASE_URL` selects the Neon-backed claim store.
-Set it to a pooled Neon connection string whose endpoint hostname includes
-`-pooler`. The handler uses the `@neondatabase/serverless` HTTP driver and one
-parameterized SQL statement for each claim. A primary key and atomic upsert
-allow only one concurrent claim; an expired claim can be replaced using the
-database clock. Each claim also removes at most 100 other expired rows, so
-cleanup is bounded and does not need a separate scheduled job.
+## Migration and configuration
 
-Before setting this runtime secret, apply
-[`api/github/migrations/0001-webhook-replay-claims.sql`](../../api/github/migrations/0001-webhook-replay-claims.sql)
-to the selected Neon database using a direct, unpooled connection. The
-migration creates only the replay key and expiry columns, plus an expiry
-index. It is safe to run more than once. For example, from a protected local
-terminal with `psql` installed:
+Apply both migrations to the selected Neon database with a direct, unpooled
+connection before deploying code that uses the new schema:
 
 ```sh
 psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
   -f api/github/migrations/0001-webhook-replay-claims.sql
+psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
+  -f api/github/migrations/0002-recoverable-webhook-delivery.sql
 ```
 
-Do not print the connection string or add it to source control. The gateway
-does not log database errors or credentials.
+Run them from a protected terminal. Never print the connection string or add
+it to source control. Both migrations are safe to run more than once.
 
-`AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY` remains available for a single
-process or a shared filesystem. When both settings are present, the Neon
-database is selected. A multi-instance deployment must not rely on a local
-function filesystem. The process-local memory store is intended for tests and
-explicitly isolated single-process operation only. The default handler fails
-closed when no durable store or injected adapter is available. Tests may set
-`AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY=true`; that flag is not a production
-fallback.
+Configure these protected values before production activation:
 
-For rollout, apply the migration first, then configure the protected runtime
-secret with the pooled URL, and deploy through the separately approved
-deployment process. Confirm a controlled duplicate delivery is rejected and
-that a failed dispatch can be retried. This code change does not configure the
-secret or activate the production webhook.
+| Store | Name | Purpose |
+| --- | --- | --- |
+| Vercel production | `AGENTIC_DELIVERY_REPLAY_DATABASE_URL` | Shared webhook and controller receipt state |
+| Controller repository Actions secret | `AGENTIC_DELIVERY_REPLAY_DATABASE_URL` | Lets the controller claim and complete its receipt |
+| Vercel production | `CRON_SECRET` | Bearer authentication for the scheduled reconciler |
+| Vercel production | `AGENTIC_DELIVERY_APP_ID` or `CODEX_DELIVERY_APP_ID` | Signs an App JWT for webhook delivery APIs |
+| Vercel production | `AGENTIC_DELIVERY_APP_PRIVATE_KEY` or `CODEX_DELIVERY_APP_PRIVATE_KEY` | Signs an App JWT; never place it in Actions workflow inputs |
 
-If Neon is unavailable, the handler fails closed and GitHub can retry. A
-rollback to file-backed state is safe only when the deployed gateway uses one
-process or a shared filesystem. On a multi-instance deployment, restore a
-previously verified shared store or keep dispatch disabled until Neon is
-available; local function storage is not a safe rollback target.
+The existing `ISSUE_FIELD_BINDINGS_JSON` value is a separate controller
+repository Actions secret used by intake. It is not an organization-level
+setting. The scheduled reconciler runs daily at 00:00 UTC through Vercel Cron;
+Vercel supplies `Authorization: Bearer $CRON_SECRET` to the route. A Hobby plan
+supports this daily schedule. The Cron route is deployed as code by
+`vercel.json`; this repository change does not set secrets, apply migrations,
+deploy, or activate the App webhook.
 
-Replay rows contain only the installation/delivery key and expiry. They do
-not contain App private keys, installation tokens, issue bodies, or model
-output. The optional integration test uses
-`AGENTIC_DELIVERY_REPLAY_TEST_DATABASE_URL`; point it only at an isolated Neon
-database where this migration has already been applied.
+## Recovery and monitoring
 
-The gateway also binds every supported event to the configured organization
-login, numeric organization ID, and App installation ID before it mints an
-origin-scoped token. The organization defaults identify
-`agentic-delivery-lab` (`327861320`), but the App installation ID has no
-runtime default and must be supplied by the protected deployment environment
-through `AGENTIC_DELIVERY_APP_INSTALLATION_ID`. Operators must verify the
-organization values and installation ID against the live App installation
-before promotion. A missing or mismatched installation is rejected before
-actor authorization or dispatch.
+GitHub does not automatically redeliver failed App webhook deliveries. The
+scheduled route creates an App JWT, pages through delivery history, groups
+attempts by stable GUID, and requests redelivery when no attempt succeeded.
+Its first scan reads the available delivery history. Each scan is capped at 100
+pages and 1,000 redelivery requests; hitting either cap returns 503 and leaves
+the checkpoint unchanged instead of silently truncating the scan.
+It also redelivers due controller receipts even when GitHub recorded the
+original webhook delivery as successful. The reconciler stores a timestamp
+and delivery ID checkpoint only after the full bounded scan and all accepted
+redelivery requests complete. A failed API call leaves the checkpoint
+unchanged, so the next run rescans safely. Redelivery requests have a
+15-minute cooldown to avoid hammering an uncertain delivery.
 
-The dispatch token is independently narrowed to the configured numeric
-Control-Plane repository ID (`AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID`).
-That value has no runtime default: a deployment that omits it fails closed
-before it can mint an installation token or dispatch an event.
-The origin token and dispatch token therefore have separate repository scopes;
-the App installation's broader selected-repository access is not exposed to
-either API call.
+Check the Vercel function invocation for `/api/cron/reconcile-webhooks` after
+each scheduled run. A 200 response reports scanned pages, matched deliveries,
+requested redeliveries, and cooldown skips. A 503 means GitHub or Neon failed
+and the checkpoint did not advance. In GitHub App settings, inspect recent
+webhook deliveries for repeated non-2xx responses. In Neon, monitor receipt
+counts by status; `exhausted` means eight controller attempts failed and needs
+operator diagnosis before any manual retry. Redelivery requests also stop after
+eight attempts and retain an `exhausted` status for diagnosis:
 
-The central Actions preflight repeats the installation and organization
-identity checks when those envelope fields and controller configuration are
-present, verifies the dispatch HMAC and timestamp, then resolves the origin
-full name from the numeric participant registry entry. A forged or misrouted
-dispatch therefore cannot redirect the run by changing only the readable
-repository name.
+```sql
+SELECT status, count(*)
+FROM public.webhook_controller_receipts
+WHERE expires_at > clock_timestamp()
+GROUP BY status
+ORDER BY status;
+```
+
+```sql
+SELECT request_status, count(*)
+FROM public.webhook_redelivery_requests
+GROUP BY request_status
+ORDER BY request_status;
+```
+
+If Neon is unavailable, the gateway fails closed. A rollback to file-backed
+state is safe only for one process or a shared filesystem. A multi-instance
+deployment must keep dispatch disabled until the shared database is restored;
+local function storage cannot preserve these semantics. To roll back the
+controller code, keep the schema in place; the additive migration is backward
+compatible with the earlier claim-only adapter.
+
+The optional isolated integration test uses
+`AGENTIC_DELIVERY_REPLAY_TEST_DATABASE_URL`. Point it only at a separate Neon
+database where both migrations have been applied. The live Vercel deployment,
+GitHub App credentials, Neon production schema, and scheduled execution remain
+unverified until an operator configures and activates them.
