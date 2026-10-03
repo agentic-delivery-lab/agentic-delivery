@@ -107,9 +107,33 @@ export async function validateArchitecturePin({
     release = {};
   }
 
-  if (release.schemaVersion !== 1) errors.push('Architecture release schemaVersion must be 1');
+  if (![1, 2].includes(release.schemaVersion)) errors.push('Architecture release schemaVersion must be 1 or 2');
+  if (release.schemaVersion === 2) {
+    if (release.$schema !== '../contracts/architecture-release.schema.json') errors.push('Architecture release schemaVersion 2 must reference its versioned contract');
+    if (release.architectureId !== 'urn:agentic-delivery:architecture:authority') errors.push('Architecture release architectureId is invalid');
+    if (!['draft', 'released', 'withdrawn'].includes(release.status)) errors.push('Architecture release status is invalid');
+    if (release.status === 'withdrawn') errors.push('Architecture release is withdrawn');
+    if (!Array.isArray(release.adrIds) || release.adrIds.length === 0
+      || release.adrIds.some((id) => !/^urn:agentic-delivery:adr:architecture:\d{4}$/.test(id))) {
+      errors.push('Architecture release adrIds must list versioned ADR identifiers');
+    }
+    if (!Array.isArray(release.decisionIds) || release.decisionIds.length === 0
+      || release.decisionIds.some((id) => !/^(ADR|ADP|ADD)-\d{4}$/.test(id))) {
+      errors.push('Architecture release decisionIds must list versioned decision identifiers');
+    }
+    if (release.contractVersions?.architectureRelease !== '4.0.0'
+      || release.contractVersions?.adrPrimitiveIndex !== '3.0.0'
+      || release.contractVersions?.decisionInventory !== '1.0.0'
+      || release.contractVersions?.architectureArtifacts !== '1.0.0') {
+      errors.push('Architecture release contract versions are unsupported');
+    }
+  }
   if (release.sourceRepository !== expectedRepository) errors.push(`Architecture release sourceRepository must be ${expectedRepository}`);
   if (!SHA1.test(String(release.sourceCommit ?? ''))) errors.push('Architecture release sourceCommit must be immutable');
+  else {
+    try { await git(architectureRoot, ['cat-file', '-e', `${release.sourceCommit}^{commit}`]); }
+    catch { errors.push('Architecture release sourceCommit is not present in the pinned repository history'); }
+  }
   if (!SHA256.test(String(release.contentSha256 ?? ''))) errors.push('Architecture release contentSha256 must be a SHA-256 digest');
   if (architectureVersion !== undefined && release.version !== architectureVersion) errors.push(`Architecture release version must be ${architectureVersion}`);
   if (architectureDigest !== undefined && release.contentSha256 !== architectureDigest) errors.push('Architecture release digest does not match the requested review pin');
@@ -164,10 +188,13 @@ export async function validateArchitecturePin({
   if (errors.length > 0) throw releaseError(errors);
   return {
     status: 'passed',
+    schemaVersion: release.schemaVersion,
     repository: release.sourceRepository,
     commit: architectureCommit,
+    sourceCommit: release.sourceCommit,
     checkedOutHead: head,
     version: release.version,
+    decisionIds: Array.isArray(release.decisionIds) ? [...release.decisionIds] : [],
     contentSha256: release.contentSha256,
     reproducedDigest,
     conformancePolicy: release.conformancePolicy.path,

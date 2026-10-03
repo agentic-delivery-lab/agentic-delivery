@@ -88,7 +88,9 @@ setting. The scheduled reconciler runs daily at 00:00 UTC through Vercel Cron;
 Vercel supplies `Authorization: Bearer $CRON_SECRET` to the route. A Hobby plan
 supports this daily schedule. The Cron route is deployed as code by
 `vercel.json`; this repository change does not set secrets, apply migrations,
-deploy, or activate the App webhook.
+deploy, or activate the App webhook. Vercel Hobby permits one invocation per
+day, while Pro and Enterprise permit per-minute schedules; confirm the project
+plan before changing this cadence ([Cron Jobs usage and pricing](https://vercel.com/docs/cron-jobs/usage-and-pricing)).
 
 ## Recovery and monitoring
 
@@ -101,8 +103,10 @@ for the next run; it does not make history-based retry decisions from a partial
 scan. The cursor is resumed until the prior checkpoint is reached. A run that
 finishes a scan first records every failed delivery in the durable Neon
 redelivery queue. It then requests at most 250 queued or due redeliveries per
-invocation. The history checkpoint stays in place while any request is still
-queued or has an uncertain `requesting` outcome. Later runs drain the queue;
+invocation. With the current daily schedule, the upper bound is 250 redelivery
+API attempts per day, and rate limits or retries can lower actual throughput.
+The history checkpoint stays in place while any request is still queued or
+has an uncertain `requesting` outcome. Later runs drain the queue;
 the checkpoint advances after all requests from the completed scan have been
 accepted or marked exhausted.
 It also redelivers due controller receipts even when GitHub recorded the
@@ -129,7 +133,15 @@ advance; they do not delete attempt state and retry forever. Network errors,
 5xx responses, timeouts, and rate limits keep the request retryable. The retry
 limit is eight attempts. An exhausted request needs operator diagnosis before
 a manual retry. The response's `redelivery_queue_pending` field reports when
-later Cron invocations still need to drain queued work.
+later Cron invocations still need to drain queued work. A run that reports
+both `redelivery_requests: 250` and `redelivery_queue_pending: true` has
+saturated the per-run batch; any remainder stays durable for the next run.
+Escalate if the queue is still pending after two consecutive successful daily
+runs or if `exhausted_redeliveries` is nonzero. Before webhook activation,
+clear those conditions and confirm that observed failed-delivery volume
+remains below the measured capacity. Do not advance the scan checkpoint
+manually. Increasing the schedule frequency requires a verified Vercel plan
+and a review of GitHub rate-limit behavior.
 
 GitHub documents that primary and secondary REST API limits can return HTTP
 403 or 429, and that clients should wait for `Retry-After` or

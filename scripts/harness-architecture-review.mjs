@@ -54,6 +54,7 @@ export async function runArchitectureReview(options) {
       const { runSemanticReview } = await import('./lib/architecture-review-agent.mjs');
       review.semantic = await runSemanticReview({
         repositoryRoot: options.repositoryRoot ?? process.cwd(),
+        architectureRoot: options.architectureRoot,
         review,
         eventPath: options.event,
       });
