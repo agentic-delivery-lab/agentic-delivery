@@ -11,6 +11,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds Neon-backed dispatch leases and controller receipts, persists cursors for bounded delivery-history scans, stores GitHub delivery IDs before advancing checkpoints, aggregates attempt outcomes across scan segments, and keeps active or uncertain webhook outcomes retryable.
 - Failed deliveries are now queued durably and drained 250 at a time. The history checkpoint waits until queued requests are accepted or exhausted; stale ambiguous requests remain retryable, and rate-limited 403 responses honor GitHub's retry guidance.
+- The controller release advances to `0.2.0-draft.60` at `d3036197be223efa2050e9d795dac87c6b8df68c`; the central participant moves to that immutable pin while draft59 remains available for rollback.
 - The controller release advances to `0.2.0-draft.59` at `2ab8bbe20c2ae01616af91ee224dcb1da881ed0c`; the central participant moves to that immutable pin while draft58 remains available for rollback.
 - Reconciliation links every observed webhook attempt to its matching controller receipt before checkpointing, including receipts that are not due yet. Due-receipt batches exclude unlinked rows before applying the limit, preventing stale rows from starving eligible retries.
 - Definitive GitHub redelivery API errors are retained as exhausted requests instead of deleting their attempt state and leaving the scan checkpoint stuck in an unlimited retry loop. Rate-limited 403 responses remain retryable.
