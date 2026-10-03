@@ -9,6 +9,10 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- The controller release manifest and central participant registry now target
+  `0.2.0-draft.46` at
+  `89c9da073df6443cef86c3cb70e38ad10d303926`, retaining draft45 for rollback.
+  Runtime intake uses the new pin after a separate reviewed bootstrap advance.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) pins the central intake bootstrap and manual recovery paths to the controller release `bootstrapCommit`; normal and recovery execution no longer fall back to a moving `main` ref.
 - The controller release advances to `0.2.0-draft.39` at
   `53c76a68cf1a7cab2141034bd477d8cb761bf4c6`; the central participant moves
