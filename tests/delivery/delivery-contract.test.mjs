@@ -81,8 +81,8 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.ok(intake.includes('ref: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}'));
   assert.ok(intake.includes('Validate the selected controller commit'));
   const release = JSON.parse(await text('config/controller-release.json'));
-  assert.equal(release.version, '0.2.0-draft.64');
-  assert.equal(release.commit, '29f9638ffcefdf50d3b6a24330b4bc6efe60b935');
+  assert.equal(release.version, '0.2.0-draft.65');
+  assert.equal(release.commit, '103bea69b2f9a94bad6bdaa648df98635c193a5c');
   assert.equal(release.bootstrapCommit, '8c650ce2b76355c23f0e2ee47e4aeb67fab18b8c');
   assert.ok(!delivery.includes('types: [opened]'));
   const consumerContract = parseRepositoryYaml(await text('.github/workflows/agentic-delivery-quality.yml'), 'consumer contract workflow');

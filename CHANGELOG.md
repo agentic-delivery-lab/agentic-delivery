@@ -15,6 +15,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 - Expired controller receipts at the eight-attempt limit become exhausted before bounded due selection; interrupted runs can no longer make a receipt reselectable forever.
 - Architecture conformance review now includes only external ADRs cited by the pull request from its validated immutable Architecture Authority release, and the replay runbook records the daily 250-request limit and escalation threshold.
 - The Harness fetches the complete history at its immutable Architecture Authority pin so release validation can verify the manifest's source commit.
+- The controller release advances to `0.2.0-draft.65` at `103bea69b2f9a94bad6bdaa648df98635c193a5c`; Architecture Authority draft `0.1.0-draft.18` remains pinned, and draft64 stays available for rollback.
 - The controller release advances to `0.2.0-draft.64` at `29f9638ffcefdf50d3b6a24330b4bc6efe60b935`; Architecture Authority draft `0.1.0-draft.18` remains pinned, and draft63 stays available for rollback.
 - Intake and delivery now use bootstrap commit `8c650ce2b76355c23f0e2ee47e4aeb67fab18b8c`, which pins draft64's participant registry and checkpoint behavior.
 - The controller release advances to `0.2.0-draft.63` at `e840a775bc1b29867155c824e060660cf907b676`; Architecture Authority draft `0.1.0-draft.18` remains pinned, and draft62 stays available for rollback.
