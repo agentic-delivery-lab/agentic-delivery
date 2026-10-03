@@ -54,7 +54,7 @@ function base64url(value) {
   return Buffer.from(value).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
-function jwt({ appId, privateKey, now = Date.now() }) {
+export function createGithubAppJwt({ appId, privateKey, now = Date.now() }) {
   const issuedAt = Math.floor(now / 1000) - 30;
   const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const payload = base64url(JSON.stringify({ iat: issuedAt, exp: issuedAt + 540, iss: String(appId) }));
@@ -110,7 +110,7 @@ export class GithubAppTokenProvider {
     const cacheKey = `${narrowedIds.join(',')}|${JSON.stringify(requestedPermissions ?? {})}`;
     const cached = this.cachedTokens.get(cacheKey);
     if (cached && cached.expiresAt - this.now() > 90_000) return cached.value;
-    const appJwt = jwt({ appId: this.appId, privateKey: this.privateKey, now: this.now() });
+    const appJwt = createGithubAppJwt({ appId: this.appId, privateKey: this.privateKey, now: this.now() });
     let installationId = this.installationId;
     if (!installationId) {
       const installation = await this.request(`/repos/${this.repository}/installation`, 'GET', appJwt);

@@ -106,14 +106,18 @@ The deterministic readiness gate checks the selected issue type, fields,
 governance controls, dependencies, and orchestration policy before an operation
 can proceed.
 
-Conversation-driven continuation uses the separate
+Conversation-driven continuation uses a durable controller receipt keyed by
+the GitHub delivery ID. The receipt lets a failed or interrupted run resume
+after its lease expires without relying on runner-local marker files. A daily
+Vercel Cron reconciles failed GitHub App deliveries and incomplete controller
+receipts. The system uses the separate
 `@agentic-delivery-lab-invoker-7f3a` invocation boundary. The GitHub App webhook covers
 issue comments, PR conversation comments, formal reviews, and inline review
 comments; only a tag on the first visible line can dispatch the deterministic
 preflight and `repository_dispatch` workflow. The actor catalog, digest,
 delivery-ID replay protection, timestamp freshness, and one-hop bot rule are
 versioned in this repository. See [webhook replay protection](replay-protection.md)
-for the gateway claim and retry contract. This does not change native
+for the gateway lease, controller receipt, migration, and retry contract. This does not change native
 `@copilot` behavior.
 
 ## Package manager and local preflight

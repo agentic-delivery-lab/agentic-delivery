@@ -5,6 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { dispatchEnvelopeSignature, invocationEnvelope } from '../../scripts/lib/agent-invocation.mjs';
+import { loadParticipantRegistry, participantForRepository } from '../../scripts/lib/participant-registry.mjs';
 import { ObservationValidationError, validateObservationEvent } from '../../scripts/validate-observation-event.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
@@ -21,6 +22,8 @@ async function writeEvent(t, envelope) {
 }
 
 test('observation validator accepts an enrolled pull-request event without GitHub access', async (t) => {
+  const registry = await loadParticipantRegistry(repositoryRoot);
+  const participant = participantForRepository(registry, '1358455028');
   const eventPath = await writeEvent(t, invocationEnvelope({
     deliveryId: '62345678-1234-4234-8234-123456789012',
     eventName: 'pull_request',
@@ -32,7 +35,7 @@ test('observation validator accepts an enrolled pull-request event without GitHu
     organizationId: '327861320',
     installationId: '163255060',
     repositoryFullName: 'agentic-delivery-lab/agentic-delivery',
-    controller: { version: '0.2.0-draft.52', commit: '8a2acddf07d0b70b11fc5d9c1f5143e54abf9185' },
+    controller: participant.controller,
     dispatchSecret: 'dispatch-secret',
     dispatchTimestamp: 1789992000000,
   }));

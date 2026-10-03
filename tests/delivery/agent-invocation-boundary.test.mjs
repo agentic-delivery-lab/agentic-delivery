@@ -22,6 +22,7 @@ import {
 } from '../../scripts/lib/agent-invocation.mjs';
 import { handleWebhook } from '../../api/github/webhook.mjs';
 import { prepareAgentInvocation } from '../../scripts/prepare-agent-invocation.mjs';
+import { NeonReplayStore } from '../../scripts/lib/neon-replay-store.mjs';
 import { parseParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
 import { InMemoryReplayStore, validateReceivedAt } from '../../scripts/lib/replay-protection.mjs';
 
@@ -218,8 +219,10 @@ test('webhook dispatches enrolled pull-request observations without granting inv
   const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
   const output = result();
   const calls = [];
+  const replayStore = new InMemoryReplayStore();
   await handleWebhook(request({ body, event: 'pull_request', signature }), output, {
     env: webhookEnv(),
+    replayStore,
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
       return response(204);
@@ -233,6 +236,40 @@ test('webhook dispatches enrolled pull-request observations without granting inv
   assert.equal(dispatch.client_payload.event, 'pull_request');
   assert.equal(dispatch.client_payload.source.kind, 'pull_request');
   assert.equal(dispatch.client_payload.source.pull_request_number, 44);
+  assert.equal(await replayStore.controllerReceipt('163255060:12345678-1234-4234-8234-123456789012'), null);
+
+  const duplicate = result();
+  await handleWebhook(request({ body, event: 'pull_request', signature }), duplicate, {
+    env: webhookEnv(),
+    replayStore,
+    fetchImpl: async () => { throw new Error('a completed observation duplicate must not dispatch again'); },
+    tokenProvider: { token: async () => 'installation-token' },
+  });
+  assert.equal(duplicate.statusCode, 200);
+  assert.match(duplicate.body, /"completed":true/);
+});
+
+test('webhook keeps an active pull-request observation retryable without a receipt', async () => {
+  const body = JSON.stringify(githubPayload({
+    action: 'synchronize',
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    pull_request: { number: 44, body: 'A pull-request change.' },
+    sender: { login: 'external-contributor', type: 'User' },
+  }));
+  const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
+  const replayStore = new InMemoryReplayStore();
+  await replayStore.claimWithLease('163255060:12345678-1234-4234-8234-123456789012');
+  const output = result();
+
+  await handleWebhook(request({ body, event: 'pull_request', signature }), output, {
+    env: webhookEnv(),
+    replayStore,
+    fetchImpl: async () => { throw new Error('an active observation lease must not dispatch again'); },
+    tokenProvider: { token: async () => 'installation-token' },
+  });
+
+  assert.equal(output.statusCode, 503);
+  assert.match(output.body, /"retryable":true/);
 });
 
 test('webhook fails closed when the central controller repository is not configured', async () => {
@@ -289,7 +326,7 @@ test('webhook fails closed when the central controller repository ID is invalid'
   assert.match(output.body, /central controller repository ID is not configured/);
 });
 
-test('webhook requires a durable replay store unless ephemeral mode is explicit', async () => {
+test('webhook requires the shared replay store unless ephemeral mode is explicit', async () => {
   const payload = githubPayload({
     action: 'created',
     repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
@@ -299,17 +336,20 @@ test('webhook requires a durable replay store unless ephemeral mode is explicit'
   });
   const body = JSON.stringify(payload);
   const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
-  await assert.rejects(handleWebhook(request({ body, signature }), result(), {
-    env: {
-      AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
-      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
-      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '1358455028',
-      AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
-      AGENTIC_DELIVERY_DISPATCH_SECRET: 'dispatch-secret',
-    },
-    fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : response(204)),
-    tokenProvider: { token: async () => 'installation-token' },
-  }), /durable replay store is required/);
+  const baseEnv = {
+    AGENTIC_DELIVERY_WEBHOOK_SECRET: 'test-secret',
+    AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+    AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '1358455028',
+    AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
+    AGENTIC_DELIVERY_DISPATCH_SECRET: 'dispatch-secret',
+  };
+  for (const env of [baseEnv, { ...baseEnv, AGENTIC_DELIVERY_REPLAY_STATE_DIRECTORY: '/tmp/local-replay' }]) {
+    await assert.rejects(handleWebhook(request({ body, signature }), result(), {
+      env,
+      fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : response(204)),
+      tokenProvider: { token: async () => 'installation-token' },
+    }), /shared Neon replay store is required/);
+  }
 });
 
 test('webhook rejects self-authored and unknown bot invocations', async () => {
@@ -360,9 +400,10 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
   assert.equal(dispatch.client_payload.source.comment_id, 7);
   assert.equal(dispatch.client_payload.actor.login, 'sjefsharp');
   assert.equal(dispatch.client_payload.body_digest.length, 64);
+  const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   assert.deepEqual(dispatch.client_payload.controller, {
-    version: '0.2.0-draft.52',
-    commit: '8a2acddf07d0b70b11fc5d9c1f5143e54abf9185',
+    version: release.version,
+    commit: release.commit,
   });
   assert.equal(Object.keys(dispatch.client_payload).length, 17);
   assert.match(dispatch.client_payload.received_at, /^\d{4}-\d{2}-\d{2}T/);
@@ -377,7 +418,7 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
   }).valid, true);
 });
 
-test('webhook claims a delivery once and releases the claim when dispatch fails', async () => {
+test('webhook leases a delivery, keeps incomplete work retryable, and releases definite dispatch failures', async () => {
   const replayStore = new InMemoryReplayStore();
   const payload = {
     action: 'created',
@@ -412,17 +453,31 @@ test('webhook claims a delivery once and releases the claim when dispatch fails'
   assert.equal(output.statusCode, 202);
   assert.equal(dispatches, 1);
 
-  const duplicate = result();
-  await handleWebhook(requestFor(), duplicate, {
+  const inFlightDuplicate = result();
+  await handleWebhook(requestFor(), inFlightDuplicate, {
     env,
     replayStore,
     tokenProvider: { token: async () => 'installation-token' },
     fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : (() => { throw new Error('duplicate must not dispatch'); })()),
   });
-  assert.equal(duplicate.statusCode, 200);
-  assert.match(duplicate.body, /"duplicate":true/);
+  assert.equal(inFlightDuplicate.statusCode, 503);
+  assert.match(inFlightDuplicate.body, /"retryable":true/);
 
-  const failingStore = new InMemoryReplayStore();
+  const receiptKey = '163255060:98765432-1234-4234-8234-123456789012';
+  assert.equal((await replayStore.claimController(receiptKey)).status, 'claimed');
+  await replayStore.completeController(receiptKey);
+  const completedDuplicate = result();
+  await handleWebhook(requestFor(), completedDuplicate, {
+    env,
+    replayStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : (() => { throw new Error('completed duplicate must not dispatch'); })()),
+  });
+  assert.equal(completedDuplicate.statusCode, 200);
+  assert.match(completedDuplicate.body, /"completed":true/);
+
+  let leaseNow = Date.now();
+  const failingStore = new InMemoryReplayStore({ now: () => leaseNow });
   await assert.rejects(handleWebhook(requestFor(), result(), {
     env,
     replayStore: failingStore,
@@ -433,6 +488,15 @@ test('webhook claims a delivery once and releases the claim when dispatch fails'
     },
   }));
   const retried = result();
+  const tooSoon = result();
+  await handleWebhook(requestFor(), tooSoon, {
+    env,
+    replayStore: failingStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : response(204)),
+  });
+  assert.equal(tooSoon.statusCode, 503);
+  leaseNow += 31_000;
   await handleWebhook(requestFor(), retried, {
     env,
     replayStore: failingStore,
@@ -440,6 +504,32 @@ test('webhook claims a delivery once and releases the claim when dispatch fails'
     fetchImpl: async (url) => (url.includes('/permission') ? response(200, { permission: 'write' }) : response(204)),
   });
   assert.equal(retried.statusCode, 202);
+});
+
+test('webhook does not dispatch when durable replay storage fails', async () => {
+  const payload = githubPayload({
+    action: 'created',
+    repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+    issue: { number: 44 },
+    comment: { id: 78, body: '@agentic-delivery-lab-invoker-7f3a continue', user: { login: 'sjefsharp', type: 'User' } },
+    sender: { login: 'sjefsharp', type: 'User' },
+  });
+  const body = JSON.stringify(payload);
+  const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
+  const replayStore = new NeonReplayStore({ client: { query: async () => { throw new Error('postgresql://user:secret@host/replay'); } } });
+  let dispatches = 0;
+
+  await assert.rejects(handleWebhook(request({ body, signature }), result(), {
+    env: webhookEnv(),
+    replayStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    fetchImpl: async (url) => {
+      if (url.includes('/permission')) return response(200, { permission: 'write' });
+      dispatches += 1;
+      return response(204);
+    },
+  }), /durable replay database operation failed/i);
+  assert.equal(dispatches, 0);
 });
 
 test('received-at validation rejects stale and future event envelopes', () => {
@@ -569,6 +659,7 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
     GITHUB_OUTPUT: outputPath,
     CODEX_DELIVERY_STATE_DIR: root,
     RUNNER_TEMP: root,
+    AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
     AGENTIC_DELIVERY_ORGANIZATION_ID: '327861320',
     CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060',
   };
@@ -633,6 +724,7 @@ test('central preflight rejects a tampered signed dispatch envelope', async (t) 
     AGENTIC_DELIVERY_ORGANIZATION_ID: '327861320',
     CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060',
     CODEX_DELIVERY_DISPATCH_SECRET: 'dispatch-secret',
+    AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
   };
   const fetchImpl = async (url) => {
     if (url.endsWith('/issues/comments/7')) return response(200, { id: 7, body, user: { login: 'sjefsharp' }, author_association: 'OWNER' });
@@ -698,6 +790,7 @@ test('central preflight resolves and revalidates the originating repository from
     GITHUB_OUTPUT: outputPath,
     CODEX_DELIVERY_STATE_DIR: root,
     RUNNER_TEMP: root,
+    AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
   };
   const calls = [];
   const fetchImpl = async (url) => {
@@ -765,6 +858,7 @@ test('central preflight rejects a controller pin that differs from the participa
         GITHUB_OUTPUT: path.join(root, 'output'),
         CODEX_DELIVERY_STATE_DIR: root,
         RUNNER_TEMP: root,
+        AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
       },
       fetchImpl: async () => { throw new Error('origin API must not be called'); },
       participantRegistry: registry,
@@ -818,6 +912,7 @@ test('central preflight accepts issue lifecycle envelopes without a comment', as
     GITHUB_OUTPUT: outputPath,
     CODEX_DELIVERY_STATE_DIR: root,
     RUNNER_TEMP: root,
+    AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY: 'true',
   };
   const fetchImpl = async (url) => {
     if (url.endsWith('/collaborators/sjefsharp/permission')) return response(200, { permission: 'write' });

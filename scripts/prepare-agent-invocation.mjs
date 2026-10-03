@@ -1,5 +1,5 @@
 // agentic-primitive: {"id":"agent-invocation-preflight","kind":"validator","enforcement":"deterministic","adrs":["ADR-0017","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,7 +15,8 @@ import {
 import { appConfiguration, githubAppTokenPermissions, GithubAppTokenProvider } from './lib/github-app.mjs';
 import { loadParticipantRegistry, participantForRepository } from './lib/participant-registry.mjs';
 import { validateEventEnvelope } from './lib/control-plane-contracts.mjs';
-import { validateReceivedAt } from './lib/replay-protection.mjs';
+import { controllerRunLeaseToken, FileReplayStore, replayKey, validateReceivedAt } from './lib/replay-protection.mjs';
+import { NeonReplayStore } from './lib/neon-replay-store.mjs';
 import actorCatalog from '../config/agent-actors.json' with { type: 'json' };
 
 const API_VERSION = '2026-03-10';
@@ -100,21 +101,19 @@ async function authorizeActor({ envelope, api }) {
   return { kind: 'human', authorized: true };
 }
 
-async function markDelivery({ repository, sourceIssue, deliveryId, env }) {
-  const root = path.resolve(env.CODEX_DELIVERY_STATE_DIR || env.RUNNER_TEMP || '/tmp');
-  const markerDirectory = path.join(root, 'agent-invocations', repository.replace('/', '_'), String(sourceIssue));
-  await mkdir(markerDirectory, { recursive: true, mode: 0o700 });
-  const marker = path.join(markerDirectory, `${deliveryId}.json`);
-  try {
-    await writeFile(marker, JSON.stringify({ deliveryId, sourceIssue, acceptedAt: new Date().toISOString() }), { flag: 'wx', mode: 0o600 });
-    return true;
-  } catch (error) {
-    if (error.code === 'EEXIST') return false;
-    throw error;
+function controllerReplayStore(env, replayStore) {
+  if (replayStore) return replayStore;
+  if (env.AGENTIC_DELIVERY_REPLAY_DATABASE_URL) {
+    return new NeonReplayStore({ connectionString: env.AGENTIC_DELIVERY_REPLAY_DATABASE_URL });
   }
+  if (env.AGENTIC_DELIVERY_ALLOW_EPHEMERAL_REPLAY === 'true') {
+    const directory = path.resolve(env.CODEX_DELIVERY_STATE_DIR || env.RUNNER_TEMP || '/tmp', 'agent-invocation-replay');
+    return new FileReplayStore({ directory });
+  }
+  throw new Error('Agent invocation requires the shared Neon replay database.');
 }
 
-export async function prepareAgentInvocation({ env = process.env, fetchImpl = fetch, participantRegistry, now = () => Date.now() } = {}) {
+export async function prepareAgentInvocation({ env = process.env, fetchImpl = fetch, participantRegistry, replayStore, now = () => Date.now() } = {}) {
   const catalog = validateActorCatalog(actorCatalog);
   if (!catalog.valid) throw new Error(`The actor catalog is invalid: ${catalog.errors.join(' ')}`);
   if (!env.GH_TOKEN || !env.GITHUB_EVENT_PATH || !env.GITHUB_REPOSITORY) throw new Error('Agent invocation preflight requires GitHub event, repository, and token context.');
@@ -195,7 +194,19 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
   const sourceIssue = await currentSource({ event: originEvent, envelope, api });
   if (!/^[1-9][0-9]*$/.test(sourceIssue)) throw new Error('The source issue number is invalid.');
   const comment = await currentComment({ envelope, api });
-  const accepted = await markDelivery({ repository: originRepository, sourceIssue, deliveryId: envelope.delivery_id, env });
+  const installationId = String(envelope.installation_id ?? appConfig.installationId ?? '');
+  const receiptKey = replayKey({ installationId, deliveryId: envelope.delivery_id });
+  const activeReplayStore = controllerReplayStore(env, replayStore);
+  await activeReplayStore.ensureControllerReceipt(receiptKey);
+  const receiptClaim = await activeReplayStore.claimController(receiptKey, { leaseToken: controllerRunLeaseToken(env) });
+  const accepted = receiptClaim.status === 'claimed';
+  if (!accepted) {
+    await writeOutput('accepted', 'false', env);
+    await writeOutput('source_issue', sourceIssue, env);
+    await writeOutput('invocation_receipt_status', receiptClaim.status, env);
+    return { accepted: false, sourceIssue, originRepository, participantMode: participant.mode, receiptStatus: receiptClaim.status };
+  }
+  await writeOutput('accepted', 'true', env);
   const normalizedPath = path.join(path.resolve(env.RUNNER_TEMP || '/tmp'), `agent-invocation-${envelope.delivery_id}.json`);
   await writeFile(normalizedPath, JSON.stringify({
     action: envelope.event === 'issues' ? envelope.action : 'created',

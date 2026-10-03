@@ -126,11 +126,15 @@ only `contents: write`. The Vercel ingress uses these Production environment var
 `AGENTIC_DELIVERY_APP_ID`, `AGENTIC_DELIVERY_APP_PRIVATE_KEY`,
 `AGENTIC_DELIVERY_APP_INSTALLATION_ID`, `AGENTIC_DELIVERY_DISPATCH_SECRET`,
 `AGENTIC_DELIVERY_ORGANIZATION`, `AGENTIC_DELIVERY_ORGANIZATION_ID`, and
-`AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID`. Treat the webhook secret, App
-private key, and dispatch secret as secrets; the IDs and organization values
-are configuration. The replay store must be a durable atomic adapter in a
-multi-instance deployment; a file-backed store is only valid for one process
-or a shared filesystem.
+`AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID`, plus
+`AGENTIC_DELIVERY_REPLAY_DATABASE_URL` and `CRON_SECRET`. Treat the webhook
+secret, App private key, dispatch secret, pooled database URL, and Cron secret
+as secrets; the IDs and organization values are configuration. Use the same
+pooled Neon URL in the Vercel production environment and as the central
+controller repository's Actions secret `AGENTIC_DELIVERY_REPLAY_DATABASE_URL`.
+The `/api/cron/reconcile-webhooks` route runs daily at 00:00 UTC and uses the
+App private key plus `CRON_SECRET` to find and redeliver failed webhook events
+and incomplete controller receipts.
 
 In the central controller repository's Actions settings, store
 `CODEX_DELIVERY_APP_ID` and, optionally,
@@ -145,6 +149,12 @@ registers every runtime field and option ID for masking before using it.
 Remove the old repository variable after the workflow changes use the secret.
 Rotate the webhook secret, dispatch secret, and private key through their
 respective Vercel or Actions secret stores; never commit them.
+
+The controller repository also needs `AGENTIC_DELIVERY_REPLAY_DATABASE_URL` as
+an Actions secret so the self-hosted preflight and hosted finalizer share
+durable controller receipts. Keep it at repository scope and pass it only to
+the invocation jobs. `ISSUE_FIELD_BINDINGS_JSON` is already a repository
+secret; it is not an organization-level setting.
 
 The ingress verifies the webhook signature and delivery ID, checks the exact
 actor catalog, signs the complete dispatch envelope with the separate dispatch
