@@ -81,8 +81,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 ### Changed
 
 - The controller release manifest and central participant registry now target
-  `0.2.0-draft.50` at
-  `2b4c112baf46453149e4538e2bf85d9c1b65e075`, retaining draft49 and draft48
+  `0.2.0-draft.51` at
+  `0f7a40dbd475105bf39cb475d91e3903a78d250b`, retaining draft50 and draft49
   for rollback. Runtime intake will use this pin after a separate reviewed
   bootstrap advance.
 - The controller release manifest and central participant registry now target
@@ -496,8 +496,8 @@ they do not authorize migration, alter that issue's scope, or close it.
   and start rejections, retains notification diagnostics only when the exact
   thread and active turn IDs match, and ignores completion events without that
   exact match. Fixed sanitized startup hints survive app-server disconnects;
-  session-budget errors are not described as subscription quota exhaustion.
-  Raw error text and additional details remain withheld.
+  quota reset advice requires stop telemetry rather than matching technical
+  error text. Raw error text and additional details remain withheld.
 - [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66) registers issue-field masks before the controller checkout cleans `trusted-intake`, allowing intake to reach routing after the validated controller is checked out.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) verifies migrated issue fields and option IDs against bound live IDs and requires both values to be present, so legacy-label fallbacks cannot mask failed readback.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) makes both issue-intake jobs resolve pnpm from the nested trusted checkout manifest, so issue events can reach actor authorization and classification.
