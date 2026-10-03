@@ -382,7 +382,11 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     if (turnId && messageTurnId && messageTurnId !== turnId) return;
     if (message.method === 'turn/started') turnId = p.turn.id;
     if (p.threadId === threadId && message.method !== 'turn/completed') recordActivity();
-    if (message.method === 'error' && p.error) lastTurnError = safeTurnError(p.error) ?? lastTurnError;
+    // Ignore retrying or uncorrelated notifications so a stale error cannot
+    // be reported as the terminal reason for this turn.
+    if (message.method === 'error' && p.error && messageTurnId === turnId && p.willRetry !== true) {
+      lastTurnError = safeTurnError(p.error) ?? lastTurnError;
+    }
     if (message.id !== undefined && message.method) {
       turnId ??= p.turnId;
       const questions = p.questions?.map((q) => `${q.question}${q.options?.length ? ` Options: ${q.options.map((o) => `${o.label}: ${o.description}`).join('; ')}` : ''}`);
