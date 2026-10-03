@@ -83,8 +83,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.51` at
   `0f7a40dbd475105bf39cb475d91e3903a78d250b`, retaining draft50 and draft49
-  for rollback. Runtime intake will use this pin after a separate reviewed
-  bootstrap advance.
+  for rollback. Runtime intake and delivery use this pin from the trusted
+  bootstrap snapshot at `b99fb89907da164b8b45a229e7569013ac093f60`.
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.48` at
   `28ea907b8346d8b63b45567d526ee5be536fcc49`, retaining draft47 and draft46
@@ -105,11 +105,11 @@ they do not authorize migration, alter that issue's scope, or close it.
   telemetry. The internal review schema is validated but remains outside the
   participant contract; review input excludes quota counters, credentials are
   redacted, and reruns refresh the current pull request and source issue.
-- [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
-  advances `bootstrapCommit` to merged controller snapshot
-  `e0b2f0719e00ac49aaab305ea10065c5f5197cb1`. Issue intake and delivery now
-  mask organization field and option IDs from the trusted bootstrap, so
-  supported participant pins do not need to carry the masker.
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60)
+  advances `bootstrapCommit` to the merged controller snapshot
+  `b99fb89907da164b8b45a229e7569013ac093f60`, which supplies the masker
+  implementation used by the existing intake and delivery workflow steps.
+  Supported participant pins do not need to carry a copy of the masker.
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.45` at
   `eed2505edaf4e1f839030697973dcaaf0c1b1bea`, retaining draft44 for rollback.
