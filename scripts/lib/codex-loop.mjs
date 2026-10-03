@@ -393,7 +393,8 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     const correlatedTurn = typeof turnId === 'string' && turnId.length > 0
       && typeof messageTurnId === 'string' && messageTurnId.length > 0
       && messageTurnId === turnId;
-    if (message.method === 'error' && p.error && correlatedTurn && p.willRetry !== true) {
+    if (message.method === 'error' && p.error && p.threadId === threadId
+      && correlatedTurn && p.willRetry !== true) {
       lastTurnError = safeTurnError(p.error) ?? lastTurnError;
     }
     if (message.id !== undefined && message.method) {
