@@ -81,9 +81,9 @@ they do not authorize migration, alter that issue's scope, or close it.
 ### Changed
 
 - The controller release manifest and central participant registry now target
-  `0.2.0-draft.49` at
-  `84e5cf66902b6e93100be557ec1cd98557ef6320`, retaining draft48 and draft47
-  for rollback. Runtime intake uses this pin after a separate reviewed
+  `0.2.0-draft.50` at
+  `2b4c112baf46453149e4538e2bf85d9c1b65e075`, retaining draft49 and draft48
+  for rollback. Runtime intake will use this pin after a separate reviewed
   bootstrap advance.
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.48` at
