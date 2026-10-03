@@ -1,4 +1,4 @@
-import { MODELS, quotaBoundary, quotaTelemetryUnavailable } from './codex-client.mjs';
+import { MODELS, quotaBoundary, quotaTelemetryUnavailable, safeCodexDiagnostic, safeCodexDiagnosticCode } from './codex-client.mjs';
 import { QUOTA_STOP_PHASE } from './quota-diagnostics.mjs';
 
 const strings = { type: 'array', items: { type: 'string' } };
@@ -290,13 +290,13 @@ function safeTurnError(error) {
   const nested = infoKey ? info[infoKey] : null;
   const status = [error.httpStatusCode, info?.httpStatusCode, nested?.httpStatusCode]
     .find((value) => Number.isSafeInteger(value) && value >= 100 && value <= 599);
-  const diagnostic = error.codexDiagnostic === 'workspace_routing_discovery_failed'
-    || error.message === 'workspace routing discovery failed'
-    ? 'workspace_routing_discovery_failed'
-    : null;
+  const diagnosticCode = safeCodexDiagnosticCode(error.codexDiagnostic ?? error.message);
+  const diagnostic = diagnosticCode === 'workspace_routing_discovery_failed'
+    ? 'diagnostic=workspace_routing_discovery_failed'
+    : diagnosticCode ? safeCodexDiagnostic(diagnosticCode) : null;
   const details = [
     ...(code ? [`codex_error=${code}`] : []),
-    ...(diagnostic ? [`diagnostic=${diagnostic}`] : []),
+    ...(diagnostic ? [diagnostic] : []),
     ...(status ? [`http_status=${status}`] : []),
   ];
   return details.length ? details.join(', ') : null;
@@ -444,7 +444,10 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
 
 export function continuation(state) {
   const awaitingHuman = state.status === 'awaiting-human';
-  const quotaPause = /allowance|budget|credit|quota/i.test(state.reason ?? '');
+  const reason = state.reason ?? '';
+  const hasCodexErrorCode = /\bcodex_error=[a-z0-9_]+\b/i.test(reason);
+  const quotaPause = state.budget?.stop === true
+    || (state.budget == null && !hasCodexErrorCode && /allowance|budget|credit|quota/i.test(reason));
   const questions = (state.questions?.length ? state.questions : state.plan?.questions ?? [])
     .filter((question) => typeof question === 'string' && question.trim());
   if (awaitingHuman && !questions.length && state.reason) questions.push(state.reason);

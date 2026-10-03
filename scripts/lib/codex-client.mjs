@@ -43,16 +43,27 @@ export function permissionForProfile(profile = 'planner') {
   }[profile] ?? 'delivery-plan';
 }
 
-function safeCodexDiagnostic(value) {
+const CODEX_DIAGNOSTIC_HINTS = Object.freeze({
+  missing_persisted_rollout: 'Codex has no persisted rollout for this thread yet.',
+  default_permission_profile_missing: 'A default permission profile is required. Check the controller startup configuration.',
+  workspace_routing_discovery_failed: 'workspace_routing_discovery_failed',
+});
+
+export function safeCodexDiagnosticCode(value) {
+  const message = String(value);
+  if (Object.hasOwn(CODEX_DIAGNOSTIC_HINTS, message)) return message;
+  if (message.includes('no rollout found for thread id')) return 'missing_persisted_rollout';
+  if (message.includes('config defines [permissions] profiles but does not set default_permissions')) return 'default_permission_profile_missing';
+  if (message === 'workspace routing discovery failed') return 'workspace_routing_discovery_failed';
+  return null;
+}
+
+export function safeCodexDiagnostic(value) {
   // Codex owns authentication. Its errors may contain arbitrary credentials,
   // including fragments whose labels were lost when stderr was truncated.
   // Publish only fixed hints, never a substring of the original diagnostic.
-  if (String(value).includes('no rollout found for thread id')) {
-    return 'Codex has no persisted rollout for this thread yet.';
-  }
-  if (String(value).includes('config defines [permissions] profiles but does not set default_permissions')) {
-    return 'A default permission profile is required. Check the controller startup configuration.';
-  }
+  const code = safeCodexDiagnosticCode(value);
+  if (code) return CODEX_DIAGNOSTIC_HINTS[code];
   return 'Details withheld because Codex errors may contain credentials. Check the runner installation, authentication, and configuration.';
 }
 
@@ -65,9 +76,8 @@ function appServerRequestError(method, serverError) {
   const httpStatusCode = serverError?.httpStatusCode ?? data.httpStatusCode;
   if (codexErrorInfo !== undefined) Object.defineProperty(error, 'codexErrorInfo', {value: codexErrorInfo});
   if (httpStatusCode !== undefined) Object.defineProperty(error, 'httpStatusCode', {value: httpStatusCode});
-  if (serverError?.message === 'workspace routing discovery failed') {
-    Object.defineProperty(error, 'codexDiagnostic', {value: 'workspace_routing_discovery_failed'});
-  }
+  const codexDiagnostic = safeCodexDiagnosticCode(serverError?.message);
+  if (codexDiagnostic) Object.defineProperty(error, 'codexDiagnostic', {value: codexDiagnostic});
   return error;
 }
 
