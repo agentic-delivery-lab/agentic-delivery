@@ -46,7 +46,7 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
     async reconcilerCheckpoint() { return this.checkpoint; },
     async dueControllerReceipts() { return this.dueReceipts; },
     async dueRedeliveryRequests() { return this.dueRedeliveries; },
-    async linkGithubDelivery(key, id) { this.linked.push({ key, id }); },
+    async linkGithubDeliveries(links) { this.linked.push(...links.map(({ replayKey, githubDeliveryId }) => ({ key: replayKey, id: githubDeliveryId }))); },
     async claimRedeliveryRequest(guid, id) {
       this.requested.push({ guid, id });
       return requestStatus === 'claimed' ? { claimed: true } : { claimed: false, status: requestStatus };
@@ -109,8 +109,7 @@ test('reconciler paginates, groups attempts by GUID, redelivers failures and sta
   assert.deepEqual(redeliveries.sort(), ['101', '99']);
   assert.equal(store.advanced.length, 1);
   assert.equal(store.advanced[0].deliveryId, '101');
-  assert.equal(store.linked[0].key, `163255060:${deliveryC}`);
-  assert.equal(store.linked[0].id, '99');
+  assert.ok(store.linked.some((link) => link.key === `163255060:${deliveryC}` && link.id === '99'));
   assert.equal(JSON.parse(res.body).scanned_pages, 2);
 });
 
@@ -128,6 +127,49 @@ test('reconciler leaves its checkpoint unchanged when GitHub rate limits redeliv
   assert.deepEqual(store.advanced, []);
   assert.equal(store.requested.length, 1);
   assert.equal(store.requested[0].released, undefined);
+});
+
+test('reconciler links a pending controller receipt before checkpointing successful webhook history', async () => {
+  const scanNow = Date.now();
+  const guid = deliveryA;
+  const pendingReceipt = { replay_key: `163255060:${guid}`, status: 'pending', github_delivery_id: null, attempt_count: 0 };
+  const store = makeStore();
+  let checkpoint = null;
+  let dueReceipts = [];
+  const posts = [];
+  store.reconcilerCheckpoint = async () => checkpoint;
+  store.dueControllerReceipts = async () => dueReceipts;
+  store.linkGithubDeliveries = async (links) => {
+    store.linked.push(...links.map(({ replayKey, githubDeliveryId }) => ({ key: replayKey, id: githubDeliveryId })));
+    for (const link of links) {
+      if (link.replayKey === pendingReceipt.replay_key) pendingReceipt.github_delivery_id = link.githubDeliveryId;
+    }
+  };
+  store.advanceReconcilerCheckpoint = async (value) => {
+    store.advanced.push(value);
+    checkpoint = { checkpoint_at: value.deliveredAt, checkpoint_delivery_id: value.deliveryId };
+  };
+  const deliveredAt = new Date(scanNow - 60_000).toISOString();
+  const fetchImpl = async (url, options) => {
+    if (options.method === 'POST') {
+      posts.push(String(url));
+      return response(202);
+    }
+    return response(200, [{ id: 301, guid, delivered_at: deliveredAt, status: 'OK', installation_id: '163255060' }]);
+  };
+  const firstRes = output();
+  await reconcileWebhookDeliveries({ req: cronRequest(), res: firstRes, env: cronEnv(), fetchImpl, store, now: () => scanNow });
+
+  assert.equal(firstRes.statusCode, 200);
+  assert.deepEqual(store.linked[0], { key: pendingReceipt.replay_key, id: '301' });
+  assert.equal(checkpoint.checkpoint_delivery_id, '301');
+
+  dueReceipts = [pendingReceipt];
+  const secondRes = output();
+  await reconcileWebhookDeliveries({ req: cronRequest(), res: secondRes, env: cronEnv(), fetchImpl, store, now: () => scanNow + 24 * 60 * 60 * 1000 });
+
+  assert.equal(secondRes.statusCode, 200);
+  assert.deepEqual(posts, ['https://api.github.com/app/hook/deliveries/301/attempts']);
 });
 
 test('reconciler resumes due redeliveries beyond its delivery-history checkpoint', async () => {

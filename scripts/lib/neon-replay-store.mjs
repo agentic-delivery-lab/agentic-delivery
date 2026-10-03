@@ -10,6 +10,7 @@ export const CONTROLLER_RECEIPT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export const CONTROLLER_PENDING_GRACE_MS = 15 * 60 * 1000;
 export const CONTROLLER_MAX_ATTEMPTS = 8;
 export const REDELIVERY_COOLDOWN_MS = 15 * 60 * 1000;
+const MAX_GITHUB_DELIVERY_LINKS = 10_000;
 
 const CLAIM_SQL = `
 WITH expired_claims AS (
@@ -310,6 +311,31 @@ export class NeonReplayStore {
       'UPDATE public.webhook_controller_receipts SET github_delivery_id = $2 WHERE replay_key = $1',
       [key, String(githubDeliveryId)],
     );
+  }
+
+  async linkGithubDeliveries(deliveries) {
+    if (!Array.isArray(deliveries) || deliveries.length > MAX_GITHUB_DELIVERY_LINKS) {
+      throw new ReplayProtectionError('The GitHub delivery link batch is invalid.');
+    }
+    const links = deliveries.map((delivery) => {
+      const replayKey = delivery?.replayKey;
+      const githubDeliveryId = delivery?.githubDeliveryId;
+      validKey(replayKey);
+      if (!/^[1-9][0-9]*$/.test(String(githubDeliveryId ?? ''))) throw new ReplayProtectionError('The GitHub delivery ID is invalid.');
+      return { replay_key: replayKey, github_delivery_id: String(githubDeliveryId) };
+    });
+    if (links.length === 0) return 0;
+    const rows = await this.#query(
+      `UPDATE public.webhook_controller_receipts AS receipts
+       SET github_delivery_id = deliveries.github_delivery_id
+       FROM jsonb_to_recordset($1::jsonb) AS deliveries(replay_key text, github_delivery_id text)
+       WHERE receipts.replay_key = deliveries.replay_key
+         AND receipts.status IN ('pending', 'running', 'retryable')
+         AND receipts.github_delivery_id IS DISTINCT FROM deliveries.github_delivery_id
+       RETURNING receipts.replay_key`,
+      [JSON.stringify(links)],
+    );
+    return rows.length;
   }
 
   async reconcilerCheckpoint() {

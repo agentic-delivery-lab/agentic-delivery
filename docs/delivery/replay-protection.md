@@ -73,11 +73,15 @@ Its first scan reads the available delivery history. Each scan is capped at 100
 pages and 1,000 redelivery requests; hitting either cap returns 503 and leaves
 the checkpoint unchanged instead of silently truncating the scan.
 It also redelivers due controller receipts even when GitHub recorded the
-original webhook delivery as successful. The reconciler stores a timestamp
-and delivery ID checkpoint only after the full bounded scan and all accepted
-redelivery requests complete. A failed API call leaves the checkpoint
-unchanged, so the next run rescans safely. Redelivery requests have a
-15-minute cooldown to avoid hammering an uncertain delivery.
+original webhook delivery as successful. Before advancing its checkpoint, the
+reconciler links each observed delivery GUID's numeric GitHub API ID to any
+matching pending, running, or retryable controller receipt. A later scan can
+then retry that receipt even after its original webhook delivery is older than
+the history checkpoint. The reconciler stores a timestamp and delivery ID
+checkpoint only after the full bounded scan and all accepted redelivery
+requests complete. A failed API call leaves the checkpoint unchanged, so the
+next run rescans safely. Redelivery requests have a 15-minute cooldown to
+avoid hammering an uncertain delivery.
 
 Check the Vercel function invocation for `/api/cron/reconcile-webhooks` after
 each scheduled run. A 200 response reports scanned pages, matched deliveries,

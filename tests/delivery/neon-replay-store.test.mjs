@@ -108,6 +108,25 @@ test('a committed claim with a lost HTTP response stays retryable until its leas
   await store.markDispatched(key, reclaimed.leaseToken);
 });
 
+test('Neon replay receipts link a batch of webhook delivery IDs before the scan checkpoint advances', async () => {
+  let call;
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        call = { statement, values };
+        return [{ replay_key: '163255060:12345678-1234-4234-8234-123456789012' }];
+      },
+    },
+  });
+  const links = [{ replayKey: '163255060:12345678-1234-4234-8234-123456789012', githubDeliveryId: '301' }];
+
+  assert.equal(await store.linkGithubDeliveries(links), 1);
+  assert.match(call.statement, /jsonb_to_recordset\(\$1::jsonb\)/);
+  assert.match(call.statement, /status IN \('pending', 'running', 'retryable'\)/);
+  assert.match(call.statement, /github_delivery_id IS DISTINCT FROM deliveries\.github_delivery_id/);
+  assert.deepEqual(JSON.parse(call.values[0]), [{ replay_key: links[0].replayKey, github_delivery_id: links[0].githubDeliveryId }]);
+});
+
 test('Neon replay claim cleanup deletes at most one bounded batch of expired keys', async () => {
   const entries = new Map(Array.from({ length: REPLAY_CLEANUP_BATCH_SIZE + 1 }, (_, index) => [
     `expired-${index}`,
@@ -155,12 +174,14 @@ test('replay migrations store only minimal lease, receipt, and checkpoint metada
   assert.doesNotMatch(migrationSql, /\b(?:body|payload|api_token|private_key|model_output)\b/i);
 });
 
-test('Neon replay integration proves claim, expiry, release and stored columns', {
+test('Neon replay integration proves claim, lost-response recovery, expiry, release and stored columns', {
   skip: testDatabaseUrl ? false : 'Set AGENTIC_DELIVERY_REPLAY_TEST_DATABASE_URL to an isolated Neon database with the replay migration applied.',
 }, async () => {
   const store = new NeonReplayStore({ connectionString: testDatabaseUrl });
   const sql = neon(testDatabaseUrl);
   const key = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
+  const lostResponseKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
+  const linkedReceiptKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const leaseToken = `integration:${randomUUID()}`;
 
   try {
@@ -174,6 +195,27 @@ test('Neon replay integration proves claim, expiry, release and stored columns',
     assert.equal(await store.claim(key), true);
     await store.release(key);
 
+    let dropClaimResponse = true;
+    const lostResponseStore = new NeonReplayStore({
+      client: {
+        async query(statement, values) {
+          const rows = await sql.query(statement, values);
+          if (dropClaimResponse && statement.includes('INSERT INTO public.webhook_replay_claims')) {
+            dropClaimResponse = false;
+            throw new Error('simulated response loss after commit');
+          }
+          return rows;
+        },
+      },
+    });
+    await assert.rejects(lostResponseStore.claimWithLease(lostResponseKey, { ttlMs: 300_000, leaseMs: 25 }), /durable replay database operation failed/);
+    assert.deepEqual(await store.claimWithLease(lostResponseKey, { ttlMs: 300_000, leaseMs: 25 }), { claimed: false, leaseToken: null });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const recovered = await store.claimWithLease(lostResponseKey, { ttlMs: 300_000, leaseMs: 25 });
+    assert.equal(recovered.claimed, true);
+    await store.markDispatched(lostResponseKey, recovered.leaseToken);
+    assert.equal(await store.claim(lostResponseKey), false);
+
     assert.equal(await store.claim(key, { ttlMs: 25 }), true);
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(await store.claim(key), true);
@@ -182,6 +224,10 @@ test('Neon replay integration proves claim, expiry, release and stored columns',
     assert.deepEqual(await store.claimController(key, { leaseToken }), { status: 'claimed' });
     await store.completeController(key, { leaseToken });
     assert.equal((await store.controllerReceipt(key)).status, 'completed');
+
+    await store.ensureControllerReceipt(linkedReceiptKey);
+    assert.equal(await store.linkGithubDeliveries([{ replayKey: linkedReceiptKey, githubDeliveryId: '987654321' }]), 1);
+    assert.equal((await store.controllerReceipt(linkedReceiptKey)).github_delivery_id, '987654321');
 
     const claimColumns = await sql.query(`
       SELECT column_name
@@ -215,6 +261,9 @@ test('Neon replay integration proves claim, expiry, release and stored columns',
     ]);
   } finally {
     await store.release(key);
-    await sql.query('DELETE FROM public.webhook_controller_receipts WHERE replay_key = $1', [key]);
+    await store.release(lostResponseKey);
+    for (const receiptKey of [key, lostResponseKey, linkedReceiptKey]) {
+      await sql.query('DELETE FROM public.webhook_controller_receipts WHERE replay_key = $1', [receiptKey]);
+    }
   }
 });

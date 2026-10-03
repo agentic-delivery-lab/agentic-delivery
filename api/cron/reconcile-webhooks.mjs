@@ -104,6 +104,12 @@ function replayKeyFromGuid(installationId, guid) {
   catch { return null; }
 }
 
+function installationFromReplayKey(key) {
+  const value = String(key ?? '');
+  const separator = value.indexOf(':');
+  return separator > 0 ? value.slice(0, separator) : '';
+}
+
 async function collectDeliveryAttempts({ checkpoint, jwt, fetchImpl }) {
   const grouped = new Map();
   let pageUrl = `https://api.github.com/app/hook/deliveries?per_page=${PAGE_SIZE}`;
@@ -204,6 +210,19 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
       dueByGuid.set(guid, receipt);
     }
 
+    const receiptLinks = [];
+    for (const [guid, group] of grouped) {
+      const dueReceipt = dueByGuid.get(guid);
+      if (!group.hasSuccess && !dueReceipt) continue;
+      const installations = [...group.installations];
+      if (installations.length > 1) throw new Error('GitHub returned conflicting installation IDs for one delivery GUID.');
+      const installationId = installations[0] ?? installationFromReplayKey(dueReceipt?.replay_key);
+      const key = replayKeyFromGuid(installationId, guid);
+      const deliveryId = String(group.newest?.id ?? '');
+      if (key && /^[1-9][0-9]*$/.test(deliveryId)) receiptLinks.push({ replayKey: key, githubDeliveryId: deliveryId });
+    }
+    await activeStore.linkGithubDeliveries(receiptLinks);
+
     let requested = 0;
     let skippedCooldown = 0;
     let exhausted = 0;
@@ -232,11 +251,6 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
     for (const [guid, { group, dueReceipt }] of candidates) {
       const deliveryId = String(group.newest?.id ?? dueReceipt?.github_delivery_id ?? '');
       if (!/^[1-9][0-9]*$/.test(deliveryId)) continue;
-      if (dueReceipt) {
-        const installationId = [...group.installations][0] ?? String(dueReceipt.replay_key).split(':', 1)[0];
-        const key = replayKeyFromGuid(installationId, guid);
-        if (key) await activeStore.linkGithubDelivery(key, deliveryId);
-      }
       const result = await requestRedelivery({ deliveryId, guid, jwt, fetchImpl, store: activeStore });
       if (result.requested) requested += 1;
       else skippedCooldown += 1;
