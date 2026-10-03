@@ -384,7 +384,10 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     if (p.threadId === threadId && message.method !== 'turn/completed') recordActivity();
     // Ignore retrying or uncorrelated notifications so a stale error cannot
     // be reported as the terminal reason for this turn.
-    if (message.method === 'error' && p.error && messageTurnId === turnId && p.willRetry !== true) {
+    const correlatedTurn = turnId !== undefined && turnId !== null
+      && messageTurnId !== undefined && messageTurnId !== null
+      && messageTurnId === turnId;
+    if (message.method === 'error' && p.error && correlatedTurn && p.willRetry !== true) {
       lastTurnError = safeTurnError(p.error) ?? lastTurnError;
     }
     if (message.id !== undefined && message.method) {
@@ -424,7 +427,12 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     turnId = response.turn.id;
     recordActivity();
     if (stopped && !settled) await client.request('turn/interrupt', { threadId, turnId });
-  } catch (error) { finish(stopped ?? { status: 'paused', reason: error.message }); }
+  } catch (error) {
+    finish(stopped ?? {
+      status: 'paused',
+      reason: turnFailureReason('failed', safeTurnError(error)),
+    });
+  }
   return result;
 }
 
