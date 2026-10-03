@@ -5,7 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
-import { ReleaseChainValidationError, validateReleaseChain } from '../../scripts/validate-release-chain.mjs';
+import { ReleaseChainValidationError, validateBootstrapWorkflowPins, validateReleaseChain } from '../../scripts/validate-release-chain.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const execFileAsync = promisify(execFile);
@@ -32,6 +32,21 @@ test('release-chain validation requires explicit cross-repository inputs', async
   );
 });
 
+test('release-chain validation requires intake and delivery to use the manifest bootstrap pin', () => {
+  const bootstrapCommit = 'a'.repeat(40);
+  assert.deepEqual(validateBootstrapWorkflowPins({
+    bootstrapCommit,
+    issueIntakeWorkflow: `jobs:\n  authorize:\n    steps:\n      - name: Check out trusted authorization\n        uses: actions/checkout@v5\n        with:\n          ref: ${bootstrapCommit}\n          path: trusted-intake\n  classify:\n    steps:\n      - name: Check out trusted intake\n        uses: actions/checkout@v5\n        with:\n          ref: ${bootstrapCommit}\n          path: trusted-intake\n`,
+    codexDeliveryWorkflow: `jobs:\n  resolve:\n    steps:\n      - name: Check out trusted participant registry bootstrap\n        uses: actions/checkout@v5\n        with:\n          ref: ${bootstrapCommit}\n          path: trusted-bootstrap\n`,
+  }), []);
+
+  assert.deepEqual(validateBootstrapWorkflowPins({
+    bootstrapCommit,
+    issueIntakeWorkflow: `jobs:\n  authorize:\n    steps:\n      - name: Check out trusted authorization\n        uses: actions/checkout@v5\n        with:\n          ref: ${bootstrapCommit}\n          path: trusted-intake\n`,
+    codexDeliveryWorkflow: `jobs:\n  resolve:\n    steps:\n      - name: Check out trusted participant registry bootstrap\n        uses: actions/checkout@v5\n        with:\n          ref: ${'b'.repeat(40)}\n          path: trusted-bootstrap\n`,
+  }), ['codex-delivery bootstrap must pin the release bootstrap commit']);
+});
+
 test('local release graph reproduces all pinned digests and publication refs', async (t) => {
   const available = await Promise.all(Object.values(siblingRoots).map(exists));
   if (!available.every(Boolean)) {
@@ -40,8 +55,9 @@ test('local release graph reproduces all pinned digests and publication refs', a
   }
   const result = await validateReleaseChain({ controlPlaneRoot: repositoryRoot, ...siblingRoots });
   assert.equal(result.status, 'passed');
-  assert.equal(result.controller.version, '0.2.0-draft.37');
-  assert.equal(result.controller.bootstrapCommit, '03dc4071f29d3914479e9a0bd174759e79180f8c');
+  assert.equal(result.controller.version, '0.2.0-draft.45');
+  assert.equal(result.controller.bootstrapCommit, 'e0b2f0719e00ac49aaab305ea10065c5f5197cb1');
+  assert.equal(result.controller.githubAppContractVersion, '2.0.0');
   assert.equal(result.architecture.contentSha256, 'ac4430f7aa86c016c51ea8f9458627d4412d36256960c1bf54b63e851dc2350c');
   assert.equal(result.primitives.contentSha256, '36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0');
   assert.equal(result.distribution.automationProjectionRelease, 'urn:agentic-delivery:distribution:0.1.0-draft.25');

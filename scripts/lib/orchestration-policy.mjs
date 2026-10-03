@@ -3,6 +3,22 @@
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const TRIGGERS = new Set(['issue', 'comment', 'agent-invocation', 'child-event', 'manual']);
 const REQUIREMENTS = new Set(['valid-plan', 'resumable-session', 'unchanged-scope', 'lineage-root']);
+const APPROVED_MODELS = Object.freeze({
+  'gpt-6-luna': ['low', 'medium', 'max'],
+  'gpt-6-sol': ['high'],
+});
+const PROFILE_MODELS = Object.freeze({
+  router: ['gpt-6-luna', 'low'],
+  discovery: ['gpt-6-luna', 'medium'],
+  research: ['gpt-6-luna', 'medium'],
+  requirements: ['gpt-6-luna', 'medium'],
+  'architecture-decision': ['gpt-6-sol', 'high'],
+  planner: ['gpt-6-sol', 'high'],
+  implementer: ['gpt-6-luna', 'max'],
+  validator: ['gpt-6-luna', 'max'],
+  coordinator: ['gpt-6-luna', 'medium'],
+  'harness-reviewer': ['gpt-6-sol', 'high'],
+});
 
 function list(value) {
   return Array.isArray(value) ? value : [];
@@ -57,7 +73,14 @@ export function validateOrchestrationPolicy(policy, { issueTypes = [], lifecycle
   if (!policy || typeof policy !== 'object' || Array.isArray(policy)) return { valid: false, errors: ['policy must be an object'] };
   if (policy.version !== 1) errors.push('version must be 1');
   const models = modelNames(policy);
-  if (!models.has('gpt-5.6-sol') || !models.has('gpt-5.6-luna')) errors.push('Sol and Luna must be explicit approved models');
+  if (models.size !== Object.keys(APPROVED_MODELS).length) errors.push('only the approved GPT-6 models may be listed');
+  for (const [model, effortOptions] of Object.entries(APPROVED_MODELS)) {
+    const actual = list(models.get(model)).slice().sort();
+    const expected = effortOptions.slice().sort();
+    if (actual.length !== expected.length || actual.some((effort, index) => effort !== expected[index])) {
+      errors.push(`${model}: reasoning efforts must be ${effortOptions.join(' and ')}`);
+    }
+  }
   const capabilities = capabilityNames(policy);
   const mcp = mcpNames(policy);
   const skills = skillNames(policy);
@@ -82,7 +105,11 @@ export function validateOrchestrationPolicy(policy, { issueTypes = [], lifecycle
   }
   if (profiles?.research?.mutates_repository || profiles?.discovery?.mutates_repository || profiles?.validator?.mutates_repository) errors.push('read-only profiles may not mutate the repository');
   if (profiles?.research && !profiles.research.capabilities?.includes('web-research')) errors.push('research must declare web-research');
-  if (profiles?.implementer && (profiles.implementer.model !== 'gpt-5.6-luna' || profiles.implementer.reasoning !== 'max')) errors.push('implementer must use GPT-5.6 Luna Max');
+  for (const [id, [model, effort]] of Object.entries(PROFILE_MODELS)) {
+    if (profiles?.[id] && (profiles[id].model !== model || profiles[id].reasoning !== effort)) {
+      errors.push(`${id}: model and reasoning must match the approved profile assignment`);
+    }
+  }
   if (profiles?.implementer?.mcp?.length) errors.push('implementer may not declare MCP servers');
   const patterns = list(policy.patterns);
   const patternIds = new Set();

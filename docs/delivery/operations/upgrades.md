@@ -5,8 +5,8 @@ versions. A merge to the controller's `main` branch is not an implicit
 participant upgrade.
 
 1. Publish a draft controller release manifest with SemVer, immutable commit,
-   supported event/lifecycle/state-machine/evidence versions, and pinned
-   Architecture and Primitive releases.
+   supported event/lifecycle/state-machine/evidence versions, the GitHub App
+   contract version, and pinned Architecture and Primitive releases.
 2. Run all deterministic checks and evaluate every active participant against
    the new release.
 3. Run the new controller in shadow mode and compare routing proposals,
@@ -17,6 +17,21 @@ participant upgrade.
 5. Record the release, participant changes, and evidence links. Remove an old
    compatibility path only after the published support window and a complete
    release cycle without fallback use.
+
+For the Control Plane's own intake workflow, the trusted bootstrap reads the
+participant registry from `bootstrapCommit`. Update the central participant
+pin in one reviewed pull request while retaining the current bootstrap. After
+that pull request merges, use a second reviewed pull request to advance
+`bootstrapCommit` and the matching workflow checkout refs to the first merge
+commit. In that second change, run the issue-field masker from the updated
+trusted bootstrap checkout (`working-directory: trusted-intake`) before
+semantic classification. In the delivery job, check out the same bootstrap at
+`trusted-bootstrap` and run its masker before source issue delivery. The
+bootstrap then provides one versioned masker to every supported participant
+pin, preserving compatibility and rollback. The workflow contract test should
+verify both masker working directories and that each masker runs before its
+consumer. Until the second change merges, intake continues to resolve the old
+participant pin.
 
 Incompatible changes use expand/migrate/contract. A security withdrawal may
 fail closed, but the incident and replacement commit must be recorded.

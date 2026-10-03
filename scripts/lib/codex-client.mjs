@@ -8,16 +8,16 @@ import { isDeepStrictEqual } from 'node:util';
 import { QUOTA_REASON } from './quota-diagnostics.mjs';
 
 export const MODELS = Object.freeze({
-  route: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  refine: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  discovery: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  research: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  requirements: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  architecture: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  plan: { model: 'gpt-5.6-sol', effort: 'high', mode: 'plan' },
-  implement: { model: 'gpt-5.6-luna', effort: 'max', mode: 'default' },
-  validate: { model: 'gpt-5.6-sol', effort: 'high', mode: 'default' },
-  review: { model: 'gpt-5.6-sol', effort: 'high', mode: 'default' },
+  route: { model: 'gpt-6-luna', effort: 'low', mode: 'plan' },
+  refine: { model: 'gpt-6-luna', effort: 'medium', mode: 'plan' },
+  discovery: { model: 'gpt-6-luna', effort: 'medium', mode: 'plan' },
+  research: { model: 'gpt-6-luna', effort: 'medium', mode: 'plan' },
+  requirements: { model: 'gpt-6-luna', effort: 'medium', mode: 'plan' },
+  architecture: { model: 'gpt-6-sol', effort: 'high', mode: 'plan' },
+  plan: { model: 'gpt-6-sol', effort: 'high', mode: 'plan' },
+  implement: { model: 'gpt-6-luna', effort: 'max', mode: 'default' },
+  validate: { model: 'gpt-6-luna', effort: 'max', mode: 'default' },
+  review: { model: 'gpt-6-sol', effort: 'high', mode: 'default' },
 });
 
 export const AUTH_STORAGE_CONFIG = 'cli_auth_credentials_store="file"';
@@ -166,6 +166,18 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
     reason: reasons[reasonCode],
     usedPercent: validWindows.length ? Math.max(...validWindows.map((window) => window.usedPercent)) : null,
     resetsAt: blocked ? nextEligibleAt : Math.max(...windows.map((window) => window.resetsAt)),
+    windows: windows.filter((window) => window.valid).map((window) => ({
+      bucketIndex: Number(window.bucket.slice('bucket-'.length)),
+      slot: window.slot,
+      durationMinutes: window.windowDurationMins,
+      usedPercent: window.usedPercent,
+      resetsAt: window.resetsAt,
+    })),
+    guardSignals: {
+      windowThresholdReached: triggerReasons.includes(QUOTA_REASON.windowReserve),
+      rateLimitReached: rateLimited,
+      spendControlReached: spendControlled,
+    },
     diagnostics: diagnostics(reasonCode, triggerReasons, triggeringWindows, nextEligibleAt),
   };
 }
@@ -187,12 +199,61 @@ export function quotaTelemetryUnavailable() {
   };
 }
 
+export function formatQuotaDiagnostics(quota) {
+  const windows = Array.isArray(quota?.windows)
+    ? quota.windows.filter((window) => Number.isSafeInteger(window.bucketIndex)
+      && ['primary', 'secondary'].includes(window.slot)
+      && Number.isFinite(window.durationMinutes) && window.durationMinutes > 0
+      && Number.isFinite(window.usedPercent) && window.usedPercent >= 0 && window.usedPercent <= 100
+      && Number.isFinite(window.resetsAt))
+    : [];
+  const describeWindow = (window) => {
+    const reset = new Date(window.resetsAt * 1000);
+    const resetsAt = Number.isNaN(reset.getTime()) ? 'invalid' : reset.toISOString();
+    return `bucket ${window.bucketIndex} ${window.slot}: ${window.durationMinutes}m at ${window.usedPercent}%, resets ${resetsAt}`;
+  };
+  const usage = Number.isFinite(quota?.usedPercent)
+    ? `${quota.usedPercent}%`
+    : Number.isFinite(quota?.highestWindowUsedPercent) ? `${quota.highestWindowUsedPercent}%` : 'unavailable';
+  const guardSignals = quota?.guardSignals
+    && ['windowThresholdReached', 'rateLimitReached', 'spendControlReached']
+      .every((key) => typeof quota.guardSignals[key] === 'boolean')
+    ? `window threshold=${quota.guardSignals.windowThresholdReached}; rate-limit=${quota.guardSignals.rateLimitReached}; spend-control=${quota.guardSignals.spendControlReached}`
+    : 'unavailable';
+  const reason = Object.values(QUOTA_REASON).includes(quota?.reasonCode) ? quota.reasonCode : 'unavailable';
+  return `Quota diagnostics: stop reason ${reason}; highest-window usage ${usage}; windows ${windows.length ? windows.map(describeWindow).join('; ') : 'unavailable'}; guards ${guardSignals}.`;
+}
+
+
 export function verifyModels(models) {
-  for (const { model, effort } of Object.values(MODELS)) {
-    const match = models.find((item) => (item.model ?? item.id) === model);
-    if (!match?.supportedReasoningEfforts?.some((item) => item.reasoningEffort === effort)) {
-      throw new Error(`Codex must support ${model} with ${effort} effort; no fallback is allowed.`);
-    }
+  const requiredPairs = [...new Map(Object.values(MODELS).map(({ model, effort }) => [
+    `${model}/${effort}`,
+    { model, effort },
+  ])).values()];
+  const requiredModels = [...new Set(requiredPairs.map(({ model }) => model))];
+  const catalogProfiles = requiredModels.map((model) => {
+    // Check every exact model-list identifier; a first match may not carry all advertised efforts.
+    const matchingEntries = models.filter((item) => item.model === model || item.id === model);
+    const efforts = [...new Set(matchingEntries.flatMap((entry) => (
+      entry.supportedReasoningEfforts
+        ?.map((option) => option.reasoningEffort)
+        .filter((effort) => SAFE_REASONING_EFFORTS.has(effort)) ?? []
+    )))].sort();
+    return { model, entries: matchingEntries.length, efforts };
+  });
+  const missingPairs = requiredPairs.filter(({ model, effort }) => (
+    !catalogProfiles.find((profile) => profile.model === model)?.efforts.includes(effort)
+  ));
+  if (missingPairs.length > 0) {
+    const summary = catalogProfiles.map(({ model, entries, efforts }) => (
+      `${model}[entries=${entries},efforts=${efforts.join(',') || 'unlisted'}]`
+    )).join(' | ');
+    const advertisedGpt6Identifiers = [...new Set(models.flatMap((item) => [item.id, item.model]
+      .filter((identifier) => typeof identifier === 'string' && identifier.length <= 120 && SAFE_GPT6_IDENTIFIER.test(identifier))
+      .map((identifier) => identifier.toLowerCase())))].sort();
+    throw new Error(
+      `Codex model catalog is missing selected model-effort pairs: ${missingPairs.map(({ model, effort }) => `${model}/${effort}`).join(', ')}; catalog profiles: ${summary}; catalog total entries=${models.length}; advertised GPT-6 identifiers: ${advertisedGpt6Identifiers.slice(0, 20).join(', ') || 'none'}; no fallback is allowed.`,
+    );
   }
 }
 

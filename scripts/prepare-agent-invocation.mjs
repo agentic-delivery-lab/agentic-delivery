@@ -12,7 +12,7 @@ import {
   validateDispatchEnvelopeSignature,
   validateActorCatalog,
 } from './lib/agent-invocation.mjs';
-import { appConfiguration, GithubAppTokenProvider } from './lib/github-app.mjs';
+import { appConfiguration, githubAppTokenPermissions, GithubAppTokenProvider } from './lib/github-app.mjs';
 import { loadParticipantRegistry, participantForRepository } from './lib/participant-registry.mjs';
 import { validateEventEnvelope } from './lib/control-plane-contracts.mjs';
 import { validateReceivedAt } from './lib/replay-protection.mjs';
@@ -179,7 +179,7 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
     ? new GithubAppTokenProvider({
       repository: controllerRepository,
       ...appConfig,
-      permissions: { contents: 'read', issues: 'read', pull_requests: 'read', metadata: 'read' },
+      permissions: githubAppTokenPermissions('invocationPreflight'),
       fetchImpl,
     })
     : null;

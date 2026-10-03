@@ -41,6 +41,7 @@
         "instructional"
       ],
       "primitives": [
+        "delivery-state-domain-language",
         "domain-language-validator",
         "quota-diagnostics-contract",
         "repository-governance-instructions"
@@ -127,11 +128,15 @@
         "instructional"
       ],
       "primitives": [
+        "codex-cli-release-update-workflow",
+        "codex-cli-release-updater",
+        "codex-cli-updater-review-classifier",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
-        "harness-architecture-review",
-        "quota-diagnostics-contract",
-        "semantic-architecture-review"
+        "github-native-issue-type",
+        "pull-request-check-readiness",
+        "pull-request-dispatch-context-resolver",
+        "quota-diagnostics-contract"
       ]
     },
     {
@@ -145,7 +150,12 @@
         "semantic"
       ],
       "primitives": [
+        "codex-cli-release-update-workflow",
+        "codex-cli-release-updater",
+        "codex-cli-updater-review-classifier",
+        "github-native-issue-type",
         "harness-architecture-review",
+        "pull-request-check-readiness",
         "quota-diagnostics-contract",
         "semantic-architecture-review"
       ]
@@ -166,6 +176,7 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "issue-classifier",
+        "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "issue-metadata-contract",
         "issue-metadata-migration",
@@ -232,6 +243,7 @@
         "organization-metadata-runbook",
         "pull-request-body-check",
         "pull-request-body-validator",
+        "pull-request-dispatch-context-resolver",
         "repository-governance-instructions"
       ]
     },
@@ -280,12 +292,18 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
+        "curated-changelog",
+        "delivery-participant-policy-resolver",
+        "delivery-state-domain-language",
         "event-catalog",
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
-        "harness-architecture-review",
+        "intake-caller-provenance-guard",
+        "intake-participation-policy",
+        "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
+        "organization-metadata-runbook",
         "organization-webhook-ingress",
         "participant-registry",
         "participant-registry-validator",
@@ -330,12 +348,18 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
+        "curated-changelog",
+        "delivery-participant-policy-resolver",
+        "delivery-state-domain-language",
         "event-catalog",
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
-        "harness-architecture-review",
+        "intake-caller-provenance-guard",
+        "intake-participation-policy",
+        "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
+        "organization-metadata-runbook",
         "organization-webhook-ingress",
         "participant-registry",
         "participant-registry-validator",
@@ -374,6 +398,9 @@
         "agent-invocation-preflight",
         "agent-invocation-workflow",
         "changelog-structure-validator",
+        "codex-cli-release-update-workflow",
+        "codex-cli-release-updater",
+        "codex-cli-updater-review-classifier",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "commit-format-validator",
@@ -382,10 +409,12 @@
         "domain-language-validator",
         "event-catalog",
         "event-catalog-validator",
+        "github-native-issue-type",
         "harness-architecture-review",
         "issue-branch-name-validator",
         "issue-classifier",
         "issue-event-authorization",
+        "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "issue-metadata-contract",
         "issue-metadata-migration",
@@ -399,6 +428,8 @@
         "organization-webhook-ingress",
         "pull-request-body-check",
         "pull-request-body-validator",
+        "pull-request-check-readiness",
+        "pull-request-dispatch-context-resolver",
         "quota-diagnostics-contract",
         "repository-governance-instructions",
         "semantic-architecture-review",
@@ -493,6 +524,48 @@
       ]
     },
     {
+      "id": "codex-cli-release-update-workflow",
+      "path": ".github/workflows/codex-cli-release-update.yml",
+      "location": ".github/workflows/codex-cli-release-update.yml",
+      "kind": "workflow",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "codex-cli-release-updater",
+      "path": "scripts/codex-cli-release-update.mjs",
+      "location": "scripts/codex-cli-release-update.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "codex-cli-updater-review-classifier",
+      "path": "scripts/classify-codex-cli-updater-review.mjs",
+      "location": "scripts/classify-codex-cli-updater-review.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
       "id": "codex-delivery-controller",
       "path": "scripts/codex-delivery.mjs",
       "location": "scripts/codex-delivery.mjs",
@@ -561,10 +634,25 @@
       "kind": "instruction",
       "enforcement": "instructional",
       "adrs": [
-        "ADR-0006"
+        "ADR-0006",
+        "ADR-0018"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "delivery-participant-policy-resolver",
+      "path": "scripts/lib/resolve-delivery-participant.mjs",
+      "location": "scripts/lib/resolve-delivery-participant.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {
@@ -574,9 +662,12 @@
       "kind": "customization",
       "enforcement": "semantic",
       "adrs": [
+        "ADR-0003",
+        "ADR-0018",
         "ADR-0019"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },
@@ -650,20 +741,57 @@
       ]
     },
     {
+      "id": "github-native-issue-type",
+      "path": "scripts/lib/github-native-issue-type.mjs",
+      "location": "scripts/lib/github-native-issue-type.mjs",
+      "kind": "customization",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
       "id": "harness-architecture-review",
       "path": "scripts/lib/architecture-review.mjs",
       "location": "scripts/lib/architecture-review.mjs",
       "kind": "validator",
       "enforcement": "deterministic",
       "adrs": [
-        "ADR-0009",
         "ADR-0011",
-        "ADR-0013",
+        "ADR-0013"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "intake-caller-provenance-guard",
+      "path": "scripts/lib/intake-caller-provenance.mjs",
+      "location": "scripts/lib/intake-caller-provenance.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
         "ADR-0018"
       ],
       "domains": [
-        "agentic-delivery-control-plane",
-        "agentic-delivery-governance"
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "intake-participation-policy",
+      "path": "scripts/lib/intake-policy.mjs",
+      "location": "scripts/lib/intake-policy.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {
@@ -702,6 +830,21 @@
         "ADR-0017"
       ],
       "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "issue-field-binding-log-masking",
+      "path": "scripts/mask-issue-field-bindings.mjs",
+      "location": "scripts/mask-issue-field-bindings.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0012",
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },
@@ -848,9 +991,11 @@
         "ADR-0015",
         "ADR-0016",
         "ADR-0017",
+        "ADR-0018",
         "ADR-0019"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },
@@ -948,6 +1093,34 @@
       ]
     },
     {
+      "id": "pull-request-check-readiness",
+      "path": "scripts/lib/pull-request-check-readiness.mjs",
+      "location": "scripts/lib/pull-request-check-readiness.mjs",
+      "kind": "customization",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "pull-request-dispatch-context-resolver",
+      "path": "scripts/resolve-pull-request-context.mjs",
+      "location": "scripts/resolve-pull-request-context.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0016"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ]
+    },
+    {
       "id": "quota-diagnostics-contract",
       "path": "scripts/lib/quota-diagnostics.mjs",
       "location": "scripts/lib/quota-diagnostics.mjs",
@@ -996,7 +1169,6 @@
       "kind": "customization",
       "enforcement": "semantic",
       "adrs": [
-        "ADR-0009",
         "ADR-0011",
         "ADR-0018"
       ],

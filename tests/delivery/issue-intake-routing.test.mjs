@@ -186,29 +186,56 @@ test('central intake mints an origin-scoped App token instead of using the contr
   assert.ok(apiCalls.length > 0 && apiCalls.every((authorization) => authorization === 'Bearer origin-scoped-token'));
 });
 
-test('shadow participant intake evaluates routing without mutating origin issue state', async () => {
+test('shadow intake fails closed instead of using write-capable token fallbacks when App credentials are missing', async () => {
   const origin = 'agentic-delivery-lab/service-a';
   const fixture = apiFixture({
     state: 'open', title: 'Task: shadow routing', body: 'Evaluate this route.',
     labels: [{ name: 'type:task' }, { name: 'state:requirements' }],
   }, 'write', [], origin);
-  const result = await classifyAndRoute({
+  await assert.rejects(classifyAndRoute({
     env: {
+      GITHUB_ACTIONS: 'true',
       GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
       ORIGIN_REPOSITORY: origin,
       SOURCE_ISSUE: '17',
-      GH_TOKEN: 'token',
+      PUBLISH_TOKEN: 'write-capable-publish-token',
+      GH_TOKEN: 'write-capable-workflow-token',
       GITHUB_ACTOR: 'maintainer',
-      CONTROL_PLANE_MODE: 'shadow',
+      PARTICIPANT_MODE: 'shadow',
     },
     event: { action: 'edited', issue: {}, repository: { full_name: origin } },
     fetchImpl: fixture.fetchImpl,
     config,
     reasonRoute: modelRoute('plan', 'task', 'ready-for-plan'),
-  });
-  assert.equal(result.route, 'plan');
-  assert.equal(result.metadata.shadow, true);
-  assert.equal(fixture.calls.some((call) => call.method === 'POST'), false);
+  }), /requires a GitHub App token from the readOnlyIntake profile; refusing PUBLISH_TOKEN or GH_TOKEN fallback/);
+  assert.equal(fixture.calls.length, 0);
+});
+
+test('active GitHub Actions intake refuses publication-token fallbacks when App credentials are missing', async () => {
+  const origin = 'agentic-delivery-lab/service-a';
+  const fixture = apiFixture({
+    state: 'open', title: 'Task: active routing', body: 'Evaluate this route.',
+    labels: [{ name: 'type:task' }, { name: 'state:requirements' }],
+  }, 'write', [], origin);
+  await assert.rejects(classifyAndRoute({
+    env: {
+      GITHUB_ACTIONS: 'true',
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      ORIGIN_REPOSITORY: origin,
+      ORIGIN_REPOSITORY_ID: '777777777',
+      SOURCE_ISSUE: '17',
+      PUBLISH_TOKEN: 'write-capable-publish-token',
+      GH_TOKEN: 'write-capable-workflow-token',
+      GITHUB_ACTOR: 'maintainer',
+      PARTICIPANT_MODE: 'active',
+      READ_ONLY_RUN: 'false',
+    },
+    event: { action: 'edited', issue: {}, repository: { full_name: origin } },
+    fetchImpl: fixture.fetchImpl,
+    config,
+    reasonRoute: modelRoute('plan', 'task', 'ready-for-plan'),
+  }), /Active GitHub Actions intake requires an origin-scoped GitHub App token; refusing PUBLISH_TOKEN or GH_TOKEN fallback/);
+  assert.equal(fixture.calls.length, 0);
 });
 
 test('shadow participant intake requests read-only origin App permissions', async () => {
@@ -237,7 +264,7 @@ test('shadow participant intake requests read-only origin App permissions', asyn
       SOURCE_ISSUE: '17',
       GH_TOKEN: 'controller-token',
       GITHUB_ACTOR: 'maintainer',
-      CONTROL_PLANE_MODE: 'shadow',
+      PARTICIPANT_MODE: 'shadow',
     },
     event: { action: 'edited', issue: {}, repository: { full_name: origin } },
     fetchImpl,
@@ -247,6 +274,126 @@ test('shadow participant intake requests read-only origin App permissions', asyn
   assert.deepEqual(tokenRequests[0].repository_ids, ['777777777']);
   assert.equal(tokenRequests[0].permissions.issues, 'read');
   assert.equal(tokenRequests[0].permissions.contents, 'read');
+});
+
+test('normal issue intake reads metadata with the registered shadow profile and performs no issue writes', async () => {
+  const origin = 'agentic-delivery-lab/service-a';
+  const fixture = apiFixture({
+    state: 'open', title: 'Task: read-only intake', body: 'Check the organization metadata without changing this issue.',
+    labels: [{ name: 'type:task' }, { name: 'state:requirements' }],
+  }, 'write', [], origin);
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const tokenRequests = [];
+  const graphqlRequests = [];
+  const organizationFields = ['lifecycle_stage', 'readiness'].map((key) => ({
+    id: config.fields[key].id,
+    name: config.fields[key].name,
+    dataType: 'SINGLE_SELECT',
+    options: config.fields[key].options.map(({ id, name }) => ({ id, name })),
+  }));
+  const organizationIssueTypes = config.issue_types.map((type) => ({
+    id: `IT_${type.id}`,
+    name: type.native_name,
+    isEnabled: true,
+    pinnedFields: organizationFields,
+  }));
+  const issueFieldValues = [
+    ['lifecycle_stage', 'planning'],
+    ['readiness', 'ready'],
+  ].map(([key, optionId]) => {
+    const field = config.fields[key];
+    const option = field.options.find((candidate) => candidate.id === optionId);
+    return {
+      id: `IFSV_${optionId}`,
+      name: option.name,
+      value: option.name,
+      optionId,
+      field: { id: field.id, name: field.name, dataType: 'SINGLE_SELECT' },
+    };
+  });
+  const fetchImpl = async (url, options) => {
+    if (url === 'https://api.github.com/graphql') {
+      const request = JSON.parse(options.body);
+      graphqlRequests.push({ ...request, headers: options.headers, method: options.method });
+      return new Response(JSON.stringify({
+        data: {
+          repository: {
+            issue: {
+              id: 'I_17', number: 17, state: 'OPEN', title: 'Task: read-only intake',
+              body: 'Check the organization metadata without changing this issue.',
+              issueType: null, issueFieldValues: { nodes: issueFieldValues }, parent: null, subIssues: { nodes: [] },
+            },
+          },
+          organization: {
+            issueTypes: { nodes: organizationIssueTypes },
+            issueFields: { nodes: organizationFields },
+            pinnedIssueFields: { nodes: organizationFields },
+          },
+        },
+      }), { status: 200 });
+    }
+    if (url.endsWith('/access_tokens')) {
+      tokenRequests.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({ token: 'read-only-origin-token', expires_at: '2099-01-01T00:00:00Z' }), { status: 201 });
+    }
+    return fixture.fetchImpl(url, options);
+  };
+  const result = await classifyAndRoute({
+    env: {
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      ORIGIN_REPOSITORY: origin,
+      ORIGIN_REPOSITORY_ID: '777777777',
+      CODEX_DELIVERY_APP_ID: '5011055',
+      CODEX_DELIVERY_APP_PRIVATE_KEY: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+      CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060',
+      SOURCE_ISSUE: '17',
+      GH_TOKEN: 'controller-token',
+      GITHUB_ACTOR: 'maintainer',
+      GITHUB_EVENT_NAME: 'issues',
+      PARTICIPANT_MODE: 'shadow',
+      GITHUB_GRAPHQL: 'true',
+    },
+    event: { action: 'edited', issue: { number: 17 }, repository: { full_name: origin } },
+    fetchImpl,
+    config,
+    reasonRoute: async () => ({
+      route: 'plan', workType: 'task', state: 'ready-for-plan',
+      lifecycleStage: 'planning', readiness: 'ready', governance: [],
+      orchestrationPattern: 'implementation-fresh',
+      summary: 'Read the issue and organization catalog.',
+      message: 'This message must not be posted during a read-only run.',
+    }),
+  });
+
+  assert.equal(result.route, 'plan');
+  assert.equal(result.metadata.shadow, true);
+  assert.equal(result.metadata.readOnlyRun, true);
+  assert.equal(result.fields.changed, false);
+  assert.equal(result.fields.readOnlyRun, true);
+  assert.equal(result.metadata.fieldAuthority, 'organization-issue-field');
+  assert.deepEqual(result.metadata.fieldPresence, { lifecycleStage: true, readiness: true });
+  assert.equal(result.metadata.lifecycleStage, 'planning');
+  assert.equal(result.metadata.readiness, 'ready');
+  assert.deepEqual(tokenRequests[0], {
+    repository_ids: ['777777777'],
+    permissions: {
+      contents: 'read', issues: 'read', pull_requests: 'read', metadata: 'read',
+      issue_fields: 'read', issue_types: 'read',
+    },
+  });
+  assert.equal(fixture.calls.some((call) => call.method !== 'GET'), false);
+  assert.equal(graphqlRequests.length, 1);
+  assert.equal(graphqlRequests[0].method, 'POST');
+  assert.equal(graphqlRequests[0].headers.Authorization, 'Bearer read-only-origin-token');
+  assert.equal(graphqlRequests[0].headers['X-GitHub-Api-Version'], '2026-03-10');
+  assert.deepEqual(graphqlRequests[0].variables, {
+    owner: 'agentic-delivery-lab', name: 'service-a', number: 17, organization: 'agentic-delivery-lab',
+  });
+  assert.match(graphqlRequests[0].query, /issueFieldValues\(first: 100\)/);
+  assert.match(graphqlRequests[0].query, /issueTypes\(first: 100\)/);
+  assert.match(graphqlRequests[0].query, /pinnedIssueFields\(first: 100\)/);
+  assert.match(graphqlRequests[0].query, /issueFields\(first: 100\)/);
+  assert.doesNotMatch(graphqlRequests[0].query, /mutation\s/);
 });
 
 test('classifies and hands off a ready issue only after metadata reconciliation and actor authorization', async () => {

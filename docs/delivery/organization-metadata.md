@@ -1,4 +1,4 @@
-<!-- agentic-primitive: {"id":"organization-metadata-runbook","kind":"instruction","enforcement":"instructional","adrs":["ADR-0012","ADR-0013","ADR-0015","ADR-0016","ADR-0017","ADR-0019"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"organization-metadata-runbook","kind":"instruction","enforcement":"instructional","adrs":["ADR-0012","ADR-0013","ADR-0015","ADR-0016","ADR-0017","ADR-0018","ADR-0019"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]} -->
 
 # Organization GitHub metadata runbook
 
@@ -34,6 +34,49 @@ authoritative compatibility contract until ADR-0019's separately authorized
 field migration is complete; do not create a second field or rename it from a
 content pull request.
 
+## GitHub App permissions
+
+The central GitHub App installation needs the organization permissions
+`Issue Fields: read` and `Issue Types: read` to read the definitions, pins,
+options, and native types used by lifecycle validation. GitHub App contract
+version 2.0.0 lists both permissions and the operation-specific token
+profiles. Intake and delivery request these two reads
+with their operation-specific repository permissions and narrow each token to
+the originating repository ID for repository resources. The organization
+catalog reads themselves are organization-wide and are not narrowed by that
+repository ID. The controller-only dispatch token requests `Contents: write`
+and no organization permissions. Active intake and delivery stop in GitHub
+Actions when the App credentials are missing; they do not fall back to
+`PUBLISH_TOKEN` or the workflow token.
+
+The installation permission grant does not prove that a token can read the
+catalog. The versioned contract gives each App token request an explicit
+operation profile. Invocation preflight requests `Contents: read`, `Issues:
+read`, `Pull requests: read`, and `Metadata: read`. Read-only intake uses those
+repository reads plus `Issue Fields: read` and `Issue Types: read`; active
+intake requests `Issues: write` instead. Delivery requests `Contents: write`,
+`Issues: write`, and `Pull requests: write` plus the same two organization
+reads. Every origin token is narrowed to the originating repository ID for
+repository resources. The organization catalog reads remain organization-wide.
+
+After the immutable controller pin is updated, trigger normal issue intake on
+canary issue #62. Add a dated `Canary run:` line to its description to emit an
+`issues.edited` event. Do not change its Issue Type, Lifecycle Stage, or
+Delivery Readiness fields. Leave `force` and all other workflow-dispatch inputs
+out of this probe; it must use the normal issue-event path. The workflow
+resolves `participant_mode` from the pinned registry. The central participant
+is registered as `shadow`, so intake requests the read-only App profile and
+does not start delivery. Confirm that the organization fields, Issue Types,
+pins, and issue values are readable without an App permission error, and that
+the run reports no issue-field changes. The route may remain held because the
+canary has no delivery work. Record the event run link and result on issue #66.
+
+Direct manual recovery through `codex-delivery.yml` is a separate path from
+this intake canary. It loads the participant mode and controller pin from the
+fixed bootstrap registry. Its `force_read_only` input defaults to `true`; set
+it to `false` only to request delivery for a participant already registered as
+`active`. A `shadow` participant remains read-only regardless of that input.
+
 Run the dry-run manifest before changing organization settings:
 
 ```text
@@ -49,8 +92,13 @@ after the operator binds the provisioned GitHub IDs.
 ## Runtime ID bindings
 
 GitHub assigns organization-specific node IDs to Issue Types, fields, and
-single-select options. Store the observed, non-secret bindings as a protected
-repository variable named `ISSUE_FIELD_BINDINGS_JSON`:
+single-select options. These IDs are configuration, not credentials, but they
+are organization-only metadata. Store the observed bindings as a repository
+Actions secret named `ISSUE_FIELD_BINDINGS_JSON`. Pass the secret explicitly
+through each reusable workflow that needs it, and register every runtime field
+and option ID individually for masking in each consuming job before use. This
+covers values that appear separately or in a transformed form in logs. Remove
+the old repository variable after all workflow references use the secret:
 
 The metadata controller reads this catalog through the GitHub GraphQL API with
 version `2026-03-10`. Keep that version pinned when operating or extending the

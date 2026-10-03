@@ -24,7 +24,8 @@ advance or corrupt the work item.
 
 After the workflow is merged and prerequisites are verified, open an issue
 through an intake form or the blank-issue fallback. The intake workflow
-uses a read-only Sol High routing turn to interpret the issue and conversation.
+uses a read-only GPT-6 Luna Low routing turn to interpret the issue and
+conversation.
 It proposes the native issue type, Lifecycle Stage, Delivery Readiness,
 governance labels, and an allowed orchestration pattern. Deterministic code
 validates that proposal against the two versioned catalogs and transition table
@@ -45,11 +46,19 @@ on the coordinating parent.
 
 People do not set lifecycle fields during normal work. The routing model
 proposes a stage and readiness value, and the deterministic readiness gate must
-pass before GPT-5.6 Sol High starts Plan mode. After a successful plan, the
+pass before GPT-6 Sol High starts Plan mode. After a successful plan, the
 controller advances the issue fields through Planning and Execution and
-automatically invokes GPT-5.6 Luna Max for Implement. Research, requirements,
-architecture, validation, and coordination routes can stop or complete without
-invoking an implementer.
+automatically invokes GPT-6 Luna Max for Implement. Refinement, discovery,
+research, requirements, architecture, validation, and coordination routes can
+stop or complete without invoking an implementer.
+
+The remaining profiles use GPT-6 Luna Medium for refinement, discovery,
+research, requirements, and coordination. Planning, architecture decisions,
+and semantic review use GPT-6 Sol High. Implementation and its first
+verification pass use GPT-6 Luna Max. Preflight checks these exact model and
+effort combinations against the runner's Codex catalog and stops before a
+model turn if one is unavailable. Automatic profiles do not use GPT-6 Astra
+and do not fall back to another model.
 
 The direct `issue_comment` workflow trigger is removed. A supported issue or
 pull-request comment/review can enter through the explicit
@@ -88,17 +97,32 @@ participant's immutable controller commit from the signed event envelope before
 loading its registry and validator. It never follows a moving `main` ref for
 observation validation and it has no App private-key or webhook-secret input.
 The issue-intake bootstrap uses the `bootstrapCommit` in the controller release
-manifest for its trusted authorization and preflight checkout. The delivery
-checkout and manual recovery input both require a 40-character controller SHA;
-neither path falls back to `main`.
+manifest for its trusted authorization and preflight checkout. Direct manual
+intake and recovery resolve participant mode and controller pin from the
+registry loaded at the fixed bootstrap commit after checking the event
+repository ID and expected name. They do not accept a caller-selected
+controller SHA. `force_read_only` defaults to `true`. The standalone delivery
+workflow resolves policy in a hosted job with contents-read permission only;
+its self-hosted delivery job runs only for an active participant with an
+effective non-read-only run. Reusable delivery checks out the immutable
+controller SHA selected from the registry. Its hosted resolver also verifies
+the main-branch caller and source repository, then re-reads participant mode
+and the controller pin from the fixed bootstrap registry. The reusable workflow
+does not accept those policy values from its caller. Neither path falls back
+to a moving `main` ref.
 
 The Vercel ingress mints a repository-scoped read token for origin actor and
 source checks, then a separate controller token narrowed to the controller
 repository with only Contents write for the `repository_dispatch` handoff.
 The runner's publication token follows the organization-wide ADR-0018
 Contents, Issues, and Pull requests boundary; Actions `workflows:write` is not
-required by the App contract. The Vercel ingress uses these Production
-environment variables: `AGENTIC_DELIVERY_WEBHOOK_SECRET`,
+required by the App contract. Origin intake and delivery tokens also request
+`issue_fields: read` and `issue_types: read` to validate organization
+metadata. These tokens remain narrowed to the originating repository ID; the
+repository ID restriction applies to repository resources; organization
+catalog reads remain organization-wide. The controller dispatch token requests
+only `contents: write`. The Vercel ingress uses these Production environment variables:
+`AGENTIC_DELIVERY_WEBHOOK_SECRET`,
 `AGENTIC_DELIVERY_APP_ID`, `AGENTIC_DELIVERY_APP_PRIVATE_KEY`,
 `AGENTIC_DELIVERY_APP_INSTALLATION_ID`, `AGENTIC_DELIVERY_DISPATCH_SECRET`,
 `AGENTIC_DELIVERY_ORGANIZATION`, `AGENTIC_DELIVERY_ORGANIZATION_ID`, and
@@ -112,11 +136,15 @@ In the central controller repository's Actions settings, store
 `CODEX_DELIVERY_APP_ID` and, optionally,
 `CODEX_DELIVERY_APP_INSTALLATION_ID` as repository variables. Store
 `CODEX_DELIVERY_APP_PRIVATE_KEY` and `CODEX_DELIVERY_DISPATCH_SECRET` as
-Actions secrets. The issue-intake and delivery workflows read the IDs through
-the `vars` context and receive the private key and dispatch secret through
-explicit secret inputs. Rotate the webhook secret, dispatch secret, and
-private key through their respective Vercel or Actions secret stores; never
-commit them.
+Actions secrets. Store `ISSUE_FIELD_BINDINGS_JSON` as a repository Actions
+secret as well. Its organization-specific field and option IDs are
+configuration rather than credentials, but they must not appear in public
+workflow logs. The issue-intake and delivery workflows pass this secret
+explicitly through their reusable-workflow calls, and each consuming job
+registers every runtime field and option ID for masking before using it.
+Remove the old repository variable after the workflow changes use the secret.
+Rotate the webhook secret, dispatch secret, and private key through their
+respective Vercel or Actions secret stores; never commit them.
 
 The ingress verifies the webhook signature and delivery ID, checks the exact
 actor catalog, signs the complete dispatch envelope with the separate dispatch
@@ -213,14 +241,78 @@ issue edits.
 - A dedicated Linux runner with labels `self-hosted`, `linux`, `x64`, `omarchy`.
 - Node.js and exact pnpm as defined in `package.json`; workflows use the pinned
   pnpm setup action and frozen installations with lifecycle scripts disabled.
-- Codex CLI 0.153.4, installed by `scripts/setup-runner-codex.mjs` from the
-  official Linux x64 package after SHA-256 verification. The dedicated tool
-  cache keeps this installation separate from personal tools. The runner verifies
-  both model/effort combinations, ChatGPT login, Plan mode, and quota telemetry.
+- The centrally pinned Codex CLI release, installed by
+  `scripts/setup-runner-codex.mjs` from the official Linux x64 package after
+  SHA-256 verification. Every Actions workflow uses this setup script; the
+  dedicated tool cache keeps this installation separate from personal tools.
+  A weekly release check opens a review pull request for a newer stable release
+  after creating a release-specific Task issue. Its pull request closes that
+  issue when merged and references issue #70 for the ongoing maintenance
+  policy, so future CLI updates do not depend on #70 remaining open. The
+  updater creates the release Task and pushes its issue-linked branch with
+  `GITHUB_TOKEN`, then opens the PR with a short-lived repository-scoped GitHub
+  App token limited to contents read and pull requests write. The PR event
+  starts the body, delivery-quality, and ADR checks on the exact head. The
+  updater does not change the repository Actions setting that combines token
+  based PR creation with review approval. It waits for the exact-head body,
+  delivery-quality, portability, and applicable ADR checks to pass, then
+  dispatches the no-generation runner smoke. It paginates the pull-request list
+  and exact-head check-run evidence. It also paginates open release Task search
+  results and stops before issue creation if the search is incomplete, changes
+  during pagination, or exceeds GitHub's 1,000-result limit. The Harness skips
+  the automatic event only for an internal bot-authored update PR with the
+  expected branch, title, and versioned marker; a human cannot suppress review
+  by editing the body. Harness starts only after the smoke passes; a
+  deterministic failure prevents both runner dispatches. The
+  generated PR description separates verified release metadata from checks
+  that are pending at creation.
+  The delivery-quality `quality` job, ADR validation and portability matrix use
+  ephemeral GitHub-hosted runners. This lets their exact-head checks finish
+  while Harness uses the single persistent self-hosted Codex runner to wait for
+  readiness.
+  The runner verifies every configured model/effort pair, ChatGPT login, Plan
+  mode, and quota telemetry before a model turn.
   The no-generation smoke check also probes persistent thread start and exact
-  resume; this pinned CLI reports that a brand-new thread has no resumable
-  rollout until its first model turn, so the check records that limitation
-  without spending model quota.
+  resume. Treat the result as release-specific runner evidence; a fresh session
+  may require its first model rollout before exact resume can be verified.
+  The check records that limitation without spending model quota.
+  Harness includes the live PR description, non-Harness check runs for its
+  exact reviewed commit, and runner preflight results. It excludes its own
+  `review` check only after verifying its workflow-run and job provenance, so
+  an unrelated same-name check remains visible. It resumes an interrupted
+  thread only when the full evidence fingerprint is unchanged; changed evidence
+  gets an isolated thread. Its semantic diff contains every
+  changed path with five lines of context, including configuration and
+  changelog edits. A diff over 500,000 characters stops before a model turn
+  and is reported as inconclusive instead of being silently truncated. Before
+  a model turn, Harness waits up to 15 minutes for the expected exact-head
+  checks to finish and skips the turn when a required check fails or remains
+  unavailable. A completed review is reused only when its full evidence
+  fingerprint matches and the required
+  exact-head checks passed. Quota snapshots are recorded outside the model
+  input before and after a semantic turn. Each snapshot keeps
+  returned primary and secondary windows separate, including duration, usage,
+  reset time, and safe threshold, rate-limit, and spend-control signals. The
+  snapshots show observed usage but cannot attribute a change to one model
+  when other Codex clients share the allowance. A failed preflight writes its
+  per-window observations and guard signals to the Actions job summary and
+  runner log before any semantic model turn starts. Deterministic violations
+  skip the semantic turn.
+- Harness review sessions use protected, runner-local state at
+  `/var/lib/github-runner/.codex/harness-reviews`, outside disposable
+  checkouts and Actions artifacts. The thread UUID is saved before the model
+  turn; an interrupted review resumes the same thread with a short prompt. A
+  completed result is reused without another semantic model turn only when
+  the exact semantic evidence fingerprint matches and expected exact-head
+  checks are complete. Session files are restricted to `github-runner` and
+  become eligible for pruning after 30 days. This state survives workflow jobs
+  on the same persistent runner, not replacement of that runner.
+- Automatic Harness suppression for a CLI update PR requires the exact
+  registered delivery App bot login, the issue-linked updater branch and
+  expected title, and the versioned marker. Other bot-authored PRs still run
+  Harness. The semantic evidence bundle omits its expected pre-turn
+  `not-run` placeholder so the current review does not mistake its own pending
+  result for missing evidence.
 - ChatGPT login for the installed `codex` executable under that user,
   `github-runner`. Another user's installation/login is not sufficient. For a
   headless runner, use the file-backed credential store so the service does not
@@ -232,7 +324,7 @@ issue edits.
   sudo -H -u github-runner env \
     HOME=/var/lib/github-runner \
     CODEX_HOME=/var/lib/github-runner/.codex \
-    /opt/actions-runner/_work/_tool/codex-delivery/0.153.4/bin/codex \
+    /opt/actions-runner/_work/_tool/codex-delivery/<pinned-version>/bin/codex \
     -c 'cli_auth_credentials_store="file"' login --device-auth
   ```
 
@@ -245,14 +337,15 @@ issue edits.
   to the runner service user and back it up as operational data.
 - Repository Actions variables `CODEX_DELIVERY_APP_ID` and, optionally,
   `CODEX_DELIVERY_APP_INSTALLATION_ID`; Actions secret
-  `CODEX_DELIVERY_APP_PRIVATE_KEY`. Install the App only on this repository
-  with Metadata read plus Issues, Contents, Pull requests, and Workflows write.
-  Issue intake uses a repository-scoped installation token to read the issue
-  and organization issue-field contract and to perform validated issue
-  write-back. Delivery uses a repository-scoped token for its authorized issue
-  and pull-request operations. The private key and tokens stay in memory,
-  are redacted, and are never exposed to Codex. The workflow token still
-  supports Actions-level authorization and controller-repository operations;
+  `CODEX_DELIVERY_APP_PRIVATE_KEY`. Install the central App with selected-
+  repository access, repository Metadata read plus Contents, Issues, and Pull
+  requests write, and organization Issue Fields and Issue Types read. Do not
+  grant Workflows write. Issue intake uses a repository-scoped installation
+  token to read the issue and organization issue-field contract and to perform
+  validated issue write-back. Delivery uses a repository-scoped token for its
+  authorized issue and pull-request operations. The private key and tokens
+  stay in memory, are redacted, and are never exposed to Codex. The workflow
+  token still supports Actions-level authorization and controller-repository operations;
   it cannot replace the installed App token for organization issue-field
   access.
 
@@ -284,7 +377,9 @@ namespace, so local test servers work without access to runner-host services.
 
 `node scripts/codex-handoff-check.mjs` is an opt-in local check that consumes
 subscription allowance. It makes two bounded real model turns, verifies that
-Sol High does not write during planning, and checks Luna Max's resulting file.
+GPT-6 Sol High planning remains read-only, then uses GPT-6 Luna Max with the
+workspace-write profile to implement the saved plan. Deterministic controller
+checks verify the resulting tree.
 Do not add it to ordinary CI. An empty app-server environment list disables
 filesystem tools; the controller deliberately retains the default local
 environment with its named permissions.
@@ -292,13 +387,17 @@ environment with its named permissions.
 ## Budget boundary and saved work
 
 The controller checks all returned usage windows and stops at 98 percent
-usage. It also stops if telemetry cannot be read. Five hours describes the
-subscription window and is the normal model-execution boundary. A turn has no
-independent absolute duration limit: its 20-minute inactivity watchdog starts
-after `turn/start` acknowledges the active turn and resets whenever that turn
-produces activity. The 5.5-hour controller timeout and 350-minute Actions
-timeout are recovery failsafes. Their gap gives the controller time to save a
-handoff before Actions stops the job. Validation repairs are capped at three.
+usage. It also stops when Codex reports a rate-limit or spend-control block or
+if telemetry cannot be read. Five hours describes the subscription window and
+is the normal model-execution boundary, but a secondary window may stop work
+first. Preflight evidence records each returned window separately in the
+Actions job summary and runner log so the limiting window can be identified.
+A turn has no independent absolute duration limit: its 20-minute inactivity
+watchdog starts after `turn/start` acknowledges the active turn. It resets
+whenever the turn produces activity. The 5.5-hour controller timeout and
+350-minute Actions timeout are recovery failsafes. Their gap gives the
+controller time to save a handoff before Actions stops the job. Validation
+repairs are capped at three.
 
 Implementation can span multiple model turns in one run. A `continue` outcome
 records exact remaining implementation tasks and starts the next turn without
@@ -367,10 +466,13 @@ verification.
 Internal pull requests also run the read-only Harness Architecture Review. The
 deterministic layer compares the merge-base-to-head diff with the official base
 ADRs, provisional head changes, the domain register, and the evidence contract.
-The semantic layer uses a bounded Sol High review turn when quota and runner
-evidence are available. Deterministic violations fail; semantic concerns and
-inconclusive runtime evidence remain cited review findings. The review workflow
-does not comment, modify, merge or close anything.
+The semantic layer uses a bounded GPT-6 Sol High review turn when quota and runner
+evidence are available. Preflight checks the exact model-effort profile against
+the runner catalog. A known unsupported pair is reported by name without raw
+runner errors; other initialization failures stay redacted. Deterministic
+violations fail; semantic concerns and inconclusive runtime evidence remain
+cited review findings. The review workflow does not comment, modify, merge or
+close anything.
 
 For each semantic run, the evidence bundle fetches the current pull-request
 title and body through the workflow's read-only pull-request permission. The

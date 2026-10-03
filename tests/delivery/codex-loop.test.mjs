@@ -35,7 +35,10 @@ test('uses actual Plan mode, implementation mode, and read-only review mode', as
     const result=await runTurn({client,threadId:'thread-1',phase,prompt:'assignment',onProgress:async()=>{}});
     assert.equal(result.text,'{"ok":true}');
     const start=client.calls.find(c=>c.method==='turn/start').params;
-    assert.deepEqual(start.collaborationMode,{mode:phase==='plan'?'plan':'default',settings:{model:phase==='implement'?'gpt-5.6-luna':'gpt-5.6-sol',reasoning_effort:phase==='implement'?'max':'high',developer_instructions:null}});
+    const expectedModel = phase === 'implement'
+      ? {model:'gpt-6-luna',reasoning_effort:'max'}
+      : {model:'gpt-6-sol',reasoning_effort:'high'};
+    assert.deepEqual(start.collaborationMode,{mode:phase==='plan'?'plan':'default',settings:{...expectedModel,developer_instructions:null}});
     assert.equal(start.permissions,phase==='plan'?'delivery-plan':phase==='implement'?'delivery-edit':'delivery-review');
     assert.equal(start.environments,undefined,'an empty environment list disables all filesystem tools');
   }

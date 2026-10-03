@@ -27,7 +27,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
     '.github/workflows/agent-observation.yml',
     'api/github/webhook.mjs', 'scripts/issue-intake.mjs', 'scripts/lib/agent-invocation.mjs', 'scripts/prepare-agent-invocation.mjs', 'scripts/lib/issue-routing.mjs', 'scripts/lib/issue-metadata.mjs',
     'scripts/lib/orchestration-policy.mjs', 'scripts/lib/primitive-selection.mjs', 'scripts/validate-automation-templates.mjs', 'automations/AGENTS.md', 'automations/templates/manifest.json', 'automations/templates/manifest.v1.schema.json', 'automations/templates/review-delivery-queue.automation.md', 'automations/templates/prepare-validation-evidence.automation.md', 'tests/helpers/organization-issue-forms.mjs',
-    'config/github-app-contract.json', 'config/event-catalog.yml', 'config/primitive-selection.yml', 'schemas/event-catalog.v1.schema.json', 'schemas/github-app-contract.v1.schema.json', 'schemas/primitive-selection.v1.schema.json', 'schemas/github-inventory.v1.schema.json', 'scripts/lib/event-catalog.mjs', 'scripts/validate-github-app-contract.mjs',
+    'config/github-app-contract.json', 'config/event-catalog.yml', 'config/primitive-selection.yml', 'schemas/event-catalog.v1.schema.json', 'schemas/github-app-contract.v1.schema.json', 'schemas/github-app-contract.v2.schema.json', 'schemas/primitive-selection.v1.schema.json', 'schemas/github-inventory.v1.schema.json', 'scripts/lib/event-catalog.mjs', 'scripts/lib/resolve-delivery-participant.mjs', 'scripts/validate-github-app-contract.mjs',
     '.github/workflows/agentic-delivery-quality.yml',
     '.github/workflows/agentic-delivery-architecture-review.yml',
     'docs/delivery/operations/onboarding.md',
@@ -72,17 +72,18 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.ok(intake.includes('readiness'));
   const delivery = await text('.github/workflows/codex-delivery.yml');
   assert.ok(delivery.includes('workflow_call:'));
-  assert.ok(delivery.includes('ref: ${{ inputs.controller_commit }}'));
+  assert.ok(delivery.includes('ref: ${{ needs.resolve.outputs.controller_commit }}'));
   assert.ok(delivery.includes('required: true'));
-  assert.ok(intake.includes("controller_commit: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '03dc4071f29d3914479e9a0bd174759e79180f8c' }}"));
+  assert.ok(intake.includes('controller_commit: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}'));
+  assert.ok(!intake.includes('inputs.controller_commit'));
   assert.equal((intake.match(/ref: main/g) ?? []).length, 0);
-  assert.ok(intake.includes('ref: 03dc4071f29d3914479e9a0bd174759e79180f8c'));
-  assert.ok(intake.includes("ref: ${{ steps.invocation.outputs.controller_commit || github.event.client_payload.controller.commit || inputs.controller_commit || '03dc4071f29d3914479e9a0bd174759e79180f8c' }}"));
+  assert.ok(intake.includes('ref: e0b2f0719e00ac49aaab305ea10065c5f5197cb1'));
+  assert.ok(intake.includes('ref: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}'));
   assert.ok(intake.includes('Validate the selected controller commit'));
   const release = JSON.parse(await text('config/controller-release.json'));
-  assert.equal(release.version, '0.2.0-draft.37');
-  assert.equal(release.commit, '7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b');
-  assert.equal(release.bootstrapCommit, '03dc4071f29d3914479e9a0bd174759e79180f8c');
+  assert.equal(release.version, '0.2.0-draft.45');
+  assert.equal(release.commit, 'eed2505edaf4e1f839030697973dcaaf0c1b1bea');
+  assert.equal(release.bootstrapCommit, 'e0b2f0719e00ac49aaab305ea10065c5f5197cb1');
   assert.ok(!delivery.includes('types: [opened]'));
   const consumerContract = parseRepositoryYaml(await text('.github/workflows/agentic-delivery-quality.yml'), 'consumer contract workflow');
   assert.ok(consumerContract.on.workflow_call);
@@ -186,6 +187,9 @@ test('repository instructions and ADR-0007 point to pnpm commands', async () => 
 test('Codex delivery reserves time for a recoverable outer shutdown', async () => {
   const workflowDocument = parseRepositoryYaml(await text('.github/workflows/codex-delivery.yml'), 'Codex delivery workflow');
   assert.equal(workflowDocument.jobs.deliver['timeout-minutes'],350);
+  assert.equal(workflowDocument.on.workflow_dispatch.inputs.force_read_only.default, true);
+  assert.equal(workflowDocument.jobs.deliver.needs, 'resolve');
+  assert.match(workflowDocument.jobs.deliver.if, /needs\.resolve\.outputs\.read_only_run == 'false'/);
 
   const controller = await text('scripts/codex-delivery.mjs');
   assert.match(controller,/5\.5 \* 60 \* 60_000/);

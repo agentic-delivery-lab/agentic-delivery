@@ -17,39 +17,39 @@ profiles:
   router:
     primitiveIds: [delivery-workflow]
     capabilities: [repository-read]
-    model: gpt-5.6-sol
-    reasoning: high
+    model: gpt-6-luna
+    reasoning: low
     tools: []
     mcp: []
     fallback: hold
   discovery:
     primitiveIds: [ubiquitous-language, plain-language-communication]
     capabilities: [repository-read]
-    model: gpt-5.6-sol
-    reasoning: high
+    model: gpt-6-luna
+    reasoning: medium
     tools: []
     mcp: []
     fallback: hold
   research:
     primitiveIds: [ubiquitous-language, plain-language-communication]
     capabilities: [repository-read, web-research]
-    model: gpt-5.6-sol
-    reasoning: high
+    model: gpt-6-luna
+    reasoning: medium
     tools: []
     mcp: [firecrawl]
     fallback: hold
   requirements:
     primitiveIds: [ubiquitous-language, plain-language-communication]
     capabilities: [repository-read]
-    model: gpt-5.6-sol
-    reasoning: high
+    model: gpt-6-luna
+    reasoning: medium
     tools: []
     mcp: []
     fallback: hold
   architecture-decision:
     primitiveIds: [architecture-decision, ubiquitous-language, plain-language-communication, delivery-workflow]
     capabilities: [repository-read, deterministic-validation]
-    model: gpt-5.6-sol
+    model: gpt-6-sol
     reasoning: high
     tools: []
     mcp: []
@@ -57,7 +57,7 @@ profiles:
   planner:
     primitiveIds: [delivery-workflow, ubiquitous-language]
     capabilities: [repository-read]
-    model: gpt-5.6-sol
+    model: gpt-6-sol
     reasoning: high
     tools: []
     mcp: []
@@ -65,7 +65,7 @@ profiles:
   implementer:
     primitiveIds: [codex-delivery, delivery-workflow, ubiquitous-language]
     capabilities: [repository-read, repository-write, deterministic-validation]
-    model: gpt-5.6-luna
+    model: gpt-6-luna
     reasoning: max
     tools: []
     mcp: []
@@ -73,23 +73,23 @@ profiles:
   validator:
     primitiveIds: [delivery-workflow, ubiquitous-language, plain-language-communication]
     capabilities: [repository-read, deterministic-validation]
-    model: gpt-5.6-sol
-    reasoning: high
+    model: gpt-6-luna
+    reasoning: max
     tools: []
     mcp: []
     fallback: hold
   coordinator:
     primitiveIds: [delivery-workflow, plain-language-communication]
     capabilities: [repository-read]
-    model: gpt-5.6-sol
-    reasoning: high
+    model: gpt-6-luna
+    reasoning: medium
     tools: []
     mcp: []
     fallback: hold
   harness-reviewer:
     primitiveIds: [architecture-decision, ubiquitous-language, delivery-workflow]
     capabilities: [repository-read, deterministic-validation]
-    model: gpt-5.6-sol
+    model: gpt-6-sol
     reasoning: high
     tools: []
     mcp: []

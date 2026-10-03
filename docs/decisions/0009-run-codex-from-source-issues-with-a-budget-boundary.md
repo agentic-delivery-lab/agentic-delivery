@@ -24,9 +24,9 @@ which amended the workflow originally tracked by
 later clarified that people must be able to continue a saved run with natural
 language instead of a required slash command.
 It requests reliable continuation of the current source-issue workflow on the
-existing self-hosted runner,
-planning with GPT-5.6 Sol High, implementation with GPT-5.6 Luna Max, and a
-review pull request. Issues may contain ideas, requirements, or decisions.
+existing self-hosted runner, planning and implementation with the approved
+phase-specific model profiles, and a review pull request. Issues may contain
+ideas, requirements, or decisions.
 The source issue must explain how the final change came about.
 
 Historical issue #17 runs showed that an absolute 20-minute model-turn deadline
@@ -51,6 +51,10 @@ delivery run, budget boundary, and continuation prompt.
 - Continue multi-turn implementation without requiring repeated human comments.
 - Keep credentials and publication outside model-generated commands.
 - Preserve human review, merge, and issue-closing authority.
+- Keep the Actions runner's Codex CLI version, artifact URL, and integrity digest
+  centrally pinned and reviewable.
+- Promote compatible stable CLI releases without floating versions or spending
+  model quota during an ordinary release check.
 - Continue only the exact source issue and persistent Codex session selected by
   a validated semantic routing proposal from a trusted repository writer.
 - Interpret natural language in its full issue context without letting fixed
@@ -67,12 +71,188 @@ delivery run, budget boundary, and continuation prompt.
   remove turn-level failure detection.
 - For issue and comment routing, use contextual model reasoning with a closed
   deterministic validator, keyword matching, or unconditional continuation.
+- For runner CLI maintenance, keep a manual pin, install the moving latest
+  release per job, or check stable releases and promote them through a verified
+  review pull request.
 
 ## Decision Outcome
 
 Chosen option: **A small Node.js controller using `codex app-server`**, because
 its protocol exposes actual collaboration modes, per-turn model settings,
 clarification requests, interruption, and subscription quota telemetry.
+
+### Quota-aware model profiles and CLI maintenance (Issue #70)
+
+Automatic delivery uses GPT-6 Luna Low for routing; GPT-6 Luna Medium for
+refinement, discovery, research, requirements, and coordination; GPT-6 Sol High
+for planning, architecture decisions, and semantic review; and GPT-6 Luna Max
+for implementation and its first verification pass. The runner checks the
+exact model and effort combinations advertised by its Codex `model/list` before
+any model turn. Missing support stops preflight; model fallback is disabled.
+GPT-6 Astra is not selected by automatic profiles.
+
+The assignment is a usage-reduction hypothesis, not a guarantee: the other
+Codex clients share the allowance, and the model catalog does not establish
+quota weighting. Luna Low and Luna Medium reduce reasoning effort for routing
+and refinement; Sol High and Luna Max reserve higher-effort profiles for
+architecture, semantic review, and implementation. Inspect actual quota
+evidence and semantic findings from the first completed runs. The 98%
+finalization reserve, subscription-only execution, and no-credit,
+no-account-switch, and no-fallback rules remain unchanged.
+
+DeepSWE provides context for long-horizon software-engineering work, but its
+published leaderboard does not report GPT-6 Luna or GPT-6 Sol results. Its
+benchmark cost per trial also does not measure the shared Codex subscription
+allowance. Use it as a role-allocation reference only; do not treat it as
+evidence that these profiles will reduce allowance use. See the
+[DeepSWE leaderboard](https://deepswe.datacurve.ai/) and
+[methodology](https://deepswe.datacurve.ai/blog/deepswe).
+
+Keep the Actions runner's Codex CLI centrally pinned in
+`scripts/setup-runner-codex.mjs`. The pin includes the official Linux x64
+release URL and published archive SHA-256. It also pins a package-tree SHA-256
+computed from the extracted, archive-verified release. Every Actions workflow
+rehashes the installed package tree before using a warm cache, and the cold
+install verifies the extracted files against the same pin. A weekly release
+check computes the next package-tree digest only after verifying the stable
+release archive. It may promote a newer stable release only by
+opening a release-specific Task issue and an issue-linked review pull request.
+The issue records that release's exact version, archive digest, and
+package-tree digest; the pull request
+closes it when merged and references issue #70 as the ongoing maintenance
+policy. This keeps each upgrade traceable without requiring the broader issue
+to remain open forever. Reusing an open release Task requires its native
+`Task` type, exact official release URL, archive SHA-256, and package-tree
+SHA-256 to match the verified candidate; a matching title or version marker
+alone is insufficient. The
+updater reuses an existing open issue or pull request for the same release
+and stops if it finds duplicates or an unresolved
+update for another release. A closed, unmerged update PR blocks later releases
+while its linked release Task remains open or cannot be verified. Closing that
+Task resolves the candidate: the updater does not recreate the same rejected
+version, while a later stable release can still be evaluated. Reuse of an
+open PR requires its registered App author, exact title, release marker,
+issue-linked branch and source line. The PR's official release URL, archive
+SHA-256, and package-tree SHA-256 must match both the newly verified candidate
+and its linked native `Task`. After exact-head checks finish, the updater
+refetches and verifies that exact PR and Task immediately before runner smoke.
+It repeats that verification after smoke and immediately before Harness
+dispatch. A branch-pattern match alone never permits runner smoke.
+The updater paginates the repository pull-request list and exact-head check-run
+evidence. It also paginates all matching open release Tasks before creating a
+new source issue. The Search API reports incomplete searches and limits a
+query to 1,000 results; the updater stops without creating a Task when the
+search is incomplete, inconsistent across pages, short of its reported total,
+or beyond that limit. It stops without dispatching runner smoke or Harness
+when pull-request or check-run evidence is incomplete or exceeds the supported
+page bound.
+
+Before reusing or creating a release source issue, the updater verifies its
+organization-native issue type through GitHub GraphQL and requires `Task`.
+The issue title and release marker are supporting evidence, not substitutes
+for the native type. The updater classifier applies the same check before it
+may suppress automatic Harness review. A missing or mismatched type fails
+closed: the candidate is not treated as a verified release Task.
+
+The updater verifies the official release asset digest. It creates the source
+Task and pushes its issue-linked branch with `GITHUB_TOKEN`, which cannot
+create a pull request while the repository's combined create-and-approve
+setting is disabled. It then mints a short-lived GitHub App installation token
+restricted to this repository with `contents:read` and
+`pull_requests:write`; that token is used only to open the pull request. The
+normal body, delivery-quality, and ADR-quality pull-request workflows then
+start from the App-created pull-request event. The updater does not change the
+repository Actions setting. It explicitly dispatches the no-generation runner
+smoke with `GITHUB_TOKEN` only after the exact-head body, delivery-quality,
+portability, and applicable ADR checks pass. It dispatches Harness only after
+that smoke passes, and skips both runner dispatches if a deterministic check
+fails.
+The Harness workflow skips its automatic pull-request event only after a
+GitHub-hosted classifier checks trusted base-revision code and verifies that an
+internal PR from the registered updater App has a `main` base, issue-linked
+branch, exact Conventional Commit title, matching version marker, exact source
+issue closing line, and linked release Task title, marker, release URL, and
+repository URL for the same version. A mismatch or unavailable evidence runs
+normal Harness review; forks stay outside the self-hosted runner boundary, and
+manual review dispatch always runs. The updater captures the smoke dispatch's
+returned `workflow_run_id` and requires its exact head, event, `codex=true` run
+name, and successful conclusion before dispatching Harness. A manual retry may
+redispatch the static checks for an existing release PR.
+
+Check names alone do not establish which workflow produced a result. Before
+runner smoke or semantic review can proceed, both the updater and Harness
+resolve each required exact-head check's Actions run and job. The run must
+match the expected workflow file and commit; its job must match the required
+name, run, check-run API URL, status, and conclusion. Missing or mismatched
+producer evidence stops before runner smoke or a semantic model turn. This
+prevents an unrelated workflow with a copied check name from satisfying the
+gate.
+
+The generated pull-request description records the release and package-tree
+digests and verification sequence without claiming that a check remains
+pending. After exact-head checks finish, the updater refetches the PR and
+release Task and checks their registered identity and release details against
+the candidate immediately before runner smoke. It repeats that check after
+smoke and immediately before dispatching Harness. GitHub's pull-request checks
+page is authoritative for current check status. This
+two-token sequence preserves `GITHUB_TOKEN` event suppression for issue and
+branch creation while using the App token only for the action that needs
+ordinary pull-request events.
+
+The candidate runner checks ChatGPT authentication, actual Plan mode, sandbox
+isolation, quota, and all configured model-effort pairs advertised by that
+account. Any missing or incomplete capability stops before a model turn. The
+updater waits for the no-generation smoke to pass before dispatching the
+Harness semantic review. The Harness workflow repeats the no-generation
+account, model, Plan, quota, and sandbox checks itself before starting its
+review turn. The Harness workflow also runs deterministic checks first and
+skips semantic model execution when those checks find an objective violation.
+Its evidence bundle includes the live pull-request description, exact-head
+non-Harness check runs, the runner's model, account, Plan, and sandbox
+preflight results, and the safe issue-state summary. It excludes its own
+`review` check run so the review cannot use its in-progress or previous result
+as evidence about itself.
+
+Quota snapshots are captured before and after a model turn for the Actions
+summary, but their counters and capture times are not sent in the semantic
+evidence bundle. Each report records returned windows separately by primary
+or secondary slot, duration, usage, and reset time, plus safe booleans for the
+threshold, rate-limit, and spend-control signals. These observations help
+identify which limit stopped work; they still observe a shared allowance and
+do not attribute usage to one model turn. A failed preflight writes those
+per-window observations and guard signals to the Actions job summary and
+runner log before any model turn starts.
+
+The Harness persists its Codex app-server thread and a versioned manifest in
+`/var/lib/github-runner/.codex/harness-reviews`, outside the checkout and
+Actions artifacts. The directory and files are restricted to the runner
+service account. The manifest records the review identity, exact semantic
+evidence fingerprint, thread UUID, status, and completed structured result.
+It saves the UUID before the first model turn. An interrupted review resumes
+that thread with a short continuation prompt. A completed result is reused
+without a model turn only when the current semantic evidence fingerprint
+matches exactly and the expected exact-head checks have completed. A changed
+pull-request revision, Architecture Authority pin, CLI version, model profile,
+or prompt version starts a new review. A later Harness run prunes session
+material whose directory has not been updated for 30 days. This is durable
+across jobs on the single persistent self-hosted runner;
+replacing that runner requires a separately approved shared-store design.
+
+The weekly check performs no Codex model turn when no newer stable release
+exists. Jobs do not follow a moving `latest` release or update the CLI in
+place, and update pull requests are never auto-merged. Retain the previous pin
+for rollback.
+
+The updater uses `GITHUB_TOKEN` for the release-specific Task issue, branch
+push, and Actions dispatch. Since that token cannot create a pull request
+without the combined repository setting that also permits approvals, the
+updater mints a short-lived repository-scoped GitHub App token with
+`contents:read` and `pull_requests:write` only for `gh pr create`. The workflow
+does not change the Actions setting, call an approval or merge operation, or
+give its App token to Codex. The process remains provisional until merged
+into `main` and the runner preflight passes for the candidate release.
+
+Amendment source: [issue #70](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70).
 
 An issue or newly created comment can enter semantic routing only after
 deterministic repository, issue, event, bot, and repository-writer checks pass.
@@ -245,12 +425,14 @@ Amendment source: [issue #32](https://github.com/agentic-delivery-lab/agentic-de
 
 - [Codex app-server](https://learn.chatgpt.com/docs/app-server)
 - [Codex permissions](https://learn.chatgpt.com/docs/permissions)
-- [Codex managed network proxy](https://github.com/openai/codex/blob/rust-v0.153.4/codex-rs/network-proxy/README.md)
+- [Codex managed network proxy](https://github.com/openai/codex/blob/rust-v0.159.3/codex-rs/network-proxy/README.md)
 - [Codex subscription allowance](https://learn.chatgpt.com/docs/pricing)
 - [GitHub workflow triggers](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
 - [GitHub branch protection availability](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
 - [Issue #18: Restore exact Codex issue continuation](https://github.com/agentic-delivery-lab/agentic-delivery/issues/18)
 - [Issue #21: Replace the fixed Codex turn deadline with quota-led execution](https://github.com/agentic-delivery-lab/agentic-delivery/issues/21)
+- [Issue #70: Reduce Codex allowance use and maintain runner CLI](https://github.com/agentic-delivery-lab/agentic-delivery/issues/70)
+- [PR #71: Assign role-specific GPT-6 profiles and maintain the runner CLI pin](https://github.com/agentic-delivery-lab/agentic-delivery/pull/71)
 - [Issue #17: Introduce an issue-driven intake and routing harness](https://github.com/agentic-delivery-lab/agentic-delivery/issues/17)
 - [PR #20: Make Codex issue comments actionable](https://github.com/agentic-delivery-lab/agentic-delivery/pull/20)
 - [Operation and continuation](../delivery/codex-workflow.md)

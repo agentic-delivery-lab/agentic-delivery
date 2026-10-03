@@ -1,17 +1,11 @@
-// agentic-primitive: {"id":"harness-architecture-review","kind":"validator","enforcement":"deterministic","adrs":["ADR-0009","ADR-0011","ADR-0013","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
+// agentic-primitive: {"id":"harness-architecture-review","kind":"validator","enforcement":"deterministic","adrs":["ADR-0011","ADR-0013"],"domains":["agentic-delivery-governance"]}
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { parseRepositoryYaml } from './yaml.mjs';
-import {
-  QUOTA_REASON_LABELS,
-  QUOTA_STOP_PHASE_LABELS,
-  QUOTA_STOP_PHASE,
-  QUOTA_TRIGGER_LABELS,
-  supportsQuotaDiagnosticsSchemaVersion,
-} from './quota-diagnostics.mjs';
+import { QUOTA_REASON_LABELS, QUOTA_STOP_PHASE_LABELS, QUOTA_STOP_PHASE, QUOTA_TRIGGER_LABELS, supportsQuotaDiagnosticsSchemaVersion } from './quota-diagnostics.mjs';
 import { buildTraceability, collectAdrsFromSources, collectPrimitivesFromSources, PRIMITIVE_MARKER } from './adr-traceability.mjs';
 import { validateArchitecturePin } from '../validate-architecture-pin.mjs';
 
@@ -22,6 +16,8 @@ const TEXT_EXTENSIONS = new Set(['.md', '.mjs', '.js', '.yml', '.yaml', '.json',
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHA = /^[0-9a-f]{40}$/i;
 const URL = /^https?:\/\/\S+$/;
+
+
 const SENSITIVE_FIELD_NAMES = '(?:access[ _-]?token|refresh[ _-]?token|id[ _-]?token|auth[ _-]?token|x[ _-]?(?:api|auth)[ _-]?key|api[ _-]?key|client[ _-]?secret|app[ _-]?secret|secret[ _-]?key|secret|password|passphrase|credential(?:s)?|authorization|proxy[ _-]?authorization|cookie|set[ _-]?cookie|private[ _-]?key|signing[ _-]?key|access[ _-]?key|secret[ _-]?access[ _-]?key|session[ _-]?(?:key|token)|token)';
 const SENSITIVE_YAML_BLOCK = new RegExp(`(^[ \\t]*)(["']?)(${SENSITIVE_FIELD_NAMES})\\2([ \\t]*:[ \\t]*)(?:[|>][+-]?[ \\t]*(?:#[^\\r\\n]*)?)(?:\\r?\\n(?:[ \\t]+[^\\r\\n]*(?:\\r?\\n|$))*)`, 'gim');
 const SENSITIVE_ASSIGNMENT = new RegExp(`(["']?)(${SENSITIVE_FIELD_NAMES})\\1([ \\t]*:[ \\t]*(?:\\r?\\n[ \\t]*)?|[ \\t]*=[ \\t]*)(?:\\[redacted(?: (?:private key|token|credential))?\\]|"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|[^,\\r\\n}\\]]+)`, 'gi');
@@ -101,6 +97,7 @@ function safeSemanticMarkdown(value) {
     .replace(/>/g, '&gt;')
     .replace(/([\\`*_{}\[\]()#+.!|\-])/g, '\\$1');
 }
+
 
 function childEnvironment() {
   const { GH_TOKEN: _ghToken, GITHUB_TOKEN: _githubToken, PUBLISH_TOKEN: _publishToken,
@@ -440,7 +437,7 @@ export async function deterministicReview({
   checks.push(missingRegisters.length
     ? check('domain-register-structure', 'fail', `A mapped bounded context is missing its register: ${missingRegisters.join(', ')}.`, ['docs/domain/ubiquitous-language.yml', 'docs/architecture/harness-review.yml'])
     : check('domain-register-structure', 'pass', 'Every mapped bounded context has a register in the reviewed revision.', ['docs/domain/ubiquitous-language.yml', 'docs/architecture/harness-review.yml']));
-  checks.push(check('runtime-context-minimal', 'pass', 'Traceability metadata is kept separate from runtime context selection; semantic review receives only affected decision evidence.', ['docs/architecture/adr-primitive-index.json', 'scripts/lib/architecture-review-agent.mjs']));
+  checks.push(check('runtime-context-minimal', 'pass', 'Traceability metadata is kept separate from runtime context selection; semantic review receives affected decision evidence plus the sanitized pull-request body and exact-head check snapshot.', ['docs/architecture/adr-primitive-index.json', 'scripts/lib/architecture-review-agent.mjs']));
 
   const evidence = validateEvidence(parseEvidenceMarker(pullRequest.body), { repository, issueNumber, head });
   checks.push(check('delivery-evidence', evidence.status, evidence.message, evidence.evidence));
@@ -451,7 +448,7 @@ export async function deterministicReview({
       checks.push(check('review-workflow-boundary', 'fail', 'The architecture-review workflow was removed from the reviewed revision.', [reviewWorkflow]));
     } else {
       const workflow = await gitShow(repositoryRoot, head, reviewWorkflow);
-      const forbiddenPermissions = /(?:contents|issues|pull-requests|actions):\s*write/i.test(workflow);
+      const forbiddenPermissions = /(?:contents|issues|pull-requests|actions|checks):\s*write/i.test(workflow);
       const mutationCommand = /(?:gh\s+(?:issue|pr)\s+(?:comment|close)|pulls\/.*PATCH|git\s+(?:push|commit))/i.test(workflow);
       checks.push(forbiddenPermissions || mutationCommand
         ? check('review-workflow-boundary', 'fail', 'The architecture-review workflow grants write access or contains a mutation command.', [reviewWorkflow])
@@ -506,9 +503,38 @@ export function formatReviewMarkdown(review) {
   lines.push(`- Affected bounded contexts: ${review.affectedContexts.join(', ') || 'none detected'}`);
   lines.push('', '#### Deterministic checks', '');
   for (const item of review.checks) lines.push(`- **${item.status}** \`${item.id}\`: ${item.message}`);
+  if (review.semantic?.skippedReason) lines.push('', review.semantic.skippedReason);
   if (review.semantic?.status && review.semantic.status !== 'not-run') {
-    const semanticStatus = ['aligned', 'findings', 'inconclusive'].includes(review.semantic.status) ? review.semantic.status : 'inconclusive';
-    lines.push('', `#### Semantic review: ${semanticStatus}`, '', safeSemanticMarkdown(review.semantic.summary ?? 'No semantic summary was returned.'));
+    lines.push('', `#### Semantic review: ${review.semantic.status}`, '', safeSemanticMarkdown(review.semantic.summary ?? 'No semantic summary was returned.'));
+    const session = review.semantic.reviewSession;
+    if (session?.disposition === 'cached') {
+      const runReference = session.sourceRunId ? ` from Actions run ${session.sourceRunId}` : '';
+      lines.push('', `Exact semantic evidence was cached${runReference}; this workflow started no semantic model turn.`);
+    } else if (session?.disposition === 'resumed') {
+      lines.push('', 'The saved Codex review session was resumed with a focused continuation prompt.');
+    } else if (session?.disposition === 'awaiting-checks') {
+      lines.push('', 'Some exact-head checks are still pending or missing. Rerun Harness after they finish to continue this saved review session.');
+    } else if (session?.disposition === 'retryable') {
+      lines.push('', 'The result was not cached. Rerun Harness to continue this saved review session.');
+    }
+    const quota = review.semantic.quotaTelemetry;
+    if (quota) {
+      const describe = (snapshot) => snapshot?.status === 'available'
+        ? `${snapshot.highestWindowUsedPercent}%`
+        : snapshot?.status ?? 'unavailable';
+      const observationSource = session?.disposition === 'cached' ? 'the original semantic turn' : 'this semantic turn';
+      lines.push('', `Quota observation for ${quota.model ?? 'the review model'} (${quota.effort ?? 'unspecified'} effort) from ${observationSource}: highest window use was ${describe(quota.before)} before and ${describe(quota.after)} after. Other Codex clients share this allowance, so the snapshots do not attribute usage to this turn alone.`);
+      const describeWindows = (snapshot) => (snapshot?.windows ?? []).map((window) => (
+        `bucket ${window.bucketIndex} ${window.slot} ${window.durationMinutes}m ${window.usedPercent}%`
+      )).join('; ') || 'window-level usage unavailable';
+      lines.push('', `Rate-limit windows before: ${describeWindows(quota.before)}. After: ${describeWindows(quota.after)}.`);
+      const describeSignals = (snapshot) => {
+        const signals = snapshot?.guardSignals;
+        if (!signals) return 'unavailable';
+        return `window threshold ${signals.windowThresholdReached ?? 'unknown'}, rate limit ${signals.rateLimitReached ?? 'unknown'}, spend control ${signals.spendControlReached ?? 'unknown'}`;
+      };
+      lines.push(`Quota guard signals before: ${describeSignals(quota.before)}. After: ${describeSignals(quota.after)}.`);
+    }
     for (const finding of review.semantic.findings ?? []) {
       const severity = ['concern', 'advisory'].includes(finding.severity) ? finding.severity : 'advisory';
       const evidence = Array.isArray(finding.evidence) ? finding.evidence.slice(0, 20).map(safeSemanticMarkdown).join(', ') : '';
@@ -517,8 +543,8 @@ export function formatReviewMarkdown(review) {
     if (review.semantic.evidenceGaps?.length) {
       lines.push('', '**Evidence gaps**', '', ...review.semantic.evidenceGaps.slice(0, 50).map((gap) => `- ${safeSemanticMarkdown(gap)}`));
     }
-    const quota = formatQuotaDiagnostics(review.semantic.quotaDiagnostics);
-    if (quota.length) lines.push('', ...quota);
+    const quotaDetails = formatQuotaDiagnostics(review.semantic.quotaDiagnostics);
+    if (quotaDetails.length) lines.push('', ...quotaDetails);
   }
   return `${lines.join('\n')}\n`;
 }
@@ -577,5 +603,6 @@ function formatQuotaDiagnostics(value) {
   }
   return lines;
 }
+
 
 export { EVIDENCE_MARKER };

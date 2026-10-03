@@ -77,17 +77,25 @@ test('pull request body workflow always reports a trusted read-only check', asyn
   assert.deepEqual(workflow.on.pull_request_target.types, [
     'opened', 'edited', 'reopened', 'synchronize', 'ready_for_review',
   ]);
-  assert.deepEqual(workflow.permissions, { contents: 'read' });
+  assert.deepEqual(workflow.permissions, { contents: 'read', 'pull-requests': 'read' });
+  assert.deepEqual(workflow.on.workflow_dispatch.inputs.pull_request_number, {
+    description: 'Open pull request whose body should be validated',
+    required: true,
+    type: 'number',
+  });
   const job = workflow.jobs.validate;
   assert.equal(job.name, 'Validate pull request body');
   assert.equal(job['runs-on'], 'ubuntu-latest');
   assert.ok(!job.if);
   const checkout = job.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
-  assert.equal(checkout.with.ref, '${{ github.event.pull_request.base.sha }}');
+  assert.equal(checkout.with.ref, "${{ github.event_name == 'workflow_dispatch' && 'main' || github.event.pull_request.base.sha }}");
   assert.equal(checkout.with['persist-credentials'], false);
+  const resolve = job.steps.find((step) => step.run === 'node scripts/resolve-pull-request-context.mjs');
+  assert.equal(resolve.if, "github.event_name == 'workflow_dispatch'");
+  assert.equal(resolve.env.PULL_REQUEST_REQUIRE_CHECKOUT_MATCH, 'false');
   const validate = job.steps.find((step) => step.run === 'node scripts/validate-pull-request-body.mjs');
-  assert.equal(validate.env.PR_AUTHOR, '${{ github.event.pull_request.user.login }}');
-  assert.equal(validate.env.PR_BODY, '${{ github.event.pull_request.body }}');
+  assert.equal(validate.env.PR_AUTHOR, "${{ github.event_name == 'workflow_dispatch' && steps.pull-request.outputs.author || github.event.pull_request.user.login }}");
+  assert.equal(validate.env.PR_BODY, "${{ github.event_name == 'workflow_dispatch' && steps.pull-request.outputs.body || github.event.pull_request.body }}");
   assert.ok(!source.includes('secrets.'));
   assert.ok(!source.includes('github.event.pull_request.head'));
 });

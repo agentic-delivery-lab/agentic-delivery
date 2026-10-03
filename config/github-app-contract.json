@@ -1,6 +1,7 @@
 {
-  "$schema": "../schemas/github-app-contract.v1.schema.json",
-  "schemaVersion": 1,
+  "$schema": "../schemas/github-app-contract.v2.schema.json",
+  "schemaVersion": 2,
+  "contractVersion": "2.0.0",
   "organization": {
     "login": "agentic-delivery-lab",
     "id": "327861320"
@@ -24,6 +25,8 @@
     "metadata": "read",
     "contents": "write",
     "issues": "write",
+    "issue_fields": "read",
+    "issue_types": "read",
     "pull_requests": "write",
     "workflows": "none"
   },
@@ -36,7 +39,52 @@
   "tokenScopes": {
     "origin": {
       "repositoryIds": "origin-event-repository",
-      "permissions": "read-minimum"
+      "profiles": {
+        "invocationPreflight": {
+          "repositoryPermissions": {
+            "contents": "read",
+            "issues": "read",
+            "pull_requests": "read",
+            "metadata": "read"
+          },
+          "organizationPermissions": {}
+        },
+        "readOnlyIntake": {
+          "repositoryPermissions": {
+            "contents": "read",
+            "issues": "read",
+            "pull_requests": "read",
+            "metadata": "read"
+          },
+          "organizationPermissions": {
+            "issue_fields": "read",
+            "issue_types": "read"
+          }
+        },
+        "activeIntake": {
+          "repositoryPermissions": {
+            "contents": "read",
+            "issues": "write",
+            "pull_requests": "read",
+            "metadata": "read"
+          },
+          "organizationPermissions": {
+            "issue_fields": "read",
+            "issue_types": "read"
+          }
+        },
+        "delivery": {
+          "repositoryPermissions": {
+            "contents": "write",
+            "issues": "write",
+            "pull_requests": "write"
+          },
+          "organizationPermissions": {
+            "issue_fields": "read",
+            "issue_types": "read"
+          }
+        }
+      }
     },
     "controller": {
       "repositoryIds": "controller-repository",

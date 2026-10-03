@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- agentic-primitive: {"id":"curated-changelog","kind":"instruction","enforcement":"instructional","adrs":["ADR-0006"],"domains":["agentic-delivery-governance"]} -->
+<!-- agentic-primitive: {"id":"curated-changelog","kind":"instruction","enforcement":"instructional","adrs":["ADR-0006","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]} -->
 
 All notable changes to this repository are documented here.
 
@@ -10,6 +10,49 @@ and releases use [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) pins the central intake bootstrap and manual recovery paths to the controller release `bootstrapCommit`; normal and recovery execution no longer fall back to a moving `main` ref.
+- The controller release advances to `0.2.0-draft.39` at
+  `53c76a68cf1a7cab2141034bd477d8cb761bf4c6`; the central participant moves
+  to that immutable pin while draft38 and draft37 remain supported for
+  rollback. The bootstrap uses commit
+  `c83fb414a0b5637bf8b8ba3d3539a7e669958512`, which contains the draft39
+  participant registry.
+- [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
+  now keeps reusable delivery policy at the workflow boundary:
+  callers cannot supply participant mode, controller pin, or read-only state;
+  a hosted resolver checks the main-branch caller and source identity, then
+  derives those values from the fixed participant-registry bootstrap.
+- The GitHub App contract advances to version `2.0.0` with a version-2 schema;
+  the draft40 controller release pins that contract version.
+- The controller release advances to `0.2.0-draft.40` at
+  `27eafd8003c4657742205e77739b4ee261482db4`; the central participant moves
+  to this immutable pin while draft39 and earlier releases remain available
+  for rollback.
+- Intake and manual recovery now use bootstrap commit
+  `b87ab48ab616e02a1cfba4b6bce57769a523c739`, which contains the draft40
+  central participant pin.
+- The controller release advances to `0.2.0-draft.41` at
+  `4f8bacfef5bcd375459756d2a39ab77b9b9be95c`; the central participant moves
+  to that pin while draft40 and earlier remain available for rollback.
+- Intake and delivery now use bootstrap commit
+  `286db47f1686becbe91e6339d90e7033015e21fa`, which contains the draft41
+  central participant pin.
+- The controller release advances to `0.2.0-draft.42` at
+  `b17a2077b645e7eb861aeb75558d77fb1c46011c`; the central participant
+  moves to this pin while draft41 and earlier remain available for rollback.
+- Intake and delivery now use bootstrap commit
+  `76ff0ff7bd35479251b9bfdf4bf420251d5738d5`, which contains the draft42
+  central participant pin.
+- The hosted intake gate now validates caller repository identity against the
+  trusted App contract and participant registry before actor authorization or
+  self-hosted classification; accepted and rejected event/workflow pairs have
+  deterministic behavior coverage.
+- The controller release advances to `0.2.0-draft.43` at
+  `c4fcfdf58379af5a0df500af7e005388af93dfb9`; the central participant moves to
+  this immutable pin while draft42 and earlier releases remain available for
+  rollback.
+- Intake and delivery now use bootstrap commit
+  `a8f11cc70fbd16e4f31498fb68bf7a9a24841cac`, which contains the draft43
+  central participant pin and caller provenance validator.
 - Private agent publication validation can now reproduce each projection from
   the exact Primitive source commit named by its provenance lock; the release
   chain checks the same byte-for-byte relationship.
@@ -37,27 +80,112 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
-- Harness quota stops now report a sanitized reason, stop phase, affected quota
-  windows, server block flags, and a calculated retry time when the telemetry
-  supports one. The diagnostics use SemVer and retain known quota details when
-  a same-major report contains a reason code this consumer does not recognize.
-  The assembled model evidence and structured review result redact known
-  credentials; the Actions summary renders reviewer text as escaped plain
-  text. Semantic reruns fetch the current pull-request description and linked
-  source-issue labels instead of relying on stale or incomplete event data.
-  The evidence marker is extracted from the full current body even when the
-  displayed description is truncated at 10,000 characters. Compound JSON
-  credentials are redacted, and active server blocks suppress retry times.
-  Simultaneous cause categories remain visible; bucket details have fixed
-  array limits and an explicit truncation flag. Invalid finite window metrics
-  are normalized before projection, and tests validate emitted records against
-  the 2020-12 schema. The report uses `Schema version` for its internal format
-  marker and labels the projection `review quota evidence`,
-  distinct from the controller's internal `quota diagnostics` record. The
-  internal Harness schema is not a participant contract. The operator guide
-  explains how to rerun a fresh review on the same pull-request head after the
-  quota windows reset.
+- [Issue #68](https://github.com/agentic-delivery-lab/agentic-delivery/issues/68)
+  records sanitized Harness quota diagnostics with stop phase, trigger causes,
+  bounded quota-window evidence, and retry eligibility only when supported by
+  telemetry. The internal review schema is validated but remains outside the
+  participant contract; review input excludes quota counters, credentials are
+  redacted, and reruns refresh the current pull request and source issue.
+- [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
+  advances `bootstrapCommit` to merged controller snapshot
+  `e0b2f0719e00ac49aaab305ea10065c5f5197cb1`. Issue intake and delivery now
+  mask organization field and option IDs from the trusted bootstrap, so
+  supported participant pins do not need to carry the masker.
+- The controller release manifest and central participant registry now target
+  `0.2.0-draft.45` at
+  `eed2505edaf4e1f839030697973dcaaf0c1b1bea`, retaining draft44 for rollback.
+- Controller release validation checks that the primary release and bootstrap
+  pin contain the issue-field binding masker used by shared intake and delivery.
+- The controller release advances to `0.2.0-draft.44` at
+  `331c433345519f00ecc15be0bd843a45651147f2`; the central participant
+  moves to that immutable code pin while draft43 and earlier remain
+  available for rollback.
+- Read-only issue intake now requires the scoped `readOnlyIntake` App token and
+  fails closed if its credentials are unavailable. The classify job's workflow
+  token has repository read permissions only.
+- Active intake and delivery now require origin-scoped GitHub App credentials
+  in Actions and fail closed instead of falling back to publication or workflow
+  tokens.
+- ADR-0018 and the domain register distinguish participant contract versions
+  from controller-wide interfaces, including the GitHub App contract pinned by
+  the controller release manifest; the amendment records the alternatives and
+  rationale.
+- Origin-scoped App tokens now use explicit invocation-preflight, read-only
+  intake, active intake, and delivery permission profiles. The versioned
+  contract is validated against the code-defined permission profiles, and
+  token requests use the selected profile's map. Origin repository IDs still
+  narrow repository resources, while the approved issue-field and issue type
+  reads remain organization-wide.
+- The release-chain validator now requires both issue intake and Codex delivery
+  to check out the bootstrap commit named by the controller release manifest.
+- Harness review now includes the sanitized pull-request body and latest
+  check-run status for the reviewed head; editing a pull request reruns the
+  read-only review after its verification evidence is updated.
+- Direct intake resolves the participant mode from the pinned registry by
+  repository ID and verifies the expected repository name. A manual
+  `force_read_only` override applies only to that run and cannot change or
+  promote the registered participant mode; delivery requires an active
+  participant and a non-read-only run.
+- Direct manual intake and delivery recovery read their controller pin and
+  participant mode from the fixed bootstrap registry. They default to
+  read-only; the self-hosted delivery job receives write permissions only for
+  an active, explicitly non-read-only run.
 
+- Actions now use Codex CLI 0.159.3 pinned to the published Linux asset
+  SHA-256 and its extracted package-tree digest; every runner setup verifies the
+  cached or newly extracted package contents. A weekly updater verifies
+  candidate assets, records both digests, creates a release-specific Task
+  issue, and opens review PRs with a repository-scoped App token so normal
+  PR checks start automatically. The updater waits for exact-head body,
+  quality, portability, and applicable ADR-quality checks before dispatching
+  the no-generation runner smoke, then starts Harness only after that smoke
+  passes. It refetches and verifies the PR and Task immediately before smoke
+  and again before Harness dispatch. It validates the exact smoke workflow run
+  ID, head SHA, dispatch event, and `codex=true` run name. A base-revision classifier verifies that
+  only a fully matching updater PR and source Task, including the Task's native
+  issue type, can delay automatic Harness review; mismatches and unavailable
+  evidence run normal review. The updater and Harness verify that required
+  exact-head checks came from their expected workflow file and matching job,
+  rather than trusting the check name alone. The updater paginates the
+  pull-request list and exact-head check-run evidence and stops on incomplete
+  or mismatched provenance. It paginates the release Task
+  search and refuses to create an issue when search results are incomplete or
+  exceed the GitHub Search API limit. Reusing an open updater PR or dispatching
+  its runner smoke requires refetching the exact PR and verifying its
+  registered App author, branch, title, marker, source line, release URL, and
+  archive and package-tree digests against the verified candidate and linked
+  native Task. The GitHub-hosted classifier applies the same release identity
+  and digest match before delaying automatic
+  Harness review; a copied marker or same-looking branch cannot suppress it.
+  A closed update PR no longer blocks later releases after its linked Task
+  issue is resolved.
+- Codex delivery and Harness review now use phase-specific GPT-6 Luna
+  Low/Medium/Max and GPT-6 Sol High profiles, with runner-catalog preflight,
+  complete matching-entry capability checks, safe reporting for unsupported
+  profile pairs, and no model fallback.
+- Harness review excludes its own check run only after verifying its exact
+  workflow path, keeps quota counters outside the semantic model input, limits
+  primitive evidence to affected ADR metadata,
+  waits for exact-head deterministic checks and their verified workflow
+  provenance, and skips a model turn when a required check fails, stays
+  incomplete, or comes from another workflow. It resumes interrupted Codex
+  threads only when the full evidence fingerprint is unchanged; changed
+  evidence starts in an isolated thread directory. Expired review state,
+  including the current candidate directory, is pruned before review. It reuses
+  a completed result for an exact evidence fingerprint without a new model
+  turn. Identical check reruns no longer
+  invalidate that fingerprint only because run IDs, links, or timestamps
+  changed. Transient preflight and quota results do not invalidate that
+  fingerprint. Protected runner-local session data is
+  pruned after 30 days. A failed preflight still writes sanitized per-window
+  usage and guard signals to the Actions summary and runner log. Deterministic
+  quality and ADR checks run on ephemeral hosted runners so they can finish
+  while Harness waits on the single persistent Codex runner.
+- Semantic Harness review now includes all changed paths with five lines of
+  context. Diffs above the 500,000-character safety limit stop before a model
+  turn and report an explicit evidence gap instead of reviewing a truncation.
+  Automatic updater suppression is restricted to the registered delivery App
+  bot, and the semantic bundle omits its expected pre-turn result placeholder.
 - Issue intake, delivery, and metadata migration now verify that the live
   Lifecycle Stage and Delivery Readiness fields are pinned to every enabled
   issue type and to issues without a type before authorizing field changes.
@@ -344,6 +472,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) verifies migrated issue fields and option IDs against bound live IDs and requires both values to be present, so legacy-label fallbacks cannot mask failed readback.
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) makes both issue-intake jobs resolve pnpm from the nested trusted checkout manifest, so issue events can reach actor authorization and classification.
 - Issue intake and delivery now read the non-sensitive GitHub App and
   installation IDs from Actions variables while keeping the App private key
   in Actions secrets.
@@ -389,6 +519,7 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Security
 
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) stores organization-specific issue-field and option IDs in an Actions repository secret, then masks each runtime ID separately in every consuming job before use.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) fails closed when the central GitHub App installation ID is absent instead of relying on a stale deployment default; tests must provide the verified installation explicitly.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) makes unscoped GitHub App installation tokens an explicit non-production test opt-in; every production token path must provide the originating or controller repository ID.
 - Subscription-only delivery pauses when credit spillover is possible or credit telemetry is unavailable, in addition to the 98-percent usage boundary.

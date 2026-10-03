@@ -4,8 +4,10 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { issueMetadata } from '../../scripts/lib/issue-metadata.mjs';
+import { bindIssueMetadataConfig } from '../../scripts/lib/issue-field-api.mjs';
 import { applyIssueMetadataMigration, organizationMetadataManifest, planIssueMetadataMigration } from '../../scripts/lib/issue-metadata-migration.mjs';
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
+import { runMigration } from '../../scripts/migrate-issue-metadata.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const config = parseRepositoryYaml(await readFile(path.join(root, 'config/issue-metadata.yml'), 'utf8'), 'issue metadata');
@@ -35,6 +37,57 @@ function liveBindings() {
       options: Object.fromEntries(config.fields[key].options.map(({ id }) => [id, `live-${id}`])),
     }])),
   };
+}
+
+async function assertMigrationReadbackRejected({ issueNumber, transformObservedFields }) {
+  const issue = { id: `I_${issueNumber}`, number: issueNumber, state: 'OPEN', title: 'Disposable', body: '', issueType: null, parent: null, subIssues: { nodes: [] } };
+  const observedFields = [];
+  const restCalls = [];
+  let fieldMutationCalls = 0;
+  const graphql = async (query, variables) => {
+    if (query.includes('setIssueFieldValue')) {
+      fieldMutationCalls += 1;
+      const writtenValues = variables.input.issueFields.map((input) => {
+        const field = liveCatalog().find((candidate) => candidate.id === input.fieldId);
+        const option = field.options.find((candidate) => candidate.id === input.singleSelectOptionId);
+        return {
+          id: `value-${field.id}`,
+          name: option.name,
+          value: option.name,
+          optionId: option.id,
+          field: { id: field.id, name: field.name, dataType: field.dataType },
+        };
+      });
+      observedFields.push(...transformObservedFields(writtenValues));
+      return { setIssueFieldValue: { issue: { id: issue.id } } };
+    }
+    return {
+      repository: { issue: { ...issue, issueFieldValues: { nodes: observedFields } } },
+      organization: {
+        issueTypes: { nodes: liveIssueTypes() },
+        issueFields: { nodes: liveCatalog() },
+        pinnedIssueFields: { nodes: liveCatalog() },
+      },
+    };
+  };
+
+  await assert.rejects(() => runMigration({
+    env: {
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      GH_TOKEN: 'test-token',
+      ISSUE_FIELD_BINDINGS_JSON: JSON.stringify(liveBindings()),
+    },
+    argv: ['node', 'scripts/migrate-issue-metadata.mjs', '--apply', '--issue', String(issue.number)],
+    root,
+    fetchImpl: async (url, init = {}) => {
+      restCalls.push({ url: String(url), method: init.method ?? 'GET' });
+      return { ok: true, status: 200, json: async () => ({ ...issue, state: 'open', labels: [{ name: 'state:needs-triage' }] }) };
+    },
+    graphqlImpl: graphql,
+  }), /Issue fields were not observed after migration\./);
+
+  assert.equal(fieldMutationCalls, 1);
+  assert.ok(restCalls.every(({ url, method }) => !(method === 'PUT' && url.endsWith('/labels'))));
 }
 
 test('migration manifests preserve the four separate metadata concepts', () => {
@@ -200,3 +253,73 @@ test('migration applies provisioned fields with explicit runtime bindings', asyn
   ]);
   assert.deepEqual(calls.at(-1).labels, []);
 });
+
+test('migration verifies field writes using the bound runtime field IDs', async () => {
+  const fields = [];
+  const issue = { id: 'I_15', number: 15, state: 'OPEN', title: 'Disposable', body: '', issueType: null, parent: null, subIssues: { nodes: [] } };
+  const graphql = async (query, variables) => {
+    if (query.includes('setIssueFieldValue')) {
+      for (const input of variables.input.issueFields) {
+        const field = liveCatalog().find((candidate) => candidate.id === input.fieldId);
+        const option = field.options.find((candidate) => candidate.id === input.singleSelectOptionId);
+        fields.push({
+          id: `value-${field.id}`,
+          name: option.name,
+          value: option.name,
+          optionId: option.id,
+          field: { id: field.id, name: field.name, dataType: field.dataType },
+        });
+      }
+      return { setIssueFieldValue: { issue: { id: issue.id } } };
+    }
+    return {
+      repository: { issue: { ...issue, issueFieldValues: { nodes: fields } } },
+      organization: {
+        issueTypes: { nodes: liveIssueTypes() },
+        issueFields: { nodes: liveCatalog() },
+        pinnedIssueFields: { nodes: liveCatalog() },
+      },
+    };
+  };
+
+  const result = await runMigration({
+    env: {
+      GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      GH_TOKEN: 'test-token',
+      ISSUE_FIELD_BINDINGS_JSON: JSON.stringify(liveBindings()),
+    },
+    argv: ['node', 'scripts/migrate-issue-metadata.mjs', '--apply', '--issue', String(issue.number)],
+    root,
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ ...issue, state: 'open', labels: [] }) }),
+    graphqlImpl: graphql,
+  });
+
+  assert.equal(result.mode, 'apply');
+  assert.equal(result.result.applied, true);
+  const observed = issueMetadata({ issueFieldValues: fields }, bindIssueMetadataConfig(config, liveBindings()));
+  assert.equal(observed.lifecycleStage, 'intake');
+  assert.equal(observed.readiness, 'not-ready');
+});
+
+test('migration rejects legacy fallback values when both fields are absent', () => assertMigrationReadbackRejected({
+  issueNumber: 16,
+  transformObservedFields: () => [],
+}));
+
+test('migration rejects readback when one required field is absent', () => assertMigrationReadbackRejected({
+  issueNumber: 17,
+  transformObservedFields: (fields) => fields.filter((field) => field.field.name !== 'Lifecycle Stage'),
+}));
+
+test('migration rejects field values attached to the wrong live field IDs', () => assertMigrationReadbackRejected({
+  issueNumber: 18,
+  transformObservedFields: (fields) => fields.map((field) => ({
+    ...field,
+    field: { ...field.field, id: `wrong-${field.field.id}` },
+  })),
+}));
+
+test('migration rejects the expected field name when its live option ID is wrong', () => assertMigrationReadbackRejected({
+  issueNumber: 19,
+  transformObservedFields: (fields) => fields.map((field) => ({ ...field, optionId: `wrong-${field.optionId}` })),
+}));
