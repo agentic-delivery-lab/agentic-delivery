@@ -9,7 +9,6 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66): register issue-field masks before controller checkout cleans `trusted-intake`.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) pins the central intake bootstrap and manual recovery paths to the controller release `bootstrapCommit`; normal and recovery execution no longer fall back to a moving `main` ref.
 - The controller release advances to `0.2.0-draft.39` at
   `53c76a68cf1a7cab2141034bd477d8cb761bf4c6`; the central participant moves
@@ -473,6 +472,7 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66) registers issue-field masks before the controller checkout cleans `trusted-intake`, allowing intake to reach routing after the validated controller is checked out.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) verifies migrated issue fields and option IDs against bound live IDs and requires both values to be present, so legacy-label fallbacks cannot mask failed readback.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) makes both issue-intake jobs resolve pnpm from the nested trusted checkout manifest, so issue events can reach actor authorization and classification.
 - Issue intake and delivery now read the non-sensitive GitHub App and
