@@ -230,7 +230,8 @@ async function requestRedelivery({ deliveryId, guid, jwt, fetchImpl, store }) {
     return { requested: true };
   } catch (error) {
     if (error.status && error.status < 500 && error.status !== 408 && error.status !== 429) {
-      await store.releaseRedeliveryRequest(guid);
+      await store.markRedeliveryRejected(guid, deliveryId);
+      return { requested: false, reason: 'exhausted' };
     }
     throw error;
   }
@@ -324,8 +325,8 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
       if (!/^[1-9][0-9]*$/.test(deliveryId)) continue;
       const result = await requestRedelivery({ deliveryId, guid, jwt, fetchImpl, store: activeStore });
       if (result.requested) requested += 1;
+      else if (result.reason === 'exhausted') exhausted += 1;
       else skippedCooldown += 1;
-      if (result.reason === 'exhausted') exhausted += 1;
     }
 
     const scanHighWater = checkpointHighWater ?? highWater;

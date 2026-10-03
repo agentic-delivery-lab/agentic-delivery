@@ -135,6 +135,29 @@ test('a committed claim with a lost HTTP response stays retryable until its leas
   await store.markDispatched(key, reclaimed.leaseToken);
 });
 
+test('Neon replay adapter preserves definitive redelivery failures as exhausted records', async () => {
+  const calls = [];
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        calls.push({ statement, values });
+        return [{ delivery_guid: values[0] }];
+      },
+    },
+  });
+  const guid = '98765432-1234-4234-8234-123456789012';
+
+  await store.markRedeliveryRejected(guid, '301');
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].statement, /UPDATE public\.webhook_redelivery_requests/);
+  assert.match(calls[0].statement, /SET request_status = 'exhausted', requested_at = clock_timestamp\(\), github_delivery_id = \$2/);
+  assert.match(calls[0].statement, /WHERE delivery_guid = \$1 AND request_status = 'requesting'/);
+  assert.match(calls[0].statement, /RETURNING delivery_guid/);
+  assert.doesNotMatch(calls[0].statement, /DELETE FROM/);
+  assert.deepEqual(calls[0].values, [guid.toLowerCase(), '301']);
+});
+
 test('Neon replay receipts link a batch of webhook delivery IDs before the scan checkpoint advances', async () => {
   let call;
   const store = new NeonReplayStore({

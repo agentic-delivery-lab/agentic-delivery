@@ -612,8 +612,16 @@ export class NeonReplayStore {
     await this.#query('DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = $1', [guid.toLowerCase()]);
   }
 
-  async releaseRedeliveryRequest(guid) {
+  async markRedeliveryRejected(guid, githubDeliveryId) {
     if (typeof guid !== 'string' || !/^[0-9a-f-]{20,}$/i.test(guid)) throw new ReplayProtectionError('The delivery GUID is invalid.');
-    await this.#query('DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = $1', [guid.toLowerCase()]);
+    if (!/^[1-9][0-9]*$/.test(String(githubDeliveryId ?? ''))) throw new ReplayProtectionError('The GitHub delivery ID is invalid.');
+    const rows = await this.#query(
+      `UPDATE public.webhook_redelivery_requests
+       SET request_status = 'exhausted', requested_at = clock_timestamp(), github_delivery_id = $2
+       WHERE delivery_guid = $1 AND request_status = 'requesting'
+       RETURNING delivery_guid`,
+      [guid.toLowerCase(), String(githubDeliveryId)],
+    );
+    if (rows.length !== 1) throw storageError();
   }
 }

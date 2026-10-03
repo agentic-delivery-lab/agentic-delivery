@@ -75,7 +75,7 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
       return requestStatus === 'claimed' ? { claimed: true } : { claimed: false, status: requestStatus };
     },
     async markRedeliveryAccepted(guid, id) { this.requested.at(-1).accepted = { guid, id }; },
-    async releaseRedeliveryRequest(guid) { this.requested.at(-1).released = guid; },
+    async markRedeliveryRejected(guid, id) { this.requested.at(-1).rejected = { guid, id }; },
     async completeRedelivery(guid) { this.completed.push(guid); },
     async saveReconcilerScan(value) {
       this.scanProgress.push(value);
@@ -170,6 +170,30 @@ test('reconciler leaves its checkpoint unchanged when GitHub rate limits redeliv
   assert.deepEqual(store.advanced, []);
   assert.equal(store.requested.length, 1);
   assert.equal(store.requested[0].released, undefined);
+});
+
+test('reconciler records definitive redelivery rejection and advances its checkpoint', async () => {
+  const scanNow = Date.now();
+  const store = makeStore();
+  const fetchImpl = async (url, options) => {
+    if (options.method === 'POST') return response(404);
+    return response(200, [{
+      id: 202,
+      guid: deliveryA,
+      delivered_at: new Date(scanNow - 5_000).toISOString(),
+      status: 'FAIL',
+      installation_id: '163255060',
+    }]);
+  };
+  const res = output();
+
+  await reconcileWebhookDeliveries({ req: cronRequest(), res, env: cronEnv(), fetchImpl, store, now: () => scanNow });
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(store.requested, [{ guid: deliveryA, id: '202', rejected: { guid: deliveryA, id: '202' } }]);
+  assert.equal(store.advanced.length, 1);
+  assert.equal(JSON.parse(res.body).exhausted_redeliveries, 1);
+  assert.equal(JSON.parse(res.body).cooldown_skips, 0);
 });
 
 test('reconciler overlaps the prior checkpoint to find late delivery-history entries', async () => {

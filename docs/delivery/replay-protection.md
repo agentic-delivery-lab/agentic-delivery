@@ -105,19 +105,28 @@ already have a numeric GitHub delivery ID, so older unlinked rows cannot occupy
 the bounded batch or starve linked retries. A later scan can retry a linked
 receipt even after its original webhook delivery is older than the history
 checkpoint. The reconciler stores a timestamp and delivery ID
-checkpoint only after the full bounded scan and all accepted redelivery
-requests complete. A failed API call leaves the checkpoint unchanged, so the
+checkpoint only after the full bounded scan and after each redelivery request
+is accepted, already exhausted, or definitively rejected and recorded. An
+ambiguous or transient API failure leaves the checkpoint unchanged, so the
 next run rescans safely. Redelivery requests have a 15-minute cooldown to
-avoid hammering an uncertain delivery.
+avoid hammering an uncertain delivery. Each request attempt is retained in
+Neon. A definitive GitHub client error (4xx other than 408 or 429) marks the
+request `exhausted` and allows the scan checkpoint to advance; it does not
+delete the attempt state and retry forever. Network errors, 5xx responses,
+timeouts, and rate limits keep the request retryable after the cooldown. The
+retry limit is eight attempts. An exhausted request needs operator diagnosis
+before a manual retry.
 
 Check the Vercel function invocation for `/api/cron/reconcile-webhooks` after
 each scheduled run. A 200 response reports scanned pages, matched deliveries,
 requested redeliveries, and cooldown skips. A 503 means GitHub or Neon failed
 and the checkpoint did not advance. In GitHub App settings, inspect recent
 webhook deliveries for repeated non-2xx responses. In Neon, monitor receipt
-counts by status; `exhausted` means eight controller attempts failed and needs
-operator diagnosis before any manual retry. Redelivery requests also stop after
-eight attempts and retain an `exhausted` status for diagnosis:
+counts by status; `exhausted` controller receipts mean eight attempts failed
+and need operator diagnosis before any manual retry. Redelivery requests retain
+an `exhausted` status when they reach eight attempts or GitHub definitively
+rejects the request, so operators can diagnose these separately from transient
+failures:
 
 ```sql
 SELECT status, count(*)
