@@ -290,7 +290,8 @@ function safeTurnError(error) {
   const nested = infoKey ? info[infoKey] : null;
   const status = [error.httpStatusCode, info?.httpStatusCode, nested?.httpStatusCode]
     .find((value) => Number.isSafeInteger(value) && value >= 100 && value <= 599);
-  const diagnostic = error.message === 'workspace routing discovery failed'
+  const diagnostic = error.codexDiagnostic === 'workspace_routing_discovery_failed'
+    || error.message === 'workspace routing discovery failed'
     ? 'workspace_routing_discovery_failed'
     : null;
   const details = [
@@ -380,12 +381,17 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     if (p.threadId && p.threadId !== threadId) return;
     const messageTurnId = p.turnId ?? p.turn?.id;
     if (turnId && messageTurnId && messageTurnId !== turnId) return;
+    if (message.method === 'turn/completed'
+      && (p.threadId !== threadId
+        || typeof turnId !== 'string' || turnId.length === 0
+        || typeof p.turn?.id !== 'string' || p.turn.id.length === 0
+        || p.turn.id !== turnId)) return;
     if (message.method === 'turn/started') turnId = p.turn.id;
     if (p.threadId === threadId && message.method !== 'turn/completed') recordActivity();
     // Ignore retrying or uncorrelated notifications so a stale error cannot
     // be reported as the terminal reason for this turn.
-    const correlatedTurn = turnId !== undefined && turnId !== null
-      && messageTurnId !== undefined && messageTurnId !== null
+    const correlatedTurn = typeof turnId === 'string' && turnId.length > 0
+      && typeof messageTurnId === 'string' && messageTurnId.length > 0
       && messageTurnId === turnId;
     if (message.method === 'error' && p.error && correlatedTurn && p.willRetry !== true) {
       lastTurnError = safeTurnError(p.error) ?? lastTurnError;

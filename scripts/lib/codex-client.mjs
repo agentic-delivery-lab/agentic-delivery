@@ -56,6 +56,21 @@ function safeCodexDiagnostic(value) {
   return 'Details withheld because Codex errors may contain credentials. Check the runner installation, authentication, and configuration.';
 }
 
+function appServerRequestError(method, serverError) {
+  const error = new Error(`Codex ${method}: ${safeCodexDiagnostic(serverError?.message)}`);
+  const data = serverError?.data && typeof serverError.data === 'object' && !Array.isArray(serverError.data)
+    ? serverError.data
+    : {};
+  const codexErrorInfo = serverError?.codexErrorInfo ?? data.codexErrorInfo;
+  const httpStatusCode = serverError?.httpStatusCode ?? data.httpStatusCode;
+  if (codexErrorInfo !== undefined) Object.defineProperty(error, 'codexErrorInfo', {value: codexErrorInfo});
+  if (httpStatusCode !== undefined) Object.defineProperty(error, 'httpStatusCode', {value: httpStatusCode});
+  if (serverError?.message === 'workspace routing discovery failed') {
+    Object.defineProperty(error, 'codexDiagnostic', {value: 'workspace_routing_discovery_failed'});
+  }
+  return error;
+}
+
 export function appServerFailure(code, signal, stderr = '') {
   const stopped = `Codex app-server stopped (${code ?? signal}).`;
   return String(stderr).trim() ? `${stopped} Diagnostic: ${safeCodexDiagnostic(stderr)}` : stopped;
@@ -357,7 +372,7 @@ export class CodexClient extends EventEmitter {
       if (!pending) return;
       clearTimeout(pending.timer);
       this.pending.delete(message.id);
-      if (message.error) pending.reject(new Error(`Codex ${pending.method}: ${safeCodexDiagnostic(message.error.message)}`));
+      if (message.error) pending.reject(appServerRequestError(pending.method, message.error));
       else pending.resolve(message.result);
     });
   }

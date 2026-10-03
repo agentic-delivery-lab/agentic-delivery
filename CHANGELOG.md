@@ -483,9 +483,9 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60)
   preserves safe Codex error categories and HTTP status codes on failed turns
-  and start rejections, and retains notification diagnostics only when a
-  non-empty turn ID matches the active turn. Raw error text and additional
-  details remain withheld.
+  and start rejections, retains error diagnostics only for an exact non-empty
+  active turn ID, and ignores completion events without an exact thread and
+  turn match. Raw error text and additional details remain withheld.
 - [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66) registers issue-field masks before the controller checkout cleans `trusted-intake`, allowing intake to reach routing after the validated controller is checked out.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) verifies migrated issue fields and option IDs against bound live IDs and requires both values to be present, so legacy-label fallbacks cannot mask failed readback.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) makes both issue-intake jobs resolve pnpm from the nested trusted checkout manifest, so issue events can reach actor authorization and classification.
