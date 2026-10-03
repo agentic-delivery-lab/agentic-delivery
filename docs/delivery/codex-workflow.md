@@ -447,6 +447,19 @@ details may contain authentication data, so the controller does not copy them
 into logs or issue comments. Inspect unexpected failures locally as the runner
 operator; never paste credential-bearing output into the audit trail.
 
+Failed-turn diagnostics include `diagnostic_message` (absent, empty,
+non-string, recognized, or unrecognized), `additional_details` (absent, null,
+empty, non-string, or present), fixed `terminal_source` and
+`diagnostic_source` values, the count of correlated retry notifications, and
+`failure_duration_ms` from the turn-start request to failure. Retry
+notifications are capped at 99 and elapsed time at 24 hours. When both a
+terminal completion error and a correlated error notification are available,
+the safe summary reports each under source-prefixed fields, keeping each error
+code paired with its own HTTP status and shape metadata. A later generic
+notification does not replace an earlier specific correlated code. An
+unrecognized message means its content remains withheld, so this shape alone
+does not identify the root cause.
+
 If issue posting fails, the outbox remains in state for another attempt. A
 hard process kill may leave `account.lock`; inspect the referenced run and
 confirm that no Codex process is still active before removing that exact lock.

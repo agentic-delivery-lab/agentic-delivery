@@ -119,6 +119,20 @@ test('unsafe user and project configuration fails before thread startup', () => 
   }
 });
 
+test('app-server request errors retain bounded diagnostic metadata only', async (t) => {
+  const server = "process.stdin.setEncoding('utf8'); process.stdin.on('data', (chunk) => { const request = JSON.parse(chunk.trim()); process.stdout.write(JSON.stringify({id:request.id,error:{message:'access_token=fixture-secret',data:{codexErrorInfo:'other',httpStatusCode:400,additionalDetails:'private-detail-secret'}}}) + '\\n'); });";
+  const client = new CodexClient({command:process.execPath,args:['-e',server,'--']});
+  t.after(async () => { await client.close(); await rm(client.runtime,{recursive:true,force:true}); });
+  await assert.rejects(client.request('thread/start'), (error) => {
+    assert.equal(error.codexErrorInfo, 'other', error.message);
+    assert.equal(error.httpStatusCode, 400);
+    assert.equal(error.codexDiagnosticMessageShape, 'unrecognized');
+    assert.equal(error.codexAdditionalDetailsShape, 'present');
+    assert.doesNotMatch(error.message, /fixture-secret|private-detail-secret|access_token/);
+    return true;
+  });
+});
+
 test('app-server diagnostics retain safe failure context without exposing credentials', () => {
   assert.equal(
     appServerFailure(1, null, 'Error: config defines [permissions] profiles but does not set default_permissions'),

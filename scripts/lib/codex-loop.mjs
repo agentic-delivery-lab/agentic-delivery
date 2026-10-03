@@ -1,6 +1,20 @@
-import { MODELS, quotaBoundary, quotaTelemetryUnavailable, safeCodexDiagnostic, safeCodexDiagnosticCode } from './codex-client.mjs';
+import {
+  MODELS,
+  quotaBoundary,
+  quotaTelemetryUnavailable,
+  safeCodexDiagnostic,
+  safeCodexDiagnosticCode,
+  safeCodexAdditionalDetailsShape,
+  safeCodexDiagnosticMessageShape,
+} from './codex-client.mjs';
 import { QUOTA_STOP_PHASE } from './quota-diagnostics.mjs';
 
+const SAFE_DIAGNOSTIC_MESSAGE_SHAPES = new Set([
+  'absent', 'empty', 'non_string', 'recognized', 'unrecognized',
+]);
+const SAFE_ADDITIONAL_DETAILS_SHAPES = new Set([
+  'absent', 'null', 'empty', 'non_string', 'present',
+]);
 const strings = { type: 'array', items: { type: 'string' } };
 const REFINEMENT_WORK_TYPES = ['bug', 'feature', 'task', 'architecture', 'implementation', 'validation'];
 export function outcomeSchema(phase) {
@@ -276,7 +290,7 @@ function normalizedCodexErrorCode(value) {
 function safeTurnError(error) {
   if (!error || typeof error !== 'object' || Array.isArray(error)) return null;
   // App-server messages and additional details may contain credentials. Publish
-  // only a known protocol code, a validated HTTP status, or a fixed hint.
+  // only safe codes, a validated status, and bounded shape metadata.
   const info = error.codexErrorInfo;
   const candidates = typeof info === 'string'
     ? [info]
@@ -291,23 +305,68 @@ function safeTurnError(error) {
   const status = [error.httpStatusCode, info?.httpStatusCode, nested?.httpStatusCode]
     .find((value) => Number.isSafeInteger(value) && value >= 100 && value <= 599);
   const diagnosticCode = safeCodexDiagnosticCode(error.codexDiagnostic ?? error.message);
+  const messageShape = SAFE_DIAGNOSTIC_MESSAGE_SHAPES.has(error.codexDiagnosticMessageShape)
+    ? error.codexDiagnosticMessageShape
+    : error.codexDiagnostic
+      ? 'recognized'
+      : safeCodexDiagnosticMessageShape(error.message, Object.hasOwn(error, 'message'));
   const diagnostic = diagnosticCode === 'workspace_routing_discovery_failed'
     ? 'diagnostic=workspace_routing_discovery_failed'
     : diagnosticCode ? safeCodexDiagnostic(diagnosticCode) : null;
-  const details = [
-    ...(code ? [`codex_error=${code}`] : []),
-    ...(diagnostic ? [diagnostic] : []),
-    ...(status ? [`http_status=${status}`] : []),
-  ];
-  return details.length ? details.join(', ') : null;
+  const hasAdditionalDetails = Object.hasOwn(error, 'additionalDetails')
+    || Object.hasOwn(error, 'additional_details');
+  const additionalDetailsValue = Object.hasOwn(error, 'additionalDetails')
+    ? error.additionalDetails
+    : error.additional_details;
+  const additionalDetailsShape = SAFE_ADDITIONAL_DETAILS_SHAPES.has(error.codexAdditionalDetailsShape)
+    ? error.codexAdditionalDetailsShape
+    : safeCodexAdditionalDetailsShape(additionalDetailsValue, hasAdditionalDetails);
+  return { code, diagnostic, status, messageShape, additionalDetailsShape };
 }
 
-function turnFailureReason(status, diagnostic) {
+function preferSpecificSafeTurnError(current, candidate) {
+  if (!current) return candidate;
+  if (!candidate) return current;
+  const currentIsSpecific = Boolean(current.code && current.code !== 'other');
+  const candidateIsSpecific = Boolean(candidate.code && candidate.code !== 'other');
+  if (currentIsSpecific !== candidateIsSpecific) return candidateIsSpecific ? candidate : current;
+  return candidate;
+}
+
+function formatSafeTurnError(error, source = null) {
+  if (!error) return null;
+  const field = (name) => source ? `${source}_${name}` : name;
+  return [
+    field('diagnostic_message') + '=' + error.messageShape,
+    field('additional_details') + '=' + error.additionalDetailsShape,
+    ...(error.code ? [`${field('codex_error')}=${error.code}`] : []),
+    ...(error.diagnostic ? [source
+      ? `${field('diagnostic')}=${error.diagnostic.replace(/^diagnostic=/, '')}`
+      : error.diagnostic] : []),
+    ...(error.status ? [`${field('http_status')}=${error.status}`] : []),
+  ].join(', ');
+}
+
+function formatSafeTurnErrors(first, firstSource, second, secondSource) {
+  if (!first) return formatSafeTurnError(second);
+  if (!second) return formatSafeTurnError(first);
+  return [formatSafeTurnError(first, firstSource), formatSafeTurnError(second, secondSource)].join(', ');
+}
+
+function failureTelemetry(diagnostic, { terminalSource, diagnosticSource, retryNotifications, durationMs }) {
+  return [
+    diagnostic ?? 'safe_error_details=unavailable',
+    'terminal_source=' + terminalSource,
+    'diagnostic_source=' + diagnosticSource,
+    'retry_notifications=' + retryNotifications,
+    'failure_duration_ms=' + durationMs,
+  ].join(', ');
+}
+
+function turnFailureReason(status, diagnostic, metadata) {
   const safeStatus = ['failed', 'interrupted', 'completed'].includes(status) ? status : 'unknown';
-  const details = diagnostic
-    ? ` (${diagnostic})`
-    : safeStatus === 'failed' ? ' (safe error details unavailable)' : '';
-  return `Codex turn ended with status ${safeStatus}.${details}`;
+  return 'Codex turn ended with status ' + safeStatus + '. ('
+    + failureTelemetry(diagnostic, metadata) + ')';
 }
 
 export async function runTurn({ client, threadId, phase, prompt, onProgress, signal, schema = outcomeSchema(phase), stallTimeoutMs = 20 * 60_000, pollMs = 15_000 }) {
@@ -322,6 +381,14 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
   let settled = false;
   let finalText = '';
   let lastTurnError;
+  let retryNotifications = 0;
+  const turnStartedAt = Date.now();
+  const failureMetadata = (terminalSource, diagnosticSource) => ({
+    terminalSource,
+    diagnosticSource,
+    retryNotifications,
+    durationMs: Math.min(86_400_000, Math.max(0, Date.now() - turnStartedAt)),
+  });
   let progress = Promise.resolve();
   let interruptTimer;
   let stallTimer;
@@ -366,13 +433,15 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
   const onAbort = () => stop('Workflow cancelled; saved work can be resumed.');
   const onFailure = (error) => {
     const failureDiagnostic = safeTurnError(error);
+    const diagnosticSource = lastTurnError
+      ? failureDiagnostic ? 'app_server_and_error_notification' : 'error_notification'
+      : failureDiagnostic ? 'app_server_error' : 'none';
     finish(stopped ?? {
       status: 'paused',
-      reason: lastTurnError
-        ? `Codex app-server disconnected after a turn error (${lastTurnError}).`
-        : failureDiagnostic
-          ? `Codex app-server disconnected (${failureDiagnostic}).`
-          : 'Codex app-server disconnected.',
+      reason: 'Codex app-server disconnected ('
+        + failureTelemetry(formatSafeTurnErrors(
+          failureDiagnostic, 'app_server', lastTurnError, 'error_notification',
+        ), failureMetadata('app_server_disconnect', diagnosticSource)) + ').',
     });
   };
   const onMessage = (message) => {
@@ -393,14 +462,14 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
         || p.turn.id !== turnId)) return;
     if (message.method === 'turn/started') turnId = p.turn.id;
     if (p.threadId === threadId && message.method !== 'turn/completed') recordActivity();
-    // Ignore retrying or uncorrelated notifications so a stale error cannot
-    // be reported as the terminal reason for this turn.
+    // Count retries only for this active turn; retain terminal diagnostics only
+    // when both the thread and turn IDs match.
     const correlatedTurn = typeof turnId === 'string' && turnId.length > 0
       && typeof messageTurnId === 'string' && messageTurnId.length > 0
       && messageTurnId === turnId;
-    if (message.method === 'error' && p.error && p.threadId === threadId
-      && correlatedTurn && p.willRetry !== true) {
-      lastTurnError = safeTurnError(p.error) ?? lastTurnError;
+    if (message.method === 'error' && p.error && p.threadId === threadId && correlatedTurn) {
+      if (p.willRetry === true) retryNotifications = Math.min(99, retryNotifications + 1);
+      else lastTurnError = preferSpecificSafeTurnError(lastTurnError, safeTurnError(p.error));
     }
     if (message.id !== undefined && message.method) {
       turnId ??= p.turnId;
@@ -413,10 +482,17 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     }
     if (message.method === 'turn/completed') {
       // Wait for mandatory progress publication before considering the turn complete.
-      const diagnostic = safeTurnError(p.turn?.error) ?? lastTurnError;
+      const terminalError = safeTurnError(p.turn?.error);
+      const diagnosticSource = terminalError && lastTurnError
+        ? 'turn_completed_and_error_notification'
+        : terminalError ? 'turn_completed_error'
+          : lastTurnError ? 'error_notification' : 'none';
+      const metadata = failureMetadata('turn_completed', diagnosticSource);
       progress.then(() => finish(stopped ?? (p.turn.status === 'completed'
         ? { status: 'completed', text: finalText }
-        : { status: 'paused', reason: turnFailureReason(p.turn.status, diagnostic) })));
+        : { status: 'paused', reason: turnFailureReason(p.turn.status, formatSafeTurnErrors(
+          terminalError, 'turn_completed', lastTurnError, 'error_notification',
+        ), metadata) })));
     }
   };
   const pollTimer = setInterval(checkBudget, pollMs);
@@ -440,9 +516,13 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     recordActivity();
     if (stopped && !settled) await client.request('turn/interrupt', { threadId, turnId });
   } catch (error) {
+    const diagnostic = safeTurnError(error);
     finish(stopped ?? {
       status: 'paused',
-      reason: turnFailureReason('failed', safeTurnError(error)),
+      reason: turnFailureReason('failed', formatSafeTurnError(diagnostic), failureMetadata(
+        'turn_start_rejection',
+        diagnostic ? 'turn_start_rejection' : 'none',
+      )),
     });
   }
   return result;
