@@ -64,6 +64,14 @@ export function safeCodexDiagnosticMessageShape(value, hasMessage = value !== un
   return safeCodexDiagnosticCode(value) ? 'recognized' : 'unrecognized';
 }
 
+export function safeCodexAdditionalDetailsShape(value, hasDetails = value !== undefined) {
+  if (!hasDetails) return 'absent';
+  if (value === null) return 'null';
+  if (typeof value !== 'string') return 'non_string';
+  if (!value.trim()) return 'empty';
+  return 'present';
+}
+
 export function safeCodexDiagnostic(value) {
   // Codex owns authentication. Its errors may contain arbitrary credentials,
   // including fragments whose labels were lost when stderr was truncated.
@@ -84,7 +92,12 @@ function appServerRequestError(method, serverError) {
     : {};
   const hasAdditionalDetails = Boolean(serverError && typeof serverError === 'object'
     && (Object.hasOwn(serverError, 'additionalDetails') || Object.hasOwn(data, 'additionalDetails')));
-  Object.defineProperty(error, 'codexAdditionalDetailsPresent', {value: hasAdditionalDetails});
+  const additionalDetails = serverError && Object.hasOwn(serverError, 'additionalDetails')
+    ? serverError.additionalDetails
+    : data.additionalDetails;
+  Object.defineProperty(error, 'codexAdditionalDetailsShape', {
+    value: safeCodexAdditionalDetailsShape(additionalDetails, hasAdditionalDetails),
+  });
   const codexErrorInfo = serverError?.codexErrorInfo ?? data.codexErrorInfo;
   const httpStatusCode = serverError?.httpStatusCode ?? data.httpStatusCode;
   if (codexErrorInfo !== undefined) Object.defineProperty(error, 'codexErrorInfo', {value: codexErrorInfo});

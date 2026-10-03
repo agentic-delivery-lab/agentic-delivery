@@ -106,6 +106,7 @@ test('terminal error notifications require exact thread and active turn IDs', as
 test('turn failure reports bounded diagnostic shape without publishing error content', async () => {
   const cases = [
     {name:'missing message', error:{codexErrorInfo:'other'}, shape:'absent'},
+    {name:'null additional details', error:{codexErrorInfo:'other',message:'',additionalDetails:null}, shape:'empty', details:'null'},
     {name:'empty message', error:{codexErrorInfo:'other',message:'  '}, shape:'empty'},
     {name:'non-string message', error:{codexErrorInfo:'other',message:{token:'fixture-secret'}}, shape:'non_string'},
     {
@@ -165,6 +166,36 @@ test('turn completion errors retain only bounded shape metadata', async () => {
   assert.match(result.reason, /diagnostic_message=unrecognized/);
   assert.match(result.reason, /additional_details=present/);
   assert.doesNotMatch(result.reason, /fixture-secret|private-detail-secret|access_token/);
+});
+
+test('useful correlated notification metadata survives an uninformative completion error', async () => {
+  const client = new FakeCodex((current) => {
+    current.emit('message', {
+      method:'error',
+      params:{
+        threadId:'thread-1',
+        turnId:'turn-1',
+        error:{codexErrorInfo:'unauthorized',message:'access_token=notification-secret'},
+      },
+    });
+    current.emit('message', {
+      method:'turn/completed',
+      params:{
+        threadId:'thread-1',
+        turn:{
+          id:'turn-1',
+          status:'failed',
+          error:{codexErrorInfo:'other',message:'',additionalDetails:null},
+        },
+      },
+    });
+  });
+  const result = await runTurn({client,threadId:'thread-1',phase:'route',prompt:'route',onProgress:async()=>{}});
+  assert.match(result.reason, /codex_error=unauthorized/);
+  assert.match(result.reason, /diagnostic_message=empty/);
+  assert.match(result.reason, /additional_details=null/);
+  assert.match(result.reason, /diagnostic_source=turn_completed_and_error_notification/);
+  assert.doesNotMatch(result.reason, /notification-secret|access_token/);
 });
 
 test('completion events with another thread or turn cannot finish the active turn', async () => {

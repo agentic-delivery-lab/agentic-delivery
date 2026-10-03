@@ -4,12 +4,16 @@ import {
   quotaTelemetryUnavailable,
   safeCodexDiagnostic,
   safeCodexDiagnosticCode,
+  safeCodexAdditionalDetailsShape,
   safeCodexDiagnosticMessageShape,
 } from './codex-client.mjs';
 import { QUOTA_STOP_PHASE } from './quota-diagnostics.mjs';
 
 const SAFE_DIAGNOSTIC_MESSAGE_SHAPES = new Set([
   'absent', 'empty', 'non_string', 'recognized', 'unrecognized',
+]);
+const SAFE_ADDITIONAL_DETAILS_SHAPES = new Set([
+  'absent', 'null', 'empty', 'non_string', 'present',
 ]);
 const strings = { type: 'array', items: { type: 'string' } };
 const REFINEMENT_WORK_TYPES = ['bug', 'feature', 'task', 'architecture', 'implementation', 'validation'];
@@ -309,17 +313,47 @@ function safeTurnError(error) {
   const diagnostic = diagnosticCode === 'workspace_routing_discovery_failed'
     ? 'diagnostic=workspace_routing_discovery_failed'
     : diagnosticCode ? safeCodexDiagnostic(diagnosticCode) : null;
-  const hasAdditionalDetails = error.codexAdditionalDetailsPresent === true
-    || Object.hasOwn(error, 'additionalDetails')
+  const hasAdditionalDetails = Object.hasOwn(error, 'additionalDetails')
     || Object.hasOwn(error, 'additional_details');
-  const details = [
-    'diagnostic_message=' + messageShape,
-    'additional_details=' + (hasAdditionalDetails ? 'present' : 'absent'),
-    ...(code ? [`codex_error=${code}`] : []),
-    ...(diagnostic ? [diagnostic] : []),
-    ...(status ? [`http_status=${status}`] : []),
-  ];
-  return details.length ? details.join(', ') : null;
+  const additionalDetailsValue = Object.hasOwn(error, 'additionalDetails')
+    ? error.additionalDetails
+    : error.additional_details;
+  const additionalDetailsShape = SAFE_ADDITIONAL_DETAILS_SHAPES.has(error.codexAdditionalDetailsShape)
+    ? error.codexAdditionalDetailsShape
+    : safeCodexAdditionalDetailsShape(additionalDetailsValue, hasAdditionalDetails);
+  return { code, diagnostic, status, messageShape, additionalDetailsShape };
+}
+
+function mergeSafeTurnErrors(terminalError, notificationError) {
+  if (!terminalError) return notificationError;
+  if (!notificationError) return terminalError;
+  const terminalCode = terminalError.code;
+  const notificationCode = notificationError.code;
+  const code = !terminalCode || terminalCode === 'other'
+    ? notificationCode ?? terminalCode
+    : terminalCode;
+  return {
+    code,
+    diagnostic: terminalError.diagnostic ?? notificationError.diagnostic,
+    status: terminalError.status ?? notificationError.status,
+    messageShape: terminalError.messageShape !== 'absent'
+      ? terminalError.messageShape
+      : notificationError.messageShape,
+    additionalDetailsShape: terminalError.additionalDetailsShape !== 'absent'
+      ? terminalError.additionalDetailsShape
+      : notificationError.additionalDetailsShape,
+  };
+}
+
+function formatSafeTurnError(error) {
+  if (!error) return null;
+  return [
+    'diagnostic_message=' + error.messageShape,
+    'additional_details=' + error.additionalDetailsShape,
+    ...(error.code ? [`codex_error=${error.code}`] : []),
+    ...(error.diagnostic ? [error.diagnostic] : []),
+    ...(error.status ? [`http_status=${error.status}`] : []),
+  ].join(', ');
 }
 
 function failureTelemetry(diagnostic, { terminalSource, diagnosticSource, retryNotifications, durationMs }) {
@@ -402,14 +436,14 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
   const onAbort = () => stop('Workflow cancelled; saved work can be resumed.');
   const onFailure = (error) => {
     const failureDiagnostic = safeTurnError(error);
-    const diagnostic = lastTurnError ?? failureDiagnostic;
+    const diagnostic = mergeSafeTurnErrors(failureDiagnostic, lastTurnError);
     const diagnosticSource = lastTurnError
-      ? 'error_notification'
+      ? failureDiagnostic ? 'app_server_and_error_notification' : 'error_notification'
       : failureDiagnostic ? 'app_server_error' : 'none';
     finish(stopped ?? {
       status: 'paused',
       reason: 'Codex app-server disconnected ('
-        + failureTelemetry(diagnostic, failureMetadata('app_server_disconnect', diagnosticSource)) + ').',
+        + failureTelemetry(formatSafeTurnError(diagnostic), failureMetadata('app_server_disconnect', diagnosticSource)) + ').',
     });
   };
   const onMessage = (message) => {
@@ -450,15 +484,16 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     }
     if (message.method === 'turn/completed') {
       // Wait for mandatory progress publication before considering the turn complete.
-      const terminalDiagnostic = safeTurnError(p.turn?.error);
-      const diagnostic = terminalDiagnostic ?? lastTurnError;
-      const diagnosticSource = terminalDiagnostic
-        ? 'turn_completed_error'
-        : lastTurnError ? 'error_notification' : 'none';
+      const terminalError = safeTurnError(p.turn?.error);
+      const diagnostic = mergeSafeTurnErrors(terminalError, lastTurnError);
+      const diagnosticSource = terminalError && lastTurnError
+        ? 'turn_completed_and_error_notification'
+        : terminalError ? 'turn_completed_error'
+          : lastTurnError ? 'error_notification' : 'none';
       const metadata = failureMetadata('turn_completed', diagnosticSource);
       progress.then(() => finish(stopped ?? (p.turn.status === 'completed'
         ? { status: 'completed', text: finalText }
-        : { status: 'paused', reason: turnFailureReason(p.turn.status, diagnostic, metadata) })));
+        : { status: 'paused', reason: turnFailureReason(p.turn.status, formatSafeTurnError(diagnostic), metadata) })));
     }
   };
   const pollTimer = setInterval(checkBudget, pollMs);
@@ -485,7 +520,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     const diagnostic = safeTurnError(error);
     finish(stopped ?? {
       status: 'paused',
-      reason: turnFailureReason('failed', diagnostic, failureMetadata(
+      reason: turnFailureReason('failed', formatSafeTurnError(diagnostic), failureMetadata(
         'turn_start_rejection',
         diagnostic ? 'turn_start_rejection' : 'none',
       )),

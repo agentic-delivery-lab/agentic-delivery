@@ -127,7 +127,7 @@ test('app-server request errors retain bounded diagnostic metadata only', async 
     assert.equal(error.codexErrorInfo, 'other', error.message);
     assert.equal(error.httpStatusCode, 400);
     assert.equal(error.codexDiagnosticMessageShape, 'unrecognized');
-    assert.equal(error.codexAdditionalDetailsPresent, true);
+    assert.equal(error.codexAdditionalDetailsShape, 'present');
     assert.doesNotMatch(error.message, /fixture-secret|private-detail-secret|access_token/);
     return true;
   });
