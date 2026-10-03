@@ -22,6 +22,8 @@ export const MODELS = Object.freeze({
 
 export const AUTH_STORAGE_CONFIG = 'cli_auth_credentials_store="file"';
 export const DEFAULT_PERMISSION_CONFIG = 'default_permissions="delivery-plan"';
+const SAFE_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+const SAFE_GPT6_IDENTIFIER = /^(?:[a-z0-9_-]+\/)?gpt-6-[a-z0-9]+(?:[._-][a-z0-9]+)*$/i;
 
 export function modelForProfile(profile = 'planner') {
   const phase = {
