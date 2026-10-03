@@ -943,7 +943,7 @@ export async function runSemanticReview({
       `## Provisional head ADR records\n\n${headRecords}`,
       `## Official base primitive evidence\n\n${basePrimitives}`,
       `## Provisional head primitive evidence\n\n${headPrimitives}`,
-      `## Head generated traceability index\n\n${traceability}`,
+      '## Generated traceability index\n\nThe deterministic traceability checks validate the complete generated index. Relevant primitive metadata is listed above, and changed index entries are visible in the complete diff.',
       `## Head domain register\n\n${domain}`,
       `## Head architecture impact map\n\n${map}`,
       `## Head evidence schema\n\n${schema}`,

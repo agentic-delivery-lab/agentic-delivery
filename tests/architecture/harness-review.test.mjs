@@ -24,7 +24,7 @@ import {
   stableCheckRunEvidence,
 } from '../../scripts/lib/architecture-review-agent.mjs';
 import { runArchitectureReview } from '../../scripts/harness-architecture-review.mjs';
-import { QUOTA_DIAGNOSTICS_SCHEMA_VERSION } from '../../scripts/lib/quota-diagnostics.mjs';
+import { QUOTA_DIAGNOSTICS_SCHEMA_VERSION, supportsQuotaDiagnosticsSchemaVersion } from '../../scripts/lib/quota-diagnostics.mjs';
 import { runNodeScript } from '../helpers/process.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
