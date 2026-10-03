@@ -544,7 +544,8 @@ export class NeonReplayStore {
       `WITH expired_requests AS (
          SELECT delivery_guid
          FROM public.webhook_redelivery_requests
-         WHERE requested_at <= clock_timestamp() - INTERVAL '30 days'
+         WHERE request_status = 'exhausted'
+           AND requested_at <= clock_timestamp() - INTERVAL '30 days'
            AND delivery_guid <> $1
          ORDER BY requested_at ASC
          LIMIT ${REPLAY_CLEANUP_BATCH_SIZE}
@@ -556,12 +557,13 @@ export class NeonReplayStore {
          RETURNING requests.delivery_guid
        )
        INSERT INTO public.webhook_redelivery_requests AS stored
-         (delivery_guid, requested_at, request_status, github_delivery_id, attempt_count)
-       VALUES ($1, clock_timestamp(), 'requesting', $3, 1)
+         (delivery_guid, requested_at, request_status, github_delivery_id, attempt_count, next_attempt_at)
+       VALUES ($1, clock_timestamp(), 'requesting', $3, 1, clock_timestamp() + ($2::double precision * INTERVAL '1 millisecond'))
        ON CONFLICT (delivery_guid) DO UPDATE
        SET requested_at = clock_timestamp(), request_status = 'requesting', github_delivery_id = $3,
-           attempt_count = stored.attempt_count + 1
-       WHERE stored.requested_at <= clock_timestamp() - ($2::double precision * INTERVAL '1 millisecond')
+           attempt_count = stored.attempt_count + 1,
+           next_attempt_at = clock_timestamp() + ($2::double precision * INTERVAL '1 millisecond')
+       WHERE (stored.request_status = 'queued' OR stored.next_attempt_at <= clock_timestamp())
          AND stored.request_status <> 'exhausted'
          AND stored.attempt_count < $4
        RETURNING delivery_guid`,
@@ -586,25 +588,80 @@ export class NeonReplayStore {
     const rows = await this.#query(
       `UPDATE public.webhook_redelivery_requests
        SET request_status = CASE WHEN attempt_count >= $3 THEN 'exhausted' ELSE 'accepted' END,
-           requested_at = clock_timestamp(), github_delivery_id = $2
+           requested_at = clock_timestamp(), github_delivery_id = $2,
+           next_attempt_at = clock_timestamp() + ($4::double precision * INTERVAL '1 millisecond')
        WHERE delivery_guid = $1 AND request_status = 'requesting'
        RETURNING delivery_guid`,
-      [guid.toLowerCase(), String(githubDeliveryId), CONTROLLER_MAX_ATTEMPTS],
+      [guid.toLowerCase(), String(githubDeliveryId), CONTROLLER_MAX_ATTEMPTS, REDELIVERY_COOLDOWN_MS],
     );
     if (rows.length !== 1) throw storageError();
+  }
+
+  async queueRedeliveryRequests(requests) {
+    if (!Array.isArray(requests)) throw new ReplayProtectionError('The redelivery queue batch is invalid.');
+    const unique = new Map();
+    for (const request of requests) {
+      const guid = request?.guid;
+      const githubDeliveryId = String(request?.githubDeliveryId ?? '');
+      if (typeof guid !== 'string' || !/^[0-9a-f-]{20,}$/i.test(guid)) throw new ReplayProtectionError('The delivery GUID is invalid.');
+      if (!/^[1-9][0-9]*$/.test(githubDeliveryId)) throw new ReplayProtectionError('The GitHub delivery ID is invalid.');
+      unique.set(guid.toLowerCase(), githubDeliveryId);
+    }
+    const entries = [...unique.entries()];
+    for (let offset = 0; offset < entries.length; offset += 500) {
+      const batch = entries.slice(offset, offset + 500);
+      await this.#query(
+        `INSERT INTO public.webhook_redelivery_requests AS stored
+           (delivery_guid, requested_at, request_status, github_delivery_id, attempt_count, next_attempt_at)
+         SELECT candidates.delivery_guid, clock_timestamp(), 'queued', candidates.github_delivery_id, 0, clock_timestamp()
+         FROM unnest($1::text[], $2::bigint[]) AS candidates(delivery_guid, github_delivery_id)
+         ON CONFLICT (delivery_guid) DO UPDATE
+         SET github_delivery_id = EXCLUDED.github_delivery_id
+         WHERE stored.request_status = 'queued'`,
+        [batch.map(([guid]) => guid), batch.map(([, deliveryId]) => deliveryId)],
+      );
+    }
   }
 
   async dueRedeliveryRequests({ limit = 100 } = {}) {
     return this.#query(
       `SELECT delivery_guid, github_delivery_id, attempt_count
        FROM public.webhook_redelivery_requests
-       WHERE request_status = 'accepted'
+       WHERE (request_status = 'queued'
+         OR (request_status IN ('accepted', 'requesting') AND next_attempt_at <= clock_timestamp()))
          AND attempt_count < $2
-         AND requested_at <= clock_timestamp() - ($3::double precision * INTERVAL '1 millisecond')
-       ORDER BY requested_at ASC
+       ORDER BY next_attempt_at ASC, requested_at ASC
        LIMIT $1`,
-      [limit, CONTROLLER_MAX_ATTEMPTS, REDELIVERY_COOLDOWN_MS],
+      [limit, CONTROLLER_MAX_ATTEMPTS],
     );
+  }
+
+  async hasPendingRedeliveryRequests() {
+    await this.#query(
+      `WITH exhausted_requests AS (
+         SELECT delivery_guid
+         FROM public.webhook_redelivery_requests
+         WHERE request_status = 'requesting'
+           AND attempt_count >= $1
+           AND next_attempt_at <= clock_timestamp()
+         ORDER BY next_attempt_at ASC
+         LIMIT ${REPLAY_CLEANUP_BATCH_SIZE}
+         FOR UPDATE SKIP LOCKED
+       )
+       UPDATE public.webhook_redelivery_requests AS requests
+       SET request_status = 'exhausted'
+       FROM exhausted_requests
+       WHERE requests.delivery_guid = exhausted_requests.delivery_guid`,
+      [CONTROLLER_MAX_ATTEMPTS],
+    );
+    const rows = await this.#query(
+      `SELECT delivery_guid
+       FROM public.webhook_redelivery_requests
+       WHERE request_status IN ('queued', 'requesting')
+       LIMIT 1`,
+      [],
+    );
+    return rows.length > 0;
   }
 
   async completeRedelivery(guid) {
@@ -621,6 +678,25 @@ export class NeonReplayStore {
        WHERE delivery_guid = $1 AND request_status = 'requesting'
        RETURNING delivery_guid`,
       [guid.toLowerCase(), String(githubDeliveryId)],
+    );
+    if (rows.length !== 1) throw storageError();
+  }
+
+  async deferRedeliveryRequest(guid, githubDeliveryId, retryAfterAt = null) {
+    if (typeof guid !== 'string' || !/^[0-9a-f-]{20,}$/i.test(guid)) throw new ReplayProtectionError('The delivery GUID is invalid.');
+    if (!/^[1-9][0-9]*$/.test(String(githubDeliveryId ?? ''))) throw new ReplayProtectionError('The GitHub delivery ID is invalid.');
+    if (retryAfterAt !== null && !Number.isFinite(Date.parse(String(retryAfterAt)))) throw new ReplayProtectionError('The redelivery retry time is invalid.');
+    const rows = await this.#query(
+      `UPDATE public.webhook_redelivery_requests
+       SET requested_at = clock_timestamp(), github_delivery_id = $2,
+           request_status = CASE WHEN attempt_count >= $5 THEN 'exhausted' ELSE 'requesting' END,
+           next_attempt_at = GREATEST(
+             clock_timestamp() + ($3::double precision * INTERVAL '1 millisecond'),
+             COALESCE($4::timestamptz, '-infinity'::timestamptz)
+           )
+       WHERE delivery_guid = $1 AND request_status = 'requesting'
+       RETURNING delivery_guid`,
+      [guid.toLowerCase(), String(githubDeliveryId), REDELIVERY_COOLDOWN_MS, retryAfterAt, CONTROLLER_MAX_ATTEMPTS],
     );
     if (rows.length !== 1) throw storageError();
   }

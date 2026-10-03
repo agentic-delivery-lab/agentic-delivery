@@ -7,7 +7,12 @@ import { fileURLToPath } from 'node:url';
 
 import { neon } from '@neondatabase/serverless';
 
-import { NeonReplayStore, REPLAY_CLEANUP_BATCH_SIZE } from '../../scripts/lib/neon-replay-store.mjs';
+import {
+  CONTROLLER_MAX_ATTEMPTS,
+  NeonReplayStore,
+  REDELIVERY_COOLDOWN_MS,
+  REPLAY_CLEANUP_BATCH_SIZE,
+} from '../../scripts/lib/neon-replay-store.mjs';
 import { replayKey, ReplayProtectionError } from '../../scripts/lib/replay-protection.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -158,6 +163,107 @@ test('Neon replay adapter preserves definitive redelivery failures as exhausted 
   assert.deepEqual(calls[0].values, [guid.toLowerCase(), '301']);
 });
 
+test('Neon replay adapter queues redelivery candidates without replacing an active attempt', async () => {
+  const calls = [];
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        calls.push({ statement, values });
+        return [];
+      },
+    },
+  });
+  const guid = '98765432-1234-4234-8234-123456789012';
+
+  await store.queueRedeliveryRequests([{ guid, githubDeliveryId: '301' }]);
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].statement, /INSERT INTO public\.webhook_redelivery_requests AS stored/);
+  assert.match(calls[0].statement, /SELECT candidates\.delivery_guid, clock_timestamp\(\), 'queued', candidates\.github_delivery_id, 0, clock_timestamp\(\)/);
+  assert.match(calls[0].statement, /WHERE stored\.request_status = 'queued'/);
+  assert.deepEqual(calls[0].values, [[guid], ['301']]);
+});
+
+test('due redelivery requests include queued work and expired ambiguous requests', async () => {
+  let call;
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        call = { statement, values };
+        return [];
+      },
+    },
+  });
+
+  await store.dueRedeliveryRequests({ limit: 250 });
+
+  assert.match(call.statement, /request_status = 'queued'/);
+  assert.match(call.statement, /request_status IN \('accepted', 'requesting'\) AND next_attempt_at <= clock_timestamp\(\)/);
+  assert.match(call.statement, /attempt_count < \$2/);
+  assert.deepEqual(call.values, [250, CONTROLLER_MAX_ATTEMPTS]);
+});
+
+test('pending redelivery work blocks scan checkpoint advancement', async () => {
+  const calls = [];
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        calls.push({ statement, values });
+        return [{ delivery_guid: '98765432-1234-4234-8234-123456789012' }];
+      },
+    },
+  });
+
+  assert.equal(await store.hasPendingRedeliveryRequests(), true);
+  assert.match(calls[0].statement, /WITH exhausted_requests AS/);
+  assert.match(calls[0].statement, /LIMIT 100\s+FOR UPDATE SKIP LOCKED/);
+  assert.match(calls[1].statement, /request_status IN \('queued', 'requesting'\)/);
+  assert.match(calls[1].statement, /LIMIT 1/);
+  assert.deepEqual(calls[1].values, []);
+});
+
+test('redelivery queue insertion splits large candidate sets into bounded SQL batches', async () => {
+  const calls = [];
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        calls.push({ statement, values });
+        return [];
+      },
+    },
+  });
+  const requests = Array.from({ length: 1_001 }, (_, index) => ({
+    guid: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    githubDeliveryId: String(index + 1),
+  }));
+
+  await store.queueRedeliveryRequests(requests);
+
+  assert.deepEqual(calls.map((call) => call.values[0].length), [500, 500, 1]);
+  assert.deepEqual(calls.map((call) => call.values[1].length), [500, 500, 1]);
+});
+
+test('rate-limited redelivery attempts preserve Retry-After after the normal cooldown', async () => {
+  let call;
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        call = { statement, values };
+        return [{ delivery_guid: values[0] }];
+      },
+    },
+  });
+  const guid = '98765432-1234-4234-8234-123456789012';
+  const retryAt = new Date(Date.now() + 60 * 60 * 1_000).toISOString();
+
+  await store.deferRedeliveryRequest(guid, '301', retryAt);
+
+  assert.match(call.statement, /next_attempt_at = GREATEST\(/);
+  assert.match(call.statement, /request_status = CASE WHEN attempt_count >= \$5 THEN 'exhausted' ELSE 'requesting' END/);
+  assert.match(call.statement, /COALESCE\(\$4::timestamptz/);
+  assert.deepEqual(call.values, [guid.toLowerCase(), '301', REDELIVERY_COOLDOWN_MS, retryAt, CONTROLLER_MAX_ATTEMPTS]);
+});
+
 test('Neon replay receipts link a batch of webhook delivery IDs before the scan checkpoint advances', async () => {
   let call;
   const store = new NeonReplayStore({
@@ -242,6 +348,7 @@ test('replay migrations store only minimal lease, receipt, and checkpoint metada
   const recoveryMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0002-recoverable-webhook-delivery.sql'), 'utf8');
   const scanMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0003-resumable-webhook-scan.sql'), 'utf8');
   const observationsMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0004-aggregate-webhook-scan-observations.sql'), 'utf8');
+  const queueMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0005-queue-webhook-redeliveries.sql'), 'utf8');
 
   assert.match(initialMigration, /CREATE TABLE IF NOT EXISTS public\.webhook_replay_claims\s*\(\s*replay_key text PRIMARY KEY,\s*expires_at timestamptz NOT NULL\s*\)/);
   assert.match(initialMigration, /ON public\.webhook_replay_claims \(expires_at\)/);
@@ -257,7 +364,9 @@ test('replay migrations store only minimal lease, receipt, and checkpoint metada
   assert.match(observationsMigration, /newest_delivery_at timestamptz NOT NULL/);
   assert.match(observationsMigration, /has_success boolean NOT NULL/);
   assert.match(observationsMigration, /installation_id bigint/);
-  const migrationSql = (initialMigration + recoveryMigration + scanMigration + observationsMigration).replace(/^\s*--.*$/gm, '');
+  assert.match(queueMigration, /request_status IN \('queued', 'requesting', 'accepted', 'exhausted'\)/);
+  assert.match(queueMigration, /next_attempt_at timestamptz/);
+  const migrationSql = (initialMigration + recoveryMigration + scanMigration + observationsMigration + queueMigration).replace(/^\s*--.*$/gm, '');
   assert.doesNotMatch(migrationSql, /\b(?:body|payload|api_token|private_key|model_output)\b/i);
 });
 
@@ -269,6 +378,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
   const key = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const lostResponseKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const linkedReceiptKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
+  const queuedGuid = randomUUID();
   const unlinkedReceiptKeys = Array.from({ length: 250 }, () => replayKey({ installationId: '163255060', deliveryId: randomUUID() }));
   const leaseToken = `integration:${randomUUID()}`;
 
@@ -341,6 +451,44 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     `, [JSON.stringify(unlinkedReceiptKeys.map((replay_key) => ({ replay_key })))]);
     const dueReceipts = await store.dueControllerReceipts({ limit: 250 });
     assert.deepEqual(dueReceipts.map((receipt) => receipt.replay_key), [linkedReceiptKey]);
+
+    const redeliveryColumns = await sql.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'webhook_redelivery_requests'
+      ORDER BY column_name
+    `, []);
+    assert.deepEqual(redeliveryColumns.map((row) => row.column_name), [
+      'attempt_count',
+      'delivery_guid',
+      'github_delivery_id',
+      'next_attempt_at',
+      'request_status',
+      'requested_at',
+    ]);
+    await store.queueRedeliveryRequests([{ guid: queuedGuid, githubDeliveryId: '987654323' }]);
+    assert.ok((await store.dueRedeliveryRequests({ limit: 250 })).some((request) => request.delivery_guid === queuedGuid));
+    assert.deepEqual(await store.claimRedeliveryRequest(queuedGuid, '987654323'), { claimed: true });
+    await sql.query(`
+      UPDATE public.webhook_redelivery_requests
+      SET next_attempt_at = clock_timestamp() - interval '1 second'
+      WHERE delivery_guid = $1
+    `, [queuedGuid]);
+    assert.ok((await store.dueRedeliveryRequests({ limit: 250 })).some((request) => request.delivery_guid === queuedGuid));
+    assert.deepEqual(await store.claimRedeliveryRequest(queuedGuid, '987654323'), { claimed: true });
+    await store.deferRedeliveryRequest(queuedGuid, '987654323', new Date(Date.now() + 60 * 60 * 1_000).toISOString());
+    assert.equal((await store.dueRedeliveryRequests({ limit: 250 })).some((request) => request.delivery_guid === queuedGuid), false);
+    await sql.query(`
+      UPDATE public.webhook_redelivery_requests
+      SET request_status = 'requesting', attempt_count = $2, next_attempt_at = clock_timestamp() - interval '1 second'
+      WHERE delivery_guid = $1
+    `, [queuedGuid, CONTROLLER_MAX_ATTEMPTS]);
+    assert.equal(await store.hasPendingRedeliveryRequests(), false, 'expired final ambiguous attempts become exhausted');
+    const exhaustedQueueRow = await sql.query(
+      'SELECT request_status FROM public.webhook_redelivery_requests WHERE delivery_guid = $1',
+      [queuedGuid],
+    );
+    assert.equal(exhaustedQueueRow[0].request_status, 'exhausted');
 
     const claimColumns = await sql.query(`
       SELECT column_name
@@ -438,6 +586,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
   } finally {
     await store.release(key);
     await store.release(lostResponseKey);
+    await sql.query('DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = $1', [queuedGuid]);
     for (const receiptKey of [key, lostResponseKey, linkedReceiptKey]) {
       await sql.query('DELETE FROM public.webhook_controller_receipts WHERE replay_key = $1', [receiptKey]);
     }

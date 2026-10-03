@@ -50,7 +50,7 @@ controller repository secret.
 
 ## Migration and configuration
 
-Apply all four migrations to the selected Neon database with a direct, unpooled
+Apply all five migrations to the selected Neon database with a direct, unpooled
 connection before deploying code that uses the new schema:
 
 ```sh
@@ -62,6 +62,8 @@ psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
   -f api/github/migrations/0003-resumable-webhook-scan.sql
 psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
   -f api/github/migrations/0004-aggregate-webhook-scan-observations.sql
+psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
+  -f api/github/migrations/0005-queue-webhook-redeliveries.sql
 ```
 
 Run them from a protected terminal. Never print the connection string or add
@@ -94,8 +96,12 @@ Each run reads at most five 100-delivery pages. If more history remains before
 the prior checkpoint, it saves the opaque cursor and accumulated GUID outcomes
 for the next run; it does not make history-based retry decisions from a partial
 scan. The cursor is resumed until the prior checkpoint is reached. A run that
-would exceed 1,000 redelivery requests returns 503 and leaves the checkpoint
-unchanged.
+finishes a scan first records every failed delivery in the durable Neon
+redelivery queue. It then requests at most 250 queued or due redeliveries per
+invocation. The history checkpoint stays in place while any request is still
+queued or has an uncertain `requesting` outcome. Later runs drain the queue;
+the checkpoint advances after all requests from the completed scan have been
+accepted or marked exhausted.
 It also redelivers due controller receipts even when GitHub recorded the
 original webhook delivery as successful. Before advancing its checkpoint, the
 reconciler links every observed delivery GUID's numeric GitHub API ID to a
@@ -105,17 +111,26 @@ already have a numeric GitHub delivery ID, so older unlinked rows cannot occupy
 the bounded batch or starve linked retries. A later scan can retry a linked
 receipt even after its original webhook delivery is older than the history
 checkpoint. The reconciler stores a timestamp and delivery ID
-checkpoint only after the full bounded scan and after each redelivery request
-is accepted, already exhausted, or definitively rejected and recorded. An
-ambiguous or transient API failure leaves the checkpoint unchanged, so the
-next run rescans safely. Redelivery requests have a 15-minute cooldown to
-avoid hammering an uncertain delivery. Each request attempt is retained in
-Neon. A definitive GitHub client error (4xx other than 408 or 429) marks the
-request `exhausted` and allows the scan checkpoint to advance; it does not
-delete the attempt state and retry forever. Network errors, 5xx responses,
-timeouts, and rate limits keep the request retryable after the cooldown. The
-retry limit is eight attempts. An exhausted request needs operator diagnosis
-before a manual retry.
+checkpoint only after the full bounded scan and after each failed delivery's
+redelivery request is accepted or marked exhausted. Each invocation claims at
+most 250 queued or due requests. An accepted request and an ambiguous
+`requesting` outcome remain in Neon and become due again after the cooldown,
+even if their original delivery is older than the history checkpoint. A
+queued request or an uncertain `requesting` outcome holds the checkpoint until
+a later run resolves it. Rate-limited responses use `Retry-After` or the
+primary rate-limit reset time when available, in addition to the 15-minute
+cooldown. GitHub may report rate limits as HTTP 403 or 429; a 403 is treated as
+rate-limited when its headers or response message say so. Other definitive
+GitHub client errors mark the request `exhausted` and allow the checkpoint to
+advance; they do not delete attempt state and retry forever. Network errors,
+5xx responses, timeouts, and rate limits keep the request retryable. The retry
+limit is eight attempts. An exhausted request needs operator diagnosis before
+a manual retry. The response's `redelivery_queue_pending` field reports when
+later Cron invocations still need to drain queued work.
+
+GitHub documents that primary and secondary REST API limits can return HTTP
+403 or 429, and that clients should wait for `Retry-After` or
+`X-RateLimit-Reset` when provided ([rate-limit guidance](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)).
 
 Check the Vercel function invocation for `/api/cron/reconcile-webhooks` after
 each scheduled run. A 200 response reports scanned pages, matched deliveries,
@@ -152,6 +167,6 @@ backward compatible with earlier controller releases.
 
 The optional isolated integration test uses
 `AGENTIC_DELIVERY_REPLAY_TEST_DATABASE_URL`. Point it only at a separate Neon
-database where all four migrations have been applied. The live Vercel deployment,
+database where all five migrations have been applied. The live Vercel deployment,
 GitHub App credentials, Neon production schema, and scheduled execution remain
 unverified until an operator configures and activates them.

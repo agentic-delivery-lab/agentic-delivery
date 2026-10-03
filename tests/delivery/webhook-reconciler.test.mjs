@@ -34,17 +34,20 @@ function output() {
   };
 }
 
-function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], requestStatus = 'claimed' } = {}) {
+function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], requestStatus = 'claimed', observations = [] } = {}) {
   return {
     checkpoint,
     dueReceipts,
     dueRedeliveries,
     requested: [],
     linked: [],
+    linkBatches: [],
     completed: [],
     advanced: [],
     scanProgress: [],
-    observations: new Map(),
+    observations: new Map(observations.map((value) => [value.delivery_guid, value])),
+    redeliveryQueue: new Map(),
+    queuedRedeliveries: [],
     async reconcilerCheckpoint() { return this.checkpoint; },
     async mergeReconcilerObservations(values) {
       for (const value of values) {
@@ -68,15 +71,72 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
     },
     async reconcilerObservations() { return [...this.observations.values()]; },
     async dueControllerReceipts() { return this.dueReceipts; },
-    async dueRedeliveryRequests() { return this.dueRedeliveries; },
-    async linkGithubDeliveries(links) { this.linked.push(...links.map(({ replayKey, githubDeliveryId }) => ({ key: replayKey, id: githubDeliveryId }))); },
+    async queueRedeliveryRequests(requests) {
+      this.queuedRedeliveries.push(...requests);
+      for (const request of requests) {
+        if (!this.redeliveryQueue.has(request.guid)) {
+          this.redeliveryQueue.set(request.guid, {
+            delivery_guid: request.guid,
+            github_delivery_id: request.githubDeliveryId,
+            attempt_count: 0,
+            request_status: 'queued',
+          });
+        }
+      }
+    },
+    async dueRedeliveryRequests({ limit = 250 } = {}) {
+      const completed = new Set(this.completed);
+      const queued = [...this.redeliveryQueue.values()]
+        .filter((request) => request.request_status === 'queued' || request.due === true);
+      return [
+        ...this.dueRedeliveries.filter((request) => !completed.has(request.delivery_guid)),
+        ...queued,
+      ].slice(0, limit);
+    },
+    async hasPendingRedeliveryRequests() {
+      return [...this.redeliveryQueue.values()].some((request) => ['queued', 'requesting'].includes(request.request_status));
+    },
+    async linkGithubDeliveries(links) {
+      this.linkBatches.push(links.length);
+      this.linked.push(...links.map(({ replayKey, githubDeliveryId }) => ({ key: replayKey, id: githubDeliveryId })));
+    },
     async claimRedeliveryRequest(guid, id) {
       this.requested.push({ guid, id });
+      const queued = this.redeliveryQueue.get(guid);
+      if (queued) {
+        if (queued.request_status !== 'queued' && queued.due !== true) {
+          this.requested.pop();
+          return { claimed: false, status: queued.request_status };
+        }
+        queued.request_status = 'requesting';
+        queued.attempt_count += 1;
+        queued.due = false;
+        return { claimed: true };
+      }
       return requestStatus === 'claimed' ? { claimed: true } : { claimed: false, status: requestStatus };
     },
-    async markRedeliveryAccepted(guid, id) { this.requested.at(-1).accepted = { guid, id }; },
-    async markRedeliveryRejected(guid, id) { this.requested.at(-1).rejected = { guid, id }; },
-    async completeRedelivery(guid) { this.completed.push(guid); },
+    async markRedeliveryAccepted(guid, id) {
+      this.requested.at(-1).accepted = { guid, id };
+      const queued = this.redeliveryQueue.get(guid);
+      if (queued) queued.request_status = 'accepted';
+    },
+    async markRedeliveryRejected(guid, id) {
+      this.requested.at(-1).rejected = { guid, id };
+      const queued = this.redeliveryQueue.get(guid);
+      if (queued) queued.request_status = 'exhausted';
+    },
+    async deferRedeliveryRequest(guid, id, retryAt) {
+      this.requested.at(-1).deferred = { guid, id, retryAt };
+      const queued = this.redeliveryQueue.get(guid);
+      if (queued) {
+        queued.request_status = 'requesting';
+        queued.retry_at = retryAt;
+      }
+    },
+    async completeRedelivery(guid) {
+      this.completed.push(guid);
+      this.redeliveryQueue.delete(guid);
+    },
     async saveReconcilerScan(value) {
       this.scanProgress.push(value);
       this.checkpoint = {
@@ -156,7 +216,7 @@ test('reconciler paginates, groups attempts by GUID, redelivers failures and sta
   assert.equal(JSON.parse(res.body).scanned_pages, 2);
 });
 
-test('reconciler leaves its checkpoint unchanged when GitHub rate limits redelivery', async () => {
+test('reconciler leaves its checkpoint unchanged and records a cooldown when GitHub rate limits redelivery', async () => {
   const scanNow = Date.now();
   const store = makeStore();
   const fetchImpl = async (url, options) => {
@@ -169,7 +229,9 @@ test('reconciler leaves its checkpoint unchanged when GitHub rate limits redeliv
   assert.equal(res.statusCode, 503);
   assert.deepEqual(store.advanced, []);
   assert.equal(store.requested.length, 1);
-  assert.equal(store.requested[0].released, undefined);
+  assert.equal(store.requested[0].deferred.guid, deliveryA);
+  assert.equal(store.requested[0].deferred.id, '201');
+  assert.ok(Number.isFinite(Date.parse(store.requested[0].deferred.retryAt)));
 });
 
 test('reconciler records definitive redelivery rejection and advances its checkpoint', async () => {
@@ -194,6 +256,92 @@ test('reconciler records definitive redelivery rejection and advances its checkp
   assert.equal(store.advanced.length, 1);
   assert.equal(JSON.parse(res.body).exhausted_redeliveries, 1);
   assert.equal(JSON.parse(res.body).cooldown_skips, 0);
+});
+
+test('reconciler defers a rate-limited GitHub 403 until Retry-After', async () => {
+  const scanNow = Date.now();
+  const store = makeStore();
+  const fetchImpl = async (url, options) => {
+    if (options.method === 'POST') {
+      return response(403, { message: 'You have exceeded a secondary rate limit.' }, { 'retry-after': '3600' });
+    }
+    return response(200, [{
+      id: 203,
+      guid: deliveryA,
+      delivered_at: new Date(scanNow - 5_000).toISOString(),
+      status: 'FAIL',
+      installation_id: '163255060',
+    }]);
+  };
+  const res = output();
+
+  await reconcileWebhookDeliveries({ req: cronRequest(), res, env: cronEnv(), fetchImpl, store, now: () => scanNow });
+
+  assert.equal(res.statusCode, 503);
+  assert.deepEqual(store.advanced, []);
+  assert.equal(store.requested[0].rejected, undefined);
+  assert.equal(store.requested[0].deferred.guid, deliveryA);
+  assert.ok(Date.parse(store.requested[0].deferred.retryAt) >= scanNow + 3_600_000);
+});
+
+test('reconciler retries an ambiguous network failure from durable requesting state', async () => {
+  const scanNow = Date.now();
+  const store = makeStore();
+  let attempts = 0;
+  const fetchImpl = async (url, options) => {
+    if (options.method === 'POST') {
+      attempts += 1;
+      if (attempts === 1) throw new Error('connection lost after request dispatch');
+      return response(202);
+    }
+    return response(200, [{
+      id: 205,
+      guid: deliveryA,
+      delivered_at: new Date(scanNow - 5_000).toISOString(),
+      status: 'FAIL',
+      installation_id: '163255060',
+    }]);
+  };
+  const firstRes = output();
+
+  await reconcileWebhookDeliveries({ req: cronRequest(), res: firstRes, env: cronEnv(), fetchImpl, store, now: () => scanNow });
+
+  assert.equal(firstRes.statusCode, 503);
+  assert.equal(store.advanced.length, 0);
+  assert.equal(store.redeliveryQueue.get(deliveryA).request_status, 'requesting');
+  assert.equal(await store.hasPendingRedeliveryRequests(), true);
+
+  store.redeliveryQueue.get(deliveryA).due = true;
+  const secondRes = output();
+  await reconcileWebhookDeliveries({ req: cronRequest(), res: secondRes, env: cronEnv(), fetchImpl, store, now: () => scanNow + 24 * 60 * 60 * 1_000 });
+
+  assert.equal(secondRes.statusCode, 200);
+  assert.equal(attempts, 2);
+  assert.equal(store.redeliveryQueue.get(deliveryA).request_status, 'accepted');
+  assert.equal(store.advanced.length, 1);
+});
+
+test('reconciler treats an authorization 403 as definitive without a rate-limit signal', async () => {
+  const scanNow = Date.now();
+  const store = makeStore();
+  const fetchImpl = async (url, options) => {
+    if (options.method === 'POST') return response(403, { message: 'Resource not accessible by integration.' });
+    return response(200, [{
+      id: 204,
+      guid: deliveryA,
+      delivered_at: new Date(scanNow - 5_000).toISOString(),
+      status: 'FAIL',
+      installation_id: '163255060',
+    }]);
+  };
+  const res = output();
+
+  await reconcileWebhookDeliveries({ req: cronRequest(), res, env: cronEnv(), fetchImpl, store, now: () => scanNow });
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(store.requested[0].rejected, { guid: deliveryA, id: '204' });
+  assert.equal(store.requested[0].deferred, undefined);
+  assert.equal(store.advanced.length, 1);
 });
 
 test('reconciler overlaps the prior checkpoint to find late delivery-history entries', async () => {
@@ -288,6 +436,7 @@ test('reconciler links failed webhook history to a pending receipt before checkp
   assert.equal(checkpoint.checkpoint_delivery_id, '301');
 
   dueReceipts = [pendingReceipt];
+  store.redeliveryQueue.get(guid).due = true;
   const secondRes = output();
   await reconcileWebhookDeliveries({ req: cronRequest(), res: secondRes, env: cronEnv(), fetchImpl, store, now: () => scanNow + 24 * 60 * 60 * 1000 });
 
@@ -319,6 +468,87 @@ test('reconciler resumes due redeliveries beyond its delivery-history checkpoint
   assert.equal(res.statusCode, 200);
   assert.equal(posts.length, 1);
   assert.match(posts[0], /\/42\/attempts$/);
+});
+
+test('reconciler retries an ambiguous requesting record after it becomes due', async () => {
+  const scanNow = Date.now();
+  const guid = '42345678-1234-4234-8234-123456789012';
+  const store = makeStore({
+    checkpoint: { checkpoint_at: new Date(scanNow - 48 * 60 * 60 * 1000).toISOString(), checkpoint_delivery_id: '50' },
+    dueRedeliveries: [{ delivery_guid: guid, github_delivery_id: '42', attempt_count: 1, request_status: 'requesting' }],
+  });
+  const posts = [];
+  const fetchImpl = async (url, options) => {
+    if (options.method === 'POST') {
+      posts.push(String(url));
+      return response(202);
+    }
+    return response(200, [{
+      id: 42,
+      guid,
+      delivered_at: new Date(scanNow - 72 * 60 * 60 * 1000).toISOString(),
+      status: 'FAIL',
+      installation_id: '163255060',
+    }]);
+  };
+  const res = output();
+
+  await reconcileWebhookDeliveries({ req: cronRequest(), res, env: cronEnv(), fetchImpl, store, now: () => scanNow });
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(posts, ['https://api.github.com/app/hook/deliveries/42/attempts']);
+});
+
+test('reconciler queues large failed-history scans and drains them in bounded batches', async () => {
+  const scanNow = Date.now();
+  const observations = Array.from({ length: 1_001 }, (_, index) => ({
+    delivery_guid: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    newest_delivery_at: new Date(scanNow - 10 * 60_000).toISOString(),
+    newest_delivery_id: String(index + 1),
+    has_success: false,
+    installation_id: '163255060',
+  }));
+  const store = makeStore({ observations });
+  const fetchImpl = async (url, options) => {
+    if (options.method === 'POST') return response(202);
+    return response(200, [{
+      id: 2_000,
+      guid: deliveryB,
+      delivered_at: new Date(scanNow - 5_000).toISOString(),
+      status: 'FAIL',
+      installation_id: '163255060',
+    }]);
+  };
+
+  const firstRes = output();
+  await reconcileWebhookDeliveries({ req: cronRequest(), res: firstRes, env: cronEnv(), fetchImpl, store, now: () => scanNow });
+
+  assert.equal(firstRes.statusCode, 200);
+  assert.equal(store.redeliveryQueue.size, 1_002);
+  assert.equal(store.requested.length, 250);
+  assert.equal(store.advanced.length, 0);
+  assert.equal(store.linked.length, 1_002);
+  assert.ok(Math.max(...store.linkBatches) <= 250);
+  assert.equal([...store.redeliveryQueue.values()].filter((request) => request.request_status === 'queued').length, 752);
+  assert.equal(JSON.parse(firstRes.body).redelivery_queue_pending, true);
+
+  for (const [batch, remaining] of [[2, 502], [3, 252], [4, 2]]) {
+    const nextRes = output();
+    await reconcileWebhookDeliveries({ req: cronRequest(), res: nextRes, env: cronEnv(), fetchImpl, store, now: () => scanNow + (batch * 60_000) });
+    assert.equal(nextRes.statusCode, 200);
+    assert.equal(store.requested.length, batch * 250);
+    assert.equal([...store.redeliveryQueue.values()].filter((request) => request.request_status === 'queued').length, remaining);
+    assert.equal(store.advanced.length, 0);
+  }
+
+  const finalRes = output();
+  await reconcileWebhookDeliveries({ req: cronRequest(), res: finalRes, env: cronEnv(), fetchImpl, store, now: () => scanNow + 5 * 60_000 });
+
+  assert.equal(finalRes.statusCode, 200);
+  assert.equal(store.requested.length, 1_002);
+  assert.equal([...store.redeliveryQueue.values()].filter((request) => request.request_status === 'queued').length, 0);
+  assert.equal(store.advanced.length, 1);
+  assert.equal(JSON.parse(finalRes.body).redelivery_queue_pending, false);
 });
 
 test('reconciler resumes a page-limited history scan from its persisted cursor', async () => {

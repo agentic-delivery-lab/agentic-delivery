@@ -8,7 +8,6 @@ import { NeonReplayStore, REDELIVERY_COOLDOWN_MS } from '../../scripts/lib/neon-
 const API_VERSION = '2026-03-10';
 const PAGE_SIZE = 100;
 const MAX_PAGES = 5;
-const MAX_REDELIVERIES = 1_000;
 const CONTROLLER_RECEIPT_LIMIT = 250;
 const CHECKPOINT_OVERLAP_MS = 5 * 60 * 1000;
 
@@ -85,6 +84,18 @@ function setRequestHeaders(jwt) {
   };
 }
 
+function retryAtFromHeaders(headers, now) {
+  const retryAfter = headers?.get?.('retry-after');
+  if (retryAfter !== null && retryAfter !== undefined && String(retryAfter).trim() !== '') {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) return new Date(now + seconds * 1_000).toISOString();
+    const date = Date.parse(String(retryAfter));
+    if (Number.isFinite(date)) return new Date(date).toISOString();
+  }
+  const reset = Number(headers?.get?.('x-ratelimit-reset'));
+  return Number.isFinite(reset) && reset > 0 ? new Date(reset * 1_000).toISOString() : null;
+}
+
 async function githubRequest({ url, method = 'GET', jwt, fetchImpl, body }) {
   const response = await fetchImpl(url, {
     method,
@@ -96,6 +107,23 @@ async function githubRequest({ url, method = 'GET', jwt, fetchImpl, body }) {
     const error = new Error(`GitHub App webhook API request failed (${response.status}).`);
     error.status = response.status;
     error.retryAfter = response.headers?.get?.('retry-after') ?? null;
+    const remaining = response.headers?.get?.('x-ratelimit-remaining');
+    let message = '';
+    if (response.status === 403 || response.status === 429) {
+      try {
+        const payload = await response.json();
+        message = String(payload?.message ?? '');
+      } catch {
+        // The status and rate-limit headers still classify an unreadable body.
+      }
+    }
+    error.rateLimited = response.status === 429
+      || (response.status === 403 && (
+        error.retryAfter !== null
+        || remaining === '0'
+        || /(?:secondary|api) rate limit|rate limit exceeded/i.test(message)
+      ));
+    error.retryAt = error.rateLimited ? retryAtFromHeaders(response.headers, Date.now()) : null;
     throw error;
   }
   return response;
@@ -217,6 +245,7 @@ async function requestRedelivery({ deliveryId, guid, jwt, fetchImpl, store }) {
   if (!claim.claimed) {
     if (claim.status === 'accepted') return { requested: false, reason: 'cooldown' };
     if (claim.status === 'exhausted') return { requested: false, reason: 'exhausted' };
+    if (claim.status === 'requesting' || claim.status === 'queued') return { requested: false, reason: 'cooldown' };
     throw new Error('A previous redelivery request has an uncertain outcome.');
   }
   try {
@@ -229,10 +258,15 @@ async function requestRedelivery({ deliveryId, guid, jwt, fetchImpl, store }) {
     await store.markRedeliveryAccepted(guid, deliveryId);
     return { requested: true };
   } catch (error) {
+    if (error.rateLimited) {
+      await store.deferRedeliveryRequest(guid, deliveryId, error.retryAt);
+      throw error;
+    }
     if (error.status && error.status < 500 && error.status !== 408 && error.status !== 429) {
       await store.markRedeliveryRejected(guid, deliveryId);
       return { requested: false, reason: 'exhausted' };
     }
+    await store.deferRedeliveryRequest(guid, deliveryId);
     throw error;
   }
 }
@@ -269,7 +303,6 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
     const observedGroups = groupsFromObservations(await activeStore.reconcilerObservations());
     const grouped = nextCursor ? new Map() : observedGroups;
     const dueReceipts = await activeStore.dueControllerReceipts({ limit: CONTROLLER_RECEIPT_LIMIT });
-    const dueRedeliveries = await activeStore.dueRedeliveryRequests({ limit: CONTROLLER_RECEIPT_LIMIT });
     const dueByGuid = new Map();
     for (const receipt of dueReceipts) {
       const separator = String(receipt.replay_key).indexOf(':');
@@ -288,40 +321,37 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
       const deliveryId = String(group.newest?.id ?? '');
       if (key && /^[1-9][0-9]*$/.test(deliveryId)) receiptLinks.push({ replayKey: key, githubDeliveryId: deliveryId });
     }
-    await activeStore.linkGithubDeliveries(receiptLinks);
+    for (let offset = 0; offset < receiptLinks.length; offset += CONTROLLER_RECEIPT_LIMIT) {
+      await activeStore.linkGithubDeliveries(receiptLinks.slice(offset, offset + CONTROLLER_RECEIPT_LIMIT));
+    }
 
-    let requested = 0;
-    let skippedCooldown = 0;
-    let exhausted = 0;
-    const candidates = new Map();
-    const completedRedeliveries = new Set();
-    for (const [guid, group] of grouped) {
-      const dueReceipt = dueByGuid.get(guid);
-      if (!group.hasSuccess || dueReceipt) candidates.set(guid, { group, dueReceipt });
-      else {
-        await activeStore.completeRedelivery(guid);
-        completedRedeliveries.add(guid);
+    const redeliveryQueue = new Map();
+    if (!nextCursor) {
+      for (const [guid, group] of grouped) {
+        const dueReceipt = dueByGuid.get(guid);
+        if (!group.hasSuccess || dueReceipt) {
+          const deliveryId = String(group.newest?.id ?? dueReceipt?.github_delivery_id ?? '');
+          if (/^[1-9][0-9]*$/.test(deliveryId)) redeliveryQueue.set(guid, { guid, githubDeliveryId: deliveryId });
+        } else {
+          await activeStore.completeRedelivery(guid);
+        }
       }
     }
     for (const [guid, receipt] of dueByGuid) {
-      if (!candidates.has(guid) && receipt.github_delivery_id) {
-        candidates.set(guid, { group: { guid, newest: { id: String(receipt.github_delivery_id) }, installations: new Set() }, dueReceipt: receipt });
+      const deliveryId = String(receipt.github_delivery_id ?? '');
+      if (/^[1-9][0-9]*$/.test(deliveryId) && !redeliveryQueue.has(guid)) {
+        redeliveryQueue.set(guid, { guid, githubDeliveryId: deliveryId });
       }
     }
+    await activeStore.queueRedeliveryRequests([...redeliveryQueue.values()]);
+
+    const dueRedeliveries = await activeStore.dueRedeliveryRequests({ limit: CONTROLLER_RECEIPT_LIMIT });
+    let requested = 0;
+    let skippedCooldown = 0;
+    let exhausted = 0;
     for (const request of dueRedeliveries) {
       const guid = String(request.delivery_guid).toLowerCase();
-      if (completedRedeliveries.has(guid)) continue;
-      if (!candidates.has(guid)) {
-        candidates.set(guid, {
-          group: { guid, newest: { id: String(request.github_delivery_id) }, installations: new Set() },
-          dueReceipt: null,
-        });
-      }
-    }
-    if (candidates.size > MAX_REDELIVERIES) throw new Error('The webhook reconciliation batch exceeded its safe redelivery limit.');
-
-    for (const [guid, { group, dueReceipt }] of candidates) {
-      const deliveryId = String(group.newest?.id ?? dueReceipt?.github_delivery_id ?? '');
+      const deliveryId = String(request.github_delivery_id ?? '');
       if (!/^[1-9][0-9]*$/.test(deliveryId)) continue;
       const result = await requestRedelivery({ deliveryId, guid, jwt, fetchImpl, store: activeStore });
       if (result.requested) requested += 1;
@@ -329,6 +359,7 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
       else skippedCooldown += 1;
     }
 
+    const redeliveryQueuePending = await activeStore.hasPendingRedeliveryRequests();
     const scanHighWater = checkpointHighWater ?? highWater;
     if (nextCursor) {
       if (!scanHighWater) throw new Error('The webhook scan cannot persist a cursor without a high-water mark.');
@@ -338,16 +369,16 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
         highWaterDeliveryId: scanHighWater.deliveryId,
         ...expectedCheckpoint,
       });
-    } else if (scanHighWater) {
+    } else if (scanHighWater && !redeliveryQueuePending) {
       await activeStore.advanceReconcilerCheckpoint({
         deliveredAt: scanHighWater.deliveredAt,
         deliveryId: scanHighWater.deliveryId,
         ...expectedCheckpoint,
       });
     }
-    return response(res, 200, { scanned_pages: pages, scan_continuation_pending: Boolean(nextCursor), matched_deliveries: observedGroups.size, redelivery_requests: requested, cooldown_skips: skippedCooldown, exhausted_redeliveries: exhausted });
+    return response(res, 200, { scanned_pages: pages, scan_continuation_pending: Boolean(nextCursor), redelivery_queue_pending: redeliveryQueuePending, matched_deliveries: observedGroups.size, redelivery_requests: requested, cooldown_skips: skippedCooldown, exhausted_redeliveries: exhausted });
   } catch (error) {
-    const status = !error.status || error.status === 429 || error.status >= 500 || error.status === 408 ? 503 : 502;
+    const status = !error.status || error.rateLimited || error.status === 429 || error.status >= 500 || error.status === 408 ? 503 : 502;
     return response(res, status, { error: 'Webhook delivery reconciliation failed; the checkpoint was not advanced.' });
   }
 }
