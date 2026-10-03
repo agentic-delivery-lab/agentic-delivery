@@ -43,22 +43,54 @@ export function permissionForProfile(profile = 'planner') {
   }[profile] ?? 'delivery-plan';
 }
 
-function safeCodexDiagnostic(value) {
+const CODEX_DIAGNOSTIC_HINTS = Object.freeze({
+  missing_persisted_rollout: 'Codex has no persisted rollout for this thread yet.',
+  default_permission_profile_missing: 'A default permission profile is required. Check the controller startup configuration.',
+  workspace_routing_discovery_failed: 'workspace_routing_discovery_failed',
+});
+
+export function safeCodexDiagnosticCode(value) {
+  const message = String(value);
+  if (Object.hasOwn(CODEX_DIAGNOSTIC_HINTS, message)) return message;
+  if (message.includes('no rollout found for thread id')) return 'missing_persisted_rollout';
+  if (message.includes('config defines [permissions] profiles but does not set default_permissions')) return 'default_permission_profile_missing';
+  if (message === 'workspace routing discovery failed') return 'workspace_routing_discovery_failed';
+  return null;
+}
+
+export function safeCodexDiagnostic(value) {
   // Codex owns authentication. Its errors may contain arbitrary credentials,
   // including fragments whose labels were lost when stderr was truncated.
   // Publish only fixed hints, never a substring of the original diagnostic.
-  if (String(value).includes('no rollout found for thread id')) {
-    return 'Codex has no persisted rollout for this thread yet.';
-  }
-  if (String(value).includes('config defines [permissions] profiles but does not set default_permissions')) {
-    return 'A default permission profile is required. Check the controller startup configuration.';
-  }
+  const code = safeCodexDiagnosticCode(value);
+  if (code) return CODEX_DIAGNOSTIC_HINTS[code];
   return 'Details withheld because Codex errors may contain credentials. Check the runner installation, authentication, and configuration.';
+}
+
+function appServerRequestError(method, serverError) {
+  const error = new Error(`Codex ${method}: ${safeCodexDiagnostic(serverError?.message)}`);
+  const data = serverError?.data && typeof serverError.data === 'object' && !Array.isArray(serverError.data)
+    ? serverError.data
+    : {};
+  const codexErrorInfo = serverError?.codexErrorInfo ?? data.codexErrorInfo;
+  const httpStatusCode = serverError?.httpStatusCode ?? data.httpStatusCode;
+  if (codexErrorInfo !== undefined) Object.defineProperty(error, 'codexErrorInfo', {value: codexErrorInfo});
+  if (httpStatusCode !== undefined) Object.defineProperty(error, 'httpStatusCode', {value: httpStatusCode});
+  const codexDiagnostic = safeCodexDiagnosticCode(serverError?.message);
+  if (codexDiagnostic) Object.defineProperty(error, 'codexDiagnostic', {value: codexDiagnostic});
+  return error;
 }
 
 export function appServerFailure(code, signal, stderr = '') {
   const stopped = `Codex app-server stopped (${code ?? signal}).`;
   return String(stderr).trim() ? `${stopped} Diagnostic: ${safeCodexDiagnostic(stderr)}` : stopped;
+}
+
+function appServerFailureError(code, signal, stderr = '') {
+  const error = new Error(appServerFailure(code, signal, stderr));
+  const diagnosticCode = safeCodexDiagnosticCode(stderr);
+  if (diagnosticCode) Object.defineProperty(error, 'codexDiagnostic', {value: diagnosticCode});
+  return error;
 }
 
 export function quotaBoundary(response, now = Date.now() / 1000) {
@@ -346,7 +378,7 @@ export class CodexClient extends EventEmitter {
     this.child.stderr.on('data', (chunk) => {
       this.stderr = `${this.stderr}${chunk.toString()}`.slice(-4000);
     });
-    this.child.on('close', (code, signal) => this.fail(new Error(appServerFailure(code, signal, this.stderr))));
+    this.child.on('close', (code, signal) => this.fail(appServerFailureError(code, signal, this.stderr)));
     this.child.stdin.on('error', () => this.fail(new Error('Codex input pipe closed.')));
     this.lines = createInterface({ input: this.child.stdout });
     this.lines.on('line', (line) => {
@@ -357,7 +389,7 @@ export class CodexClient extends EventEmitter {
       if (!pending) return;
       clearTimeout(pending.timer);
       this.pending.delete(message.id);
-      if (message.error) pending.reject(new Error(`Codex ${pending.method}: ${safeCodexDiagnostic(message.error.message)}`));
+      if (message.error) pending.reject(appServerRequestError(pending.method, message.error));
       else pending.resolve(message.result);
     });
   }

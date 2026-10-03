@@ -52,6 +52,86 @@ test('interrupts on clarification without inventing an answer', async () => {
   assert.equal(client.calls.filter(c=>c.method==='turn/start').length,1);
 });
 
+test('start rejection exposes only allowlisted error metadata', async () => {
+  const client = new FakeCodex(() => {});
+  const request = client.request.bind(client);
+  client.request = async (method, params) => {
+    if (method === 'turn/start') {
+      client.calls.push({method, params});
+      const error = new Error('Authentication failed: access_token=fixture-secret');
+      error.codexErrorInfo = 'unauthorized';
+      error.httpStatusCode = 401;
+      throw error;
+    }
+    return request(method, params);
+  };
+  const result = await runTurn({client,threadId:'thread-1',phase:'implement',prompt:'work',onProgress:async()=>{}});
+  assert.equal(result.status, 'paused');
+  assert.match(result.reason, /codex_error=unauthorized/);
+  assert.match(result.reason, /http_status=401/);
+  assert.doesNotMatch(result.reason, /fixture-secret|access_token/);
+});
+
+test('terminal error notifications require exact thread and active turn IDs', async () => {
+  const cases = [
+    {name:'missing thread', params:{turnId:'turn-1'}},
+    {name:'foreign thread', params:{threadId:'another-thread',turnId:'turn-1'}},
+    {name:'foreign turn', params:{threadId:'thread-1',turnId:'another-turn'}},
+    {name:'retrying turn', params:{threadId:'thread-1',turnId:'turn-1',willRetry:true}},
+    {name:'exact active turn', params:{threadId:'thread-1',turnId:'turn-1'}, expected:true},
+  ];
+
+  for (const testCase of cases) {
+    const client = new FakeCodex((current) => {
+      current.emit('message', {
+        method:'error',
+        params:{...testCase.params,error:{codexErrorInfo:'other',message:'access_token=fixture-secret'}},
+      });
+      current.emit('message', {
+        method:'turn/completed',
+        params:{threadId:'thread-1',turn:{id:'turn-1',status:'failed'}},
+      });
+    });
+    const result = await runTurn({client,threadId:'thread-1',phase:'review',prompt:'review',onProgress:async()=>{}});
+    assert.equal(result.status, 'paused', testCase.name);
+    assert.equal(result.reason.includes('codex_error=other'), testCase.expected ?? false, testCase.name);
+    assert.doesNotMatch(result.reason, /fixture-secret|access_token/, testCase.name);
+  }
+});
+
+test('completion events with another thread or turn cannot finish the active turn', async () => {
+  const terminalEvents = [
+    {threadId:'another-thread',turn:{id:'turn-1',status:'failed'}},
+    {turn:{id:'turn-1',status:'failed'}},
+    {threadId:'thread-1',turn:{id:'another-turn',status:'failed'}},
+    {threadId:'thread-1',turn:{status:'failed'}},
+  ];
+  for (const params of terminalEvents) {
+    const client = new FakeCodex((current) => {
+      current.emit('message', {method:'turn/completed',params});
+      setTimeout(() => current.finish('{"ok":true}'), 5);
+    });
+    const result = await runTurn({client,threadId:'thread-1',phase:'review',prompt:'review',onProgress:async()=>{}});
+    assert.equal(result.status, 'completed');
+    assert.equal(result.text, '{"ok":true}');
+  }
+});
+
+test('app-server disconnect preserves a fixed startup hint without publishing raw text', async () => {
+  const client = new FakeCodex((current) => {
+    setImmediate(() => {
+      const error = new Error('Codex app-server stopped; access_token=fixture-secret');
+      Object.defineProperty(error, 'codexDiagnostic', {value:'default_permission_profile_missing'});
+      current.emit('failure', error);
+    });
+  });
+  const result = await runTurn({client,threadId:'thread-1',phase:'review',prompt:'review',onProgress:async()=>{}});
+  assert.equal(result.status, 'paused');
+  assert.match(result.reason, /Codex app-server disconnected/);
+  assert.match(result.reason, /A default permission profile is required/);
+  assert.doesNotMatch(result.reason, /fixture-secret|access_token/);
+});
+
 test('interrupts near exhaustion and refuses to start when quota is unavailable', async () => {
   const client=new FakeCodex((c)=>c.emit('message',{method:'account/rateLimits/updated',params:{rateLimits:{primary:{usedPercent:98}}}}));
   let reads=0;
@@ -256,9 +336,28 @@ test('completed plans keep details available without overwhelming the issue time
 });
 
 test('technical pauses are short and do not ask for a continuation comment or field change', () => {
-  const text=continuation({issue:15,status:'paused',phase:'implement',reason:'Quota reserve',branch:'feat/issue-15-change',plan:{plan:'The plan',tasks:['First task']},tasks:['Remaining task'],lastProgress:'Edited controller'});
+  const text=continuation({issue:15,status:'paused',phase:'implement',reason:'Quota reserve',budget:{stop:true,resetsAt:1_800_000_100},branch:'feat/issue-15-change',plan:{plan:'The plan',tasks:['First task']},tasks:['Remaining task'],lastProgress:'Edited controller'});
   for(const value of ['## Delivery paused','**Stopped at:** Implement','Quota reserve','Rerun the failed workflow','Do not change lifecycle fields or post a continuation comment']) assert.ok(text.includes(value),value);
   for(const hidden of ['#15','feat/issue-15-change','Remaining task','Edited controller','Codex session ID']) assert.doesNotMatch(text,new RegExp(hidden));
+});
+
+test('quota words in a technical failure do not trigger reset advice without quota telemetry', () => {
+  for (const reason of [
+    'The quota service rejected workspace routing.',
+    'The session budget could not be read.',
+    'Codex reports codex_error=session_budget_exceeded.',
+    'The account credit endpoint returned an error.',
+  ]) {
+    const text = continuation({status:'paused',phase:'implement',reason});
+    assert.match(text, /Fix the reported cause, then rerun the failed workflow/);
+    assert.doesNotMatch(text, /Rerun the failed workflow after/);
+  }
+
+  const measured = continuation({
+    status:'paused',phase:'implement',reason:'The measured allowance is nearly exhausted.',
+    budget:{stop:true,resetsAt:1_800_000_100},
+  });
+  assert.match(measured, /Rerun the failed workflow after 2027-01-15T08:01:40\.000Z/);
 });
 
 test('validation recovery surfaces the latest error without restoring completed plan tasks', () => {

@@ -440,8 +440,10 @@ made another clean commit locally. Invalid saved state is left untouched for
 operator inspection. Older state without a source snapshot returns to planning
 before dependent work can continue.
 
-Codex startup and protocol failures publish fixed diagnostic hints only. Raw
-errors may contain authentication data, so the controller does not copy them
+Codex startup and protocol failures publish only allowlisted error codes, HTTP
+status codes, and fixed diagnostic hints. For example, a recognized workspace
+routing failure is recorded as a fixed category. Raw errors and additional
+details may contain authentication data, so the controller does not copy them
 into logs or issue comments. Inspect unexpected failures locally as the runner
 operator; never paste credential-bearing output into the audit trail.
 
