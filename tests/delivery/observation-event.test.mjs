@@ -32,7 +32,7 @@ test('observation validator accepts an enrolled pull-request event without GitHu
     organizationId: '327861320',
     installationId: '163255060',
     repositoryFullName: 'agentic-delivery-lab/agentic-delivery',
-    controller: { version: '0.2.0-draft.48', commit: '28ea907b8346d8b63b45567d526ee5be536fcc49' },
+    controller: { version: '0.2.0-draft.49', commit: '84e5cf66902b6e93100be557ec1cd98557ef6320' },
     dispatchSecret: 'dispatch-secret',
     dispatchTimestamp: 1789992000000,
   }));
