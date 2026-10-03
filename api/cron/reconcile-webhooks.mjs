@@ -280,7 +280,6 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
     const receiptLinks = [];
     for (const [guid, group] of grouped) {
       const dueReceipt = dueByGuid.get(guid);
-      if (!group.hasSuccess && !dueReceipt) continue;
       const installations = [...group.installations];
       if (installations.length > 1) throw new Error('GitHub returned conflicting installation IDs for one delivery GUID.');
       const installationId = installations[0] ?? installationFromReplayKey(dueReceipt?.replay_key);

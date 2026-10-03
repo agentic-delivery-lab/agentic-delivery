@@ -98,10 +98,13 @@ would exceed 1,000 redelivery requests returns 503 and leaves the checkpoint
 unchanged.
 It also redelivers due controller receipts even when GitHub recorded the
 original webhook delivery as successful. Before advancing its checkpoint, the
-reconciler links each observed delivery GUID's numeric GitHub API ID to any
-matching pending, running, or retryable controller receipt. A later scan can
-then retry that receipt even after its original webhook delivery is older than
-the history checkpoint. The reconciler stores a timestamp and delivery ID
+reconciler links every observed delivery GUID's numeric GitHub API ID to a
+matching pending, running, or retryable controller receipt, including receipts
+whose retry time has not arrived. The due-receipt query selects only rows that
+already have a numeric GitHub delivery ID, so older unlinked rows cannot occupy
+the bounded batch or starve linked retries. A later scan can retry a linked
+receipt even after its original webhook delivery is older than the history
+checkpoint. The reconciler stores a timestamp and delivery ID
 checkpoint only after the full bounded scan and all accepted redelivery
 requests complete. A failed API call leaves the checkpoint unchanged, so the
 next run rescans safely. Redelivery requests have a 15-minute cooldown to

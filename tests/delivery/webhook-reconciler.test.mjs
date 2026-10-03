@@ -224,7 +224,7 @@ test('reconciler does not re-request a due redelivery after successful history r
   assert.equal(store.advanced.length, 1);
 });
 
-test('reconciler links a pending controller receipt before checkpointing successful webhook history', async () => {
+test('reconciler links failed webhook history to a pending receipt before checkpointing, even when it is not due', async () => {
   const scanNow = Date.now();
   const guid = deliveryA;
   const pendingReceipt = { replay_key: `163255060:${guid}`, status: 'pending', github_delivery_id: null, attempt_count: 0 };
@@ -241,22 +241,26 @@ test('reconciler links a pending controller receipt before checkpointing success
     }
   };
   store.advanceReconcilerCheckpoint = async (value) => {
+    assert.equal(pendingReceipt.github_delivery_id, '301');
     store.advanced.push(value);
     checkpoint = { checkpoint_at: value.deliveredAt, checkpoint_delivery_id: value.deliveryId };
   };
   const deliveredAt = new Date(scanNow - 60_000).toISOString();
+  let historyPage = 0;
   const fetchImpl = async (url, options) => {
     if (options.method === 'POST') {
       posts.push(String(url));
       return response(202);
     }
-    return response(200, [{ id: 301, guid, delivered_at: deliveredAt, status: 'OK', installation_id: '163255060' }]);
+    const status = historyPage++ === 0 ? 'FAIL' : 'OK';
+    return response(200, [{ id: 301, guid, delivered_at: deliveredAt, status, installation_id: '163255060' }]);
   };
   const firstRes = output();
   await reconcileWebhookDeliveries({ req: cronRequest(), res: firstRes, env: cronEnv(), fetchImpl, store, now: () => scanNow });
 
   assert.equal(firstRes.statusCode, 200);
   assert.deepEqual(store.linked[0], { key: pendingReceipt.replay_key, id: '301' });
+  assert.deepEqual(posts, ['https://api.github.com/app/hook/deliveries/301/attempts']);
   assert.equal(checkpoint.checkpoint_delivery_id, '301');
 
   dueReceipts = [pendingReceipt];
@@ -264,7 +268,10 @@ test('reconciler links a pending controller receipt before checkpointing success
   await reconcileWebhookDeliveries({ req: cronRequest(), res: secondRes, env: cronEnv(), fetchImpl, store, now: () => scanNow + 24 * 60 * 60 * 1000 });
 
   assert.equal(secondRes.statusCode, 200);
-  assert.deepEqual(posts, ['https://api.github.com/app/hook/deliveries/301/attempts']);
+  assert.deepEqual(posts, [
+    'https://api.github.com/app/hook/deliveries/301/attempts',
+    'https://api.github.com/app/hook/deliveries/301/attempts',
+  ]);
 });
 
 test('reconciler resumes due redeliveries beyond its delivery-history checkpoint', async () => {

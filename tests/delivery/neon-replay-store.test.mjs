@@ -155,6 +155,33 @@ test('Neon replay receipts link a batch of webhook delivery IDs before the scan 
   assert.deepEqual(JSON.parse(call.values[0]), [{ replay_key: links[0].replayKey, github_delivery_id: links[0].githubDeliveryId }]);
 });
 
+test('due controller receipt selection excludes unlinked rows before applying its limit', async () => {
+  const unlinked = Array.from({ length: 250 }, (_, index) => ({
+    replay_key: `163255060:unlinked-${index}`,
+    github_delivery_id: null,
+    status: 'retryable',
+  }));
+  const eligible = {
+    replay_key: '163255060:linked-receipt',
+    github_delivery_id: '301',
+    status: 'retryable',
+  };
+  let call;
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        call = { statement, values };
+        return [...unlinked, eligible].filter((receipt) => receipt.github_delivery_id !== null).slice(0, values[0]);
+      },
+    },
+  });
+
+  assert.deepEqual(await store.dueControllerReceipts({ limit: 250 }), [eligible]);
+  assert.match(call.statement, /github_delivery_id IS NOT NULL/);
+  assert.match(call.statement, /LIMIT \$1/);
+  assert.deepEqual(call.values, [250, 15 * 60 * 1000]);
+});
+
 test('Neon replay claim cleanup deletes at most one bounded batch of expired keys', async () => {
   const entries = new Map(Array.from({ length: REPLAY_CLEANUP_BATCH_SIZE + 1 }, (_, index) => [
     `expired-${index}`,
@@ -219,6 +246,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
   const key = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const lostResponseKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const linkedReceiptKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
+  const unlinkedReceiptKeys = Array.from({ length: 250 }, () => replayKey({ installationId: '163255060', deliveryId: randomUUID() }));
   const leaseToken = `integration:${randomUUID()}`;
 
   try {
@@ -275,6 +303,21 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     await store.ensureControllerReceipt(linkedReceiptKey);
     assert.equal(await store.linkGithubDeliveries([{ replayKey: linkedReceiptKey, githubDeliveryId: '987654321' }]), 1);
     assert.equal((await store.controllerReceipt(linkedReceiptKey)).github_delivery_id, '987654321');
+    await sql.query(`
+      UPDATE public.webhook_controller_receipts
+      SET status = 'retryable', next_attempt_at = clock_timestamp() - interval '1 hour'
+      WHERE replay_key = $1
+    `, [linkedReceiptKey]);
+    await sql.query(`
+      INSERT INTO public.webhook_controller_receipts (replay_key, status, next_attempt_at, created_at, expires_at)
+      SELECT entries.replay_key, 'retryable',
+             clock_timestamp() - interval '1 hour',
+             clock_timestamp() - interval '1 hour',
+             clock_timestamp() + interval '1 day'
+      FROM jsonb_to_recordset($1::jsonb) AS entries(replay_key text)
+    `, [JSON.stringify(unlinkedReceiptKeys.map((replay_key) => ({ replay_key })))]);
+    const dueReceipts = await store.dueControllerReceipts({ limit: 250 });
+    assert.deepEqual(dueReceipts.map((receipt) => receipt.replay_key), [linkedReceiptKey]);
 
     const claimColumns = await sql.query(`
       SELECT column_name
@@ -375,6 +418,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     for (const receiptKey of [key, lostResponseKey, linkedReceiptKey]) {
       await sql.query('DELETE FROM public.webhook_controller_receipts WHERE replay_key = $1', [receiptKey]);
     }
+    await sql.query('DELETE FROM public.webhook_controller_receipts WHERE replay_key = ANY($1::text[])', [unlinkedReceiptKeys]);
     await sql.query('DELETE FROM public.webhook_reconciler_observations');
     await sql.query("DELETE FROM public.webhook_reconciler_state WHERE state_key = 'github-app-deliveries'");
   }

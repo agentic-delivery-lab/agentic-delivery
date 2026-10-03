@@ -305,6 +305,7 @@ export class NeonReplayStore {
       `SELECT replay_key, status, github_delivery_id, attempt_count
        FROM public.webhook_controller_receipts
        WHERE expires_at > clock_timestamp()
+         AND github_delivery_id IS NOT NULL
          AND (
            (status = 'pending' AND created_at <= clock_timestamp() - ($2::double precision * INTERVAL '1 millisecond'))
            OR (status = 'retryable' AND next_attempt_at <= clock_timestamp())
