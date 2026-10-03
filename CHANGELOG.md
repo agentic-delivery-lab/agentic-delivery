@@ -83,9 +83,14 @@ they do not authorize migration, alter that issue's scope, or close it.
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.52` at
   `8a2acddf07d0b70b11fc5d9c1f5143e54abf9185`, retaining draft51 and draft50
-  for rollback. The participant remains in shadow mode. The bootstrap still
-  points to `b99fb89907da164b8b45a229e7569013ac093f60`; a separate reviewed
-  bootstrap update is required before the next canary.
+  for rollback. The participant remains in shadow mode. Its release PR kept
+  the bootstrap at `b99fb89907da164b8b45a229e7569013ac093f60` pending this
+  separate reviewed update.
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60)
+  advances `bootstrapCommit` and all intake and delivery workflow checkout
+  refs to merge commit `7f71508ea4cf4ff881b8d1b7628dc5722fca24b5`, which
+  contains the draft52 participant pin and issue-field masker. The central
+  participant remains in shadow mode pending the post-merge canary.
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.51` at
   `0f7a40dbd475105bf39cb475d91e3903a78d250b`, retaining draft50 and draft49
