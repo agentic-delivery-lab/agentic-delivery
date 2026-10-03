@@ -116,7 +116,7 @@ export function quotaBoundary(response, now = Date.now() / 1000) {
     || (value.secondary != null && (typeof value.secondary !== 'object' || Array.isArray(value.secondary))));
   const creditReasons = new Set();
   for (const { value } of buckets) {
-    const credits = value.credits;
+    const credits = value?.credits;
     if (credits?.hasCredits === true) creditReasons.add(QUOTA_REASON.creditSpillover);
     else if (credits?.hasCredits !== false) creditReasons.add(QUOTA_REASON.creditTelemetryUnavailable);
     if (credits?.unlimited === true) creditReasons.add(QUOTA_REASON.unlimitedCredits);
