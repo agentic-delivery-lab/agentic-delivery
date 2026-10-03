@@ -81,6 +81,12 @@ they do not authorize migration, alter that issue's scope, or close it.
 ### Changed
 
 - The controller release manifest and central participant registry now target
+  `0.2.0-draft.52` at
+  `8a2acddf07d0b70b11fc5d9c1f5143e54abf9185`, retaining draft51 and draft50
+  for rollback. The participant remains in shadow mode. The bootstrap still
+  points to `b99fb89907da164b8b45a229e7569013ac093f60`; a separate reviewed
+  bootstrap update is required before the next canary.
+- The controller release manifest and central participant registry now target
   `0.2.0-draft.51` at
   `0f7a40dbd475105bf39cb475d91e3903a78d250b`, retaining draft50 and draft49
   for rollback. Runtime intake and delivery use this pin from the trusted
