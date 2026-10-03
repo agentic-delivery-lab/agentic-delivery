@@ -10,6 +10,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds Neon-backed dispatch leases and controller receipts, persists cursors for bounded delivery-history scans, stores GitHub delivery IDs before advancing checkpoints, aggregates attempt outcomes across scan segments, and keeps active or uncertain webhook outcomes retryable.
+- The controller release advances to `0.2.0-draft.59` at `2ab8bbe20c2ae01616af91ee224dcb1da881ed0c`; the central participant moves to that immutable pin while draft58 remains available for rollback.
 - Reconciliation links every observed webhook attempt to its matching controller receipt before checkpointing, including receipts that are not due yet. Due-receipt batches exclude unlinked rows before applying the limit, preventing stale rows from starving eligible retries.
 - Definitive GitHub redelivery API errors are retained as exhausted requests instead of deleting their attempt state and leaving the scan checkpoint stuck in an unlimited retry loop.
 - Review follow-up pins invocation finalization to the validated participant controller commit and makes webhook ingress fail closed instead of selecting a configured local file store. Migration 0004 retains temporary webhook delivery observations until the full scan reaches its checkpoint.
