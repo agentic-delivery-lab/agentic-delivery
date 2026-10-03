@@ -107,7 +107,7 @@ they do not authorize migration, alter that issue's scope, or close it.
   redacted, and reruns refresh the current pull request and source issue.
 - [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
   advances `bootstrapCommit` to merged controller snapshot
-  `e0b2f0719e00ac49aaab305ea10065c5f5197cb1`. Issue intake and delivery now
+  `b99fb89907da164b8b45a229e7569013ac093f60`. Issue intake and delivery now
   mask organization field and option IDs from the trusted bootstrap, so
   supported participant pins do not need to carry the masker.
 - The controller release manifest and central participant registry now target
