@@ -271,6 +271,22 @@ and evidence contracts use SemVer. Reusable workflow callers and bootstrap
 bundles use SemVer plus an exact source SHA. Primitive and Architecture
 dependencies use a release version, source commit and content digest.
 
+The SemVer evidence-contract version declared in the participant registry and
+controller release is separate from the integer `schemaVersion` stored in a
+delivery evidence record. The current participant record uses integer `1` as
+its record-format major; it does not replace the declared SemVer compatibility
+version.
+
+Schemas for controller-owned Harness review artifacts use a local SemVer
+version while the data stays inside the control plane. They do not become
+participant evidence contracts or release-manifest entries solely because a
+review artifact is machine-readable. Before a participant consumes or
+exchanges one of these schemas, promote it into the versioned participant
+contract and release manifest through a reviewed change. The schema for
+`review quota evidence` in
+`docs/architecture/quota-diagnostics.schema.json` follows this boundary; its
+source remains the control plane's internal `quota diagnostics` record.
+
 The controller publishes a release manifest containing supported event,
 lifecycle, state-machine, evidence, primitive, Architecture and minimum
 bootstrap versions. It supports the current major and immediately preceding
@@ -408,6 +424,7 @@ Deterministic tests and an operator smoke run must prove:
 - Supersedes the historical [ADR-0014: Use a repository-scoped GitHub App for event-producing mutations](https://github.com/agentic-delivery-lab/agentic-delivery/blob/1212568eeb80960696385f04a1dd6313e38e4e04/docs/decisions/0014-use-a-repository-scoped-github-app.md): the App installation is organization-wide with per-origin repository token narrowing. Its record is removed from the active tree, but the commit history remains the historical source.
 - Refines [ADR-0015: Isolate resumable runner execution](0015-isolate-resumable-runner-execution.md): runner namespaces and continuation records must include repository ID, issue and pinned controller/state-machine versions.
 - Refines [ADR-0017: Use an explicit agent-invocation boundary for conversation-driven delivery](0017-use-an-explicit-agent-invocation-boundary.md): invocation envelopes retain the originating repository and are authorized centrally.
+- Amendment tracked by [Issue #68](https://github.com/agentic-delivery-lab/agentic-delivery/issues/68) and reviewed in [PR #69](https://github.com/agentic-delivery-lab/agentic-delivery/pull/69): controller-local Harness schemas remain outside participant contract manifests until participants consume or exchange them.
 - The selected architecture is an intermediate implementation boundary as the Architecture Authority, Agentic Primitives and Distribution repositories are extracted. The Control Plane remains in `agentic-delivery` to preserve existing issue and pull-request URLs.
 - `Delivery Readiness` remains the current live field. Renaming it to `Delivery State` is a separate architecture decision and migration; this ADR does not silently change that vocabulary.
 - This record is provisional until its review pull request is merged into `main`.

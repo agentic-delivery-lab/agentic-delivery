@@ -1,4 +1,5 @@
-import { MODELS, quotaBoundary } from './codex-client.mjs';
+import { MODELS, quotaBoundary, quotaTelemetryUnavailable } from './codex-client.mjs';
+import { QUOTA_STOP_PHASE } from './quota-diagnostics.mjs';
 
 const strings = { type: 'array', items: { type: 'string' } };
 const REFINEMENT_WORK_TYPES = ['bug', 'feature', 'task', 'architecture', 'implementation', 'validation'];
@@ -260,8 +261,8 @@ export function formatRefinementComment(outcome) {
 export async function runTurn({ client, threadId, phase, prompt, onProgress, signal, schema = outcomeSchema(phase), stallTimeoutMs = 20 * 60_000, pollMs = 15_000 }) {
   let budget;
   try { budget = quotaBoundary(await client.request('account/rateLimits/read')); }
-  catch { return { status: 'paused', reason: 'Quota telemetry is unavailable.' }; }
-  if (budget.stop) return { status: 'paused', reason: budget.reason, budget };
+  catch { budget = quotaTelemetryUnavailable(); }
+  if (budget.stop) return { status: 'paused', reason: budget.reason, budget, stopPhase: QUOTA_STOP_PHASE.preflight };
   if (signal?.aborted) return { status: 'paused', reason: 'Workflow cancelled.' };
 
   let turnId;
@@ -286,9 +287,9 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     signal?.removeEventListener('abort', onAbort);
     progress.then(() => resolveResult(value));
   };
-  const stop = (reason, status = 'paused', questions = []) => {
+  const stop = (reason, status = 'paused', questions = [], stopPhase) => {
     if (stopped || settled) return;
-    stopped = { status, reason, budget, questions };
+    stopped = { status, reason, budget, questions, ...(stopPhase ? { stopPhase } : {}) };
     interruptTimer = setTimeout(() => { closeClient(); finish(stopped); }, 5000);
     if (turnId) client.request('turn/interrupt', { threadId, turnId }).catch(() => { closeClient(); finish(stopped); });
   };
@@ -302,8 +303,11 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
     polling = true;
     try {
       budget = quotaBoundary(await client.request('account/rateLimits/read'));
-      if (budget.stop) stop(budget.reason);
-    } catch { stop('Quota telemetry became unavailable.'); }
+      if (budget.stop) stop(budget.reason, 'paused', [], turnId ? QUOTA_STOP_PHASE.activeTurn : QUOTA_STOP_PHASE.preflight);
+    } catch {
+      budget = quotaTelemetryUnavailable();
+      stop(budget.reason, 'paused', [], turnId ? QUOTA_STOP_PHASE.activeTurn : QUOTA_STOP_PHASE.preflight);
+    }
     finally { polling = false; }
   };
   const onAbort = () => stop('Workflow cancelled; saved work can be resumed.');

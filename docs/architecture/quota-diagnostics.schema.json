@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/docs/architecture/quota-diagnostics.schema.json",
+  "title": "Harness review quota evidence",
+  "description": "Controller-owned, bounded, sanitized review quota evidence. This schema is internal to Harness review artifacts and Actions summaries; it is not a participant contract while it remains inside the control plane. Version 1 consumers ignore optional unknown properties.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "reasonCode",
+    "stopPhase",
+    "triggerReasons",
+    "windows",
+    "triggeringWindows",
+    "serverBlocks",
+    "truncated",
+    "nextEligibleAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$",
+      "description": "Semantic Versioning version in schema major 1. Minor versions may add optional properties; consumers ignore unknown properties and safe reason identifiers."
+    },
+    "reasonCode": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "description": "Primary safe stop reason. Additional same-major reason codes may be introduced additively."
+    },
+    "stopPhase": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "description": "Safe stop phase identifier. An unrecognized same-major value is displayed as unknown."
+    },
+    "triggerReasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 9,
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+      "description": "Every known simultaneous safe cause, independently of the bounded bucket detail arrays."
+    },
+    "windows": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/window" },
+      "description": "At most 32 triggering windows followed by at most 32 context windows."
+    },
+    "triggeringWindows": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/window" },
+      "description": "A bounded sample of windows that caused the reserve stop or had invalid telemetry."
+    },
+    "serverBlocks": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/serverBlock" }
+    },
+    "truncated": {
+      "type": "boolean",
+      "description": "True when a record limit omitted quota bucket details or unsafe records were discarded. Trigger reason categories remain available."
+    },
+    "nextEligibleAt": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "Unix time in seconds, present only when quota telemetry identifies an eligible reset and no other cause blocks execution."
+    }
+  },
+  "$defs": {
+    "window": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["bucket", "slot", "usedPercent", "windowDurationMins", "resetsAt", "valid"],
+      "properties": {
+        "bucket": { "type": "string", "pattern": "^bucket-[1-9][0-9]{0,3}$" },
+        "slot": { "enum": ["primary", "secondary"] },
+        "usedPercent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "windowDurationMins": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "resetsAt": { "type": ["number", "null"], "minimum": 0 },
+        "valid": { "type": "boolean" }
+      }
+    },
+    "serverBlock": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["bucket", "rateLimitReached", "spendControlReached"],
+      "properties": {
+        "bucket": { "type": "string", "pattern": "^bucket-[1-9][0-9]{0,3}$" },
+        "rateLimitReached": { "type": "boolean" },
+        "spendControlReached": { "type": "boolean" }
+      }
+    }
+  }
+}

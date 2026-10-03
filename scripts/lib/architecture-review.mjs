@@ -5,6 +5,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { parseRepositoryYaml } from './yaml.mjs';
+import { QUOTA_REASON_LABELS, QUOTA_STOP_PHASE_LABELS, QUOTA_STOP_PHASE, QUOTA_TRIGGER_LABELS, supportsQuotaDiagnosticsSchemaVersion } from './quota-diagnostics.mjs';
 import { buildTraceability, collectAdrsFromSources, collectPrimitivesFromSources, PRIMITIVE_MARKER } from './adr-traceability.mjs';
 import { validateArchitecturePin } from '../validate-architecture-pin.mjs';
 
@@ -16,7 +17,87 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHA = /^[0-9a-f]{40}$/i;
 const URL = /^https?:\/\/\S+$/;
 
+
+const SENSITIVE_FIELD_NAMES = '(?:access[ _-]?token|refresh[ _-]?token|id[ _-]?token|auth[ _-]?token|x[ _-]?(?:api|auth)[ _-]?key|api[ _-]?key|client[ _-]?secret|app[ _-]?secret|secret[ _-]?key|secret|password|passphrase|credential(?:s)?|authorization|proxy[ _-]?authorization|cookie|set[ _-]?cookie|private[ _-]?key|signing[ _-]?key|access[ _-]?key|secret[ _-]?access[ _-]?key|session[ _-]?(?:key|token)|token)';
+const SENSITIVE_YAML_BLOCK = new RegExp(`(^[ \\t]*)(["']?)(${SENSITIVE_FIELD_NAMES})\\2([ \\t]*:[ \\t]*)(?:[|>][+-]?[ \\t]*(?:#[^\\r\\n]*)?)(?:\\r?\\n(?:[ \\t]+[^\\r\\n]*(?:\\r?\\n|$))*)`, 'gim');
+const SENSITIVE_ASSIGNMENT = new RegExp(`(["']?)(${SENSITIVE_FIELD_NAMES})\\1([ \\t]*:[ \\t]*(?:\\r?\\n[ \\t]*)?|[ \\t]*=[ \\t]*)(?:\\[redacted(?: (?:private key|token|credential))?\\]|"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|[^,\\r\\n}\\]]+)`, 'gi');
+const SENSITIVE_COMPOUND_ASSIGNMENT = new RegExp(`(["']?)(${SENSITIVE_FIELD_NAMES})\\1([ \\t]*:[ \\t]*)`, 'gi');
+
+function compoundValueEnd(source, start) {
+  const expectedClosers = [source[start] === '{' ? '}' : ']'];
+  let quote = null;
+  let escaped = false;
+  for (let index = start + 1; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") quote = character;
+    else if (character === '{') expectedClosers.push('}');
+    else if (character === '[') expectedClosers.push(']');
+    else if (character === '}' || character === ']') {
+      if (expectedClosers.pop() !== character) return source.length;
+      if (expectedClosers.length === 0) return index + 1;
+    }
+  }
+  return source.length;
+}
+
+function redactSensitiveCompoundValues(value) {
+  const source = String(value ?? '');
+  const assignment = new RegExp(SENSITIVE_COMPOUND_ASSIGNMENT.source, SENSITIVE_COMPOUND_ASSIGNMENT.flags);
+  const replacements = [];
+  let match;
+  while ((match = assignment.exec(source))) {
+    const valueStart = assignment.lastIndex;
+    let compoundStart = valueStart;
+    while (compoundStart < source.length && /\s/.test(source[compoundStart])) compoundStart += 1;
+    if (source[compoundStart] !== '{' && source[compoundStart] !== '[') continue;
+    replacements.push({ start: valueStart, end: compoundValueEnd(source, compoundStart) });
+    assignment.lastIndex = replacements.at(-1).end;
+  }
+  let redacted = source;
+  for (const replacement of replacements.reverse()) {
+    redacted = `${redacted.slice(0, replacement.start)}[redacted]${redacted.slice(replacement.end)}`;
+  }
+  return redacted;
+}
+
 export const REVIEW_SCHEMA_VERSION = 1;
+
+export function redactSensitiveText(value) {
+  let text = redactSensitiveCompoundValues(value)
+    .replace(SENSITIVE_YAML_BLOCK, (_match, indent, quote, key, separator) => `${indent}${quote}${key}${quote}${separator}[redacted]`)
+    .replace(SENSITIVE_ASSIGNMENT, (_match, quote, key, separator) => `${quote}${key}${quote}${separator}[redacted]`)
+    .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)/gi, '[redacted private key]')
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]{8,}={0,2}/gi, 'Bearer [redacted]')
+    .replace(/\bBasic\s+[A-Za-z0-9+/]{8,}={0,2}/gi, 'Basic [redacted]')
+    .replace(/\b(?:github_pat_|gh[pousr]_|glpat-|glsa-|xox[baprs]-|npm_|pypi-)[A-Za-z0-9_-]{8,}/gi, '[redacted token]')
+    .replace(/\bsk-(?:proj-|live_|test_)?[A-Za-z0-9_-]{16,}/gi, '[redacted token]')
+    .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, '[redacted token]')
+    .replace(/\bAIza[0-9A-Za-z_-]{30,}\b/g, '[redacted token]')
+    .replace(/\bya29\.[0-9A-Za-z_-]{16,}\b/g, '[redacted token]')
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{8,}\b/g, '[redacted token]')
+    .replace(/\b(https?:\/\/)[^\s/:@]+:[^\s/@]+@/gi, '$1[redacted]@');
+  for (const name of ['GH_TOKEN', 'GITHUB_TOKEN', 'PUBLISH_TOKEN', 'OPENAI_API_KEY', 'CODEX_DELIVERY_APP_PRIVATE_KEY']) {
+    const secret = process.env[name];
+    if (secret && secret.length >= 8) text = text.split(secret).join('[redacted credential]');
+  }
+  return text;
+}
+
+function safeSemanticMarkdown(value) {
+  return redactSensitiveText(value)
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/([\\`*_{}\[\]()#+.!|\-])/g, '\\$1');
+}
+
 
 function childEnvironment() {
   const { GH_TOKEN: _ghToken, GITHUB_TOKEN: _githubToken, PUBLISH_TOKEN: _publishToken,
@@ -424,7 +505,7 @@ export function formatReviewMarkdown(review) {
   for (const item of review.checks) lines.push(`- **${item.status}** \`${item.id}\`: ${item.message}`);
   if (review.semantic?.skippedReason) lines.push('', review.semantic.skippedReason);
   if (review.semantic?.status && review.semantic.status !== 'not-run') {
-    lines.push('', `#### Semantic review: ${review.semantic.status}`, '', review.semantic.summary ?? 'No semantic summary was returned.');
+    lines.push('', `#### Semantic review: ${review.semantic.status}`, '', safeSemanticMarkdown(review.semantic.summary ?? 'No semantic summary was returned.'));
     const session = review.semantic.reviewSession;
     if (session?.disposition === 'cached') {
       const runReference = session.sourceRunId ? ` from Actions run ${session.sourceRunId}` : '';
@@ -454,12 +535,74 @@ export function formatReviewMarkdown(review) {
       };
       lines.push(`Quota guard signals before: ${describeSignals(quota.before)}. After: ${describeSignals(quota.after)}.`);
     }
-    for (const finding of review.semantic.findings ?? []) lines.push(`- **${finding.severity ?? 'advisory'}** ${finding.statement} (Evidence: ${(finding.evidence ?? []).join(', ') || 'none'})`);
-    if (review.semantic.evidenceGaps?.length) {
-      lines.push('', '**Evidence gaps**', '', ...review.semantic.evidenceGaps.map((gap) => `- ${gap}`));
+    for (const finding of review.semantic.findings ?? []) {
+      const severity = ['concern', 'advisory'].includes(finding.severity) ? finding.severity : 'advisory';
+      const evidence = Array.isArray(finding.evidence) ? finding.evidence.slice(0, 20).map(safeSemanticMarkdown).join(', ') : '';
+      lines.push(`- **${severity}** ${safeSemanticMarkdown(finding.statement)} (Evidence: ${evidence || 'none'})`);
     }
+    if (review.semantic.evidenceGaps?.length) {
+      lines.push('', '**Evidence gaps**', '', ...review.semantic.evidenceGaps.slice(0, 50).map((gap) => `- ${safeSemanticMarkdown(gap)}`));
+    }
+    const quotaDetails = formatQuotaDiagnostics(review.semantic.quotaDiagnostics);
+    if (quotaDetails.length) lines.push('', ...quotaDetails);
   }
   return `${lines.join('\n')}\n`;
 }
+
+function formatQuotaDiagnostics(value) {
+  if (!value || typeof value !== 'object' || !supportsQuotaDiagnosticsSchemaVersion(value.schemaVersion)) return [];
+  const phase = QUOTA_STOP_PHASE_LABELS[value.stopPhase] ?? QUOTA_STOP_PHASE_LABELS[QUOTA_STOP_PHASE.unknown];
+  const reason = QUOTA_REASON_LABELS[value.reasonCode] ?? 'unrecognized by this consumer';
+  const timestamp = (seconds) => {
+    if (!Number.isFinite(seconds)) return null;
+    try { return new Date(seconds * 1000).toISOString(); } catch { return null; }
+  };
+  const displayBucket = (bucket) => {
+    const match = /^bucket-([1-9]\d{0,3})$/.exec(bucket ?? '');
+    return match ? `Bucket ${match[1]}` : null;
+  };
+  const windows = Array.isArray(value.windows) ? value.windows : [];
+  const triggering = new Set((Array.isArray(value.triggeringWindows) ? value.triggeringWindows : [])
+    .filter((window) => displayBucket(window?.bucket) && ['primary', 'secondary'].includes(window.slot))
+    .map((window) => `${window.bucket}:${window.slot}`));
+  const lines = [
+    '#### Review quota evidence',
+    '',
+    `- Schema version: ${value.schemaVersion}`,
+    `- Stop phase: ${phase}`,
+    `- Reason: ${reason}`,
+  ];
+  const triggers = Array.isArray(value.triggerReasons) ? value.triggerReasons.map((code) => QUOTA_TRIGGER_LABELS[code]).filter(Boolean) : [];
+  if (triggers.length) lines.push(`- Trigger signals: ${[...new Set(triggers)].join(', ')}`);
+  if (value.truncated === true) lines.push('- Some bucket details were omitted to keep review quota evidence within fixed size limits.');
+  const next = timestamp(value.nextEligibleAt);
+  lines.push(`- Next eligible time: ${next ?? 'not derivable from quota telemetry'}`);
+  lines.push('', '**Quota windows**');
+  if (!windows.length) lines.push('- No quota windows were available.');
+  for (const window of windows) {
+    const bucket = displayBucket(window?.bucket);
+    if (!bucket || !['primary', 'secondary'].includes(window.slot)) continue;
+    const usage = Number.isFinite(window.usedPercent) && window.usedPercent >= 0 && window.usedPercent <= 100
+      ? `${Number.isInteger(window.usedPercent) ? window.usedPercent : window.usedPercent.toFixed(1)}%`
+      : 'usage unavailable';
+    const duration = Number.isFinite(window.windowDurationMins) && window.windowDurationMins > 0
+      ? `${window.windowDurationMins}-minute window`
+      : 'duration unavailable';
+    const reset = timestamp(window.resetsAt);
+    const resetText = reset ? `; resets at ${reset}` : '';
+    const invalidText = window.valid === true ? '' : ' (telemetry invalid or expired)';
+    const causedStop = triggering.has(`${window.bucket}:${window.slot}`) ? '; triggered the stop' : '';
+    lines.push(`- ${bucket} ${window.slot}: ${usage} of the ${duration}${resetText}${causedStop}${invalidText}`);
+  }
+  const serverBlocks = Array.isArray(value.serverBlocks) ? value.serverBlocks : [];
+  for (const block of serverBlocks) {
+    const bucket = displayBucket(block?.bucket);
+    if (!bucket) continue;
+    if (block.rateLimitReached === true) lines.push(`- ${bucket}: server rate-limit flag set`);
+    if (block.spendControlReached === true) lines.push(`- ${bucket}: server spend-control flag set`);
+  }
+  return lines;
+}
+
 
 export { EVIDENCE_MARKER };

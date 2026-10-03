@@ -4,6 +4,8 @@ import { createInterface } from 'node:readline';
 import { existsSync, realpathSync, mkdirSync, mkdtempSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
+import { isDeepStrictEqual } from 'node:util';
+import { QUOTA_REASON } from './quota-diagnostics.mjs';
 
 export const MODELS = Object.freeze({
   route: { model: 'gpt-6-luna', effort: 'low', mode: 'plan' },
@@ -60,46 +62,136 @@ export function appServerFailure(code, signal, stderr = '') {
 }
 
 export function quotaBoundary(response, now = Date.now() / 1000) {
-  const candidates = Object.values(response?.rateLimitsByLimitId ?? {});
-  if (response?.rateLimits) candidates.push(response.rateLimits);
-  const buckets = candidates.filter((bucket, index) => candidates.indexOf(bucket) === index);
-  if (buckets.some((bucket) => !bucket || typeof bucket !== 'object' || !bucket.primary)) {
-    return { stop: true, reason: 'Quota telemetry contains an invalid bucket.' };
+  const mapped = response?.rateLimitsByLimitId;
+  const mappedIsRecord = mapped == null || (typeof mapped === 'object' && !Array.isArray(mapped));
+  const entries = mappedIsRecord && mapped
+    ? Object.entries(mapped).map(([limitId, value]) => ({ limitId, value }))
+    : [];
+  if (response?.rateLimits != null) {
+    const legacy = response.rateLimits;
+    const legacyLimitId = typeof legacy.limitId === 'string' ? legacy.limitId : null;
+    const mirrored = mappedIsRecord && entries.some(({ limitId, value }) => value === legacy
+      || (legacyLimitId && (limitId === legacyLimitId || value?.limitId === legacyLimitId)
+        && isDeepStrictEqual(value, legacy)));
+    if (!mirrored) entries.push({ limitId: legacyLimitId ?? 'legacy', value: legacy });
   }
-  if (buckets.some((bucket) => bucket.credits?.hasCredits !== false || bucket.credits?.unlimited !== false)) {
-    return { stop: true, reason: 'Credit spillover is possible or credit telemetry is unavailable; subscription-only execution is required.' };
+  const buckets = entries.map(({ value }, index) => ({ name: `bucket-${index + 1}`, value }));
+  const windows = buckets.flatMap(({ name, value }) => ['primary', 'secondary'].flatMap((slot) => {
+    const window = value && typeof value === 'object' ? value[slot] : null;
+    if (window == null) {
+      return slot === 'primary'
+        ? [{ bucket: name, slot, usedPercent: null, windowDurationMins: null, resetsAt: null, valid: false }]
+        : [];
+    }
+    if (typeof window !== 'object' || Array.isArray(window)) {
+      return [{ bucket: name, slot, usedPercent: null, windowDurationMins: null, resetsAt: null, valid: false }];
+    }
+    const valid = Number.isFinite(window.usedPercent) && window.usedPercent >= 0 && window.usedPercent <= 100
+      && Number.isFinite(window.windowDurationMins) && window.windowDurationMins > 0
+      && Number.isFinite(window.resetsAt) && window.resetsAt > now;
+    return [{
+      bucket: name,
+      slot,
+      usedPercent: Number.isFinite(window.usedPercent) ? window.usedPercent : null,
+      windowDurationMins: Number.isFinite(window.windowDurationMins) ? window.windowDurationMins : null,
+      resetsAt: Number.isFinite(window.resetsAt) ? window.resetsAt : null,
+      valid,
+    }];
+  }));
+  const serverBlocks = buckets.map(({ name, value }) => ({
+    bucket: name,
+    rateLimitReached: Boolean(value?.rateLimitReachedType),
+    spendControlReached: Boolean(value?.spendControlReached),
+  }));
+  const diagnostics = (reasonCode, triggerReasons = [], triggeringWindows = [], nextEligibleAt = null) => ({
+    reasonCode,
+    triggerReasons,
+    windows,
+    triggeringWindows,
+    serverBlocks,
+    nextEligibleAt,
+  });
+  const hasInvalidBucket = !mappedIsRecord || buckets.some(({ value }) => !value || typeof value !== 'object' || Array.isArray(value)
+    || value.primary == null || typeof value.primary !== 'object' || Array.isArray(value.primary)
+    || (value.secondary != null && (typeof value.secondary !== 'object' || Array.isArray(value.secondary))));
+  const creditReasons = new Set();
+  for (const { value } of buckets) {
+    const credits = value?.credits;
+    if (credits?.hasCredits === true) creditReasons.add(QUOTA_REASON.creditSpillover);
+    else if (credits?.hasCredits !== false) creditReasons.add(QUOTA_REASON.creditTelemetryUnavailable);
+    if (credits?.unlimited === true) creditReasons.add(QUOTA_REASON.unlimitedCredits);
+    else if (credits?.unlimited !== false) creditReasons.add(QUOTA_REASON.creditTelemetryUnavailable);
   }
-  const windows = buckets.flatMap((bucket) => [bucket.primary, bucket.secondary].filter(Boolean));
-  if (!windows.some((window) => window.windowDurationMins === 300)
-      || windows.some((window) => !Number.isFinite(window.usedPercent)
-        || window.usedPercent < 0 || window.usedPercent > 100
-        || !Number.isFinite(window.windowDurationMins) || window.windowDurationMins <= 0
-        || !Number.isFinite(window.resetsAt) || window.resetsAt <= now)) {
-    return { stop: true, reason: 'Quota telemetry is missing, invalid, or expired.' };
-  }
-  const exhausted = windows.filter((window) => window.usedPercent >= 98);
-  const rateLimitReached = buckets.some((bucket) => Boolean(bucket.rateLimitReachedType));
-  const spendControlReached = buckets.some((bucket) => bucket.spendControlReached === true);
-  const windowUsage = buckets.flatMap((bucket, bucketIndex) => (
-    [['primary', bucket.primary], ['secondary', bucket.secondary]]
-      .filter(([, value]) => value)
-      .map(([slot, value]) => ({
-        bucketIndex: bucketIndex + 1,
-        slot,
-        durationMinutes: value.windowDurationMins,
-        usedPercent: value.usedPercent,
-        resetsAt: value.resetsAt,
-      }))
-  ));
-  const windowThresholdReached = exhausted.length > 0;
-  const blocked = rateLimitReached || spendControlReached;
+  const exhausted = windows.filter((window) => window.valid && window.usedPercent >= 98);
+  const missingOrInvalidWindow = !windows.some((window) => window.windowDurationMins === 300) || windows.some((window) => !window.valid);
+  const rateLimited = serverBlocks.some((bucket) => bucket.rateLimitReached);
+  const spendControlled = serverBlocks.some((bucket) => bucket.spendControlReached);
+  const triggerReasons = [
+    ...(hasInvalidBucket ? [QUOTA_REASON.invalidBucket] : []),
+    ...[QUOTA_REASON.creditSpillover, QUOTA_REASON.unlimitedCredits, QUOTA_REASON.creditTelemetryUnavailable]
+      .filter((reasonCode) => creditReasons.has(reasonCode)),
+    ...(missingOrInvalidWindow ? [QUOTA_REASON.missingOrInvalidWindow] : []),
+    ...(exhausted.length ? [QUOTA_REASON.windowReserve] : []),
+    ...(rateLimited ? [QUOTA_REASON.serverRateLimit] : []),
+    ...(spendControlled ? [QUOTA_REASON.spendControl] : []),
+  ];
+  const blocked = triggerReasons.length > 0;
+  const reasonCode = triggerReasons[0] ?? QUOTA_REASON.available;
+  const reasons = {
+    [QUOTA_REASON.invalidBucket]: 'Quota telemetry contains an invalid bucket.',
+    [QUOTA_REASON.creditSpillover]: 'Spendable credits are available; subscription-only execution is required.',
+    [QUOTA_REASON.unlimitedCredits]: 'Unlimited credits are available; subscription-only execution is required.',
+    [QUOTA_REASON.creditTelemetryUnavailable]: 'Credit telemetry is missing or incomplete; subscription-only execution is required.',
+    [QUOTA_REASON.missingOrInvalidWindow]: 'Quota telemetry is missing, invalid, or expired.',
+    [QUOTA_REASON.windowReserve]: 'Codex allowance reached the finalization reserve.',
+    [QUOTA_REASON.serverRateLimit]: 'The server reported a rate limit.',
+    [QUOTA_REASON.spendControl]: 'The server reported a spend-control block.',
+    [QUOTA_REASON.available]: 'Allowance available.',
+  };
+  const nextEligibleAt = exhausted.length && triggerReasons.length === 1 && triggerReasons[0] === QUOTA_REASON.windowReserve
+    ? Math.max(...exhausted.map((window) => window.resetsAt))
+    : null;
+  const triggeringWindows = [
+    ...exhausted,
+    ...(missingOrInvalidWindow ? windows.filter((window) => !window.valid) : []),
+  ];
+  const validWindows = windows.filter((window) => window.valid);
   return {
-    stop: exhausted.length > 0 || blocked,
-    reason: exhausted.length || blocked ? 'Codex allowance reached the finalization reserve.' : 'Allowance available.',
-    usedPercent: Math.max(...windows.map((window) => window.usedPercent)),
-    resetsAt: Math.max(...(exhausted.length ? exhausted : windows).map((window) => window.resetsAt)),
-    windows: windowUsage,
-    guardSignals: { windowThresholdReached, rateLimitReached, spendControlReached },
+    stop: blocked,
+    reasonCode,
+    reason: reasons[reasonCode],
+    usedPercent: validWindows.length ? Math.max(...validWindows.map((window) => window.usedPercent)) : null,
+    resetsAt: blocked ? nextEligibleAt : Math.max(...windows.map((window) => window.resetsAt)),
+    windows: windows.filter((window) => window.valid).map((window) => ({
+      bucketIndex: Number(window.bucket.slice('bucket-'.length)),
+      slot: window.slot,
+      durationMinutes: window.windowDurationMins,
+      usedPercent: window.usedPercent,
+      resetsAt: window.resetsAt,
+    })),
+    guardSignals: {
+      windowThresholdReached: triggerReasons.includes(QUOTA_REASON.windowReserve),
+      rateLimitReached: rateLimited,
+      spendControlReached: spendControlled,
+    },
+    diagnostics: diagnostics(reasonCode, triggerReasons, triggeringWindows, nextEligibleAt),
+  };
+}
+
+export function quotaTelemetryUnavailable() {
+  const diagnostics = {
+    reasonCode: QUOTA_REASON.telemetryUnavailable,
+    triggerReasons: [QUOTA_REASON.telemetryUnavailable],
+    windows: [],
+    triggeringWindows: [],
+    serverBlocks: [],
+    nextEligibleAt: null,
+  };
+  return {
+    stop: true,
+    reasonCode: QUOTA_REASON.telemetryUnavailable,
+    reason: 'Quota telemetry is unavailable.',
+    diagnostics,
   };
 }
 
@@ -124,8 +216,10 @@ export function formatQuotaDiagnostics(quota) {
       .every((key) => typeof quota.guardSignals[key] === 'boolean')
     ? `window threshold=${quota.guardSignals.windowThresholdReached}; rate-limit=${quota.guardSignals.rateLimitReached}; spend-control=${quota.guardSignals.spendControlReached}`
     : 'unavailable';
-  return `Quota diagnostics: highest-window usage ${usage}; windows ${windows.length ? windows.map(describeWindow).join('; ') : 'unavailable'}; guards ${guardSignals}.`;
+  const reason = Object.values(QUOTA_REASON).includes(quota?.reasonCode) ? quota.reasonCode : 'unavailable';
+  return `Quota diagnostics: stop reason ${reason}; highest-window usage ${usage}; windows ${windows.length ? windows.map(describeWindow).join('; ') : 'unavailable'}; guards ${guardSignals}.`;
 }
+
 
 export function verifyModels(models) {
   const requiredPairs = [...new Map(Object.values(MODELS).map(({ model, effort }) => [
@@ -320,7 +414,11 @@ export class CodexClient extends EventEmitter {
     verifyModels(models);
     const modes = await this.request('collaborationMode/list');
     if (!modes.data.some((item) => item.mode === 'plan')) throw new Error('Runner Codex must support actual Plan mode.');
-    return quotaBoundary(await this.request('account/rateLimits/read'));
+    try {
+      return quotaBoundary(await this.request('account/rateLimits/read'));
+    } catch {
+      return quotaTelemetryUnavailable();
+    }
   }
 
   async threadConfig(cwd, developerInstructions = '', profile = 'planner') {

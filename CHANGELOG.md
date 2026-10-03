@@ -80,6 +80,12 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- [Issue #68](https://github.com/agentic-delivery-lab/agentic-delivery/issues/68)
+  records sanitized Harness quota diagnostics with stop phase, trigger causes,
+  bounded quota-window evidence, and retry eligibility only when supported by
+  telemetry. The internal review schema is validated but remains outside the
+  participant contract; review input excludes quota counters, credentials are
+  redacted, and reruns refresh the current pull request and source issue.
 - [Issue #66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66)
   advances `bootstrapCommit` to merged controller snapshot
   `e0b2f0719e00ac49aaab305ea10065c5f5197cb1`. Issue intake and delivery now

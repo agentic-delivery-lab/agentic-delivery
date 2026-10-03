@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/p
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import Ajv2020 from 'ajv/dist/2020.js';
 
 import {
   deterministicReview,
@@ -13,6 +14,7 @@ import {
 } from '../../scripts/lib/architecture-review.mjs';
 import {
   parseSemanticOutcome,
+  projectQuotaDiagnostics,
   excludeVerifiedHarnessReviewChecks,
   isHarnessReviewCheck,
   pruneExpiredReviewState,
@@ -22,6 +24,7 @@ import {
   stableCheckRunEvidence,
 } from '../../scripts/lib/architecture-review-agent.mjs';
 import { runArchitectureReview } from '../../scripts/harness-architecture-review.mjs';
+import { QUOTA_DIAGNOSTICS_SCHEMA_VERSION, supportsQuotaDiagnosticsSchemaVersion } from '../../scripts/lib/quota-diagnostics.mjs';
 import { runNodeScript } from '../helpers/process.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
@@ -527,7 +530,7 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
     }
     if (address.endsWith('/issues/25')) return {
       ok: true,
-      json: async () => ({ number: 25, title: 'Review evidence', body: 'Check evidence collection.', state: 'open' }),
+      json: async () => ({ number: 25, title: 'Review evidence', body: 'Check evidence collection.', state: 'open', labels: [{ name: 'adr:proposed' }] }),
     };
     if (address.includes('/issues/25/comments?')) return { ok: true, json: async () => [] };
     throw new Error('Unexpected GitHub evidence request.');
@@ -598,6 +601,9 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
   assert.match(bundleText, /"conclusion": "success"/);
   assert.match(bundleText, /"codexCliVersion": "0\.159\.3"/);
   assert.match(bundleText, /no ADR-linked primitives selected because this review has no affected ADR/);
+  const sourceIssueText = bundleText.split('## Source issue intent\n\n')[1]?.split('\n\n## Pull-request evidence marker')[0];
+  assert.ok(sourceIssueText);
+  assert.deepEqual(JSON.parse(sourceIssueText).labels, ['adr:proposed']);
   assert.doesNotMatch(bundleText, /function safePreflightReport|export async function runSemanticReview/);
   assert.ok(bundleText.length < 100_000, 'unrelated primitive source files must not inflate the semantic evidence bundle');
   assert.doesNotMatch(bundleText, /Do not include this self-review result|"id": 654326/);
@@ -631,6 +637,15 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
   quotaBlockedPreflight.status = 'failed';
   quotaBlockedPreflight.quota.highestWindowUsedPercent = 100;
   quotaBlockedPreflight.quota.allowanceAvailable = false;
+  quotaBlockedPreflight.quota.reasonCode = 'window_reserve';
+  quotaBlockedPreflight.quota.diagnostics = {
+    reasonCode: 'window_reserve',
+    triggerReasons: ['window_reserve'],
+    windows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 100, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true }],
+    triggeringWindows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 100, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true }],
+    serverBlocks: [],
+    nextEligibleAt: 1_800_000_100,
+  };
   await writeFile(preflightPath, `${JSON.stringify(quotaBlockedPreflight, null, 2)}\n`);
   process.env.RUNNER_PREFLIGHT_OUTCOME = 'failure';
   const cachedDuringQuotaHold = await runSemanticReview({
@@ -654,6 +669,8 @@ test('semantic evidence bundle includes the live PR body, exact-head checks, and
   });
   assert.equal(changedButQuotaBlocked.status, 'inconclusive');
   assert.equal(changedButQuotaBlocked.reviewSession.noModelTurn, true);
+  assert.equal(changedButQuotaBlocked.quotaDiagnostics.reasonCode, 'window_reserve');
+  assert.equal(changedButQuotaBlocked.quotaDiagnostics.stopPhase, 'preflight');
   assert.equal(modelTurns, 1);
 
   const availablePreflight = JSON.parse(await readFile(preflightPath, 'utf8'));
@@ -864,4 +881,270 @@ test('review CLI reserves exit code 2 for invalid invocation', async () => {
   const result = await runNodeScript(path.join(repositoryRoot, 'scripts/harness-architecture-review.mjs'), [], { cwd: repositoryRoot });
   assert.equal(result.status, 2);
   assert.match(result.stderr, /Usage:/);
+});
+
+
+test('semantic output is redacted, bounded, and rendered as plain Markdown text', () => {
+  const unsafe = parseSemanticOutcome(JSON.stringify({
+    status: 'findings',
+    summary: '## Injected heading\n- fake item\n"access_token":\n  "fixture secret with spaces"\npassword:\n  fixture multiline secret\ntoken: >-\n  fixture block secret value\n"client_secret": {\n  "nested": { "value": "fixture compound JSON object secret" }\n}\n"api_key": [\n  "fixture compound JSON array secret"\n]',
+    affectedAdrs: ['ADR-0009'],
+    affectedContexts: ['agentic-delivery-governance'],
+    findings: [{
+      category: 'security',
+      severity: 'concern',
+      statement: '<img src=x onerror=alert(1)> Bearer abcdefghijklmnopqrstuvwxyz',
+      evidence: ['docs/example.md:12'],
+      recommendedAction: 'Remove the unsafe rendering path.',
+    }],
+    evidenceGaps: ['Authorization: Bearer abcdefghijklmnopqrstuvwxyz'],
+    unmodeled: 'extra model content must not reach the report',
+  }));
+  assert.equal(unsafe.status, 'findings');
+  assert.equal(Object.hasOwn(unsafe, 'unmodeled'), false);
+  assert.doesNotMatch(JSON.stringify(unsafe), /fixture secret with spaces|fixture block secret value|fixture compound JSON (?:object|array) secret|abcdefghijklmnopqrstuvwxyz/);
+  assert.match(unsafe.summary, /access_token"?:[\s\S]{0,30}\[redacted\]/);
+
+  const markdown = formatReviewMarkdown({
+    status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [], semantic: unsafe,
+  });
+  assert.doesNotMatch(markdown, /^## Injected heading/m);
+  assert.doesNotMatch(markdown, /\n- fake item/);
+  assert.doesNotMatch(markdown, /<img/i);
+  assert.match(markdown, /&lt;img/);
+  assert.doesNotMatch(markdown, /abcdefghijklmnopqrstuvwxyz|fixture secret with spaces/);
+
+  const listInjection = parseSemanticOutcome(JSON.stringify({
+    status: 'aligned', summary: '- fabricated reviewer finding', affectedAdrs: [], affectedContexts: [], findings: [], evidenceGaps: [],
+  }));
+  const listMarkdown = formatReviewMarkdown({
+    status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [], semantic: listInjection,
+  });
+  assert.doesNotMatch(listMarkdown, /\n- fabricated reviewer finding/);
+  assert.match(listMarkdown, /\\- fabricated reviewer finding/);
+
+  const oversized = parseSemanticOutcome(JSON.stringify({
+    status: 'aligned', summary: 'A'.repeat(4_001), affectedAdrs: [], affectedContexts: [], findings: [], evidenceGaps: [],
+  }));
+  assert.equal(oversized.status, 'inconclusive');
+});
+
+test('review quota evidence schema validates the internal SemVer projection', async () => {
+  const schema = JSON.parse(await readFile(path.join(repositoryRoot, 'docs/architecture/quota-diagnostics.schema.json'), 'utf8'));
+  const validateQuotaDiagnostics = new Ajv2020({ allErrors: true, strict: true }).compile(schema);
+  const projected = projectQuotaDiagnostics({
+    reasonCode: 'credit_spillover',
+    diagnostics: {
+      reasonCode: 'credit_spillover',
+      triggerReasons: ['credit_spillover', 'missing_or_invalid_window', 'window_reserve', 'server_rate_limit', 'spend_control'],
+      windows: [
+        { bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true },
+        { bucket: 'bucket-2', slot: 'secondary', usedPercent: null, windowDurationMins: null, resetsAt: null, valid: false },
+      ],
+      triggeringWindows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 99, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true }],
+      serverBlocks: [{ bucket: 'bucket-1', rateLimitReached: true, spendControlReached: true }],
+      nextEligibleAt: null,
+    },
+  }, 'active_turn');
+
+  assert.deepEqual(schema.required, Object.keys(projected));
+  assert.deepEqual(Object.keys(projected), Object.keys(schema.properties));
+  assert.equal(validateQuotaDiagnostics(projected), true, JSON.stringify(validateQuotaDiagnostics.errors));
+  assert.equal(schema.additionalProperties, true);
+  assert.equal(schema.$defs.window.additionalProperties, true);
+  assert.equal(schema.$defs.serverBlock.additionalProperties, true);
+  assert.match(schema.$id, /quota-diagnostics\.schema\.json$/);
+  assert.match(schema.description, /not a participant contract/);
+  assert.equal(schema.properties.triggerReasons.maxItems, 9);
+  assert.equal(schema.properties.windows.maxItems, 64);
+  assert.equal(schema.properties.triggeringWindows.maxItems, 32);
+  assert.equal(schema.properties.serverBlocks.maxItems, 32);
+  assert.equal(schema.properties.truncated.type, 'boolean');
+  const schemaVersionPattern = new RegExp(schema.properties.schemaVersion.pattern);
+  assert.equal(schemaVersionPattern.test('1.2.3-beta.1+build.6'), true);
+  assert.equal(schemaVersionPattern.test('1.1.0'), true);
+  assert.equal(schemaVersionPattern.test('1.2.3-01'), false);
+  const futureMinorPayload = { ...projected, schemaVersion: '1.1.0', optionalFutureField: true };
+  assert.equal(schemaVersionPattern.test(futureMinorPayload.schemaVersion), true);
+  assert.equal(schema.additionalProperties, true, 'minor-version optional fields are permitted');
+  assert.deepEqual(projected.triggerReasons, ['credit_spillover', 'missing_or_invalid_window', 'window_reserve', 'server_rate_limit', 'spend_control']);
+  assert.equal(projected.triggeringWindows.some((window) => !window.valid), true);
+  assert.equal(projected.truncated, false);
+  assert.equal(supportsQuotaDiagnosticsSchemaVersion(projected.schemaVersion), true);
+  assert.equal(supportsQuotaDiagnosticsSchemaVersion('2.0.0'), false);
+
+  const invalidInstance = structuredClone(projected);
+  invalidInstance.windows[0].usedPercent = 101;
+  assert.equal(validateQuotaDiagnostics(invalidInstance), false, 'the schema rejects out-of-range usage');
+
+  const invalidTelemetryProjection = projectQuotaDiagnostics({
+    reasonCode: 'window_reserve',
+    diagnostics: {
+      reasonCode: 'window_reserve',
+      triggerReasons: ['window_reserve'],
+      windows: [
+        { bucket: 'bucket-3', slot: 'primary', usedPercent: 101, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true },
+        { bucket: 'bucket-4', slot: 'primary', usedPercent: 99, windowDurationMins: 0, resetsAt: 1_800_000_100, valid: true },
+        { bucket: 'bucket-5', slot: 'secondary', usedPercent: 99, windowDurationMins: 300, resetsAt: -1, valid: true },
+      ],
+      triggeringWindows: [
+        { bucket: 'bucket-3', slot: 'primary', usedPercent: 101, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: true },
+        { bucket: 'bucket-4', slot: 'primary', usedPercent: 99, windowDurationMins: 0, resetsAt: 1_800_000_100, valid: true },
+        { bucket: 'bucket-5', slot: 'secondary', usedPercent: 99, windowDurationMins: 300, resetsAt: -1, valid: true },
+      ],
+      serverBlocks: [],
+      nextEligibleAt: -1,
+    },
+  }, 'preflight');
+  assert.equal(invalidTelemetryProjection.reasonCode, 'missing_or_invalid_window');
+  assert.deepEqual(invalidTelemetryProjection.triggerReasons, ['missing_or_invalid_window']);
+  assert.equal(invalidTelemetryProjection.nextEligibleAt, null);
+  assert.deepEqual(invalidTelemetryProjection.windows.map(({ usedPercent, windowDurationMins, resetsAt, valid }) => ({
+    usedPercent, windowDurationMins, resetsAt, valid,
+  })), [
+    { usedPercent: null, windowDurationMins: 300, resetsAt: 1_800_000_100, valid: false },
+    { usedPercent: 99, windowDurationMins: null, resetsAt: 1_800_000_100, valid: false },
+    { usedPercent: 99, windowDurationMins: 300, resetsAt: null, valid: false },
+  ]);
+  assert.equal(validateQuotaDiagnostics(invalidTelemetryProjection), true, JSON.stringify(validateQuotaDiagnostics.errors));
+});
+
+test('quota diagnostic projection and formatting cover each independent stop reason', () => {
+  const cases = [
+    ['invalid_bucket', { windows: [{ bucket: 'bucket-1', slot: 'secondary', usedPercent: null, windowDurationMins: null, resetsAt: null, valid: false }] }, /invalid bucket/],
+    ['credit_spillover', { windows: [], serverBlocks: [] }, /spendable credits are available/],
+    ['unlimited_credits', { windows: [], serverBlocks: [] }, /unlimited credits are available/],
+    ['credit_telemetry_unavailable', { windows: [], serverBlocks: [] }, /credit telemetry was unavailable/],
+    ['server_rate_limit', { triggerReasons: ['server_rate_limit'], serverBlocks: [{ bucket: 'bucket-1', rateLimitReached: true, spendControlReached: false }] }, /server rate-limit flag set/],
+    ['spend_control', { triggerReasons: ['spend_control'], serverBlocks: [{ bucket: 'bucket-1', rateLimitReached: false, spendControlReached: true }] }, /server spend-control flag set/],
+  ];
+  for (const [reasonCode, extra, expected] of cases) {
+    const quotaDiagnostics = projectQuotaDiagnostics({
+      reasonCode,
+      diagnostics: {
+        reasonCode,
+        triggerReasons: [reasonCode],
+        windows: [], triggeringWindows: [], serverBlocks: [], nextEligibleAt: null,
+        ...extra,
+      },
+    }, 'preflight');
+    assert.equal(quotaDiagnostics.reasonCode, reasonCode);
+    assert.equal(quotaDiagnostics.schemaVersion, QUOTA_DIAGNOSTICS_SCHEMA_VERSION);
+    assert.equal(quotaDiagnostics.stopPhase, 'preflight');
+    const markdown = formatReviewMarkdown({
+      status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [],
+      semantic: { status: 'inconclusive', summary: 'Review stopped.', findings: [], evidenceGaps: [], quotaDiagnostics },
+    });
+    assert.match(markdown, expected, reasonCode);
+    assert.match(markdown, /Stop phase: preflight/);
+  }
+  const unsupported = formatReviewMarkdown({
+    status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [],
+    semantic: {
+      status: 'inconclusive', summary: 'Review stopped.', findings: [], evidenceGaps: [],
+      quotaDiagnostics: { schemaVersion: '2.0.0', reasonCode: 'window_reserve' },
+    },
+  });
+  assert.doesNotMatch(unsupported, /#### Review quota evidence/, 'unknown diagnostic schema versions are not interpreted as v1');
+
+  const compatibleUnknownCode = formatReviewMarkdown({
+    status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [],
+    semantic: {
+      status: 'inconclusive', summary: 'Review stopped.', findings: [], evidenceGaps: [],
+      quotaDiagnostics: {
+        schemaVersion: '1.2.0-beta.1+build.6', reasonCode: 'future_reason', stopPhase: 'preflight',
+        triggerReasons: ['future_trigger', 'window_reserve'],
+        windows: [{ bucket: 'bucket-1', slot: 'primary', usedPercent: 98, windowDurationMins: 300, valid: true }],
+      },
+    },
+  });
+  assert.match(compatibleUnknownCode, /Schema version: 1\.2\.0-beta\.1\+build\.6/);
+  assert.match(compatibleUnknownCode, /Reason: unrecognized by this consumer/);
+  assert.match(compatibleUnknownCode, /Trigger signals: 98% usage reserve/);
+  assert.match(compatibleUnknownCode, /98% of the 300-minute window/);
+  assert.doesNotMatch(compatibleUnknownCode, /future_reason|future_trigger/);
+});
+
+test('quota diagnostics cap bucket details, prioritize triggers, and mark omitted records', () => {
+  const windows = Array.from({ length: 40 }, (_, index) => ({
+    bucket: `bucket-${index + 1}`,
+    slot: 'primary',
+    usedPercent: index === 39 ? 99 : 20,
+    windowDurationMins: 300,
+    resetsAt: 1_800_000_100,
+    valid: true,
+  }));
+  const serverBlocks = Array.from({ length: 40 }, (_, index) => ({
+    bucket: `bucket-${index + 1}`,
+    rateLimitReached: index === 39,
+    spendControlReached: false,
+  }));
+  const quotaDiagnostics = projectQuotaDiagnostics({
+    reasonCode: 'window_reserve',
+    diagnostics: {
+      reasonCode: 'window_reserve',
+      triggerReasons: ['window_reserve', 'server_rate_limit'],
+      windows,
+      triggeringWindows: [windows[39]],
+      serverBlocks,
+      nextEligibleAt: null,
+    },
+  }, 'active_turn');
+
+  assert.equal(quotaDiagnostics.windows.length, 33, 'all trigger windows plus 32 context windows are retained');
+  assert.equal(quotaDiagnostics.windows.some((window) => window.bucket === 'bucket-40'), true);
+  assert.equal(quotaDiagnostics.serverBlocks.length, 32, 'server-block output has an absolute limit');
+  assert.equal(quotaDiagnostics.serverBlocks.some((block) => block.bucket === 'bucket-40' && block.rateLimitReached), true);
+  assert.equal(quotaDiagnostics.truncated, true);
+  const markdown = formatReviewMarkdown({
+    status: 'pass', base: 'base', head: 'head', affectedAdrs: [], affectedContexts: [], checks: [],
+    semantic: { status: 'inconclusive', summary: 'Review stopped.', findings: [], evidenceGaps: [], quotaDiagnostics },
+  });
+  assert.match(markdown, /Bucket 40 primary: 99% .*triggered the stop/);
+  assert.match(markdown, /Bucket 40: server rate-limit flag set/);
+  assert.match(markdown, /Some bucket details were omitted/);
+
+  const manyTriggerWindows = Array.from({ length: 80 }, (_, index) => ({
+    bucket: `bucket-${index + 1}`,
+    slot: 'primary',
+    usedPercent: 99,
+    windowDurationMins: 300,
+    resetsAt: 1_800_000_100,
+    valid: true,
+  }));
+  const manyServerBlocks = manyTriggerWindows.map((window) => ({
+    bucket: window.bucket,
+    rateLimitReached: true,
+    spendControlReached: false,
+  }));
+  const heavilyTruncated = projectQuotaDiagnostics({
+    reasonCode: 'window_reserve',
+    diagnostics: {
+      reasonCode: 'window_reserve',
+      triggerReasons: ['window_reserve', 'server_rate_limit'],
+      windows: manyTriggerWindows,
+      triggeringWindows: manyTriggerWindows,
+      serverBlocks: manyServerBlocks,
+      nextEligibleAt: null,
+    },
+  }, 'active_turn');
+  assert.equal(heavilyTruncated.windows.length, 32);
+  assert.equal(heavilyTruncated.triggeringWindows.length, 32);
+  assert.equal(heavilyTruncated.serverBlocks.length, 32);
+  assert.equal(heavilyTruncated.truncated, true);
+  assert.deepEqual(heavilyTruncated.triggerReasons, ['window_reserve', 'server_rate_limit']);
+
+  const invalidWindow = { ...windows[39], valid: false, usedPercent: null };
+  const invalidQuotaDiagnostics = projectQuotaDiagnostics({
+    reasonCode: 'missing_or_invalid_window',
+    diagnostics: {
+      reasonCode: 'missing_or_invalid_window',
+      triggerReasons: [],
+      windows: [...windows.slice(0, 39), invalidWindow],
+      triggeringWindows: [],
+      serverBlocks: [],
+      nextEligibleAt: null,
+    },
+  }, 'preflight');
+  assert.equal(invalidQuotaDiagnostics.triggeringWindows.some((window) => window.bucket === 'bucket-40'), true);
 });

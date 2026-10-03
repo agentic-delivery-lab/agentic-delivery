@@ -7,6 +7,8 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { CodexClient, MODELS } from './codex-client.mjs';
+import { QUOTA_DIAGNOSTICS_SCHEMA_VERSION, QUOTA_REASON, QUOTA_REASON_CODES, QUOTA_STOP_PHASE, QUOTA_STOP_PHASES, QUOTA_TRIGGER_CODES } from './quota-diagnostics.mjs';
+import { redactSensitiveText } from './architecture-review.mjs';
 import { outcomeSchema, runTurn } from './codex-loop.mjs';
 import { gitFiles, gitShow, parseEvidenceMarker } from './architecture-review.mjs';
 import {
@@ -23,6 +25,15 @@ const REVIEW_STATE_VERSION = 1;
 const REVIEW_STATE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const REVIEW_CHECK_WAIT_TIMEOUT_MS = 15 * 60 * 1000;
 const REVIEW_CHECK_POLL_INTERVAL_MS = 15 * 1000;
+const MAX_SEMANTIC_RESPONSE_LENGTH = 250_000;
+const MAX_FINDINGS = 30;
+const MAX_EVIDENCE_ITEMS = 20;
+const MAX_EVIDENCE_GAPS = 50;
+const MAX_MODEL_STRING_LENGTH = 4_000;
+const MAX_TRIGGERING_QUOTA_WINDOWS = 32;
+const MAX_CONTEXT_QUOTA_WINDOWS = 32;
+const MAX_QUOTA_SERVER_BLOCKS = 32;
+
 const REVIEW_THREAD_INSTRUCTIONS = 'You are a read-only architecture reviewer. Cite evidence and never modify files, contact GitHub, merge, close issues, or treat model judgment as deterministic validation. If the pull-request body schedules an acceptance canary after merge, record it as pending operational evidence; its expected absence before merge alone does not prevent a code and architecture conformance conclusion.';
 
 function childEnvironment() {
@@ -106,10 +117,7 @@ async function safeState(review, event = {}) {
 }
 
 function redactSensitive(value) {
-  return String(value ?? '')
-    .replace(/(?:github_pat_|gh[pousr]_|sk-)[A-Za-z0-9_-]{15,}/g, '[redacted]')
-    .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, '[redacted private key]')
-    .replace(/(token|secret|password|api[_-]?key|authorization)\s*[:=]\s*\S+/gi, '$1: [redacted]');
+  return redactSensitiveText(value);
 }
 
 function safeIssueText(value) {
@@ -144,7 +152,10 @@ async function sourceIssueEvidence(repository, issue) {
         comments = Array.isArray(values) ? values.slice(0, 100).map((comment) => ({ id: comment.id, author: comment.user?.login, body: safeIssueText(comment.body).slice(0, 4_000) })) : [];
       }
     } catch {}
-    return JSON.stringify({ number: value.number, title: safeIssueText(value.title), body: safeIssueText(value.body), state: value.state, comments }, null, 2);
+    const labels = Array.isArray(value.labels)
+      ? [...new Set(value.labels.map((label) => safeIssueText(label?.name).trim().slice(0, 100)).filter(Boolean))].slice(0, 100)
+      : [];
+    return JSON.stringify({ number: value.number, title: safeIssueText(value.title), body: safeIssueText(value.body), state: value.state, labels, comments }, null, 2);
   } catch {
     return '(unavailable: the source issue could not be read with the configured read-only evidence access)';
   }
@@ -440,6 +451,7 @@ function safePreflightReport(value) {
       .map(({ model, effort }) => ({ model, effort }))
     : [];
   const usedPercent = value.quota?.highestWindowUsedPercent;
+  const quotaDiagnostics = projectQuotaDiagnostics(value.quota, QUOTA_STOP_PHASE.preflight);
   return {
     schemaVersion: value.schemaVersion === 1 ? 1 : null,
     status: ['passed', 'failed'].includes(value.status) ? value.status : 'unknown',
@@ -459,6 +471,7 @@ function safePreflightReport(value) {
         guardSignals: safeQuotaGuardSignals(value.quota.guardSignals),
       }
       : null,
+    ...(quotaDiagnostics ? { quotaDiagnostics } : {}),
     sessionProbe: ['start-and-resume-passed', 'start-passed-resume-needs-first-rollout'].includes(value.sessionProbe)
       ? value.sessionProbe
       : null,
@@ -506,29 +519,159 @@ function quotaSnapshot(value) {
 
 function validFinding(finding) {
   return finding && typeof finding === 'object'
-    && typeof finding.category === 'string'
+    && typeof finding.category === 'string' && finding.category.trim().length <= 100
     && ['concern', 'advisory'].includes(finding.severity)
-    && typeof finding.statement === 'string' && finding.statement.trim()
-    && Array.isArray(finding.evidence) && finding.evidence.length > 0
-    && finding.evidence.every((item) => typeof item === 'string' && item.trim())
-    && typeof finding.recommendedAction === 'string' && finding.recommendedAction.trim();
+    && typeof finding.statement === 'string' && finding.statement.trim() && finding.statement.length <= MAX_MODEL_STRING_LENGTH
+    && Array.isArray(finding.evidence) && finding.evidence.length > 0 && finding.evidence.length <= MAX_EVIDENCE_ITEMS
+    && finding.evidence.every((item) => typeof item === 'string' && item.trim() && item.length <= 1_000)
+    && typeof finding.recommendedAction === 'string' && finding.recommendedAction.trim() && finding.recommendedAction.length <= MAX_MODEL_STRING_LENGTH;
 }
 
 export function parseSemanticOutcome(text) {
+  if (typeof text !== 'string' || text.length > MAX_SEMANTIC_RESPONSE_LENGTH) {
+    return { status: 'inconclusive', summary: 'The semantic reviewer returned an oversized result.', findings: [], evidenceGaps: ['The structured semantic-review result exceeded its size limit.'] };
+  }
   let value;
   try { value = JSON.parse(text); } catch { return { status: 'inconclusive', summary: 'The semantic reviewer did not return JSON.', findings: [], evidenceGaps: ['The review output was not structured JSON.'] }; }
-  const strings = (items) => Array.isArray(items) && items.every((item) => typeof item === 'string' && item.trim());
-  if (!value || !['aligned', 'findings', 'inconclusive'].includes(value.status) || typeof value.summary !== 'string' || !value.summary.trim()
+  const strings = (items, maxItems = 100, maxLength = 200) => Array.isArray(items) && items.length <= maxItems
+    && items.every((item) => typeof item === 'string' && item.trim() && item.length <= maxLength);
+  if (!value || !['aligned', 'findings', 'inconclusive'].includes(value.status)
+    || typeof value.summary !== 'string' || !value.summary.trim() || value.summary.length > MAX_MODEL_STRING_LENGTH
     || !strings(value.affectedAdrs) || !strings(value.affectedContexts)
-    || !Array.isArray(value.findings) || !value.findings.every(validFinding)
-    || !strings(value.evidenceGaps)) {
+    || !Array.isArray(value.findings) || value.findings.length > MAX_FINDINGS || !value.findings.every(validFinding)
+    || !strings(value.evidenceGaps, MAX_EVIDENCE_GAPS, 2_000)) {
     return { status: 'inconclusive', summary: 'The semantic reviewer returned an invalid result.', findings: [], evidenceGaps: ['The structured semantic-review contract was invalid.'] };
   }
   if (value.status === 'aligned' && value.findings.length) {
     return { status: 'inconclusive', summary: 'The semantic reviewer marked findings as aligned.', findings: [], evidenceGaps: ['The result status and findings disagree.'] };
   }
-  return value;
+  const safeText = (item) => redactSensitiveText(item);
+  return {
+    status: value.status,
+    summary: safeText(value.summary),
+    affectedAdrs: value.affectedAdrs.map(safeText),
+    affectedContexts: value.affectedContexts.map(safeText),
+    findings: value.findings.map((finding) => ({
+      category: safeText(finding.category),
+      severity: finding.severity,
+      statement: safeText(finding.statement),
+      evidence: finding.evidence.map(safeText),
+      recommendedAction: safeText(finding.recommendedAction),
+    })),
+    evidenceGaps: value.evidenceGaps.map(safeText),
+  };
 }
+
+const QUOTA_REASON_CODE_SET = new Set(QUOTA_REASON_CODES);
+const QUOTA_TRIGGER_CODE_SET = new Set(QUOTA_TRIGGER_CODES);
+
+export function projectQuotaDiagnostics(budget, stopPhase) {
+  const diagnostics = budget?.diagnostics;
+  const reasonCode = QUOTA_REASON_CODE_SET.has(budget?.reasonCode) ? budget.reasonCode
+    : QUOTA_REASON_CODE_SET.has(diagnostics?.reasonCode) ? diagnostics.reasonCode : null;
+  if (!reasonCode) return null;
+  const bucketName = (value) => typeof value === 'string' && /^bucket-[1-9]\d{0,3}$/.test(value);
+  const projectWindow = (window) => {
+    if (!window || !bucketName(window.bucket) || !['primary', 'secondary'].includes(window.slot)) return null;
+    const usedPercent = Number.isFinite(window.usedPercent) && window.usedPercent >= 0 && window.usedPercent <= 100
+      ? window.usedPercent : null;
+    const windowDurationMins = Number.isFinite(window.windowDurationMins) && window.windowDurationMins > 0
+      ? window.windowDurationMins : null;
+    const resetsAt = Number.isFinite(window.resetsAt) && window.resetsAt >= 0
+      ? window.resetsAt : null;
+    return {
+      bucket: window.bucket,
+      slot: window.slot,
+      usedPercent,
+      windowDurationMins,
+      resetsAt,
+      valid: window.valid === true && usedPercent !== null && windowDurationMins !== null && resetsAt !== null,
+    };
+  };
+  const rawWindows = Array.isArray(diagnostics?.windows) ? diagnostics.windows : [];
+  const rawTriggeringWindows = Array.isArray(diagnostics?.triggeringWindows) ? diagnostics.triggeringWindows : [];
+  const projectWindows = (items, limit) => items.slice(0, limit).map(projectWindow).filter(Boolean);
+  const allWindows = projectWindows(rawWindows, MAX_TRIGGERING_QUOTA_WINDOWS + MAX_CONTEXT_QUOTA_WINDOWS);
+  const projectedRequestedTriggers = projectWindows(rawTriggeringWindows, MAX_TRIGGERING_QUOTA_WINDOWS);
+  const requestedTriggers = projectedRequestedTriggers.filter((window) => window.valid && window.usedPercent >= 98);
+  const rawTriggerReasons = Array.isArray(diagnostics?.triggerReasons) ? diagnostics.triggerReasons : [];
+  const rawServerBlocks = Array.isArray(diagnostics?.serverBlocks) ? diagnostics.serverBlocks : [];
+  const allReportedWindows = [...new Map([...allWindows, ...projectedRequestedTriggers]
+    .map((window) => [`${window.bucket}:${window.slot}`, window])).values()];
+  const invalidStopWindows = allReportedWindows.filter((window) => !window.valid);
+  const reserveWindows = allReportedWindows.filter((window) => window.valid && window.usedPercent >= 98);
+  const hasValidReserveWindow = reserveWindows.length > 0;
+  const hasInvalidWindow = invalidStopWindows.length > 0;
+  const hasUnsupportedReserveSignal = !hasValidReserveWindow
+    && (reasonCode === QUOTA_REASON.windowReserve
+      || diagnostics?.reasonCode === QUOTA_REASON.windowReserve
+      || rawTriggerReasons.includes(QUOTA_REASON.windowReserve));
+  const projectedReasonCode = hasUnsupportedReserveSignal
+    ? QUOTA_REASON.missingOrInvalidWindow
+    : reasonCode;
+  const triggerReasons = new Set(rawTriggerReasons.filter((code) => QUOTA_TRIGGER_CODE_SET.has(code)));
+  if (!hasValidReserveWindow) triggerReasons.delete(QUOTA_REASON.windowReserve);
+  else triggerReasons.add(QUOTA_REASON.windowReserve);
+  if (hasInvalidWindow || hasUnsupportedReserveSignal) triggerReasons.add(QUOTA_REASON.missingOrInvalidWindow);
+  if (projectedReasonCode !== reasonCode) triggerReasons.add(projectedReasonCode);
+  const triggerCandidates = [...new Map([...requestedTriggers, ...invalidStopWindows, ...reserveWindows]
+    .map((window) => [`${window.bucket}:${window.slot}`, window])).values()];
+  const triggeringWindows = triggerCandidates.slice(0, MAX_TRIGGERING_QUOTA_WINDOWS);
+  const triggeringKeys = new Set(triggerCandidates.map((window) => `${window.bucket}:${window.slot}`));
+  const contextCandidates = [...new Map(allWindows
+    .filter((window) => window.valid && (!Number.isFinite(window.usedPercent) || window.usedPercent < 98)
+      && !triggeringKeys.has(`${window.bucket}:${window.slot}`))
+    .map((window) => [`${window.bucket}:${window.slot}`, window])).values()];
+  const windows = [...triggeringWindows, ...contextCandidates.slice(0, MAX_CONTEXT_QUOTA_WINDOWS)];
+
+  const activeServerBlocks = [];
+  const contextServerBlocks = [];
+  let truncated = rawWindows.length > MAX_TRIGGERING_QUOTA_WINDOWS + MAX_CONTEXT_QUOTA_WINDOWS
+    || rawTriggeringWindows.length > MAX_TRIGGERING_QUOTA_WINDOWS
+    || allWindows.length < Math.min(rawWindows.length, MAX_TRIGGERING_QUOTA_WINDOWS + MAX_CONTEXT_QUOTA_WINDOWS)
+    || projectedRequestedTriggers.length < Math.min(rawTriggeringWindows.length, MAX_TRIGGERING_QUOTA_WINDOWS)
+    || triggerCandidates.length > MAX_TRIGGERING_QUOTA_WINDOWS
+    || contextCandidates.length > MAX_CONTEXT_QUOTA_WINDOWS;
+  for (const block of rawServerBlocks) {
+    if (!block || !bucketName(block.bucket)) {
+      truncated = true;
+      continue;
+    }
+    const projected = {
+      bucket: block.bucket,
+      rateLimitReached: block.rateLimitReached === true,
+      spendControlReached: block.spendControlReached === true,
+    };
+    const active = projected.rateLimitReached || projected.spendControlReached;
+    const target = active ? activeServerBlocks : contextServerBlocks;
+    if (target.length < MAX_QUOTA_SERVER_BLOCKS) target.push(projected);
+    else truncated = true;
+  }
+  const serverBlocks = [
+    ...activeServerBlocks,
+    ...contextServerBlocks.slice(0, Math.max(0, MAX_QUOTA_SERVER_BLOCKS - activeServerBlocks.length)),
+  ];
+  if (activeServerBlocks.length + contextServerBlocks.length > serverBlocks.length) truncated = true;
+  const hasIndependentStopCause = [budget?.reasonCode, diagnostics?.reasonCode, ...triggerReasons]
+    .some((code) => QUOTA_REASON_CODE_SET.has(code) && code !== QUOTA_REASON.windowReserve)
+    || hasInvalidWindow
+    || rawServerBlocks.some((block) => block?.rateLimitReached === true || block?.spendControlReached === true);
+  const phase = QUOTA_STOP_PHASES.includes(stopPhase) ? stopPhase : QUOTA_STOP_PHASE.unknown;
+  return {
+    schemaVersion: QUOTA_DIAGNOSTICS_SCHEMA_VERSION,
+    reasonCode: projectedReasonCode,
+    stopPhase: phase,
+    triggerReasons: [...triggerReasons].slice(0, QUOTA_TRIGGER_CODE_SET.size),
+    windows,
+    triggeringWindows,
+    serverBlocks,
+    truncated,
+    nextEligibleAt: hasValidReserveWindow && !hasIndependentStopCause
+      && Number.isFinite(diagnostics?.nextEligibleAt) && diagnostics.nextEligibleAt >= 0
+      ? diagnostics.nextEligibleAt : null,
+  };
+}
+
 
 function safeRunnerFailure(error) {
   const message = typeof error?.message === 'string' ? error.message : '';
@@ -749,7 +892,7 @@ export async function runSemanticReview({
     const body = String(github.pullRequest?.body ?? event.pull_request?.body ?? '').slice(0, 20_000);
     const evidence = parseEvidenceMarker(body);
     const affectedAdrs = review.affectedAdrs ?? [];
-    const [baseAdr, headAdr, baseRecords, headRecords, basePrimitives, headPrimitives, domain, map, schema, diffText, state, traceability, sourceIssue] = await Promise.all([
+    const [baseAdr, headAdr, baseRecords, headRecords, basePrimitives, headPrimitives, domain, map, schema, quotaSchema, diffText, state, traceability, sourceIssue] = await Promise.all([
       revisionFile(repositoryRoot, review.base, 'docs/decisions/README.md'),
       revisionFile(repositoryRoot, review.head, 'docs/decisions/README.md'),
       decisionRecords(repositoryRoot, review.base, affectedAdrs),
@@ -759,6 +902,7 @@ export async function runSemanticReview({
       revisionFile(repositoryRoot, review.head, 'docs/domain/ubiquitous-language.yml'),
       revisionFile(repositoryRoot, review.head, 'docs/architecture/harness-review.yml'),
       revisionFile(repositoryRoot, review.head, 'docs/architecture/delivery-evidence.schema.json'),
+      revisionFile(repositoryRoot, review.head, 'docs/architecture/quota-diagnostics.schema.json'),
       semanticReviewDiff(repositoryRoot, review.mergeBase ?? review.base, review.head),
       safeState(review, event),
       revisionFile(repositoryRoot, review.head, 'docs/architecture/adr-primitive-index.json'),
@@ -799,10 +943,11 @@ export async function runSemanticReview({
       `## Provisional head ADR records\n\n${headRecords}`,
       `## Official base primitive evidence\n\n${basePrimitives}`,
       `## Provisional head primitive evidence\n\n${headPrimitives}`,
-      `## Head generated traceability index\n\n${traceability}`,
+      '## Generated traceability index\n\nThe deterministic traceability checks validate the complete generated index. Relevant primitive metadata is listed above, and changed index entries are visible in the complete diff.',
       `## Head domain register\n\n${domain}`,
       `## Head architecture impact map\n\n${map}`,
       `## Head evidence schema\n\n${schema}`,
+      `## Head internal quota diagnostics schema\n\n${quotaSchema}`,
       `## Safe runner-state summary\n\n${JSON.stringify(state, null, 2)}`,
       `## Complete merge-base to head diff (all changed paths)\n\n${reviewDiff}`,
     ];
@@ -909,6 +1054,7 @@ export async function runSemanticReview({
           before: preflightQuotaSnapshot(runner.preflight),
           after: { status: 'not-run' },
         },
+        ...(runner.preflight?.quotaDiagnostics ? { quotaDiagnostics: runner.preflight.quotaDiagnostics } : {}),
         reviewSession: {
           fingerprint,
           disposition: failedChecks.length ? 'checks-failed' : 'not-started',
@@ -933,7 +1079,9 @@ export async function runSemanticReview({
       runtime,
     });
     await client.initialize();
-    const quotaBefore = quotaSnapshot(await client.capabilities());
+    const capabilityBudget = await client.capabilities();
+    const quotaBefore = quotaSnapshot(capabilityBudget);
+    const quotaDiagnostics = projectQuotaDiagnostics(capabilityBudget, QUOTA_STOP_PHASE.preflight);
     if (quotaBefore.status !== 'available' || !quotaBefore.allowanceAvailable) {
       return {
         status: 'inconclusive',
@@ -943,6 +1091,7 @@ export async function runSemanticReview({
         sessionId: existing?.threadId ?? null,
         model: MODELS.review,
         quotaTelemetry: { before: quotaBefore, after: { status: 'not-run' } },
+        ...(quotaDiagnostics ? { quotaDiagnostics } : {}),
         reviewSession: { fingerprint, disposition: 'not-started', noModelTurn: true },
       };
     }
@@ -1009,6 +1158,7 @@ export async function runSemanticReview({
       after: quotaAfter,
     };
     if (result.status !== 'completed') {
+      const quotaDiagnostics = projectQuotaDiagnostics(result.budget, result.stopPhase);
       await writeReviewManifest(statePaths.manifest, {
         version: REVIEW_STATE_VERSION, identity, fingerprint, status: 'interrupted', threadId,
         promptVersion: SEMANTIC_REVIEW_PROMPT_VERSION, runId: process.env.GITHUB_RUN_ID ?? null,
@@ -1018,7 +1168,12 @@ export async function runSemanticReview({
         status: 'inconclusive',
         summary: 'Semantic architecture review was not completed; its Codex session is saved for continuation.',
         findings: [],
-        evidenceGaps: [result.reason ?? 'The review turn did not complete.'],
+        evidenceGaps: [quotaDiagnostics
+          ? `Quota telemetry stopped the review (${quotaDiagnostics.reasonCode}, ${quotaDiagnostics.stopPhase}).`
+          : typeof result.reason === 'string' && result.reason.trim()
+            ? redactSensitiveText(result.reason).slice(0, 2_000)
+            : 'The review turn did not complete.'],
+        ...(quotaDiagnostics ? { quotaDiagnostics } : {}),
         sessionId: threadId,
         model: MODELS.review,
         quotaTelemetry,

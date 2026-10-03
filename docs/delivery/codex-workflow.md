@@ -474,6 +474,53 @@ violations fail; semantic concerns and inconclusive runtime evidence remain
 cited review findings. The review workflow does not comment, modify, merge or
 close anything.
 
+For each semantic run, the evidence bundle fetches the current pull-request
+title and body through the workflow's read-only pull-request permission. The
+event supplies the repository and pull-request number; its title and body are
+not reused because a rerun can carry an older event snapshot. If GitHub cannot
+return the current description, the bundle marks it unavailable instead of
+falling back to stale text. The description is untrusted input, is filtered for
+known credentials, and includes at most 10,000 body characters. The versioned
+delivery-evidence marker is extracted separately from the full current body,
+so a long description cannot hide a marker beyond that text cap.
+
+The linked source issue is fetched with the read-only issue permission. Its
+sanitized projection includes current labels so the reviewer can verify ADR
+governance metadata instead of relying on an incomplete event snapshot.
+
+When quota telemetry stops semantic review, the Actions summary records whether
+the stop happened during preflight or an active review turn. It retains every
+known safe cause category and reports at most 32 triggering windows, 32 context
+windows, and 32 server-block records, prioritizing active server blocks. The
+projection sets `truncated` when these limits or safety filters omit bucket
+details. The summary includes usage, duration, reset times, and a next eligible
+time only when window reserve is the sole stop cause and the exhausted windows
+make it possible to calculate one. Active server rate limits and spend controls
+always suppress that time.
+Provider limit names, account identifiers, and raw error details are not
+published. An `inconclusive` result means no semantic conclusion was reached;
+it does not change the deterministic review result.
+
+The optional `semantic.quotaDiagnostics` object has its own SemVer
+`schemaVersion`, initially `1.0.0`. Version 1 codes, stop phases, and display
+labels are registered in `scripts/lib/quota-diagnostics.mjs`; producer,
+projection, schema, and summary formatter use that shared contract. A minor
+version may add optional fields or codes; the schema permits unknown properties
+and consumers ignore them. Corrections that do not change the contract
+increment the patch version. Removing fields or changing their meaning
+increments the major version. Consumers support compatible versions with major
+version 1 and must not interpret an unsupported major version as version 1.
+
+To retry after a quota stop, open the latest Harness Architecture Review run
+for the pull request head and inspect its Actions summary. Wait until the
+reported next eligible UTC time. If no time can be derived, check the current
+subscription quota for the same account, confirm any reported server block has
+cleared, and wait until all exhausted windows have reset below the 98% reserve.
+Then use **Re-run all jobs** on that run. The retry starts a fresh read-only
+semantic review on the same pull-request head; it does not resume a saved model
+session. If it stops again, use the new sanitized summary to identify the
+window or server flag before deciding whether further recovery is needed.
+
 Review generated workflow and test changes before approving their execution.
 Review PR CI runs repository code directly as the runner service account; it
 does not inherit the model-tool sandbox. Contributors with repository write

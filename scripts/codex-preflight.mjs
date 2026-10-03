@@ -33,7 +33,8 @@ async function writeFailureSummary(quota) {
     '',
     '- Status: failed before a model turn.',
     `- Codex CLI version: ${RELEASE.version}`,
-    `- Highest-window usage: ${quota ? `${quota.highestWindowUsedPercent}%` : 'unavailable'}`,
+    `- Stop reason: ${typeof quota?.reasonCode === 'string' ? quota.reasonCode : 'unavailable'}`,
+    `- Highest-window usage: ${Number.isFinite(quota?.highestWindowUsedPercent) ? `${quota.highestWindowUsedPercent}%` : 'unavailable'}`,
     `- Rate-limit windows: ${windows}`,
     `- Quota guard signals: ${guardSignals}`,
     '- Model turn: not started.',
@@ -96,15 +97,16 @@ let quotaObservation = null;
 try {
   await client.initialize();
   const quota = await client.capabilities();
-  if (Number.isFinite(quota?.usedPercent) && quota.usedPercent >= 0 && quota.usedPercent <= 100) {
-    quotaObservation = {
-      highestWindowUsedPercent: quota.usedPercent,
-      allowanceAvailable: quota.stop === false,
-      windows: quota.windows,
-      guardSignals: quota.guardSignals,
-    };
-  }
-  if (quota.stop !== false || !quotaObservation) {
+  const usageAvailable = Number.isFinite(quota?.usedPercent) && quota.usedPercent >= 0 && quota.usedPercent <= 100;
+  quotaObservation = {
+    ...(usageAvailable ? { highestWindowUsedPercent: quota.usedPercent } : {}),
+    allowanceAvailable: quota.stop === false,
+    windows: Array.isArray(quota?.windows) ? quota.windows : [],
+    guardSignals: quota?.guardSignals ?? null,
+    ...(typeof quota?.reasonCode === 'string' ? { reasonCode: quota.reasonCode } : {}),
+    ...(quota?.diagnostics && typeof quota.diagnostics === 'object' ? { diagnostics: quota.diagnostics } : {}),
+  };
+  if (quota.stop !== false || !usageAvailable) {
     throw new Error(quota.reason || 'Codex quota telemetry is unavailable or at the finalization reserve.');
   }
   await client.close();
