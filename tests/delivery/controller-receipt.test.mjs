@@ -1,14 +1,28 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
 import { finalizeAgentInvocation } from '../../scripts/finalize-agent-invocation.mjs';
-import { InMemoryReplayStore } from '../../scripts/lib/replay-protection.mjs';
+import { FileReplayStore, InMemoryReplayStore } from '../../scripts/lib/replay-protection.mjs';
 
 const deliveryId = '12345678-1234-4234-8234-123456789012';
 const receiptKey = `163255060:${deliveryId}`;
+
+test('file-backed replay state uses portable filenames for composite delivery IDs', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-file-replay-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const store = new FileReplayStore({ directory: root });
+
+  assert.equal(await store.claim(receiptKey), true);
+  await store.ensureControllerReceipt(receiptKey);
+
+  const files = await readdir(root);
+  assert.equal(files.length, 2);
+  assert.ok(files.every((file) => !file.includes(':')));
+  assert.equal((await store.controllerReceipt(receiptKey)).status, 'pending');
+});
 
 test('controller receipts serialize active runs and identify completed duplicate dispatches', async () => {
   const store = new InMemoryReplayStore({ now: () => 10_000 });

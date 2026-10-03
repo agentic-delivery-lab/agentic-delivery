@@ -4,6 +4,10 @@ import { randomUUID } from 'node:crypto';
 const DELIVERY_ID = /^[0-9a-f-]{20,}$/i;
 const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 
+function replayFileKey(key) {
+  return Buffer.from(String(key), 'utf8').toString('base64url');
+}
+
 export const DEFAULT_REPLAY_WINDOW_MS = 5 * 60 * 1000;
 export const DEFAULT_FUTURE_SKEW_MS = 30 * 1000;
 
@@ -168,7 +172,7 @@ export class FileReplayStore {
     const { mkdir, open, readFile, unlink } = await import('node:fs/promises');
     const path = await import('node:path');
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
-    const safeKey = key.replace(/[^A-Za-z0-9_.:-]/g, '_');
+    const safeKey = replayFileKey(key);
     const marker = path.join(this.directory, `${safeKey}.json`);
     const expiresAt = this.now() + ttlMs;
     try {
@@ -197,7 +201,7 @@ export class FileReplayStore {
   async release(key) {
     const { unlink } = await import('node:fs/promises');
     const path = await import('node:path');
-    const safeKey = key.replace(/[^A-Za-z0-9_.:-]/g, '_');
+    const safeKey = replayFileKey(key);
     try { await unlink(path.join(this.directory, `${safeKey}.json`)); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
 
@@ -211,7 +215,7 @@ export class FileReplayStore {
   }
 
   #receiptPath(key) {
-    const safeKey = key.replace(/[^A-Za-z0-9_.:-]/g, '_');
+    const safeKey = replayFileKey(key);
     return path.join(this.directory, `${safeKey}.receipt.json`);
   }
 
