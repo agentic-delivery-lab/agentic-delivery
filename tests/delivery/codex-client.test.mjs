@@ -163,6 +163,21 @@ test('subprocess stderr is withheld even when chunks lose the credential label',
   });
 });
 
+test('recognized subprocess startup diagnostics retain only their safe code', async (t) => {
+  const client = new CodexClient({ command: process.execPath, args: ['-e', `
+    process.stdin.once('data', () => {
+      process.stderr.write('config defines [permissions] profiles but does not set default_permissions; access_token=fixture-secret', () => process.exit(1));
+    });
+  `, '--'] });
+  t.after(async () => { await client.close(); await rm(client.runtime, {recursive:true, force:true}); });
+  await assert.rejects(client.initialize(), (error) => {
+    assert.match(error.message, /A default permission profile is required/);
+    assert.equal(error.codexDiagnostic, 'default_permission_profile_missing');
+    assert.doesNotMatch(error.message, /fixture-secret|access_token/);
+    return true;
+  });
+});
+
 test('protocol errors use the same safe diagnostic boundary as process errors', async (t) => {
   const client = new CodexClient({ command: process.execPath, args: ['-e', `
     const { createInterface } = require('node:readline');

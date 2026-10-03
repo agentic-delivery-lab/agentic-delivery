@@ -450,10 +450,7 @@ export async function runTurn({ client, threadId, phase, prompt, onProgress, sig
 
 export function continuation(state) {
   const awaitingHuman = state.status === 'awaiting-human';
-  const reason = state.reason ?? '';
-  const hasCodexErrorCode = /\bcodex_error=[a-z0-9_]+\b/i.test(reason);
-  const quotaPause = state.budget?.stop === true
-    || (state.budget == null && !hasCodexErrorCode && /allowance|budget|credit|quota/i.test(reason));
+  const quotaPause = state.budget?.stop === true;
   const questions = (state.questions?.length ? state.questions : state.plan?.questions ?? [])
     .filter((question) => typeof question === 'string' && question.trim());
   if (awaitingHuman && !questions.length && state.reason) questions.push(state.reason);
