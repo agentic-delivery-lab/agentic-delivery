@@ -82,7 +82,7 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.46` at
-  `89c9da073df6443cef86c3cb70e38ad10d303926`, retaining draft45 for rollback.
+  `3eff353fb7c00b1931d874d08c0ddfa5500bbe6d`, retaining draft45 for rollback.
   Runtime intake uses the new pin after a separate reviewed bootstrap advance.
 - [Issue #68](https://github.com/agentic-delivery-lab/agentic-delivery/issues/68)
   records sanitized Harness quota diagnostics with stop phase, trigger causes,
