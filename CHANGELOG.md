@@ -104,6 +104,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Update the pinned Codex CLI from 0.159.3 to 0.160.0 after verifying the official release asset digest; the pull request waits for no-generation runner capability checks before semantic review.
+
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.52` at
   `8a2acddf07d0b70b11fc5d9c1f5143e54abf9185`, retaining draft51 and draft50
