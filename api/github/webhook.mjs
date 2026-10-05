@@ -52,6 +52,14 @@ function reply(res, status, body = null) {
   return res.end(JSON.stringify(body));
 }
 
+function logSafely(logger, level, event) {
+  try {
+    logger?.[level]?.(JSON.stringify(event));
+  } catch {
+    // Observability must not change webhook delivery behavior.
+  }
+}
+
 function environment(env = process.env) {
   return {
     controllerRepository: env.AGENTIC_DELIVERY_CONTROLLER_REPOSITORY
@@ -136,6 +144,7 @@ export async function handleWebhook(req, res, {
   tokenProvider,
   participantRegistry,
   replayStore,
+  logger,
   now = () => Date.now(),
 } = {}) {
   if (req.method !== 'POST') return reply(res, 405, { error: 'POST is required.' });
@@ -260,6 +269,15 @@ export async function handleWebhook(req, res, {
     await activeReplayStore.ensureControllerReceipt(key);
     const receipt = await activeReplayStore.controllerReceipt(key);
     if (receipt?.status === 'completed') {
+      logSafely(logger, 'info', {
+        event: 'agentic_delivery_webhook',
+        outcome: 'duplicate',
+        http_status: 200,
+        delivery_id: deliveryId,
+        repository_id: repositoryId,
+        event_name: eventName,
+        action,
+      });
       return reply(res, 200, { accepted: false, duplicate: true, completed: true, delivery_id: deliveryId, repository_id: repositoryId });
     }
   }
@@ -270,6 +288,15 @@ export async function handleWebhook(req, res, {
   if (!claim.claimed) {
     if (durableReceipts) return reply(res, 503, { accepted: false, retryable: true, delivery_id: deliveryId, repository_id: repositoryId });
     if (claim.status === 'dispatched') {
+      logSafely(logger, 'info', {
+        event: 'agentic_delivery_webhook',
+        outcome: 'duplicate',
+        http_status: 200,
+        delivery_id: deliveryId,
+        repository_id: repositoryId,
+        event_name: eventName,
+        action,
+      });
       return reply(res, 200, { accepted: false, duplicate: true, completed: true, delivery_id: deliveryId, repository_id: repositoryId });
     }
     return reply(res, 503, { accepted: false, retryable: true, delivery_id: deliveryId, repository_id: repositoryId });
@@ -296,12 +323,21 @@ export async function handleWebhook(req, res, {
     }
     throw error;
   }
+  logSafely(logger, 'info', {
+    event: 'agentic_delivery_webhook',
+    outcome: 'accepted',
+    http_status: 202,
+    delivery_id: deliveryId,
+    repository_id: repositoryId,
+    event_name: eventName,
+    action,
+  });
   return reply(res, 202, { accepted: true, delivery_id: deliveryId, repository_id: repositoryId });
 }
 
 export default async function handler(req, res) {
   try {
-    return await handleWebhook(req, res);
+    return await handleWebhook(req, res, { logger: console });
   } catch (error) {
     // Do not expose GitHub responses or credential details to the public hook.
     return reply(res, 502, { error: 'The invocation could not be dispatched.' });

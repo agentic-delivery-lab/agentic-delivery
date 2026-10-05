@@ -219,6 +219,7 @@ test('webhook dispatches enrolled pull-request observations without granting inv
   const signature = `sha256=${createHmac('sha256', 'test-secret').update(body).digest('hex')}`;
   const output = result();
   const calls = [];
+  const logs = [];
   const replayStore = new InMemoryReplayStore();
   await handleWebhook(request({ body, event: 'pull_request', signature }), output, {
     env: webhookEnv(),
@@ -228,6 +229,7 @@ test('webhook dispatches enrolled pull-request observations without granting inv
       return response(204);
     },
     tokenProvider: { token: async () => 'installation-token' },
+    logger: { info: (line) => logs.push(JSON.parse(line)) },
   });
   assert.equal(output.statusCode, 202);
   assert.equal(calls.length, 1);
@@ -237,6 +239,15 @@ test('webhook dispatches enrolled pull-request observations without granting inv
   assert.equal(dispatch.client_payload.source.kind, 'pull_request');
   assert.equal(dispatch.client_payload.source.pull_request_number, 44);
   assert.equal(await replayStore.controllerReceipt('163255060:12345678-1234-4234-8234-123456789012'), null);
+  assert.deepEqual(logs, [{
+    event: 'agentic_delivery_webhook',
+    outcome: 'accepted',
+    http_status: 202,
+    delivery_id: '12345678-1234-4234-8234-123456789012',
+    repository_id: '1358455028',
+    event_name: 'pull_request',
+    action: 'synchronize',
+  }]);
 
   const duplicate = result();
   await handleWebhook(request({ body, event: 'pull_request', signature }), duplicate, {
@@ -244,9 +255,19 @@ test('webhook dispatches enrolled pull-request observations without granting inv
     replayStore,
     fetchImpl: async () => { throw new Error('a completed observation duplicate must not dispatch again'); },
     tokenProvider: { token: async () => 'installation-token' },
+    logger: { info: (line) => logs.push(JSON.parse(line)) },
   });
   assert.equal(duplicate.statusCode, 200);
   assert.match(duplicate.body, /"completed":true/);
+  assert.deepEqual(logs.at(-1), {
+    event: 'agentic_delivery_webhook',
+    outcome: 'duplicate',
+    http_status: 200,
+    delivery_id: '12345678-1234-4234-8234-123456789012',
+    repository_id: '1358455028',
+    event_name: 'pull_request',
+    action: 'synchronize',
+  });
 });
 
 test('webhook keeps an active pull-request observation retryable without a receipt', async () => {
