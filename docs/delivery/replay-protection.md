@@ -184,6 +184,22 @@ definitively rejects a request or eight accepted/ambiguous attempts fail to
 produce a successful history result by the final cooldown. Operators can
 diagnose these separately from transient failures:
 
+The Vercel runtime also emits structured JSON events without webhook payloads
+or secret values. `agentic_delivery_webhook` records an accepted delivery
+after the controller dispatch succeeds; its `http_status` is the response
+returned to GitHub. `agentic_delivery_webhook_reconciler_redelivery` records
+the GitHub API result for one redelivery request, including its delivery GUID,
+numeric delivery ID, outcome, and HTTP status. An `accepted` redelivery means
+GitHub accepted the request to retry; check later delivery history to see
+whether that retry succeeded. An outcome ending in `_not_recorded` means GitHub's
+result was known but Neon could not save it; `recovery_status` says whether the
+request was durably deferred. The run then fails with HTTP 503 and does not
+advance its checkpoint. `agentic_delivery_webhook_reconciler_run`
+records the Cron endpoint's completed or failed response and its counters.
+There, `http_status` is the Vercel endpoint response and `github_api_status`
+is the GitHub API response when one is known. Capture these events with the
+Vercel request ID and timestamp because runtime-log retention is limited.
+
 ```sql
 SELECT status, count(*)
 FROM public.webhook_controller_receipts
