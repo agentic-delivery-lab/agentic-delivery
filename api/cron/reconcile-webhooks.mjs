@@ -35,6 +35,49 @@ function logSafely(logger, level, event) {
   }
 }
 
+function safeErrorType(error) {
+  const name = error?.name;
+  return typeof name === 'string' && /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(name) ? name : 'Error';
+}
+
+async function deferAndReportPersistenceFailure({
+  deliveryId,
+  guid,
+  githubApiStatus,
+  outcome,
+  error,
+  retryAt,
+  logger,
+  store,
+  rateLimited = false,
+}) {
+  let recoveryStatus = 'deferred';
+  let recoveryErrorType = null;
+  try {
+    // A known GitHub result must remain retryable if its durable outcome could
+    // not be recorded. The original request has already left the API boundary.
+    await store.deferRedeliveryRequest(guid, deliveryId, retryAt);
+  } catch (recoveryError) {
+    recoveryStatus = 'failed';
+    recoveryErrorType = safeErrorType(recoveryError);
+  }
+  logSafely(logger, 'error', {
+    event: 'agentic_delivery_webhook_reconciler_redelivery',
+    outcome: `${outcome}_not_recorded`,
+    delivery_guid: guid,
+    github_delivery_id: String(deliveryId),
+    github_api_status: Number.isInteger(githubApiStatus) ? githubApiStatus : null,
+    recovery_status: recoveryStatus,
+    storage_error_type: safeErrorType(error),
+    ...(recoveryErrorType ? { recovery_error_type: recoveryErrorType } : {}),
+    rate_limited: Boolean(rateLimited),
+  });
+  const failure = new Error('The redelivery outcome could not be persisted.');
+  failure.githubApiStatus = Number.isInteger(githubApiStatus) ? githubApiStatus : null;
+  failure.rateLimited = Boolean(rateLimited);
+  throw failure;
+}
+
 function nextPage(linkHeader) {
   for (const item of String(linkHeader ?? '').split(',')) {
     const match = /^\s*<([^>]+)>\s*;\s*rel="next"\s*$/.exec(item);
@@ -256,25 +299,24 @@ async function requestRedelivery({ deliveryId, guid, jwt, fetchImpl, store, logg
     if (claim.status === 'requesting' || claim.status === 'queued') return { requested: false, reason: 'cooldown' };
     throw new Error('A previous redelivery request has an uncertain outcome.');
   }
+  let result;
   try {
-    const result = await githubRequest({
+    result = await githubRequest({
       url: `https://api.github.com/app/hook/deliveries/${encodeURIComponent(String(deliveryId))}/attempts`,
       method: 'POST',
       jwt,
       fetchImpl,
     });
-    await store.markRedeliveryAccepted(guid, deliveryId);
-    logSafely(logger, 'info', {
-      event: 'agentic_delivery_webhook_reconciler_redelivery',
-      outcome: 'accepted',
-      delivery_guid: guid,
-      github_delivery_id: String(deliveryId),
-      github_api_status: result.status,
-    });
-    return { requested: true };
   } catch (error) {
     if (error.rateLimited) {
-      await store.deferRedeliveryRequest(guid, deliveryId, error.retryAt);
+      try {
+        await store.deferRedeliveryRequest(guid, deliveryId, error.retryAt);
+      } catch (storageError) {
+        await deferAndReportPersistenceFailure({
+          deliveryId, guid, githubApiStatus: error.status, outcome: 'deferred',
+          error: storageError, retryAt: error.retryAt, logger, store, rateLimited: true,
+        });
+      }
       logSafely(logger, 'warn', {
         event: 'agentic_delivery_webhook_reconciler_redelivery',
         outcome: 'deferred',
@@ -286,7 +328,14 @@ async function requestRedelivery({ deliveryId, guid, jwt, fetchImpl, store, logg
       throw error;
     }
     if (error.status && error.status < 500 && error.status !== 408 && error.status !== 429) {
-      await store.markRedeliveryRejected(guid, deliveryId);
+      try {
+        await store.markRedeliveryRejected(guid, deliveryId);
+      } catch (storageError) {
+        await deferAndReportPersistenceFailure({
+          deliveryId, guid, githubApiStatus: error.status, outcome: 'rejected',
+          error: storageError, logger, store,
+        });
+      }
       logSafely(logger, 'warn', {
         event: 'agentic_delivery_webhook_reconciler_redelivery',
         outcome: 'rejected',
@@ -297,7 +346,14 @@ async function requestRedelivery({ deliveryId, guid, jwt, fetchImpl, store, logg
       });
       return { requested: false, reason: 'exhausted' };
     }
-    await store.deferRedeliveryRequest(guid, deliveryId);
+    try {
+      await store.deferRedeliveryRequest(guid, deliveryId);
+    } catch (storageError) {
+      await deferAndReportPersistenceFailure({
+        deliveryId, guid, githubApiStatus: error.status, outcome: 'uncertain',
+        error: storageError, logger, store,
+      });
+    }
     logSafely(logger, 'warn', {
       event: 'agentic_delivery_webhook_reconciler_redelivery',
       outcome: 'uncertain',
@@ -308,6 +364,22 @@ async function requestRedelivery({ deliveryId, guid, jwt, fetchImpl, store, logg
     });
     throw error;
   }
+
+  try {
+    await store.markRedeliveryAccepted(guid, deliveryId);
+  } catch (error) {
+    await deferAndReportPersistenceFailure({
+      deliveryId, guid, githubApiStatus: result.status, outcome: 'accepted', error, logger, store,
+    });
+  }
+  logSafely(logger, 'info', {
+    event: 'agentic_delivery_webhook_reconciler_redelivery',
+    outcome: 'accepted',
+    delivery_guid: guid,
+    github_delivery_id: String(deliveryId),
+    github_api_status: result.status,
+  });
+  return { requested: true };
 }
 
 export async function reconcileWebhookDeliveries({ req, res, env = process.env, fetchImpl = fetch, store, logger, now = () => Date.now() }) {
@@ -435,9 +507,11 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
       event: 'agentic_delivery_webhook_reconciler_run',
       outcome: 'failed',
       http_status: status,
-      github_api_status: Number.isInteger(error.status) ? error.status : null,
+      github_api_status: Number.isInteger(error.githubApiStatus)
+        ? error.githubApiStatus
+        : Number.isInteger(error.status) ? error.status : null,
       rate_limited: Boolean(error.rateLimited),
-      error_type: typeof error.name === 'string' ? error.name : 'Error',
+      error_type: safeErrorType(error),
     });
     return response(res, status, { error: 'Webhook delivery reconciliation failed; the checkpoint was not advanced.' });
   }

@@ -191,12 +191,14 @@ returned to GitHub. `agentic_delivery_webhook_reconciler_redelivery` records
 the GitHub API result for one redelivery request, including its delivery GUID,
 numeric delivery ID, outcome, and HTTP status. An `accepted` redelivery means
 GitHub accepted the request to retry; check later delivery history to see
-whether that retry succeeded. `agentic_delivery_webhook_reconciler_run`
+whether that retry succeeded. An outcome ending in `_not_recorded` means GitHub's
+result was known but Neon could not save it; `recovery_status` says whether the
+request was durably deferred. The run then fails with HTTP 503 and does not
+advance its checkpoint. `agentic_delivery_webhook_reconciler_run`
 records the Cron endpoint's completed or failed response and its counters.
 There, `http_status` is the Vercel endpoint response and `github_api_status`
-is a GitHub API response when one caused the failure. Capture these events
-with the Vercel request ID and timestamp because runtime-log retention is
-limited.
+is the GitHub API response when one is known. Capture these events with the
+Vercel request ID and timestamp because runtime-log retention is limited.
 
 ```sql
 SELECT status, count(*)

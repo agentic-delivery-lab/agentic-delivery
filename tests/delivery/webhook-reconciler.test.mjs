@@ -254,6 +254,95 @@ test('reconciler paginates, groups attempts by GUID, redelivers failures and sta
   });
 });
 
+test('reconciler preserves an accepted GitHub outcome when its state write and recovery both fail', async () => {
+  const scanNow = Date.now();
+  const store = makeStore();
+  store.markRedeliveryAccepted = async () => { throw new Error('private database detail'); };
+  store.deferRedeliveryRequest = async () => { throw new Error('private recovery detail'); };
+  const fetchImpl = async (_url, options) => options.method === 'POST'
+    ? response(202)
+    : response(200, [{
+      id: 206,
+      guid: deliveryA,
+      delivered_at: new Date(scanNow - 5_000).toISOString(),
+      status: 'FAIL',
+      installation_id: '163255060',
+    }]);
+  const res = output();
+  const logs = [];
+  const logger = {
+    info: (line) => logs.push(JSON.parse(line)),
+    warn: (line) => logs.push(JSON.parse(line)),
+    error: (line) => logs.push(JSON.parse(line)),
+  };
+
+  await reconcileWebhookDeliveries({ req: cronRequest(), res, env: cronEnv(), fetchImpl, store, logger, now: () => scanNow });
+
+  assert.equal(res.statusCode, 503);
+  assert.deepEqual(store.advanced, []);
+  assert.deepEqual(logs, [{
+    event: 'agentic_delivery_webhook_reconciler_redelivery',
+    outcome: 'accepted_not_recorded',
+    delivery_guid: deliveryA,
+    github_delivery_id: '206',
+    github_api_status: 202,
+    recovery_status: 'failed',
+    storage_error_type: 'Error',
+    recovery_error_type: 'Error',
+    rate_limited: false,
+  }, {
+    event: 'agentic_delivery_webhook_reconciler_run',
+    outcome: 'failed',
+    http_status: 503,
+    github_api_status: 202,
+    rate_limited: false,
+    error_type: 'Error',
+  }]);
+  assert.doesNotMatch(JSON.stringify(logs), /private database detail|private recovery detail/);
+});
+
+test('reconciler reports when it defers an accepted GitHub outcome after its state write fails', async () => {
+  const scanNow = Date.now();
+  const store = makeStore();
+  store.markRedeliveryAccepted = async () => { throw new Error('database write failed'); };
+  const fetchImpl = async (_url, options) => options.method === 'POST'
+    ? response(202)
+    : response(200, [{
+      id: 207,
+      guid: deliveryA,
+      delivered_at: new Date(scanNow - 5_000).toISOString(),
+      status: 'FAIL',
+      installation_id: '163255060',
+    }]);
+  const res = output();
+  const logs = [];
+  const logger = { error: (line) => logs.push(JSON.parse(line)) };
+
+  await reconcileWebhookDeliveries({ req: cronRequest(), res, env: cronEnv(), fetchImpl, store, logger, now: () => scanNow });
+
+  assert.equal(res.statusCode, 503);
+  assert.equal(store.requested[0].deferred.guid, deliveryA);
+  assert.equal(store.requested[0].deferred.id, '207');
+  assert.equal(store.advanced.length, 0);
+  assert.deepEqual(logs, [{
+    event: 'agentic_delivery_webhook_reconciler_redelivery',
+    outcome: 'accepted_not_recorded',
+    delivery_guid: deliveryA,
+    github_delivery_id: '207',
+    github_api_status: 202,
+    recovery_status: 'deferred',
+    storage_error_type: 'Error',
+    rate_limited: false,
+  }, {
+    event: 'agentic_delivery_webhook_reconciler_run',
+    outcome: 'failed',
+    http_status: 503,
+    github_api_status: 202,
+    rate_limited: false,
+    error_type: 'Error',
+  }]);
+});
+
 test('reconciler leaves its checkpoint unchanged and records a cooldown when GitHub rate limits redelivery', async () => {
   const scanNow = Date.now();
   const store = makeStore();
