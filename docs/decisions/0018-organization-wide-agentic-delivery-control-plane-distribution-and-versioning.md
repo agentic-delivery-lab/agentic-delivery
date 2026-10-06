@@ -234,12 +234,14 @@ of the HMAC. The observation workflow's trusted `github.sha` revision
 normalizes that wrapper into the direct `client_payload` shape, then verifies
 the envelope signature, bounded timestamp, and controller pin against the
 participant registry before checking out the selected controller commit.
-The immutable pinned reader verifies the normalized envelope again before
-fetching the current GitHub object, resolving the participant's controller
-and contract versions, asking the semantic router for a proposal, and
-applying only deterministically authorized mutations to the originating
-repository. The invocation path performs its signature and registry-pin
-checks with the fixed bootstrap before checking out the participant pin.
+The immutable pinned observation reader verifies the normalized envelope
+again and ends with observation validation; it does not fetch the current
+GitHub object, route work, or mutate issue state. The invocation path
+separately performs its signature and registry-pin checks with the fixed
+bootstrap before checking out the participant pin. Its preflight then fetches
+the current GitHub object, resolves the participant's controller and contract
+versions, asks the semantic router for a proposal, and applies only
+deterministically authorized mutations to the originating repository.
 The webhook secret and dispatch secret are separate credentials: the former
 authenticates GitHub ingress, while the latter authenticates the gateway-to-
 controller handoff. Neither is available to an origin repository or model
