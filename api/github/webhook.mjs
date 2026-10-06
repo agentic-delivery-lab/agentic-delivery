@@ -65,6 +65,11 @@ function safeErrorType(error) {
   return typeof name === 'string' && /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(name) ? name : 'Error';
 }
 
+function safeErrorCode(error) {
+  const code = error?.code;
+  return typeof code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : null;
+}
+
 function environment(env = process.env) {
   return {
     controllerRepository: env.AGENTIC_DELIVERY_CONTROLLER_REPOSITORY
@@ -347,12 +352,14 @@ export async function webhookHandler(req, res, { logger = console, ...options } 
   } catch (error) {
     // Do not expose GitHub responses or credential details to the public hook.
     const deliveryId = String(header(req, 'x-github-delivery') ?? '');
+    const errorCode = safeErrorCode(error);
     logSafely(logger, 'error', {
       event: 'agentic_delivery_webhook',
       outcome: 'failed',
       http_status: 502,
       github_api_status: Number.isInteger(error?.githubApiStatus) ? error.githubApiStatus : null,
       error_type: safeErrorType(error),
+      ...(errorCode ? { error_code: errorCode } : {}),
       ...(/^[0-9a-f-]{20,}$/i.test(deliveryId) ? { delivery_id: deliveryId } : {}),
     });
     return reply(res, 502, { error: 'The invocation could not be dispatched.' });

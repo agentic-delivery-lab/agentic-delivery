@@ -51,6 +51,11 @@ test('the configured App actor and event catalog are deterministic', async () =>
   assert.ok((await readFile(path.join(repositoryRoot, 'config/agent-actors.json'), 'utf8')).includes('agentic-delivery-lab-invoker-7f3a[bot]'));
 });
 
+test('Vercel bundles the participant registry with the webhook function', async () => {
+  const config = JSON.parse(await readFile(path.join(repositoryRoot, 'vercel.json'), 'utf8'));
+  assert.equal(config.functions?.['api/github/webhook.mjs']?.includeFiles, 'config/participants.yml');
+});
+
 test('only an explicit first visible line invokes the orchestrator', () => {
   assert.equal(hasInvocationMention('@agentic-delivery-lab-invoker-7f3a please continue'), true);
   assert.equal(hasInvocationMention('\n\n@agentic-delivery-lab-invoker-7f3a\nPlease continue'), true);
@@ -522,6 +527,28 @@ test('webhook leases a delivery, keeps incomplete work retryable, and releases d
     delivery_id: '98765432-1234-4234-8234-123456789012',
   }]);
   assert.doesNotMatch(JSON.stringify(failureLogs), /private GitHub response|installation-token|dispatch-secret/);
+
+  const networkFailure = Object.assign(new Error('private network detail'), { code: 'ECONNRESET' });
+  const networkFailureLogs = [];
+  const networkFailureRes = result();
+  await webhookHandler(requestFor(), networkFailureRes, {
+    env,
+    replayStore: loggingStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    logger: { error: (line) => networkFailureLogs.push(JSON.parse(line)) },
+    fetchImpl: async () => { throw networkFailure; },
+  });
+  assert.equal(networkFailureRes.statusCode, 502);
+  assert.deepEqual(networkFailureLogs, [{
+    event: 'agentic_delivery_webhook',
+    outcome: 'failed',
+    http_status: 502,
+    github_api_status: null,
+    error_type: 'Error',
+    error_code: 'ECONNRESET',
+    delivery_id: '98765432-1234-4234-8234-123456789012',
+  }]);
+  assert.doesNotMatch(JSON.stringify(networkFailureLogs), /private network detail|installation-token|dispatch-secret/);
 
   await assert.rejects(handleWebhook(requestFor(), result(), {
     env,
