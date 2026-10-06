@@ -226,13 +226,17 @@ reusable workflow boundary even when its caller has already applied them.
 
 The App webhook verifies the GitHub signature, installation, organization,
 supported event/action, delivery ID and repository identity. It emits a
-versioned event envelope whose complete `repository_dispatch` payload is
-signed with a separate central HMAC dispatch secret. The controller verifies
-that signature and its bounded timestamp before fetching the current GitHub
-object again, resolving the participant's pinned controller and contract
-versions, asking the semantic router for a proposal, and applying only
-deterministically authorized mutations to the originating repository. The
-webhook secret and dispatch secret are separate credentials: the former
+versioned event envelope and signs the complete envelope with a separate
+central HMAC dispatch secret. To meet GitHub's ten-property limit for
+`repository_dispatch` `client_payload`, the gateway carries the envelope in
+the single `client_payload.envelope` property; the wrapper itself is not part
+of the HMAC. The central workflow normalizes that wrapper into the direct
+`client_payload` shape expected by the immutable pinned readers, which verify
+the envelope signature and bounded timestamp before fetching the current
+GitHub object again, resolving the participant's pinned controller and
+contract versions, asking the semantic router for a proposal, and applying
+only deterministically authorized mutations to the originating repository.
+The webhook secret and dispatch secret are separate credentials: the former
 authenticates GitHub ingress, while the latter authenticates the gateway-to-
 controller handoff. Neither is available to an origin repository or model
 process.

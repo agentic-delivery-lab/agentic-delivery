@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { promisify } from 'node:util';
 
 import {
   normalizeRepositoryDispatchEvent,
@@ -10,9 +12,22 @@ import {
 } from '../../scripts/normalize-repository-dispatch-event.mjs';
 import {
   dispatchEnvelopeSignature,
+  invocationEnvelope,
   packRepositoryDispatchClientPayload,
   validateDispatchEnvelopeSignature,
 } from '../../scripts/lib/agent-invocation.mjs';
+import { validateEventEnvelope } from '../../scripts/lib/control-plane-contracts.mjs';
+
+const repositoryRoot = path.resolve(import.meta.dirname, '../..');
+const execFileAsync = promisify(execFile);
+
+async function pinnedFile(commit, file) {
+  const { stdout } = await execFileAsync('git', ['show', `${commit}:${file}`], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+  return stdout;
+}
 
 test('dispatch normalizer restores the direct payload shape without changing its envelope', () => {
   const unsignedEnvelope = {
@@ -77,4 +92,59 @@ test('dispatch normalizer writes a separate event file for pinned readers', asyn
   assert.deepEqual(normalized, { client_payload: envelope });
   assert.equal(validateDispatchEnvelopeSignature({ secret, envelope: normalized.client_payload, now: Number(envelope.dispatch_timestamp) }).valid, true);
   await assert.rejects(normalizeRepositoryDispatchEventFile(sourcePath, targetPath), /EEXIST/);
+});
+
+test('normalized events match the invocation and observation readers at their immutable pins', async () => {
+  const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
+  const invocationReader = await pinnedFile(release.bootstrapCommit, 'scripts/prepare-agent-invocation.mjs');
+  const observationReader = await pinnedFile(release.commit, 'scripts/validate-observation-event.mjs');
+  for (const reader of [invocationReader, observationReader]) {
+    assert.match(reader, /const envelope = event\?\.client_payload;/);
+  }
+
+  const secret = 'dispatch-secret';
+  const cases = [
+    {
+      eventName: 'issue_comment',
+      action: 'created',
+      source: { kind: 'issue_comment', issue_number: 60, pull_request_number: null, comment_id: 99, review_id: null },
+      actor: { login: 'sjefsharp', type: 'User' },
+      body: '@agentic-delivery-lab-invoker-7f3a continue',
+      controller: { version: release.version, commit: release.commit },
+    },
+    {
+      eventName: 'pull_request',
+      action: 'synchronize',
+      source: { kind: 'pull_request', issue_number: null, pull_request_number: 27, comment_id: null, review_id: null },
+      actor: { login: 'external-contributor', type: 'User' },
+      body: 'Pull request observation',
+      controller: { version: release.version, commit: release.commit },
+    },
+  ];
+
+  for (const [index, fields] of cases.entries()) {
+    const envelope = invocationEnvelope({
+      deliveryId: `${index + 1}2345678-1234-4234-8234-123456789012`,
+      repositoryId: '1358455028',
+      organizationId: '327861320',
+      installationId: '163255060',
+      repositoryFullName: 'agentic-delivery-lab/agentic-delivery',
+      receivedAt: new Date().toISOString(),
+      dispatchSecret: secret,
+      dispatchTimestamp: Date.now(),
+      ...fields,
+    });
+    const normalized = normalizeRepositoryDispatchEvent({
+      repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
+      client_payload: packRepositoryDispatchClientPayload(envelope),
+    });
+    assert.deepEqual(validateEventEnvelope(normalized.client_payload), { valid: true, errors: [] });
+    assert.equal(validateDispatchEnvelopeSignature({
+      secret,
+      envelope: normalized.client_payload,
+      now: Number(envelope.dispatch_timestamp),
+    }).valid, true);
+    assert.equal(normalized.client_payload.event, fields.eventName);
+    assert.equal(normalized.client_payload.delivery_id, envelope.delivery_id);
+  }
 });
