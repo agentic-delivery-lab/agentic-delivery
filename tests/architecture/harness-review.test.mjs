@@ -229,6 +229,7 @@ test('the current architecture map covers the official ADR set and emits a conci
   const contexts = parseRepositoryYaml(reviewMap, 'harness review map')['bounded-contexts'];
   const controlPlane = contexts.find((context) => context.id === 'agentic-delivery-control-plane');
   assert.ok(controlPlane.paths.includes('.github/workflows/agent-observation.yml'));
+  assert.ok(controlPlane.paths.includes('scripts/normalize-repository-dispatch-event.mjs'));
   assert.match(formatReviewMarkdown(review), /Harness Architecture Review/);
   assert.match(formatReviewMarkdown(review), /adr-map-coverage/);
 });

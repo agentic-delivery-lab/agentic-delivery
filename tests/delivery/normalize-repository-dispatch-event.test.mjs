@@ -82,6 +82,26 @@ test('dispatch shape diagnostics omit arbitrary keys and values', () => {
   assert.doesNotMatch(serialized, /unexpected_.*_secret_key|secret value|private-repository-name/);
 });
 
+test('dispatch shape diagnostics describe nested client payloads without exposing their values', () => {
+  const shape = repositoryDispatchEventShape({
+    client_payload: {
+      client_payload: {
+        envelope: {
+          version: 1,
+          delivery_id: '12345678-1234-4234-8234-123456789012',
+          unexpected_nested_secret_key: 'nested secret value',
+        },
+      },
+    },
+  });
+  assert.deepEqual(shape.client_payload_keys, ['client_payload']);
+  assert.deepEqual(shape.nested_client_payload_keys, ['envelope']);
+  assert.equal(shape.nested_envelope_type, 'object');
+  assert.deepEqual(shape.nested_envelope_keys, ['delivery_id', 'version']);
+  assert.equal(shape.nested_envelope_unknown_key_count, 1);
+  assert.doesNotMatch(JSON.stringify(shape), /12345678-1234-4234-8234-123456789012|unexpected_nested_secret_key|nested secret value/);
+});
+
 test('dispatch normalizer preserves legacy direct events and rejects malformed wrappers', () => {
   const legacy = { client_payload: { version: 1, delivery_id: '12345678-1234-4234-8234-123456789012' } };
   assert.equal(normalizeRepositoryDispatchEvent(legacy), legacy);

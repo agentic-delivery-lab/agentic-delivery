@@ -529,9 +529,9 @@ they do not authorize migration, alter that issue's scope, or close it.
 ### Fixed
 
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60)
-  logs only normalized repository-dispatch event and payload field names and
-  value types, making malformed event envelopes diagnosable without exposing
-  their values.
+  logs only allowlisted repository-dispatch field names and value types; it
+  counts unknown names without logging them or payload values. The Harness
+  review map classifies the normalizer as a Control Plane path.
 
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) fixes the truncated `pnpm/setup` pin so repository-dispatch observation jobs can start their validation.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) normalizes the wrapped event again in the separate receipt-finalizer job so the participant-pinned finalizer completes or retries the same controller receipt.
