@@ -117,9 +117,12 @@ if (isMainModule) {
     process.exitCode = 2;
   } else {
     try {
+      const sourceEvent = JSON.parse(await readFile(sourcePath, 'utf8'));
+      const sourceShape = repositoryDispatchEventShape(sourceEvent);
       await normalizeRepositoryDispatchEventFile(sourcePath, targetPath);
       const normalized = JSON.parse(await readFile(targetPath, 'utf8'));
-      process.stdout.write(`Repository dispatch event shape (values omitted): ${JSON.stringify(repositoryDispatchEventShape(normalized))}\n`);
+      process.stdout.write(`Repository dispatch source event shape (values omitted): ${JSON.stringify(sourceShape)}\n`);
+      process.stdout.write(`Repository dispatch normalized event shape (values omitted): ${JSON.stringify(repositoryDispatchEventShape(normalized))}\n`);
       process.stdout.write('Repository dispatch event is ready for the pinned controller reader.\n');
     } catch (error) {
       process.stderr.write(`${error.message}\n`);

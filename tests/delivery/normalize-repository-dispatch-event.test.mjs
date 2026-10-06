@@ -112,6 +112,8 @@ test('dispatch shape diagnostics describe nested client payloads without exposin
     sourcePath,
     targetPath,
   ], { cwd: repositoryRoot });
+  assert.match(stdout, /Repository dispatch source event shape \(values omitted\):/);
+  assert.match(stdout, /Repository dispatch normalized event shape \(values omitted\):/);
   assert.match(stdout, /"nested_client_payload_keys":\["envelope"\]/);
   assert.match(stdout, /"nested_envelope_keys":\["delivery_id","version"\]/);
   assert.doesNotMatch(stdout, /12345678-1234-4234-8234-123456789012|unexpected_nested_secret_key|nested secret value/);
@@ -162,7 +164,9 @@ test('dispatch normalizer writes a separate event file for pinned readers', asyn
     sourcePath,
     cliTargetPath,
   ], { cwd: repositoryRoot });
-  assert.match(stdout, /Repository dispatch event shape \(values omitted\):/);
+  assert.match(stdout, /Repository dispatch source event shape \(values omitted\):/);
+  assert.match(stdout, /"client_payload_keys":\["envelope"\]/);
+  assert.match(stdout, /Repository dispatch normalized event shape \(values omitted\):/);
   assert.match(stdout, /"delivery_id":"string"/);
   assert.doesNotMatch(stdout, /12345678-1234-4234-8234-123456789012|sha256=|dispatch-secret/);
 });
