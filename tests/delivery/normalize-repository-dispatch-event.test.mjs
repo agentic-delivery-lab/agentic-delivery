@@ -228,6 +228,61 @@ test('dispatch CLI suppresses parser excerpts for malformed JSON', async (t) => 
   assert.doesNotMatch(`${failure.stdout}${failure.stderr}`, /parser-excerpt-sensitive-value|secret_marker/);
 });
 
+test('dispatch CLI hides source paths when the input file cannot be read', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'repository-dispatch-unreadable-source-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const sourcePath = path.join(root, 'private-source-path.json');
+  const targetPath = path.join(root, 'normalized.json');
+
+  let failure;
+  try {
+    await execFileAsync(process.execPath, [
+      path.join(repositoryRoot, 'scripts/normalize-repository-dispatch-event.mjs'),
+      sourcePath,
+      targetPath,
+    ], { cwd: repositoryRoot });
+  } catch (error) {
+    failure = error;
+  }
+
+  assert.ok(failure, 'an unreadable source file should fail normalization');
+  assert.equal(failure.code, 1);
+  assert.match(failure.stderr, /source event file could not be read/);
+  assert.doesNotMatch(`${failure.stdout}${failure.stderr}`, /private-source-path|ENOENT/);
+});
+
+test('dispatch CLI hides filesystem details when it cannot write the normalized file', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'repository-dispatch-unwritable-target-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const sourcePath = path.join(root, 'source.json');
+  const targetPath = path.join(root, 'private-target-path.json');
+  const existingTargetContent = 'existing-target-private-value';
+  await writeFile(sourcePath, JSON.stringify({
+    client_payload: {
+      envelope: { version: 1, delivery_id: 'private-source-delivery-value' },
+    },
+  }));
+  await writeFile(targetPath, existingTargetContent);
+
+  let failure;
+  try {
+    await execFileAsync(process.execPath, [
+      path.join(repositoryRoot, 'scripts/normalize-repository-dispatch-event.mjs'),
+      sourcePath,
+      targetPath,
+    ], { cwd: repositoryRoot });
+  } catch (error) {
+    failure = error;
+  }
+
+  assert.ok(failure, 'an existing target file should reject the write');
+  assert.equal(failure.code, 1);
+  assert.match(failure.stdout, /Repository dispatch source event shape \(values omitted\):/);
+  assert.match(failure.stderr, /normalized repository dispatch event file could not be written/);
+  assert.doesNotMatch(`${failure.stdout}${failure.stderr}`, /private-target-path|private-source-delivery-value|existing-target-private-value|EEXIST/);
+  assert.equal(await readFile(targetPath, 'utf8'), existingTargetContent);
+});
+
 test('normalized events pass invocation, observation, and finalizer readers at their immutable pins', async (t) => {
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   const workspace = await mkdtemp(path.join(repositoryRoot, '.rdr-'));
