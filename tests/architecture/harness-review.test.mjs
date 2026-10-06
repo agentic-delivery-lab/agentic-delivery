@@ -227,9 +227,12 @@ test('the current architecture map covers the official ADR set and emits a conci
   assert.match(reviewMap, /scripts\/classify-codex-cli-updater-review\.mjs/);
   assert.match(reviewMap, /id: agent-invocation/);
   const contexts = parseRepositoryYaml(reviewMap, 'harness review map')['bounded-contexts'];
+  const runtimeSurfaces = parseRepositoryYaml(reviewMap, 'harness review map')['runtime-surfaces'];
   const controlPlane = contexts.find((context) => context.id === 'agentic-delivery-control-plane');
+  const agentInvocation = runtimeSurfaces.find((surface) => surface.id === 'agent-invocation');
   assert.ok(controlPlane.paths.includes('.github/workflows/agent-observation.yml'));
   assert.ok(controlPlane.paths.includes('scripts/normalize-repository-dispatch-event.mjs'));
+  assert.ok(agentInvocation.paths.includes('scripts/normalize-repository-dispatch-event.mjs'));
   assert.match(formatReviewMarkdown(review), /Harness Architecture Review/);
   assert.match(formatReviewMarkdown(review), /adr-map-coverage/);
 });

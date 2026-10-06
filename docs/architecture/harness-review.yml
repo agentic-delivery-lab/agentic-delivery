@@ -26,5 +26,5 @@ runtime-surfaces:
     paths: [.github/workflows/codex-cli-release-update.yml, .github/workflows/self-hosted-runner-smoke.yml, scripts/classify-codex-cli-updater-review.mjs, scripts/codex-cli-release-update.mjs, scripts/lib/github-native-issue-type.mjs, scripts/lib/pull-request-check-readiness.mjs, scripts/setup-runner-codex.mjs, scripts/codex-preflight.mjs]
     evidence: [candidate-version, release-asset-digest, source-issue, native-task-type, exact-head-checks, workflow-provenance, runner-preflight, semantic-review]
   - id: agent-invocation
-    paths: [config/agent-actors.json, config/issue-metadata.yml, config/orchestration-policy.yml, .github/workflows/agent-invocation.yml, .github/workflows/issue-intake.yml, api/github/**, scripts/lib/agent-invocation.mjs, scripts/prepare-agent-invocation.mjs, scripts/authorize-issue-event.mjs]
+    paths: [config/agent-actors.json, config/issue-metadata.yml, config/orchestration-policy.yml, .github/workflows/agent-invocation.yml, .github/workflows/issue-intake.yml, api/github/**, scripts/lib/agent-invocation.mjs, scripts/prepare-agent-invocation.mjs, scripts/normalize-repository-dispatch-event.mjs, scripts/authorize-issue-event.mjs]
     evidence: [conversation-event, invocation-boundary, actor-catalog, actor-authorization, delivery-dispatch, idempotency, hop-limit, actions-run]
