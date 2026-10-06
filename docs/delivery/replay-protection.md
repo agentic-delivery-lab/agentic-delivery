@@ -91,6 +91,8 @@ supports this daily schedule. The Cron route is deployed as code by
 deploy, or activate the App webhook. Vercel Hobby permits one invocation per
 day, while Pro and Enterprise permit per-minute schedules; confirm the project
 plan before changing this cadence ([Cron Jobs usage and pricing](https://vercel.com/docs/cron-jobs/usage-and-pricing)).
+The webhook function reads `config/participants.yml` at runtime, so the
+`vercel.json` function configuration includes that file in its bundle.
 
 ## Recovery and monitoring
 
@@ -207,7 +209,8 @@ result was known but Neon could not save it; `recovery_status` says whether the
 request was durably deferred. The run then fails with HTTP 503 and does not
 advance its checkpoint. A failed webhook dispatch emits `outcome: failed` with
 the gateway response status, a GitHub API status when known, a bounded error
-type, and the delivery GUID; it excludes raw errors and request contents.
+type, an optional sanitized system error code, and the delivery GUID; it
+excludes error messages and request contents.
 `agentic_delivery_webhook_reconciler_run`
 records the Cron endpoint's completed or failed response and its counters.
 There, `http_status` is the Vercel endpoint response and `github_api_status`
