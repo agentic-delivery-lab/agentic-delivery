@@ -225,6 +225,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   const intakeSteps = intakeWorkflow.jobs.classify.steps;
   const trustedIntakeCheckout = intakeSteps.find((step) => step.name === 'Check out trusted intake');
   const install = intakeSteps.find((step) => step.name === 'Install intake dependencies');
+  const normalizer = intakeSteps.find((step) => step.name === 'Normalize the wrapped event for the pinned controller reader');
   const invocation = intakeSteps.find((step) => step.name === 'Validate and normalize explicit agent invocation');
   const participant = intakeSteps.find((step) => step.name === 'Resolve participant mode for direct intake');
   const intakePolicy = intakeSteps.find((step) => step.name === 'Resolve participant and read-only run policy');
@@ -257,6 +258,11 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   const controllerInstall = intakeSteps.find((step) => step.name === 'Install validated controller dependencies');
   assert.equal(trustedIntakeCheckout.with.path, 'trusted-intake');
   assert.equal(install['working-directory'], 'trusted-intake');
+  assert.equal(normalizer.id, 'normalized-event');
+  assert.equal(normalizer.env.SOURCE_EVENT_PATH, '${{ github.event_path }}');
+  assert.match(normalizer.run, /node dispatch-boundary\/scripts\/normalize-repository-dispatch-event\.mjs/);
+  assert.equal(invocation.env.GITHUB_EVENT_PATH, '${{ steps.normalized-event.outputs.event_path || github.event_path }}');
+  assert.ok(intakeSteps.indexOf(normalizer) < intakeSteps.indexOf(invocation));
   assert.equal(invocation['working-directory'], 'trusted-intake');
   assert.equal(controllerCheckout.with.path, undefined);
   assert.equal(controllerInstall['working-directory'], '.');

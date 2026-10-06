@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url';
 import {
   normalizeRepositoryDispatchEvent,
   normalizeRepositoryDispatchEventFile,
+  repositoryDispatchEventShape,
 } from '../../scripts/normalize-repository-dispatch-event.mjs';
 import {
   dispatchEnvelopeSignature,
@@ -45,6 +46,40 @@ test('dispatch normalizer restores the direct payload shape without changing its
     client_payload: envelope,
   });
   assert.equal(validateDispatchEnvelopeSignature({ secret, envelope, now: Number(envelope.dispatch_timestamp) }).valid, true);
+
+  const shape = repositoryDispatchEventShape(normalizeRepositoryDispatchEvent(event));
+  assert.deepEqual(shape.event_keys, ['client_payload', 'repository']);
+  assert.deepEqual(shape.client_payload_keys, Object.keys(envelope).sort());
+  assert.deepEqual(shape.client_payload_value_types, {
+    delivery_id: 'string',
+    dispatch_signature: 'string',
+    dispatch_timestamp: 'string',
+    event: 'string',
+    repository_id: 'string',
+    version: 'number',
+  });
+  assert.equal(shape.wrapped_envelope_type, 'missing');
+  assert.doesNotMatch(JSON.stringify(shape), /12345678-1234-4234-8234-123456789012|sha256=|dispatch-secret/);
+});
+
+test('dispatch shape diagnostics omit arbitrary keys and values', () => {
+  const shape = repositoryDispatchEventShape({
+    unexpected_root_secret_key: 'root secret value',
+    repository: { name: 'private-repository-name' },
+    client_payload: {
+      envelope: {
+        version: 1,
+        delivery_id: '12345678-1234-4234-8234-123456789012',
+        unexpected_envelope_secret_key: 'nested secret value',
+      },
+      unexpected_payload_secret_key: 'payload secret value',
+    },
+  });
+  const serialized = JSON.stringify(shape);
+  assert.equal(shape.event_unknown_key_count, 1);
+  assert.equal(shape.client_payload_unknown_key_count, 1);
+  assert.equal(shape.wrapped_envelope_unknown_key_count, 1);
+  assert.doesNotMatch(serialized, /unexpected_.*_secret_key|secret value|private-repository-name/);
 });
 
 test('dispatch normalizer preserves legacy direct events and rejects malformed wrappers', () => {
@@ -65,6 +100,7 @@ test('dispatch normalizer writes a separate event file for pinned readers', asyn
   t.after(() => rm(root, { recursive: true, force: true }));
   const sourcePath = path.join(root, 'source.json');
   const targetPath = path.join(root, 'normalized.json');
+  const cliTargetPath = path.join(root, 'normalized-cli.json');
   const unsignedEnvelope = {
     version: 1,
     delivery_id: '12345678-1234-4234-8234-123456789012',
@@ -85,6 +121,15 @@ test('dispatch normalizer writes a separate event file for pinned readers', asyn
   assert.deepEqual(normalized, { client_payload: envelope });
   assert.equal(validateDispatchEnvelopeSignature({ secret, envelope: normalized.client_payload, now: Number(envelope.dispatch_timestamp) }).valid, true);
   await assert.rejects(normalizeRepositoryDispatchEventFile(sourcePath, targetPath), /EEXIST/);
+
+  const { stdout } = await execFileAsync(process.execPath, [
+    path.join(repositoryRoot, 'scripts/normalize-repository-dispatch-event.mjs'),
+    sourcePath,
+    cliTargetPath,
+  ], { cwd: repositoryRoot });
+  assert.match(stdout, /Repository dispatch event shape \(values omitted\):/);
+  assert.match(stdout, /"delivery_id":"string"/);
+  assert.doesNotMatch(stdout, /12345678-1234-4234-8234-123456789012|sha256=|dispatch-secret/);
 });
 
 test('normalized events pass invocation, observation, and finalizer readers at their immutable pins', async (t) => {
