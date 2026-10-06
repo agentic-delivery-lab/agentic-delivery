@@ -311,6 +311,7 @@
         "primitive-selection-contract",
         "primitive-selection-validator",
         "quota-diagnostics-contract",
+        "repository-dispatch-event-normalizer",
         "repository-governance-instructions",
         "semantic-architecture-review",
         "webhook-delivery-reconciler"
@@ -369,6 +370,7 @@
         "primitive-selection-contract",
         "primitive-selection-validator",
         "quota-diagnostics-contract",
+        "repository-dispatch-event-normalizer",
         "repository-governance-instructions",
         "semantic-architecture-review",
         "webhook-delivery-reconciler"
@@ -1152,6 +1154,19 @@
       "domains": [
         "agentic-delivery-control-plane",
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "repository-dispatch-event-normalizer",
+      "path": "scripts/normalize-repository-dispatch-event.mjs",
+      "location": "scripts/normalize-repository-dispatch-event.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {

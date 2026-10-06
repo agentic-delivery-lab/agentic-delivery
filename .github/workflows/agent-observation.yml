@@ -15,18 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Validate the participant controller pin
-        env:
-          CONTROLLER_COMMIT: ${{ github.event.client_payload.controller.commit }}
-        run: |
-          set -euo pipefail
-          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-
-      - name: Check out the pinned observation validator
+      - name: Check out the workflow revision for dispatch normalization
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ github.event.client_payload.controller.commit }}
-          path: controller
+          ref: ${{ github.sha }}
+          path: dispatch-boundary
           persist-credentials: false
 
       - name: Set up pnpm and Node.js
@@ -34,13 +27,48 @@ jobs:
         with:
           runtime: node@24
           install: false
+          package-json-file: dispatch-boundary/package.json
 
-      - name: Install observation validator dependencies
+      - name: Install trusted observation validator dependencies
+        run: pnpm --dir dispatch-boundary install --frozen-lockfile --ignore-scripts
+
+      - name: Normalize the wrapped event for the pinned controller reader
+        id: normalized-event
+        env:
+          SOURCE_EVENT_PATH: ${{ github.event_path }}
+          NORMALIZED_EVENT_PATH: ${{ runner.temp }}/agentic-delivery-event.json
+        run: |
+          node dispatch-boundary/scripts/normalize-repository-dispatch-event.mjs "$SOURCE_EVENT_PATH" "$NORMALIZED_EVENT_PATH"
+          echo "event_path=$NORMALIZED_EVENT_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the signed event and registry pin before pinned checkout
+        id: trusted-validation
+        env:
+          GITHUB_EVENT_PATH: ${{ steps.normalized-event.outputs.event_path }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}
+        run: node dispatch-boundary/scripts/validate-observation-event.mjs dispatch-boundary
+
+      - name: Validate the trusted controller pin
+        env:
+          CONTROLLER_COMMIT: ${{ steps.trusted-validation.outputs.controller_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Check out the validated pinned observation reader
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ steps.trusted-validation.outputs.controller_commit }}
+          path: controller
+          persist-credentials: false
+
+      - name: Install pinned observation validator dependencies
         run: pnpm --dir controller install --frozen-lockfile --ignore-scripts
 
-      - name: Validate the signed pull-request observation
+      - name: Recheck with the immutable pinned observation validator
         env:
-          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_EVENT_PATH: ${{ steps.normalized-event.outputs.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}
         run: node controller/scripts/validate-observation-event.mjs controller

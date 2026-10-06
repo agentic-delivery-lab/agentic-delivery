@@ -9,6 +9,7 @@ import {
   actorEntry,
   invocationBody,
   invocationEnvelope,
+  packRepositoryDispatchClientPayload,
   observationEventSupported,
   webhookEventSupported,
   hasInvocationMention,
@@ -321,7 +322,7 @@ export async function handleWebhook(req, res, {
       method: 'POST',
       body: {
         event_type: observationEvent ? 'agent_observation' : 'agent_invocation',
-        client_payload: envelope,
+        client_payload: packRepositoryDispatchClientPayload(envelope),
       },
       fetchImpl,
     });

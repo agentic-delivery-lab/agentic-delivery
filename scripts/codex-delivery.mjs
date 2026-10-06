@@ -15,7 +15,7 @@ import { validateBranchName } from './validate-branch-name.mjs';
 import { deterministicReview, validateEvidenceRecord } from './lib/architecture-review.mjs';
 import { validateTransition } from './lib/lifecycle-transitions.mjs';
 import { appConfiguration, githubAppTokenPermissions, GithubAppTokenProvider } from './lib/github-app.mjs';
-import { bodyDigest } from './lib/agent-invocation.mjs';
+import { bodyDigest, unwrapRepositoryDispatchClientPayload } from './lib/agent-invocation.mjs';
 import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType, validateOrganizationIssueFields } from './lib/issue-field-api.mjs';
 import { issueMetadata, issueFieldMutation, validateFieldMutation } from './lib/issue-metadata.mjs';
 import { patternById, selectOrchestration } from './lib/orchestration-policy.mjs';
@@ -147,15 +147,17 @@ export function intakeEvent(event, env) {
  * preflight stage has already authenticated the event and source comment.
  */
 export function normalizeOriginEvent(event, env) {
-  if (!env.ORIGIN_REPOSITORY) return event;
+  const payload = unwrapRepositoryDispatchClientPayload(event?.client_payload);
+  const sourceEvent = payload === event?.client_payload ? event : { ...event, client_payload: payload };
+  if (!env.ORIGIN_REPOSITORY) return sourceEvent;
   if (!/^[\w.-]+\/[\w.-]+$/.test(env.ORIGIN_REPOSITORY)
     || !/^[1-9][0-9]*$/.test(String(env.ORIGIN_REPOSITORY_ID ?? ''))) {
     throw new Error('Origin repository identity is incomplete.');
   }
-  const payload = event.client_payload;
   const source = payload?.source ?? {};
   const normalized = {
-    ...event,
+    ...sourceEvent,
+    client_payload: payload,
     action: payload ? (payload.event === 'issues' ? payload.action : 'created') : event.action,
     repository: { ...event.repository, id: Number(env.ORIGIN_REPOSITORY_ID), full_name: env.ORIGIN_REPOSITORY },
   };

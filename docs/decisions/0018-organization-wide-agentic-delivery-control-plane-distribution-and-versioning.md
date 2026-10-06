@@ -226,13 +226,28 @@ reusable workflow boundary even when its caller has already applied them.
 
 The App webhook verifies the GitHub signature, installation, organization,
 supported event/action, delivery ID and repository identity. It emits a
-versioned event envelope whose complete `repository_dispatch` payload is
-signed with a separate central HMAC dispatch secret. The controller verifies
-that signature and its bounded timestamp before fetching the current GitHub
-object again, resolving the participant's pinned controller and contract
-versions, asking the semantic router for a proposal, and applying only
-deterministically authorized mutations to the originating repository. The
-webhook secret and dispatch secret are separate credentials: the former
+versioned event envelope and signs the complete envelope with a separate
+central HMAC dispatch secret. To meet GitHub's ten-property limit for
+`repository_dispatch` `client_payload`, the gateway carries the envelope in
+the single `client_payload.envelope` property; the wrapper itself is not part
+of the HMAC. The observation workflow's trusted `github.sha` revision
+normalizes that wrapper into the direct `client_payload` shape, then verifies
+the envelope signature, bounded timestamp, and controller pin against the
+participant registry before checking out the selected controller commit.
+The immutable pinned observation reader verifies the normalized envelope
+again and ends with observation validation; it does not fetch the current
+GitHub object, route work, or mutate issue state. The invocation path
+separately performs its signature and registry-pin checks with the fixed
+bootstrap before checking out the participant pin. Its preflight then fetches
+the current GitHub object, resolves the participant's controller and contract
+versions, asks the semantic router for a proposal, and applies only
+deterministically authorized mutations to the originating repository.
+The invocation finalizer runs in a separate job. It normalizes the original
+dispatch again with the trusted workflow revision, then passes the direct
+version-1 envelope to the participant-pinned receipt finalizer. That finalizer
+uses the same installation and delivery IDs to complete or retry the
+controller receipt.
+The webhook secret and dispatch secret are separate credentials: the former
 authenticates GitHub ingress, while the latter authenticates the gateway-to-
 controller handoff. Neither is available to an origin repository or model
 process.

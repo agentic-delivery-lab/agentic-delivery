@@ -10,8 +10,15 @@ The gateway carries `received_at` in the envelope. The central preflight
 accepts a compatible legacy envelope without that field, but validates a
 present timestamp against the five-minute replay window and a thirty-second
 future clock-skew allowance. New webhook deliveries always include it. The
-gateway also signs the complete `repository_dispatch` client payload with the
-separate `AGENTIC_DELIVERY_DISPATCH_SECRET` using HMAC-SHA256.
+gateway signs the complete version-1 envelope with the separate
+`AGENTIC_DELIVERY_DISPATCH_SECRET` using HMAC-SHA256, then sends it as the sole
+top-level `client_payload.envelope` property. This keeps the payload within
+GitHub's limit of 10 top-level properties. The invocation and observation
+workflows copy the envelope into a per-run event file in the direct shape
+expected by the pinned controller readers; those readers validate the original
+schema and signature. The
+[GitHub REST API reference](https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event)
+documents this limit.
 
 Neon stores the five-minute gateway replay window and dispatch lease in
 `webhook_replay_claims`. `webhook_controller_receipts` keeps a 30-day status and

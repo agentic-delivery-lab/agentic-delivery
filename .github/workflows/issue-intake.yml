@@ -140,6 +140,14 @@ jobs:
           path: trusted-intake
           persist-credentials: false
 
+      - name: Check out the workflow revision for dispatch normalization
+        if: ${{ inputs.agent_invocation }}
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          path: dispatch-boundary
+          persist-credentials: false
+
       - name: Set up pnpm and Node.js
         uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
@@ -150,6 +158,16 @@ jobs:
       - name: Install intake dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
         working-directory: trusted-intake
+
+      - name: Normalize the wrapped event for the pinned controller reader
+        id: normalized-event
+        if: ${{ inputs.agent_invocation }}
+        env:
+          SOURCE_EVENT_PATH: ${{ github.event_path }}
+          NORMALIZED_EVENT_PATH: ${{ runner.temp }}/agentic-delivery-event.json
+        run: |
+          node dispatch-boundary/scripts/normalize-repository-dispatch-event.mjs "$SOURCE_EVENT_PATH" "$NORMALIZED_EVENT_PATH"
+          echo "event_path=$NORMALIZED_EVENT_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Resolve participant mode for direct intake
         id: participant
@@ -185,7 +203,7 @@ jobs:
           CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ vars.CODEX_DELIVERY_APP_INSTALLATION_ID }}
           CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}
           AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}
-          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_EVENT_PATH: ${{ steps.normalized-event.outputs.event_path || github.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
           RUNNER_TEMP: ${{ runner.temp }}
@@ -314,6 +332,29 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Check out the workflow revision for finalizer event normalization
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          path: dispatch-boundary
+          persist-credentials: false
+
+      - name: Set up Node.js and pnpm for finalizer normalization
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+          package-json-file: dispatch-boundary/package.json
+
+      - name: Normalize the wrapped event for the pinned receipt finalizer
+        id: normalized-finalizer-event
+        env:
+          SOURCE_EVENT_PATH: ${{ github.event_path }}
+          NORMALIZED_EVENT_PATH: ${{ runner.temp }}/agentic-delivery-finalizer-event.json
+        run: |
+          node dispatch-boundary/scripts/normalize-repository-dispatch-event.mjs "$SOURCE_EVENT_PATH" "$NORMALIZED_EVENT_PATH"
+          echo "event_path=$NORMALIZED_EVENT_PATH" >> "$GITHUB_OUTPUT"
+
       - name: Validate the participant controller pin
         env:
           CONTROLLER_COMMIT: ${{ needs.classify.outputs.controller_commit }}
@@ -340,6 +381,6 @@ jobs:
       - name: Persist invocation completion or retryability
         env:
           AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}
-          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_EVENT_PATH: ${{ steps.normalized-finalizer-event.outputs.event_path }}
           INVOCATION_RESULT: ${{ needs.classify.result == 'success' && (needs.deliver.result == 'success' || needs.deliver.result == 'skipped') && 'success' || 'failure' }}
         run: node scripts/finalize-agent-invocation.mjs
