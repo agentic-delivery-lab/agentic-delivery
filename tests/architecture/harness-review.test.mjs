@@ -225,6 +225,7 @@ test('the current architecture map covers the official ADR set and emits a conci
   assert.match(reviewMap, /scripts\/codex-cli-release-update\.mjs/);
   assert.match(reviewMap, /scripts\/classify-codex-cli-updater-review\.mjs/);
   assert.match(reviewMap, /id: agent-invocation/);
+  assert.match(reviewMap, /\.github\/workflows\/agent-observation\.yml/);
   assert.match(formatReviewMarkdown(review), /Harness Architecture Review/);
   assert.match(formatReviewMarkdown(review), /adr-map-coverage/);
 });

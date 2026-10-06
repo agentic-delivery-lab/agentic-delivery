@@ -9,7 +9,6 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- Fixed the observation workflow's truncated `pnpm/setup` action pin so repository-dispatch deliveries can start validation jobs.
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds Neon-backed dispatch leases and controller receipts, persists cursors for bounded delivery-history scans, stores GitHub delivery IDs before advancing checkpoints, aggregates attempt outcomes across scan segments, and keeps active or uncertain webhook outcomes retryable.
 - Failed deliveries are queued durably and drained 250 at a time. Accepted requests retry after a cooldown; unresolved final attempts and definitive rejections become exhausted and hold checkpoint progress until operator diagnosis and explicit retry. Rate-limited 403 responses honor GitHub's retry guidance.
 - Unresolved exhausted redelivery requests no longer expire during ordinary queue claims; clearing their checkpoint hold requires operator diagnosis and an explicit requeue.
@@ -529,6 +528,7 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) fixes the truncated `pnpm/setup` pin so repository-dispatch observation jobs can start their validation.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) normalizes the wrapped event again in the separate receipt-finalizer job so the participant-pinned finalizer completes or retries the same controller receipt.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) validates the observation event signature and participant pin with the trusted workflow revision before checking out or running a participant-pinned reader.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) wraps the signed dispatch envelope in one `repository_dispatch` client payload property and restores its direct shape in per-run event files for pinned readers, staying within GitHub's ten-property limit while preserving envelope verification.
