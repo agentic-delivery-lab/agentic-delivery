@@ -126,6 +126,8 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   const pinnedCheckout = observationSteps.find((step) => step.name === 'Check out the validated pinned observation reader');
   const pinnedValidation = observationSteps.find((step) => step.name === 'Recheck with the immutable pinned observation validator');
   assert.equal(boundaryCheckout.with.ref, '${{ github.sha }}');
+  assert.equal(setupNode.uses, 'pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2');
+  assert.match(setupNode.uses, /^pnpm\/setup@[0-9a-f]{40}$/);
   assert.equal(setupNode.with['package-json-file'], 'dispatch-boundary/package.json');
   assert.equal(normalizeObservation.id, 'normalized-event');
   assert.equal(trustedValidation.env.GITHUB_EVENT_PATH, '${{ steps.normalized-event.outputs.event_path }}');

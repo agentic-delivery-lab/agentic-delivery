@@ -5,6 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import Ajv2020 from 'ajv/dist/2020.js';
 
+import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 import {
   deterministicReview,
   formatReviewMarkdown,
@@ -225,6 +226,9 @@ test('the current architecture map covers the official ADR set and emits a conci
   assert.match(reviewMap, /scripts\/codex-cli-release-update\.mjs/);
   assert.match(reviewMap, /scripts\/classify-codex-cli-updater-review\.mjs/);
   assert.match(reviewMap, /id: agent-invocation/);
+  const contexts = parseRepositoryYaml(reviewMap, 'harness review map')['bounded-contexts'];
+  const controlPlane = contexts.find((context) => context.id === 'agentic-delivery-control-plane');
+  assert.ok(controlPlane.paths.includes('.github/workflows/agent-observation.yml'));
   assert.match(formatReviewMarkdown(review), /Harness Architecture Review/);
   assert.match(formatReviewMarkdown(review), /adr-map-coverage/);
 });

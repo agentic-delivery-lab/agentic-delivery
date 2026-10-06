@@ -528,6 +528,7 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) fixes the truncated `pnpm/setup` pin so repository-dispatch observation jobs can start their validation.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) normalizes the wrapped event again in the separate receipt-finalizer job so the participant-pinned finalizer completes or retries the same controller receipt.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) validates the observation event signature and participant pin with the trusted workflow revision before checking out or running a participant-pinned reader.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) wraps the signed dispatch envelope in one `repository_dispatch` client payload property and restores its direct shape in per-run event files for pinned readers, staying within GitHub's ten-property limit while preserving envelope verification.
