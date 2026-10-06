@@ -160,12 +160,14 @@ The ingress verifies the webhook signature and delivery ID, checks the exact
 actor catalog, and signs the complete version-1 dispatch envelope with the
 separate dispatch secret. It sends that envelope as the only top-level
 `client_payload` property, named `envelope`, to stay within GitHub's limit of
-10 top-level properties. The self-hosted preflight unwraps and authenticates
-the envelope, re-fetches the current comment or review, maps a pull request to
-its issue-linked source, and then invokes the existing issue intake. A Vercel
-outage is fail-closed: it cannot authorize a delivery run by itself. Native
-`@copilot` and other GitHub-managed agent mentions remain outside this
-repository-owned invocation contract.
+10 top-level properties. The invocation and observation workflows write a
+per-run event file with the version-1 envelope restored at `client_payload`,
+so existing pinned controller readers keep their input contract. The
+self-hosted preflight validates the signature, re-fetches the current comment
+or review, maps a pull request to its issue-linked source, and then invokes the
+existing issue intake. A Vercel outage is fail-closed: it cannot authorize a
+delivery run by itself. Native `@copilot` and other GitHub-managed agent
+mentions remain outside this repository-owned invocation contract.
 
 The GitHub `repository_dispatch` payload limit is documented in the
 [REST API reference](https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event).

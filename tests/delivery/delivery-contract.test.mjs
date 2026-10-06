@@ -109,12 +109,17 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.deepEqual(invocation.on.repository_dispatch.types, ['agent_invocation']);
   assert.equal(invocation.jobs.intake.uses, './.github/workflows/issue-intake.yml');
   assert.equal(invocation.jobs.intake.with.agent_invocation, true);
+  const intakeText = await text('.github/workflows/issue-intake.yml');
+  assert.ok(intakeText.includes('Normalize the wrapped event for the pinned controller reader'));
+  assert.ok(intakeText.includes('steps.normalized-event.outputs.event_path || github.event_path'));
   const observation = parseRepositoryYaml(await text('.github/workflows/agent-observation.yml'), 'agent observation workflow');
   assert.deepEqual(observation.on.repository_dispatch.types, ['agent_observation']);
   assert.equal(observation.jobs.validate.permissions, undefined);
   const observationText = await text('.github/workflows/agent-observation.yml');
   assert.ok(observationText.includes('CONTROLLER_COMMIT: ${{ github.event.client_payload.envelope.controller.commit || github.event.client_payload.controller.commit }}'));
   assert.ok(observationText.includes('ref: ${{ github.event.client_payload.envelope.controller.commit || github.event.client_payload.controller.commit }}'));
+  assert.ok(observationText.includes('Normalize the wrapped event for the pinned controller reader'));
+  assert.ok(observationText.includes('GITHUB_EVENT_PATH: ${{ steps.normalized-event.outputs.event_path }}'));
   assert.ok(observationText.includes('path: controller'));
   assert.ok(observationText.includes('node controller/scripts/validate-observation-event.mjs controller'));
   assert.ok(!observationText.includes('ref: main'));

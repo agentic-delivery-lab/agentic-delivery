@@ -13,8 +13,10 @@ future clock-skew allowance. New webhook deliveries always include it. The
 gateway signs the complete version-1 envelope with the separate
 `AGENTIC_DELIVERY_DISPATCH_SECRET` using HMAC-SHA256, then sends it as the sole
 top-level `client_payload.envelope` property. This keeps the payload within
-GitHub's limit of 10 top-level properties. The controller unwraps the envelope
-before validating its schema and signature. The
+GitHub's limit of 10 top-level properties. The invocation and observation
+workflows copy the envelope into a per-run event file in the direct shape
+expected by the pinned controller readers; those readers validate the original
+schema and signature. The
 [GitHub REST API reference](https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event)
 documents this limit.
 
