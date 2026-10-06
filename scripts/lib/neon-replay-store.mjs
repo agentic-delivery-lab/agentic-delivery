@@ -395,8 +395,10 @@ export class NeonReplayStore {
     expectedCursor = null,
     expectedCheckpointAt = null,
     expectedCheckpointDeliveryId = null,
+    refreshEqualTimestampDeliveryIds = false,
   } = {}) {
     if (!Array.isArray(observations)) throw new ReplayProtectionError('The webhook scan observations are invalid.');
+    if (typeof refreshEqualTimestampDeliveryIds !== 'boolean') throw new ReplayProtectionError('The webhook delivery ID refresh option is invalid.');
     if (observations.length === 0) return 0;
     if (expectedCursor !== null && (typeof expectedCursor !== 'string' || !expectedCursor || expectedCursor.length > 4096 || /[\u0000-\u001f\u007f]/.test(expectedCursor))) {
       throw new ReplayProtectionError('The expected webhook scan cursor is invalid.');
@@ -459,10 +461,12 @@ export class NeonReplayStore {
        SET newest_delivery_at = CASE
              WHEN (stored.newest_delivery_at, stored.newest_delivery_id)
                   < (EXCLUDED.newest_delivery_at, EXCLUDED.newest_delivery_id)
+                  OR ($5::boolean AND stored.newest_delivery_at = EXCLUDED.newest_delivery_at)
              THEN EXCLUDED.newest_delivery_at ELSE stored.newest_delivery_at END,
            newest_delivery_id = CASE
              WHEN (stored.newest_delivery_at, stored.newest_delivery_id)
                   < (EXCLUDED.newest_delivery_at, EXCLUDED.newest_delivery_id)
+                  OR ($5::boolean AND stored.newest_delivery_at = EXCLUDED.newest_delivery_at)
              THEN EXCLUDED.newest_delivery_id ELSE stored.newest_delivery_id END,
            has_success = stored.has_success OR EXCLUDED.has_success,
            installation_id = COALESCE(stored.installation_id, EXCLUDED.installation_id)
@@ -470,7 +474,7 @@ export class NeonReplayStore {
           OR EXCLUDED.installation_id IS NULL
           OR stored.installation_id = EXCLUDED.installation_id
        RETURNING delivery_guid`,
-      [JSON.stringify(normalized), expectedCursor, expectedCheckpointAt, expectedCheckpointDeliveryId],
+      [JSON.stringify(normalized), expectedCursor, expectedCheckpointAt, expectedCheckpointDeliveryId, refreshEqualTimestampDeliveryIds],
     );
     if (rows.length !== normalized.length) throw storageError();
     return rows.length;
@@ -630,9 +634,21 @@ export class NeonReplayStore {
          SELECT candidates.delivery_guid, clock_timestamp(), 'queued', candidates.github_delivery_id, 0, clock_timestamp()
          FROM unnest($1::text[], $2::bigint[]) AS candidates(delivery_guid, github_delivery_id)
          ON CONFLICT (delivery_guid) DO UPDATE
-         SET github_delivery_id = EXCLUDED.github_delivery_id
-         WHERE stored.request_status = 'queued'`,
-        [batch.map(([guid]) => guid), batch.map(([, deliveryId]) => deliveryId)],
+         SET request_status = CASE
+               WHEN stored.request_status = 'exhausted' THEN 'queued'
+               ELSE stored.request_status END,
+             requested_at = CASE
+               WHEN stored.request_status = 'exhausted' THEN clock_timestamp()
+               ELSE stored.requested_at END,
+             github_delivery_id = EXCLUDED.github_delivery_id,
+             next_attempt_at = CASE
+               WHEN stored.request_status = 'exhausted' THEN clock_timestamp()
+               ELSE stored.next_attempt_at END
+         WHERE stored.request_status = 'queued'
+            OR (stored.request_status = 'exhausted'
+              AND stored.github_delivery_id IS DISTINCT FROM EXCLUDED.github_delivery_id
+              AND stored.attempt_count < $3)`,
+        [batch.map(([guid]) => guid), batch.map(([, deliveryId]) => deliveryId), CONTROLLER_MAX_ATTEMPTS],
       );
     }
   }

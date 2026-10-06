@@ -60,6 +60,11 @@ function logSafely(logger, level, event) {
   }
 }
 
+function safeErrorType(error) {
+  const name = error?.name;
+  return typeof name === 'string' && /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(name) ? name : 'Error';
+}
+
 function environment(env = process.env) {
   return {
     controllerRepository: env.AGENTIC_DELIVERY_CONTROLLER_REPOSITORY
@@ -102,6 +107,7 @@ async function repositoryApi({ repository, token, route, method = 'GET', body, f
   if (!response.ok) {
     const error = new Error('GitHub ' + method + ' ' + route + ' failed (' + response.status + ').');
     error.status = response.status;
+    error.githubApiStatus = response.status;
     throw error;
   }
   return response.status === 204 ? null : response.json();
@@ -335,11 +341,24 @@ export async function handleWebhook(req, res, {
   return reply(res, 202, { accepted: true, delivery_id: deliveryId, repository_id: repositoryId });
 }
 
-export default async function handler(req, res) {
+export async function webhookHandler(req, res, { logger = console, ...options } = {}) {
   try {
-    return await handleWebhook(req, res, { logger: console });
+    return await handleWebhook(req, res, { ...options, logger });
   } catch (error) {
     // Do not expose GitHub responses or credential details to the public hook.
+    const deliveryId = String(header(req, 'x-github-delivery') ?? '');
+    logSafely(logger, 'error', {
+      event: 'agentic_delivery_webhook',
+      outcome: 'failed',
+      http_status: 502,
+      github_api_status: Number.isInteger(error?.githubApiStatus) ? error.githubApiStatus : null,
+      error_type: safeErrorType(error),
+      ...(/^[0-9a-f-]{20,}$/i.test(deliveryId) ? { delivery_id: deliveryId } : {}),
+    });
     return reply(res, 502, { error: 'The invocation could not be dispatched.' });
   }
+}
+
+export default async function handler(req, res) {
+  return webhookHandler(req, res, { logger: console });
 }

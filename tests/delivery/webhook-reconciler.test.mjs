@@ -21,7 +21,8 @@ function response(status, body = [], headers = {}) {
     status,
     ok: status >= 200 && status < 300,
     headers: { get(name) { return values.get(String(name).toLowerCase()) ?? null; } },
-    async json() { return body; },
+    async json() { return typeof body === 'string' ? JSON.parse(body) : body; },
+    async text() { return typeof body === 'string' ? body : JSON.stringify(body); },
   };
 }
 
@@ -50,21 +51,23 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
     redeliveryQueue: new Map(),
     queuedRedeliveries: [],
     async reconcilerCheckpoint() { return this.checkpoint; },
-    async mergeReconcilerObservations(values) {
+    async mergeReconcilerObservations(values, { refreshEqualTimestampDeliveryIds = false } = {}) {
       for (const value of values) {
         const existing = this.observations.get(value.guid);
         if (existing && existing.installation_id != null && value.installationId != null
           && String(existing.installation_id) !== String(value.installationId)) {
           throw new Error('conflicting installation IDs');
         }
+        const sameTimestamp = existing
+          && Date.parse(value.deliveredAt) === Date.parse(existing.newest_delivery_at);
         const newer = !existing
           || Date.parse(value.deliveredAt) > Date.parse(existing.newest_delivery_at)
-          || (Date.parse(value.deliveredAt) === Date.parse(existing.newest_delivery_at)
-            && BigInt(value.deliveryId) > BigInt(existing.newest_delivery_id));
+          || (sameTimestamp && BigInt(value.deliveryId) > BigInt(existing.newest_delivery_id));
+        const refreshEqualTimestampId = refreshEqualTimestampDeliveryIds && sameTimestamp;
         this.observations.set(value.guid, {
           delivery_guid: value.guid,
-          newest_delivery_at: newer ? value.deliveredAt : existing.newest_delivery_at,
-          newest_delivery_id: newer ? value.deliveryId : existing.newest_delivery_id,
+          newest_delivery_at: newer || refreshEqualTimestampId ? value.deliveredAt : existing.newest_delivery_at,
+          newest_delivery_id: newer || refreshEqualTimestampId ? value.deliveryId : existing.newest_delivery_id,
           has_success: Boolean(existing?.has_success || value.hasSuccess),
           installation_id: existing?.installation_id ?? value.installationId,
         });
@@ -75,13 +78,21 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
     async queueRedeliveryRequests(requests) {
       this.queuedRedeliveries.push(...requests);
       for (const request of requests) {
-        if (!this.redeliveryQueue.has(request.guid)) {
+        const existing = this.redeliveryQueue.get(request.guid);
+        if (!existing) {
           this.redeliveryQueue.set(request.guid, {
             delivery_guid: request.guid,
             github_delivery_id: request.githubDeliveryId,
             attempt_count: 0,
             request_status: 'queued',
           });
+        } else if (existing.request_status === 'queued') {
+          existing.github_delivery_id = request.githubDeliveryId;
+        } else if (existing.request_status === 'exhausted'
+          && existing.github_delivery_id !== request.githubDeliveryId
+          && Number(existing.attempt_count ?? 0) < CONTROLLER_MAX_ATTEMPTS) {
+          existing.github_delivery_id = request.githubDeliveryId;
+          existing.request_status = 'queued';
         }
       }
     },
@@ -252,6 +263,53 @@ test('reconciler paginates, groups attempts by GUID, redelivers failures and sta
     cooldown_skips: 0,
     exhausted_redeliveries: 0,
   });
+});
+
+test('reconciler preserves exact large delivery IDs and refreshes exhausted rows from the full-history source', async () => {
+  const scanNow = Date.now();
+  const deliveredAt = new Date(scanNow - 5_000).toISOString();
+  const exactDeliveryId = '3846548579682426877';
+  const roundedDeliveryId = String(Number(exactDeliveryId));
+  assert.notEqual(roundedDeliveryId, exactDeliveryId);
+  assert.ok(BigInt(roundedDeliveryId) > BigInt(exactDeliveryId));
+  const store = makeStore({
+    observations: [{
+      delivery_guid: deliveryA,
+      newest_delivery_at: deliveredAt,
+      newest_delivery_id: roundedDeliveryId,
+      has_success: false,
+      installation_id: '163255060',
+    }],
+  });
+  store.redeliveryQueue.set(deliveryA, {
+    delivery_guid: deliveryA,
+    github_delivery_id: roundedDeliveryId,
+    attempt_count: 1,
+    request_status: 'exhausted',
+  });
+  const postUrls = [];
+  const fetchImpl = async (url, options) => {
+    if (options.method === 'POST') {
+      postUrls.push(String(url));
+      return response(202);
+    }
+    return response(200, `[{
+      "id":${exactDeliveryId},
+      "guid":"${deliveryA}",
+      "delivered_at":"${deliveredAt}",
+      "status":"FAIL",
+      "installation_id":163255060
+    }]`);
+  };
+  const res = output();
+
+  await reconcileWebhookDeliveries({ req: cronRequest(), res, env: cronEnv(), fetchImpl, store, now: () => scanNow });
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(postUrls, [`https://api.github.com/app/hook/deliveries/${exactDeliveryId}/attempts`]);
+  assert.deepEqual(store.requested.map(({ id }) => id), [exactDeliveryId]);
+  assert.equal(store.redeliveryQueue.get(deliveryA).request_status, 'accepted');
+  assert.equal(store.advanced.length, 1);
 });
 
 test('reconciler preserves an accepted GitHub outcome when its state write and recovery both fail', async () => {

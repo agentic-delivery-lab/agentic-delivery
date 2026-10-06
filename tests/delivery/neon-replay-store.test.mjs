@@ -220,13 +220,48 @@ test('Neon replay adapter queues redelivery candidates without replacing an acti
   });
   const guid = '98765432-1234-4234-8234-123456789012';
 
-  await store.queueRedeliveryRequests([{ guid, githubDeliveryId: '301' }]);
+  const exactDeliveryId = '3846548579682426877';
+  await store.queueRedeliveryRequests([{ guid, githubDeliveryId: exactDeliveryId }]);
 
   assert.equal(calls.length, 1);
   assert.match(calls[0].statement, /INSERT INTO public\.webhook_redelivery_requests AS stored/);
   assert.match(calls[0].statement, /SELECT candidates\.delivery_guid, clock_timestamp\(\), 'queued', candidates\.github_delivery_id, 0, clock_timestamp\(\)/);
   assert.match(calls[0].statement, /WHERE stored\.request_status = 'queued'/);
-  assert.deepEqual(calls[0].values, [[guid], ['301']]);
+  assert.match(calls[0].statement, /WHEN stored\.request_status = 'exhausted' THEN 'queued'/);
+  assert.match(calls[0].statement, /stored\.github_delivery_id IS DISTINCT FROM EXCLUDED\.github_delivery_id[\s\S]*stored\.attempt_count < \$3/);
+  assert.deepEqual(calls[0].values, [[guid], [exactDeliveryId], CONTROLLER_MAX_ATTEMPTS]);
+});
+
+test('a new full-history scan can replace a rounded ID at the same timestamp', async () => {
+  let call;
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        call = { statement, values };
+        return [{ delivery_guid: values[0] }];
+      },
+    },
+  });
+  const guid = '98765432-1234-4234-8234-123456789012';
+  const deliveredAt = '2026-10-06T00:00:00.000Z';
+  const exactDeliveryId = '3846548579682426877';
+
+  await store.mergeReconcilerObservations([{
+    guid,
+    deliveredAt,
+    deliveryId: exactDeliveryId,
+    hasSuccess: false,
+    installationId: '163255060',
+  }], { refreshEqualTimestampDeliveryIds: true });
+
+  assert.match(call.statement, /\$5::boolean AND stored\.newest_delivery_at = EXCLUDED\.newest_delivery_at/);
+  assert.deepEqual(call.values, [JSON.stringify([{
+    guid,
+    delivered_at: deliveredAt,
+    delivery_id: exactDeliveryId,
+    has_success: false,
+    installation_id: '163255060',
+  }]), null, null, null, true]);
 });
 
 test('claiming another redelivery never prunes unresolved exhausted requests', async () => {

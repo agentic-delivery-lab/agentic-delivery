@@ -9,6 +9,9 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The webhook reconciler preserves exact large GitHub delivery IDs from the API response and repairs an exhausted retry only when a fresh history scan supplies a different exact ID for the same delivery GUID. Webhook dispatch failures now emit payload-free status evidence.
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds Neon-backed dispatch leases and controller receipts, persists cursors for bounded delivery-history scans, stores GitHub delivery IDs before advancing checkpoints, aggregates attempt outcomes across scan segments, and keeps active or uncertain webhook outcomes retryable.
 - Failed deliveries are queued durably and drained 250 at a time. Accepted requests retry after a cooldown; unresolved final attempts and definitive rejections become exhausted and hold checkpoint progress until operator diagnosis and explicit retry. Rate-limited 403 responses honor GitHub's retry guidance.
 - Unresolved exhausted redelivery requests no longer expire during ordinary queue claims; clearing their checkpoint hold requires operator diagnosis and an explicit requeue.
