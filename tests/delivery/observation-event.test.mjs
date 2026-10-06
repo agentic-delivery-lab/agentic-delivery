@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { dispatchEnvelopeSignature, invocationEnvelope } from '../../scripts/lib/agent-invocation.mjs';
+import { dispatchEnvelopeSignature, invocationEnvelope, packRepositoryDispatchClientPayload } from '../../scripts/lib/agent-invocation.mjs';
 import { loadParticipantRegistry, participantForRepository } from '../../scripts/lib/participant-registry.mjs';
 import { ObservationValidationError, validateObservationEvent } from '../../scripts/validate-observation-event.mjs';
 
@@ -16,7 +16,7 @@ async function writeEvent(t, envelope) {
   const eventPath = path.join(root, 'event.json');
   await writeFile(eventPath, JSON.stringify({
     repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
-    client_payload: envelope,
+    client_payload: packRepositoryDispatchClientPayload(envelope),
   }));
   return eventPath;
 }
@@ -62,7 +62,7 @@ test('observation validator rejects a tampered central dispatch envelope', async
   });
   const eventPath = await writeEvent(t, envelope);
   const event = JSON.parse(await readFile(eventPath, 'utf8'));
-  event.client_payload.repository_id = '777777777';
+  event.client_payload.envelope.repository_id = '777777777';
   await writeFile(eventPath, JSON.stringify(event));
   await assert.rejects(
     validateObservationEvent({ eventPath, repositoryRoot, dispatchSecret: 'dispatch-secret', now: () => 1789992000000 }),

@@ -7,7 +7,7 @@ on:
     types: [agent_invocation]
 
 concurrency:
-  group: agent-invocation-${{ github.event.client_payload.delivery_id }}
+  group: agent-invocation-${{ github.event.client_payload.envelope.delivery_id }}
   cancel-in-progress: false
 
 permissions:

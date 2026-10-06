@@ -113,8 +113,8 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.deepEqual(observation.on.repository_dispatch.types, ['agent_observation']);
   assert.equal(observation.jobs.validate.permissions, undefined);
   const observationText = await text('.github/workflows/agent-observation.yml');
-  assert.ok(observationText.includes('CONTROLLER_COMMIT: ${{ github.event.client_payload.controller.commit }}'));
-  assert.ok(observationText.includes('ref: ${{ github.event.client_payload.controller.commit }}'));
+  assert.ok(observationText.includes('CONTROLLER_COMMIT: ${{ github.event.client_payload.envelope.controller.commit }}'));
+  assert.ok(observationText.includes('ref: ${{ github.event.client_payload.envelope.controller.commit }}'));
   assert.ok(observationText.includes('path: controller'));
   assert.ok(observationText.includes('node controller/scripts/validate-observation-event.mjs controller'));
   assert.ok(!observationText.includes('ref: main'));

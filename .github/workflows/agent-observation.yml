@@ -17,7 +17,7 @@ jobs:
     steps:
       - name: Validate the participant controller pin
         env:
-          CONTROLLER_COMMIT: ${{ github.event.client_payload.controller.commit }}
+          CONTROLLER_COMMIT: ${{ github.event.client_payload.envelope.controller.commit }}
         run: |
           set -euo pipefail
           [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
@@ -25,7 +25,7 @@ jobs:
       - name: Check out the pinned observation validator
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ github.event.client_payload.controller.commit }}
+          ref: ${{ github.event.client_payload.envelope.controller.commit }}
           path: controller
           persist-credentials: false
 

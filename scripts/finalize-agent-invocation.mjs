@@ -3,12 +3,13 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { unwrapRepositoryDispatchClientPayload } from './lib/agent-invocation.mjs';
 import { controllerRunLeaseToken, replayKey } from './lib/replay-protection.mjs';
 import { NeonReplayStore } from './lib/neon-replay-store.mjs';
 
 export async function finalizeAgentInvocation({ env = process.env, store } = {}) {
   if (!env.GITHUB_EVENT_PATH) throw new Error('Agent invocation finalization requires the GitHub event payload.');
-  const envelope = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'))?.client_payload;
+  const envelope = unwrapRepositoryDispatchClientPayload(JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'))?.client_payload);
   const key = replayKey({ installationId: envelope?.installation_id, deliveryId: envelope?.delivery_id });
   const leaseToken = controllerRunLeaseToken(env);
   const activeStore = store ?? (env.AGENTIC_DELIVERY_REPLAY_DATABASE_URL

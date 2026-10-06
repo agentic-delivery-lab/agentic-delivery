@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 import { intakeEvent, normalizeOriginEvent, redact, checkPublicationText, deliveryExitCode } from '../../scripts/codex-delivery.mjs';
-import { invocationEnvelope } from '../../scripts/lib/agent-invocation.mjs';
+import { invocationEnvelope, packRepositoryDispatchClientPayload } from '../../scripts/lib/agent-invocation.mjs';
 import { validateEventEnvelope } from '../../scripts/lib/control-plane-contracts.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
@@ -33,7 +33,7 @@ test('central delivery uses the explicit originating repository identity', () =>
 test('central delivery normalizes the controller event to the authenticated origin identity', () => {
   const normalized = normalizeOriginEvent({
     repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
-    client_payload: { event: 'issues', action: 'opened', source: { kind: 'issue', issue_number: 12 } },
+    client_payload: packRepositoryDispatchClientPayload({ event: 'issues', action: 'opened', source: { kind: 'issue', issue_number: 12 } }),
   }, {
     ORIGIN_REPOSITORY: 'agentic-delivery-lab/service-a', ORIGIN_REPOSITORY_ID: '777777777',
   });
@@ -60,7 +60,7 @@ test('two enrolled repositories retain independent identity for the same issue n
     assert.deepEqual(validateEventEnvelope(envelope), { valid: true, errors: [] });
     const normalized = normalizeOriginEvent({
       repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
-      client_payload: envelope,
+      client_payload: packRepositoryDispatchClientPayload(envelope),
     }, { ORIGIN_REPOSITORY: repository, ORIGIN_REPOSITORY_ID: repositoryId });
     const context = intakeEvent(normalized, {
       SOURCE_ISSUE: '15',

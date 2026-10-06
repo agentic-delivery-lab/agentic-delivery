@@ -157,14 +157,18 @@ the invocation jobs. `ISSUE_FIELD_BINDINGS_JSON` is already a repository
 secret; it is not an organization-level setting.
 
 The ingress verifies the webhook signature and delivery ID, checks the exact
-actor catalog, signs the complete dispatch envelope with the separate dispatch
-secret, and calls GitHub `repository_dispatch` with only immutable source IDs,
-a body digest, and the signed identity fields. The self-hosted preflight
-re-fetches the current comment or
-review, maps a pull request to its issue-linked source, and then invokes the
-existing issue intake. A Vercel outage is fail-closed: it cannot authorize a
-delivery run by itself. Native `@copilot` and other GitHub-managed agent
-mentions remain outside this repository-owned invocation contract.
+actor catalog, and signs the complete version-1 dispatch envelope with the
+separate dispatch secret. It sends that envelope as the only top-level
+`client_payload` property, named `envelope`, to stay within GitHub's limit of
+10 top-level properties. The self-hosted preflight unwraps and authenticates
+the envelope, re-fetches the current comment or review, maps a pull request to
+its issue-linked source, and then invokes the existing issue intake. A Vercel
+outage is fail-closed: it cannot authorize a delivery run by itself. Native
+`@copilot` and other GitHub-managed agent mentions remain outside this
+repository-owned invocation contract.
+
+The GitHub `repository_dispatch` payload limit is documented in the
+[REST API reference](https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event).
 
 The controller reuses saved changes and a single branch. It never creates a
 new task for a comment on missing, completed, running, stale, or inactive

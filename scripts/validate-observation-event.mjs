@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   invocationEventSupported,
   observationEventSupported,
+  unwrapRepositoryDispatchClientPayload,
   validateDispatchEnvelopeSignature,
 } from './lib/agent-invocation.mjs';
 import { validateEventEnvelope } from './lib/control-plane-contracts.mjs';
@@ -44,7 +45,7 @@ export async function validateObservationEvent({
 } = {}) {
   if (!eventPath) throw new ObservationValidationError('GITHUB_EVENT_PATH is required', 2);
   const event = await readJson(eventPath);
-  const envelope = event?.client_payload;
+  const envelope = unwrapRepositoryDispatchClientPayload(event?.client_payload);
   const configuredController = controllerRepository
     ?? (await readJson(path.join(root, 'config/github-app-contract.json'))).controller?.repository;
   const errors = [];
