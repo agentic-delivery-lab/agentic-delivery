@@ -97,6 +97,17 @@ plan before changing this cadence ([Cron Jobs usage and pricing](https://vercel.
 GitHub does not automatically redeliver failed App webhook deliveries. The
 scheduled route creates an App JWT, pages through delivery history, groups
 attempts by stable GUID, and requests redelivery when no attempt succeeded.
+The App API returns delivery IDs as JSON integers, and current IDs exceed
+JavaScript's safe integer range. The reconciler retains each original decimal
+number token as a string before comparing, storing, or putting it in a request
+URL. Parsing the value through `Number` rounds it and can make GitHub reject a
+redelivery with HTTP 404. Any segment in a paginated history scan can replace a
+rounded ID at the same timestamp. The observation update and exhausted-row
+requeue happen atomically, so a later page cannot replace the repaired ID with
+an older attempt. The request waits until the history scan finishes before it
+is sent. Reconciliation requeues only when that GUID maps to a different exact
+ID and its retry count remains below the limit. It preserves the retry count
+and leaves unchanged or unmatched exhausted records for operator diagnosis.
 Each run reads at most five 100-delivery pages. If more history remains before
 the prior checkpoint, it saves the opaque cursor and accumulated GUID outcomes
 for the next run; it does not make history-based retry decisions from a partial
@@ -194,7 +205,10 @@ GitHub accepted the request to retry; check later delivery history to see
 whether that retry succeeded. An outcome ending in `_not_recorded` means GitHub's
 result was known but Neon could not save it; `recovery_status` says whether the
 request was durably deferred. The run then fails with HTTP 503 and does not
-advance its checkpoint. `agentic_delivery_webhook_reconciler_run`
+advance its checkpoint. A failed webhook dispatch emits `outcome: failed` with
+the gateway response status, a GitHub API status when known, a bounded error
+type, and the delivery GUID; it excludes raw errors and request contents.
+`agentic_delivery_webhook_reconciler_run`
 records the Cron endpoint's completed or failed response and its counters.
 There, `http_status` is the Vercel endpoint response and `github_api_status`
 is the GitHub API response when one is known. Capture these events with the

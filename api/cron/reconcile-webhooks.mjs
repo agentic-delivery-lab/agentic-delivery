@@ -112,6 +112,20 @@ function deliveryTuple(delivery) {
   return { at, id: BigInt(id) };
 }
 
+function parseDeliveryHistory(body) {
+  const items = JSON.parse(body, (key, value, context) => {
+    if (key !== 'id' || typeof value !== 'number') return value;
+    const source = context?.source;
+    if (typeof source === 'string' && /^[1-9][0-9]*$/.test(source)) return source;
+    if (!Number.isSafeInteger(value) || value < 1) {
+      throw new Error('GitHub returned a webhook delivery ID that cannot be parsed exactly.');
+    }
+    return String(value);
+  });
+  if (!Array.isArray(items)) throw new Error('GitHub returned an invalid webhook delivery page.');
+  return items;
+}
+
 function tupleAfter(left, right) {
   if (!right) return true;
   if (left.at !== right.at) return left.at > right.at;
@@ -223,8 +237,7 @@ async function collectDeliveryAttempts({ checkpoint, scanCursor = null, jwt, fet
       throw new Error('GitHub returned an unexpected webhook pagination link.');
     }
     const pageResponse = await githubRequest({ url: pageUrl, jwt, fetchImpl });
-    const items = await pageResponse.json();
-    if (!Array.isArray(items)) throw new Error('GitHub returned an invalid webhook delivery page.');
+    const items = parseDeliveryHistory(await pageResponse.text());
     pages += 1;
 
     for (const item of items) {
@@ -410,7 +423,13 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
       expectedCheckpointAt: checkpoint?.checkpoint_at ?? null,
       expectedCheckpointDeliveryId: checkpoint?.checkpoint_delivery_id ?? null,
     };
-    await activeStore.mergeReconcilerObservations(observationsFromGroups(segmentGroups), expectedCheckpoint);
+    await activeStore.mergeReconcilerObservations(observationsFromGroups(segmentGroups), {
+      ...expectedCheckpoint,
+      // Every segment is authoritative for exact IDs at the same timestamp.
+      // The store repairs an exhausted request atomically on the first exact
+      // match, then later pages cannot replace that repaired ID.
+      refreshEqualTimestampDeliveryIds: true,
+    });
     const observedGroups = groupsFromObservations(await activeStore.reconcilerObservations());
     const grouped = nextCursor ? new Map() : observedGroups;
     const dueReceipts = await activeStore.dueControllerReceipts({ limit: CONTROLLER_RECEIPT_LIMIT });
@@ -456,7 +475,10 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
     }
     await activeStore.queueRedeliveryRequests([...redeliveryQueue.values()]);
 
-    const dueRedeliveries = await activeStore.dueRedeliveryRequests({ limit: CONTROLLER_RECEIPT_LIMIT });
+    const dueRedeliveries = await activeStore.dueRedeliveryRequests({
+      limit: CONTROLLER_RECEIPT_LIMIT,
+      includeQueued: !nextCursor,
+    });
     let requested = 0;
     let skippedCooldown = 0;
     let exhausted = 0;

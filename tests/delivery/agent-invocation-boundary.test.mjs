@@ -20,7 +20,7 @@ import {
   validateDispatchEnvelopeSignature,
   validateActorCatalog,
 } from '../../scripts/lib/agent-invocation.mjs';
-import { handleWebhook } from '../../api/github/webhook.mjs';
+import { handleWebhook, webhookHandler } from '../../api/github/webhook.mjs';
 import { prepareAgentInvocation } from '../../scripts/prepare-agent-invocation.mjs';
 import { NeonReplayStore } from '../../scripts/lib/neon-replay-store.mjs';
 import { parseParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
@@ -499,6 +499,30 @@ test('webhook leases a delivery, keeps incomplete work retryable, and releases d
 
   let leaseNow = Date.now();
   const failingStore = new InMemoryReplayStore({ now: () => leaseNow });
+  const loggingStore = new InMemoryReplayStore();
+  const failureLogs = [];
+  const failureRes = result();
+  await webhookHandler(requestFor(), failureRes, {
+    env,
+    replayStore: loggingStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    logger: { error: (line) => failureLogs.push(JSON.parse(line)) },
+    fetchImpl: async (url) => {
+      if (url.includes('/permission')) return response(200, { permission: 'write' });
+      return response(500, { message: 'private GitHub response' });
+    },
+  });
+  assert.equal(failureRes.statusCode, 502);
+  assert.deepEqual(failureLogs, [{
+    event: 'agentic_delivery_webhook',
+    outcome: 'failed',
+    http_status: 502,
+    github_api_status: 500,
+    error_type: 'Error',
+    delivery_id: '98765432-1234-4234-8234-123456789012',
+  }]);
+  assert.doesNotMatch(JSON.stringify(failureLogs), /private GitHub response|installation-token|dispatch-secret/);
+
   await assert.rejects(handleWebhook(requestFor(), result(), {
     env,
     replayStore: failingStore,

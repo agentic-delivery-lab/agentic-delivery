@@ -395,8 +395,10 @@ export class NeonReplayStore {
     expectedCursor = null,
     expectedCheckpointAt = null,
     expectedCheckpointDeliveryId = null,
+    refreshEqualTimestampDeliveryIds = false,
   } = {}) {
     if (!Array.isArray(observations)) throw new ReplayProtectionError('The webhook scan observations are invalid.');
+    if (typeof refreshEqualTimestampDeliveryIds !== 'boolean') throw new ReplayProtectionError('The webhook delivery ID refresh option is invalid.');
     if (observations.length === 0) return 0;
     if (expectedCursor !== null && (typeof expectedCursor !== 'string' || !expectedCursor || expectedCursor.length > 4096 || /[\u0000-\u001f\u007f]/.test(expectedCursor))) {
       throw new ReplayProtectionError('The expected webhook scan cursor is invalid.');
@@ -449,28 +451,72 @@ export class NeonReplayStore {
            guid text, delivered_at text, delivery_id text,
            has_success boolean, installation_id text
          )
+       ), updated_observations AS (
+         INSERT INTO public.webhook_reconciler_observations AS stored
+           (delivery_guid, newest_delivery_at, newest_delivery_id, has_success, installation_id)
+         SELECT incoming.guid, incoming.delivered_at, incoming.delivery_id,
+                incoming.has_success, incoming.installation_id
+         FROM incoming CROSS JOIN scan_state
+         ON CONFLICT (delivery_guid) DO UPDATE
+         SET newest_delivery_at = CASE
+               WHEN (stored.newest_delivery_at, stored.newest_delivery_id)
+                    < (EXCLUDED.newest_delivery_at, EXCLUDED.newest_delivery_id)
+                    OR ($5::boolean
+                      AND stored.newest_delivery_at = EXCLUDED.newest_delivery_at
+                      AND EXISTS (
+                        SELECT 1
+                        FROM public.webhook_redelivery_requests AS retry
+                        WHERE retry.delivery_guid = stored.delivery_guid
+                          AND retry.request_status = 'exhausted'
+                          AND retry.github_delivery_id IS DISTINCT FROM EXCLUDED.newest_delivery_id
+                          AND retry.attempt_count < $6
+                      ))
+               THEN EXCLUDED.newest_delivery_at ELSE stored.newest_delivery_at END,
+             newest_delivery_id = CASE
+               WHEN (stored.newest_delivery_at, stored.newest_delivery_id)
+                    < (EXCLUDED.newest_delivery_at, EXCLUDED.newest_delivery_id)
+                    OR ($5::boolean
+                      AND stored.newest_delivery_at = EXCLUDED.newest_delivery_at
+                      AND EXISTS (
+                        SELECT 1
+                        FROM public.webhook_redelivery_requests AS retry
+                        WHERE retry.delivery_guid = stored.delivery_guid
+                          AND retry.request_status = 'exhausted'
+                          AND retry.github_delivery_id IS DISTINCT FROM EXCLUDED.newest_delivery_id
+                          AND retry.attempt_count < $6
+                      ))
+               THEN EXCLUDED.newest_delivery_id ELSE stored.newest_delivery_id END,
+             has_success = stored.has_success OR EXCLUDED.has_success,
+             installation_id = COALESCE(stored.installation_id, EXCLUDED.installation_id)
+         WHERE stored.installation_id IS NULL
+            OR EXCLUDED.installation_id IS NULL
+            OR stored.installation_id = EXCLUDED.installation_id
+         RETURNING delivery_guid, newest_delivery_at, newest_delivery_id
+       ), repaired_requests AS (
+         UPDATE public.webhook_redelivery_requests AS retry
+         SET request_status = 'queued',
+             requested_at = clock_timestamp(),
+             github_delivery_id = observed.newest_delivery_id,
+             next_attempt_at = clock_timestamp()
+         FROM updated_observations AS observed
+         WHERE $5::boolean
+           AND retry.delivery_guid = observed.delivery_guid
+           AND retry.request_status = 'exhausted'
+           AND retry.github_delivery_id IS DISTINCT FROM observed.newest_delivery_id
+           AND retry.attempt_count < $6
+           AND EXISTS (
+             SELECT 1
+             FROM incoming
+             WHERE incoming.guid = observed.delivery_guid
+               AND incoming.delivered_at = observed.newest_delivery_at
+               AND incoming.delivery_id = observed.newest_delivery_id
+           )
+         RETURNING retry.delivery_guid
        )
-       INSERT INTO public.webhook_reconciler_observations AS stored
-         (delivery_guid, newest_delivery_at, newest_delivery_id, has_success, installation_id)
-       SELECT incoming.guid, incoming.delivered_at, incoming.delivery_id,
-              incoming.has_success, incoming.installation_id
-       FROM incoming CROSS JOIN scan_state
-       ON CONFLICT (delivery_guid) DO UPDATE
-       SET newest_delivery_at = CASE
-             WHEN (stored.newest_delivery_at, stored.newest_delivery_id)
-                  < (EXCLUDED.newest_delivery_at, EXCLUDED.newest_delivery_id)
-             THEN EXCLUDED.newest_delivery_at ELSE stored.newest_delivery_at END,
-           newest_delivery_id = CASE
-             WHEN (stored.newest_delivery_at, stored.newest_delivery_id)
-                  < (EXCLUDED.newest_delivery_at, EXCLUDED.newest_delivery_id)
-             THEN EXCLUDED.newest_delivery_id ELSE stored.newest_delivery_id END,
-           has_success = stored.has_success OR EXCLUDED.has_success,
-           installation_id = COALESCE(stored.installation_id, EXCLUDED.installation_id)
-       WHERE stored.installation_id IS NULL
-          OR EXCLUDED.installation_id IS NULL
-          OR stored.installation_id = EXCLUDED.installation_id
-       RETURNING delivery_guid`,
-      [JSON.stringify(normalized), expectedCursor, expectedCheckpointAt, expectedCheckpointDeliveryId],
+       SELECT observed.delivery_guid
+       FROM updated_observations AS observed
+       LEFT JOIN repaired_requests USING (delivery_guid)`,
+      [JSON.stringify(normalized), expectedCursor, expectedCheckpointAt, expectedCheckpointDeliveryId, refreshEqualTimestampDeliveryIds, CONTROLLER_MAX_ATTEMPTS],
     );
     if (rows.length !== normalized.length) throw storageError();
     return rows.length;
@@ -630,23 +676,36 @@ export class NeonReplayStore {
          SELECT candidates.delivery_guid, clock_timestamp(), 'queued', candidates.github_delivery_id, 0, clock_timestamp()
          FROM unnest($1::text[], $2::bigint[]) AS candidates(delivery_guid, github_delivery_id)
          ON CONFLICT (delivery_guid) DO UPDATE
-         SET github_delivery_id = EXCLUDED.github_delivery_id
-         WHERE stored.request_status = 'queued'`,
-        [batch.map(([guid]) => guid), batch.map(([, deliveryId]) => deliveryId)],
+         SET request_status = CASE
+               WHEN stored.request_status = 'exhausted' THEN 'queued'
+               ELSE stored.request_status END,
+             requested_at = CASE
+               WHEN stored.request_status = 'exhausted' THEN clock_timestamp()
+               ELSE stored.requested_at END,
+             github_delivery_id = EXCLUDED.github_delivery_id,
+             next_attempt_at = CASE
+               WHEN stored.request_status = 'exhausted' THEN clock_timestamp()
+               ELSE stored.next_attempt_at END
+         WHERE stored.request_status = 'queued'
+            OR (stored.request_status = 'exhausted'
+              AND stored.github_delivery_id IS DISTINCT FROM EXCLUDED.github_delivery_id
+              AND stored.attempt_count < $3)`,
+        [batch.map(([guid]) => guid), batch.map(([, deliveryId]) => deliveryId), CONTROLLER_MAX_ATTEMPTS],
       );
     }
   }
 
-  async dueRedeliveryRequests({ limit = 100 } = {}) {
+  async dueRedeliveryRequests({ limit = 100, includeQueued = true } = {}) {
+    if (typeof includeQueued !== 'boolean') throw new ReplayProtectionError('The queued redelivery selection option is invalid.');
     return this.#query(
       `SELECT delivery_guid, github_delivery_id, attempt_count
        FROM public.webhook_redelivery_requests
-       WHERE (request_status = 'queued'
+       WHERE (($3::boolean AND request_status = 'queued')
          OR (request_status IN ('accepted', 'requesting') AND next_attempt_at <= clock_timestamp()))
          AND attempt_count < $2
        ORDER BY next_attempt_at ASC, requested_at ASC
        LIMIT $1`,
-      [limit, CONTROLLER_MAX_ATTEMPTS],
+      [limit, CONTROLLER_MAX_ATTEMPTS, includeQueued],
     );
   }
 

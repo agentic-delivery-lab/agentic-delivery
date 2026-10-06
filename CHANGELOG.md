@@ -528,6 +528,7 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) preserves exact large GitHub delivery IDs across paginated history scans, requeues a changed exhausted ID atomically, and waits for the complete scan before retrying. Webhook dispatch failures emit payload-free status evidence.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) adds structured, payload-free logs for accepted webhook deliveries, individual redelivery outcomes, GitHub API status codes, and reconciler run totals; a known API result remains visible when Neon cannot persist it, while the run fails without advancing its checkpoint.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60)
   preserves safe Codex error categories and HTTP status codes on failed turns
