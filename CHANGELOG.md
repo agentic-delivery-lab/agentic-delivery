@@ -529,12 +529,9 @@ they do not authorize migration, alter that issue's scope, or close it.
 ### Fixed
 
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60)
-  logs the allowlisted received-event shape before normalization and the
-  normalized shape after it, including malformed wrappers without exposing
-  arbitrary names or payload values. Parser and file errors use fixed messages
-  so runtime diagnostics cannot echo input excerpts. The Harness review map
-  classifies the normalizer as a Control Plane path and an agent-invocation
-  runtime surface.
+  helps operators diagnose repository-dispatch failures by summarizing the
+  received and normalized event structure while keeping payload values and
+  parser or file error details out of logs.
 
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) fixes the truncated `pnpm/setup` pin so repository-dispatch observation jobs can start their validation.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) normalizes the wrapped event again in the separate receipt-finalizer job so the participant-pinned finalizer completes or retries the same controller receipt.
