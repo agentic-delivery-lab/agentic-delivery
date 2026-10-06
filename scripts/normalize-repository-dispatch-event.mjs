@@ -99,11 +99,33 @@ export function normalizeRepositoryDispatchEvent(event) {
   return { ...event, client_payload: clientPayload.envelope };
 }
 
+async function readRepositoryDispatchEventFile(sourcePath) {
+  let source;
+  try {
+    source = await readFile(sourcePath, 'utf8');
+  } catch {
+    throw new Error('The repository dispatch source event file could not be read.');
+  }
+  try {
+    return JSON.parse(source);
+  } catch {
+    throw new Error('The repository dispatch source event is not valid JSON.');
+  }
+}
+
+async function writeNormalizedRepositoryDispatchEventFile(targetPath, event) {
+  try {
+    await writeFile(targetPath, JSON.stringify(event), { flag: 'wx' });
+  } catch {
+    throw new Error('The normalized repository dispatch event file could not be written.');
+  }
+}
+
 export async function normalizeRepositoryDispatchEventFile(sourcePath, targetPath) {
   if (!sourcePath || !targetPath) throw new Error('Source and target event paths are required.');
-  const event = JSON.parse(await readFile(sourcePath, 'utf8'));
+  const event = await readRepositoryDispatchEventFile(sourcePath);
   const normalized = normalizeRepositoryDispatchEvent(event);
-  await writeFile(targetPath, JSON.stringify(normalized), { flag: 'wx' });
+  await writeNormalizedRepositoryDispatchEventFile(targetPath, normalized);
   return targetPath;
 }
 
@@ -117,15 +139,27 @@ if (isMainModule) {
     process.exitCode = 2;
   } else {
     try {
-      const sourceEvent = JSON.parse(await readFile(sourcePath, 'utf8'));
+      const sourceEvent = await readRepositoryDispatchEventFile(sourcePath);
       const sourceShape = repositoryDispatchEventShape(sourceEvent);
-      await normalizeRepositoryDispatchEventFile(sourcePath, targetPath);
-      const normalized = JSON.parse(await readFile(targetPath, 'utf8'));
       process.stdout.write(`Repository dispatch source event shape (values omitted): ${JSON.stringify(sourceShape)}\n`);
+      const normalized = normalizeRepositoryDispatchEvent(sourceEvent);
+      await writeNormalizedRepositoryDispatchEventFile(targetPath, normalized);
       process.stdout.write(`Repository dispatch normalized event shape (values omitted): ${JSON.stringify(repositoryDispatchEventShape(normalized))}\n`);
       process.stdout.write('Repository dispatch event is ready for the pinned controller reader.\n');
     } catch (error) {
-      process.stderr.write(`${error.message}\n`);
+      const safeMessages = new Set([
+        'The repository dispatch source event file could not be read.',
+        'The repository dispatch source event is not valid JSON.',
+        'Source and target event paths are required.',
+        'A repository dispatch event object is required.',
+        'A repository dispatch client payload is required.',
+        'The wrapped repository dispatch envelope is malformed.',
+        'The normalized repository dispatch event file could not be written.',
+      ]);
+      const message = error instanceof Error && safeMessages.has(error.message)
+        ? error.message
+        : 'Repository dispatch event normalization failed.';
+      process.stderr.write(`${message}\n`);
       process.exitCode = 1;
     }
   }

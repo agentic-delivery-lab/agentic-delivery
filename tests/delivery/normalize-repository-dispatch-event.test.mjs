@@ -157,7 +157,10 @@ test('dispatch normalizer writes a separate event file for pinned readers', asyn
   const normalized = JSON.parse(await readFile(targetPath, 'utf8'));
   assert.deepEqual(normalized, { client_payload: envelope });
   assert.equal(validateDispatchEnvelopeSignature({ secret, envelope: normalized.client_payload, now: Number(envelope.dispatch_timestamp) }).valid, true);
-  await assert.rejects(normalizeRepositoryDispatchEventFile(sourcePath, targetPath), /EEXIST/);
+  await assert.rejects(
+    normalizeRepositoryDispatchEventFile(sourcePath, targetPath),
+    /normalized repository dispatch event file could not be written/,
+  );
 
   const { stdout } = await execFileAsync(process.execPath, [
     path.join(repositoryRoot, 'scripts/normalize-repository-dispatch-event.mjs'),
@@ -169,6 +172,60 @@ test('dispatch normalizer writes a separate event file for pinned readers', asyn
   assert.match(stdout, /Repository dispatch normalized event shape \(values omitted\):/);
   assert.match(stdout, /"delivery_id":"string"/);
   assert.doesNotMatch(stdout, /12345678-1234-4234-8234-123456789012|sha256=|dispatch-secret/);
+});
+
+test('dispatch CLI logs a safe source shape before rejecting a malformed wrapper', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'repository-dispatch-malformed-wrapper-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const sourcePath = path.join(root, 'source.json');
+  const targetPath = path.join(root, 'normalized.json');
+  await writeFile(sourcePath, JSON.stringify({
+    client_payload: {
+      envelope: { delivery_id: 'sensitive-delivery-id', hidden_key: 'private-payload-value' },
+      extra: 'another-private-value',
+    },
+  }));
+
+  let failure;
+  try {
+    await execFileAsync(process.execPath, [
+      path.join(repositoryRoot, 'scripts/normalize-repository-dispatch-event.mjs'),
+      sourcePath,
+      targetPath,
+    ], { cwd: repositoryRoot });
+  } catch (error) {
+    failure = error;
+  }
+
+  assert.ok(failure, 'the malformed wrapper should fail normalization');
+  assert.equal(failure.code, 1);
+  assert.match(failure.stdout, /Repository dispatch source event shape \(values omitted\):/);
+  assert.match(failure.stderr, /wrapped repository dispatch envelope is malformed/);
+  assert.doesNotMatch(`${failure.stdout}${failure.stderr}`, /sensitive-delivery-id|private-payload-value|another-private-value|hidden_key/);
+});
+
+test('dispatch CLI suppresses parser excerpts for malformed JSON', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'repository-dispatch-invalid-json-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const sourcePath = path.join(root, 'source.json');
+  const targetPath = path.join(root, 'normalized.json');
+  await writeFile(sourcePath, '{"client_payload":{"secret_marker":"parser-excerpt-sensitive-value","bad":}}');
+
+  let failure;
+  try {
+    await execFileAsync(process.execPath, [
+      path.join(repositoryRoot, 'scripts/normalize-repository-dispatch-event.mjs'),
+      sourcePath,
+      targetPath,
+    ], { cwd: repositoryRoot });
+  } catch (error) {
+    failure = error;
+  }
+
+  assert.ok(failure, 'invalid JSON should fail normalization');
+  assert.equal(failure.code, 1);
+  assert.match(failure.stderr, /source event is not valid JSON/);
+  assert.doesNotMatch(`${failure.stdout}${failure.stderr}`, /parser-excerpt-sensitive-value|secret_marker/);
 });
 
 test('normalized events pass invocation, observation, and finalizer readers at their immutable pins', async (t) => {
