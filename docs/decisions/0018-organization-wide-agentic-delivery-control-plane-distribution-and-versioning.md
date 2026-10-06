@@ -230,12 +230,16 @@ versioned event envelope and signs the complete envelope with a separate
 central HMAC dispatch secret. To meet GitHub's ten-property limit for
 `repository_dispatch` `client_payload`, the gateway carries the envelope in
 the single `client_payload.envelope` property; the wrapper itself is not part
-of the HMAC. The central workflow normalizes that wrapper into the direct
-`client_payload` shape expected by the immutable pinned readers, which verify
-the envelope signature and bounded timestamp before fetching the current
-GitHub object again, resolving the participant's pinned controller and
-contract versions, asking the semantic router for a proposal, and applying
-only deterministically authorized mutations to the originating repository.
+of the HMAC. The observation workflow's trusted `github.sha` revision
+normalizes that wrapper into the direct `client_payload` shape, then verifies
+the envelope signature, bounded timestamp, and controller pin against the
+participant registry before checking out the selected controller commit.
+The immutable pinned reader verifies the normalized envelope again before
+fetching the current GitHub object, resolving the participant's controller
+and contract versions, asking the semantic router for a proposal, and
+applying only deterministically authorized mutations to the originating
+repository. The invocation path performs its signature and registry-pin
+checks with the fixed bootstrap before checking out the participant pin.
 The webhook secret and dispatch secret are separate credentials: the former
 authenticates GitHub ingress, while the latter authenticates the gateway-to-
 controller handoff. Neither is available to an origin repository or model

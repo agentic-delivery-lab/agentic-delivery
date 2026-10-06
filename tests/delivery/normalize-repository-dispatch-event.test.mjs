@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
+import { pathToFileURL } from 'node:url';
 
 import {
   normalizeRepositoryDispatchEvent,
@@ -20,14 +21,6 @@ import { validateEventEnvelope } from '../../scripts/lib/control-plane-contracts
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const execFileAsync = promisify(execFile);
-
-async function pinnedFile(commit, file) {
-  const { stdout } = await execFileAsync('git', ['show', `${commit}:${file}`], {
-    cwd: repositoryRoot,
-    encoding: 'utf8',
-  });
-  return stdout;
-}
 
 test('dispatch normalizer restores the direct payload shape without changing its envelope', () => {
   const unsignedEnvelope = {
@@ -94,35 +87,63 @@ test('dispatch normalizer writes a separate event file for pinned readers', asyn
   await assert.rejects(normalizeRepositoryDispatchEventFile(sourcePath, targetPath), /EEXIST/);
 });
 
-test('normalized events match the invocation and observation readers at their immutable pins', async () => {
+test('normalized events pass the invocation and observation readers at their immutable pins', async (t) => {
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
-  const invocationReader = await pinnedFile(release.bootstrapCommit, 'scripts/prepare-agent-invocation.mjs');
-  const observationReader = await pinnedFile(release.commit, 'scripts/validate-observation-event.mjs');
-  for (const reader of [invocationReader, observationReader]) {
-    assert.match(reader, /const envelope = event\?\.client_payload;/);
-  }
+  const workspace = await mkdtemp(path.join(repositoryRoot, '.rdr-'));
+  const invocationRoot = path.join(workspace, 'invocation');
+  const observationRoot = path.join(workspace, 'observation');
+  const worktrees = [];
+  t.after(async () => {
+    let cleanupError;
+    for (const worktree of worktrees.reverse()) {
+      try {
+        await execFileAsync('git', ['worktree', 'remove', '--force', worktree], { cwd: repositoryRoot });
+      } catch (error) {
+        cleanupError ??= error;
+      }
+    }
+    await rm(workspace, { recursive: true, force: true });
+    if (cleanupError) throw cleanupError;
+  });
+  await execFileAsync('git', ['worktree', 'add', '--detach', invocationRoot, release.bootstrapCommit], { cwd: repositoryRoot });
+  worktrees.push(invocationRoot);
+  await execFileAsync('git', ['worktree', 'add', '--detach', observationRoot, release.commit], { cwd: repositoryRoot });
+  worktrees.push(observationRoot);
 
+  const invocationReader = await import(pathToFileURL(path.join(invocationRoot, 'scripts/prepare-agent-invocation.mjs')).href);
+  const invocationRegistryReader = await import(pathToFileURL(path.join(invocationRoot, 'scripts/lib/participant-registry.mjs')).href);
+  const observationReader = await import(pathToFileURL(path.join(observationRoot, 'scripts/validate-observation-event.mjs')).href);
+  const observationRegistryReader = await import(pathToFileURL(path.join(observationRoot, 'scripts/lib/participant-registry.mjs')).href);
+  const invocationRegistry = await invocationRegistryReader.loadParticipantRegistry(invocationRoot);
+  const observationRegistry = await observationRegistryReader.loadParticipantRegistry(observationRoot);
+  assert.equal(invocationRegistry.valid, true);
+  assert.equal(observationRegistry.valid, true);
+  const invocationParticipant = invocationRegistryReader.participantForRepository(invocationRegistry, '1358455028');
+  const observationParticipant = observationRegistryReader.participantForRepository(observationRegistry, '1358455028');
   const secret = 'dispatch-secret';
   const cases = [
     {
-      eventName: 'issue_comment',
-      action: 'created',
-      source: { kind: 'issue_comment', issue_number: 60, pull_request_number: null, comment_id: 99, review_id: null },
+      reader: 'invocation',
+      controller: invocationParticipant.controller,
+      eventName: 'issues',
+      action: 'opened',
+      source: { kind: 'issue', issue_number: 62, pull_request_number: null, comment_id: null, review_id: null },
       actor: { login: 'sjefsharp', type: 'User' },
-      body: '@agentic-delivery-lab-invoker-7f3a continue',
-      controller: { version: release.version, commit: release.commit },
+      body: 'Canary issue event',
     },
     {
+      reader: 'observation',
+      controller: observationParticipant.controller,
       eventName: 'pull_request',
       action: 'synchronize',
       source: { kind: 'pull_request', issue_number: null, pull_request_number: 27, comment_id: null, review_id: null },
       actor: { login: 'external-contributor', type: 'User' },
       body: 'Pull request observation',
-      controller: { version: release.version, commit: release.commit },
     },
   ];
 
   for (const [index, fields] of cases.entries()) {
+    const dispatchTimestamp = Date.now();
     const envelope = invocationEnvelope({
       deliveryId: `${index + 1}2345678-1234-4234-8234-123456789012`,
       repositoryId: '1358455028',
@@ -131,20 +152,65 @@ test('normalized events match the invocation and observation readers at their im
       repositoryFullName: 'agentic-delivery-lab/agentic-delivery',
       receivedAt: new Date().toISOString(),
       dispatchSecret: secret,
-      dispatchTimestamp: Date.now(),
+      dispatchTimestamp,
       ...fields,
     });
-    const normalized = normalizeRepositoryDispatchEvent({
+    const sourcePath = path.join(workspace, `${fields.reader}-source.json`);
+    const normalizedPath = path.join(workspace, `${fields.reader}-normalized.json`);
+    await writeFile(sourcePath, JSON.stringify({
       repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
       client_payload: packRepositoryDispatchClientPayload(envelope),
-    });
+    }));
+    await normalizeRepositoryDispatchEventFile(sourcePath, normalizedPath);
+    const normalized = JSON.parse(await readFile(normalizedPath, 'utf8'));
     assert.deepEqual(validateEventEnvelope(normalized.client_payload), { valid: true, errors: [] });
     assert.equal(validateDispatchEnvelopeSignature({
       secret,
       envelope: normalized.client_payload,
-      now: Number(envelope.dispatch_timestamp),
+      now: dispatchTimestamp,
     }).valid, true);
     assert.equal(normalized.client_payload.event, fields.eventName);
     assert.equal(normalized.client_payload.delivery_id, envelope.delivery_id);
+
+    if (fields.reader === 'observation') {
+      const result = await observationReader.validateObservationEvent({
+        eventPath: normalizedPath,
+        repositoryRoot: observationRoot,
+        controllerRepository: 'agentic-delivery-lab/agentic-delivery',
+        dispatchSecret: secret,
+        now: () => dispatchTimestamp,
+      });
+      assert.equal(result.status, 'passed');
+      assert.equal(result.controller.commit, observationParticipant.controller.commit);
+    } else {
+      const result = await invocationReader.prepareAgentInvocation({
+        env: {
+          GH_TOKEN: 'fixture-token',
+          GITHUB_EVENT_PATH: normalizedPath,
+          GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+          CODEX_DELIVERY_DISPATCH_SECRET: secret,
+          RUNNER_TEMP: workspace,
+          GITHUB_RUN_ID: '123456',
+          GITHUB_JOB: 'intake',
+          GITHUB_RUN_ATTEMPT: '1',
+        },
+        participantRegistry: invocationRegistry,
+        replayStore: {
+          ensureControllerReceipt: async () => undefined,
+          claimController: async () => ({ status: 'claimed' }),
+        },
+        fetchImpl: async (request) => {
+          const requestPath = new URL(String(request)).pathname;
+          if (requestPath.endsWith('/collaborators/sjefsharp/permission')) {
+            return new Response(JSON.stringify({ permission: 'write' }), { status: 200 });
+          }
+          throw new Error(`Unexpected pinned invocation request: ${requestPath}`);
+        },
+        now: () => dispatchTimestamp,
+      });
+      assert.equal(result.accepted, true);
+      assert.equal(result.sourceIssue, '62');
+      assert.equal(result.originRepository, invocationParticipant.expectedFullName);
+    }
   }
 });

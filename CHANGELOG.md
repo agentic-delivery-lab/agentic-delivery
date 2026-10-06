@@ -528,6 +528,7 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) validates the observation event signature and participant pin with the trusted workflow revision before checking out or running a participant-pinned reader.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) wraps the signed dispatch envelope in one `repository_dispatch` client payload property and restores its direct shape in per-run event files for pinned readers, staying within GitHub's ten-property limit while preserving envelope verification.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) bundles the participant registry with the Vercel webhook function and records safe system error codes for failed deliveries without logging request contents or error messages.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) preserves exact large GitHub delivery IDs across paginated history scans, requeues a changed exhausted ID atomically, and waits for the complete scan before retrying. Webhook dispatch failures emit payload-free status evidence.

@@ -160,11 +160,15 @@ The ingress verifies the webhook signature and delivery ID, checks the exact
 actor catalog, and signs the complete version-1 dispatch envelope with the
 separate dispatch secret. It sends that envelope as the only top-level
 `client_payload` property, named `envelope`, to stay within GitHub's limit of
-10 top-level properties. The invocation and observation workflows write a
+10 top-level properties. The invocation preflight checks the signature and
+participant pin with the fixed bootstrap before it checks out the selected
+controller. The observation workflow normalizes the event with its trusted
+`github.sha` checkout, verifies the signature and registry pin, and only then
+checks out the selected immutable controller reader. Both paths write a
 per-run event file with the version-1 envelope restored at `client_payload`,
-so existing pinned controller readers keep their input contract. The
-self-hosted preflight validates the signature, re-fetches the current comment
-or review, maps a pull request to its issue-linked source, and then invokes the
+so existing pinned readers keep their input contract and verify the signed
+envelope again. The self-hosted preflight re-fetches the current comment or
+review, maps a pull request to its issue-linked source, and then invokes the
 existing issue intake. A Vercel outage is fail-closed: it cannot authorize a
 delivery run by itself. Native `@copilot` and other GitHub-managed agent
 mentions remain outside this repository-owned invocation contract.

@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { appendFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -94,6 +94,12 @@ if (isMainModule) {
       repositoryRoot: process.argv[2] ?? repositoryRoot,
       controllerRepository: process.env.GITHUB_REPOSITORY,
     });
+    if (!/^[0-9a-f]{40}$/i.test(String(result.controller?.commit ?? ''))) {
+      throw new ObservationValidationError('validated controller pin is not a commit SHA');
+    }
+    if (process.env.GITHUB_OUTPUT) {
+      await appendFile(process.env.GITHUB_OUTPUT, `controller_commit=${result.controller.commit.toLowerCase()}\n`);
+    }
     process.stdout.write(`Observation ${result.status}: ${result.repository}#${result.repositoryId} ${result.action}.\n`);
   } catch (error) {
     process.stderr.write(`${error.message}\n`);
