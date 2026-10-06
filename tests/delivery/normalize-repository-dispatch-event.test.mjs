@@ -87,7 +87,7 @@ test('dispatch normalizer writes a separate event file for pinned readers', asyn
   await assert.rejects(normalizeRepositoryDispatchEventFile(sourcePath, targetPath), /EEXIST/);
 });
 
-test('normalized events pass the invocation and observation readers at their immutable pins', async (t) => {
+test('normalized events pass invocation, observation, and finalizer readers at their immutable pins', async (t) => {
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   const workspace = await mkdtemp(path.join(repositoryRoot, '.rdr-'));
   const invocationRoot = path.join(workspace, 'invocation');
@@ -112,6 +112,7 @@ test('normalized events pass the invocation and observation readers at their imm
 
   const invocationReader = await import(pathToFileURL(path.join(invocationRoot, 'scripts/prepare-agent-invocation.mjs')).href);
   const invocationRegistryReader = await import(pathToFileURL(path.join(invocationRoot, 'scripts/lib/participant-registry.mjs')).href);
+  const finalizerReader = await import(pathToFileURL(path.join(observationRoot, 'scripts/finalize-agent-invocation.mjs')).href);
   const observationReader = await import(pathToFileURL(path.join(observationRoot, 'scripts/validate-observation-event.mjs')).href);
   const observationRegistryReader = await import(pathToFileURL(path.join(observationRoot, 'scripts/lib/participant-registry.mjs')).href);
   const invocationRegistry = await invocationRegistryReader.loadParticipantRegistry(invocationRoot);
@@ -124,6 +125,15 @@ test('normalized events pass the invocation and observation readers at their imm
   const cases = [
     {
       reader: 'invocation',
+      controller: invocationParticipant.controller,
+      eventName: 'issues',
+      action: 'opened',
+      source: { kind: 'issue', issue_number: 62, pull_request_number: null, comment_id: null, review_id: null },
+      actor: { login: 'sjefsharp', type: 'User' },
+      body: 'Canary issue event',
+    },
+    {
+      reader: 'finalizer',
       controller: invocationParticipant.controller,
       eventName: 'issues',
       action: 'opened',
@@ -182,6 +192,29 @@ test('normalized events pass the invocation and observation readers at their imm
       });
       assert.equal(result.status, 'passed');
       assert.equal(result.controller.commit, observationParticipant.controller.commit);
+    } else if (fields.reader === 'finalizer') {
+      const finalized = [];
+      const store = {
+        completeController: async (key, options) => finalized.push({ outcome: 'completed', key, ...options }),
+        retryController: async (key, options) => finalized.push({ outcome: 'retryable', key, ...options }),
+      };
+      for (const [resultName, expectedStatus] of [['success', 'completed'], ['failure', 'retryable']]) {
+        const result = await finalizerReader.finalizeAgentInvocation({
+          env: {
+            GITHUB_EVENT_PATH: normalizedPath,
+            INVOCATION_RESULT: resultName,
+            GITHUB_RUN_ID: '123456',
+            GITHUB_RUN_ATTEMPT: '1',
+          },
+          store,
+        });
+        assert.deepEqual(result, { status: expectedStatus });
+      }
+      assert.equal(finalized.length, 2);
+      assert.equal(finalized[0].key, `${envelope.installation_id}:${envelope.delivery_id}`);
+      assert.equal(finalized[0].leaseToken, '123456:1');
+      assert.equal(finalized[1].key, finalized[0].key);
+      assert.equal(finalized[1].leaseToken, finalized[0].leaseToken);
     } else {
       const result = await invocationReader.prepareAgentInvocation({
         env: {

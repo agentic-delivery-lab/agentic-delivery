@@ -242,6 +242,11 @@ bootstrap before checking out the participant pin. Its preflight then fetches
 the current GitHub object, resolves the participant's controller and contract
 versions, asks the semantic router for a proposal, and applies only
 deterministically authorized mutations to the originating repository.
+The invocation finalizer runs in a separate job. It normalizes the original
+dispatch again with the trusted workflow revision, then passes the direct
+version-1 envelope to the participant-pinned receipt finalizer. That finalizer
+uses the same installation and delivery IDs to complete or retry the
+controller receipt.
 The webhook secret and dispatch secret are separate credentials: the former
 authenticates GitHub ingress, while the latter authenticates the gateway-to-
 controller handoff. Neither is available to an origin repository or model
