@@ -425,9 +425,10 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
     };
     await activeStore.mergeReconcilerObservations(observationsFromGroups(segmentGroups), {
       ...expectedCheckpoint,
-      // A fresh GitHub history segment is authoritative for exact IDs at the
-      // same timestamp. This repairs IDs rounded by previous runtimes.
-      refreshEqualTimestampDeliveryIds: !scanCursor,
+      // Every segment is authoritative for exact IDs at the same timestamp.
+      // The store repairs an exhausted request atomically on the first exact
+      // match, then later pages cannot replace that repaired ID.
+      refreshEqualTimestampDeliveryIds: true,
     });
     const observedGroups = groupsFromObservations(await activeStore.reconcilerObservations());
     const grouped = nextCursor ? new Map() : observedGroups;
@@ -474,7 +475,10 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
     }
     await activeStore.queueRedeliveryRequests([...redeliveryQueue.values()]);
 
-    const dueRedeliveries = await activeStore.dueRedeliveryRequests({ limit: CONTROLLER_RECEIPT_LIMIT });
+    const dueRedeliveries = await activeStore.dueRedeliveryRequests({
+      limit: CONTROLLER_RECEIPT_LIMIT,
+      includeQueued: !nextCursor,
+    });
     let requested = 0;
     let skippedCooldown = 0;
     let exhausted = 0;

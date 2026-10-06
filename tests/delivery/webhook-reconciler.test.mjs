@@ -63,7 +63,11 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
         const newer = !existing
           || Date.parse(value.deliveredAt) > Date.parse(existing.newest_delivery_at)
           || (sameTimestamp && BigInt(value.deliveryId) > BigInt(existing.newest_delivery_id));
-        const refreshEqualTimestampId = refreshEqualTimestampDeliveryIds && sameTimestamp;
+        const queued = this.redeliveryQueue.get(value.guid);
+        const refreshEqualTimestampId = refreshEqualTimestampDeliveryIds && sameTimestamp
+          && queued?.request_status === 'exhausted'
+          && queued.github_delivery_id !== value.deliveryId
+          && Number(queued.attempt_count ?? 0) < CONTROLLER_MAX_ATTEMPTS;
         this.observations.set(value.guid, {
           delivery_guid: value.guid,
           newest_delivery_at: newer || refreshEqualTimestampId ? value.deliveredAt : existing.newest_delivery_at,
@@ -71,6 +75,10 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
           has_success: Boolean(existing?.has_success || value.hasSuccess),
           installation_id: existing?.installation_id ?? value.installationId,
         });
+        if (refreshEqualTimestampId) {
+          queued.github_delivery_id = value.deliveryId;
+          queued.request_status = 'queued';
+        }
       }
     },
     async reconcilerObservations() { return [...this.observations.values()]; },
@@ -96,10 +104,10 @@ function makeStore({ checkpoint = null, dueReceipts = [], dueRedeliveries = [], 
         }
       }
     },
-    async dueRedeliveryRequests({ limit = 250 } = {}) {
+    async dueRedeliveryRequests({ limit = 250, includeQueued = true } = {}) {
       const completed = new Set(this.completed);
       const queued = [...this.redeliveryQueue.values()]
-        .filter((request) => (request.request_status === 'queued' || request.due === true)
+        .filter((request) => ((includeQueued && request.request_status === 'queued') || request.due === true)
           && Number(request.attempt_count ?? 0) < CONTROLLER_MAX_ATTEMPTS);
       return [
         ...this.dueRedeliveries.filter((request) => !completed.has(request.delivery_guid)
@@ -310,6 +318,96 @@ test('reconciler preserves exact large delivery IDs and refreshes exhausted rows
   assert.deepEqual(store.requested.map(({ id }) => id), [exactDeliveryId]);
   assert.equal(store.redeliveryQueue.get(deliveryA).request_status, 'accepted');
   assert.equal(store.advanced.length, 1);
+});
+
+test('reconciler repairs an exhausted ID on a resumed page and preserves it through later pages', async () => {
+  const scanNow = Date.now();
+  const deliveredAt = new Date(scanNow - 120_000).toISOString();
+  const checkpoint = {
+    checkpoint_at: new Date(scanNow - 60 * 60_000).toISOString(),
+    checkpoint_delivery_id: '1000',
+    scan_cursor: 'page-6',
+    scan_high_water_at: new Date(scanNow - 60_000).toISOString(),
+    scan_high_water_delivery_id: '50000',
+  };
+  const exactDeliveryId = '3846548579682426877';
+  const olderAttemptId = '3846548579682426876';
+  const roundedDeliveryId = String(Number(exactDeliveryId));
+  const store = makeStore({
+    checkpoint,
+    observations: [{
+      delivery_guid: deliveryA,
+      newest_delivery_at: deliveredAt,
+      newest_delivery_id: roundedDeliveryId,
+      has_success: false,
+      installation_id: '163255060',
+    }],
+  });
+  store.redeliveryQueue.set(deliveryA, {
+    delivery_guid: deliveryA,
+    github_delivery_id: roundedDeliveryId,
+    attempt_count: 1,
+    request_status: 'exhausted',
+  });
+  const postUrls = [];
+  const pageFetch = (firstPage, lastPage, primaryDeliveryId) => async (url, options) => {
+    if (options.method === 'POST') {
+      postUrls.push(String(url));
+      return response(202);
+    }
+    const page = Number(new URL(String(url)).searchParams.get('cursor').replace('page-', ''));
+    assert.ok(page >= firstPage && page <= lastPage);
+    const other = {
+      id: 30_000 - page,
+      guid: deliveryB,
+      delivered_at: new Date(scanNow - (page * 1_000)).toISOString(),
+      status: 'OK',
+      installation_id: 163255060,
+    };
+    const event = page === firstPage
+      ? `{"id":${primaryDeliveryId},"guid":"${deliveryA}","delivered_at":"${deliveredAt}","status":"FAIL","installation_id":163255060}`
+      : null;
+    const body = event ? `[${event},${JSON.stringify(other)}]` : JSON.stringify([other]);
+    const headers = page < lastPage
+      ? { link: `<https://api.github.com/app/hook/deliveries?per_page=100&cursor=page-${page + 1}>; rel="next"` }
+      : (lastPage === 10
+        ? { link: '<https://api.github.com/app/hook/deliveries?per_page=100&cursor=page-11>; rel="next"' }
+        : {});
+    return response(200, body, headers);
+  };
+
+  const firstRes = output();
+  await reconcileWebhookDeliveries({
+    req: cronRequest(),
+    res: firstRes,
+    env: cronEnv(),
+    fetchImpl: pageFetch(6, 10, exactDeliveryId),
+    store,
+    now: () => scanNow,
+  });
+
+  assert.equal(firstRes.statusCode, 200);
+  assert.equal(JSON.parse(firstRes.body).scan_continuation_pending, true);
+  assert.equal(store.checkpoint.scan_cursor, 'page-11');
+  assert.equal(store.observations.get(deliveryA).newest_delivery_id, exactDeliveryId);
+  assert.equal(store.redeliveryQueue.get(deliveryA).request_status, 'queued');
+  assert.equal(store.redeliveryQueue.get(deliveryA).github_delivery_id, exactDeliveryId);
+  assert.deepEqual(postUrls, [], 'the repaired queued request waits for complete history');
+
+  const secondRes = output();
+  await reconcileWebhookDeliveries({
+    req: cronRequest(),
+    res: secondRes,
+    env: cronEnv(),
+    fetchImpl: pageFetch(11, 15, olderAttemptId),
+    store,
+    now: () => scanNow + 60_000,
+  });
+
+  assert.equal(secondRes.statusCode, 200);
+  assert.equal(JSON.parse(secondRes.body).scan_continuation_pending, false);
+  assert.deepEqual(postUrls, [`https://api.github.com/app/hook/deliveries/${exactDeliveryId}/attempts`]);
+  assert.equal(store.requested.at(-1).id, exactDeliveryId);
 });
 
 test('reconciler preserves an accepted GitHub outcome when its state write and recovery both fail', async () => {

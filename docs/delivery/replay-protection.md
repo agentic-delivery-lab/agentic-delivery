@@ -101,11 +101,13 @@ The App API returns delivery IDs as JSON integers, and current IDs exceed
 JavaScript's safe integer range. The reconciler retains each original decimal
 number token as a string before comparing, storing, or putting it in a request
 URL. Parsing the value through `Number` rounds it and can make GitHub reject a
-redelivery with HTTP 404. A fresh history scan can replace a rounded ID at the
-same timestamp; it requeues an exhausted record only when that GUID now maps to
-a different exact ID and its retry count remains below the limit. It preserves
-the retry count and leaves unchanged or unmatched exhausted records for
-operator diagnosis.
+redelivery with HTTP 404. Any segment in a paginated history scan can replace a
+rounded ID at the same timestamp. The observation update and exhausted-row
+requeue happen atomically, so a later page cannot replace the repaired ID with
+an older attempt. The request waits until the history scan finishes before it
+is sent. Reconciliation requeues only when that GUID maps to a different exact
+ID and its retry count remains below the limit. It preserves the retry count
+and leaves unchanged or unmatched exhausted records for operator diagnosis.
 Each run reads at most five 100-delivery pages. If more history remains before
 the prior checkpoint, it saves the opaque cursor and accumulated GUID outcomes
 for the next run; it does not make history-based retry decisions from a partial
