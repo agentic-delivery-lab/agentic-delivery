@@ -18,9 +18,58 @@ import {
   validateDispatchEnvelopeSignature,
 } from '../../scripts/lib/agent-invocation.mjs';
 import { validateEventEnvelope } from '../../scripts/lib/control-plane-contracts.mjs';
+import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const execFileAsync = promisify(execFile);
+
+test('normalized event consumers pass the event path at process launch instead of overriding runner defaults', async () => {
+  let consumers = 0;
+  for (const file of ['issue-intake.yml', 'agent-observation.yml']) {
+    const workflow = parseRepositoryYaml(await readFile(path.join(repositoryRoot, '.github/workflows', file), 'utf8'), file);
+    for (const job of Object.values(workflow.jobs)) {
+      for (const step of job.steps ?? []) {
+        const eventPath = step.env?.CONTROLLER_EVENT_PATH ?? step.env?.GITHUB_EVENT_PATH;
+        if (!eventPath?.includes('steps.') || !eventPath.includes('event_path')) continue;
+        consumers += 1;
+        assert.equal(step.env.GITHUB_EVENT_PATH, undefined, `${step.name}: GitHub overwrites this runner default`);
+        assert.match(step.run, /^GITHUB_EVENT_PATH="\$CONTROLLER_EVENT_PATH" /);
+        assert.match(step.run, / node /);
+        for (const variable of ['GITHUB_EVENT_NAME', 'GITHUB_TRIGGERING_ACTOR']) {
+          assert.equal(step.env[variable], undefined, `${step.name}: reserved runner variable ${variable}`);
+        }
+      }
+    }
+  }
+  assert.equal(consumers, 5);
+  const delivery = parseRepositoryYaml(await readFile(path.join(repositoryRoot, '.github/workflows/codex-delivery.yml'), 'utf8'), 'codex delivery');
+  const job = delivery.jobs.deliver;
+  assert.equal(job.env.GITHUB_EVENT_NAME, undefined);
+  assert.equal(job.env.GITHUB_TRIGGERING_ACTOR, undefined);
+  assert.match(job.env.CONTROLLER_EVENT_NAME, /inputs.invocation_event_name/);
+  assert.match(job.env.CONTROLLER_TRIGGERING_ACTOR, /inputs.invocation_actor/);
+  const launch = job.steps.find((step) => step.name === 'Run source issue delivery');
+  assert.equal(launch.run, 'GITHUB_EVENT_NAME="$CONTROLLER_EVENT_NAME" GITHUB_TRIGGERING_ACTOR="$CONTROLLER_TRIGGERING_ACTOR" node scripts/codex-delivery.mjs');
+});
+
+test('workflow launch assignments replace runner event defaults for the reader process', { skip: process.platform === 'win32' }, async () => {
+  const workflow = parseRepositoryYaml(await readFile(path.join(repositoryRoot, '.github/workflows/issue-intake.yml'), 'utf8'), 'issue intake');
+  const step = workflow.jobs.classify.steps.find((item) => item.name === 'Reason about and validate issue routing');
+  const assignments = step.run.slice(0, step.run.indexOf('node '));
+  const script = `${assignments} "${process.execPath}" -e 'process.stdout.write(JSON.stringify([process.env.GITHUB_EVENT_PATH, process.env.GITHUB_EVENT_NAME, process.env.GITHUB_TRIGGERING_ACTOR]))'`;
+  const { stdout } = await execFileAsync('sh', ['-c', script], {
+    env: {
+      ...process.env,
+      GITHUB_EVENT_PATH: '/runner/original-wrapped.json',
+      GITHUB_EVENT_NAME: 'repository_dispatch',
+      GITHUB_TRIGGERING_ACTOR: 'dispatch-app[bot]',
+      CONTROLLER_EVENT_PATH: '/runner/normalized event.json',
+      CONTROLLER_EVENT_NAME: 'issue_comment',
+      CONTROLLER_TRIGGERING_ACTOR: 'fixture-writer',
+    },
+  });
+  assert.deepEqual(JSON.parse(stdout), ['/runner/normalized event.json', 'issue_comment', 'fixture-writer']);
+});
 
 test('dispatch normalizer restores the direct payload shape without changing its envelope', () => {
   const unsignedEnvelope = {
