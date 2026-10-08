@@ -9,6 +9,11 @@ on:
         type: boolean
         default: false
 
+      codex_error_diagnostics:
+        description: Classify recent runner errors without printing messages or starting a model turn
+        type: boolean
+        default: false
+
       reconciliation_diagnostics:
         description: Read App installation metadata and Neon reconciliation state without changing work state
         type: boolean
@@ -62,6 +67,32 @@ jobs:
       - name: Check actual tool isolation without model execution
         if: inputs.codex
         run: node scripts/codex-sandbox-check.mjs
+
+      - name: Classify recent Codex error metadata without a model turn
+        if: inputs.codex && inputs.codex_error_diagnostics
+        run: |
+          node --input-type=module <<'NODE'
+          import { existsSync } from 'node:fs';
+          import { DatabaseSync } from 'node:sqlite';
+          import { createHash } from 'node:crypto';
+          const databasePath = '/var/lib/github-runner/.codex/logs_1.sqlite';
+          if (!existsSync(databasePath)) {
+            console.log(JSON.stringify({ codex_error_log_available: false }));
+          } else {
+            const db = new DatabaseSync(databasePath, { readOnly: true });
+            try {
+              const columns = db.prepare('PRAGMA table_info(logs)').all().map((row) => row.name);
+              const required = ['message', 'level', 'ts'];
+              if (!required.every((name) => columns.includes(name))) throw new Error('Unknown diagnostic log schema.');
+              const rows = db.prepare("SELECT message, ts FROM logs WHERE level = 'ERROR' ORDER BY ts DESC LIMIT 20").all();
+              const markers = ['model', 'unsupported', 'not supported', 'reasoning', 'effort', 'quota', 'rate limit', 'authentication', 'unauthorized', 'permission', 'workspace', 'routing', 'configuration', 'network', 'context', 'api', 'backend', 'plan', 'gpt-6-luna', 'gpt-6-sol', 'websocket', 'stream', '400', '401', '403', '429', 'retry', 'timeout'];
+              console.log(JSON.stringify({ codex_error_log_available: true, errors: rows.map((row) => {
+                const text = String(row.message ?? '');
+                return { at: row.ts, length: text.length, sha256: createHash('sha256').update(text).digest('hex'), markers: markers.filter((marker) => text.toLowerCase().includes(marker)) };
+              }) }));
+            } finally { db.close(); }
+          }
+          NODE
 
   reconciliation-diagnostics:
     if: ${{ inputs.reconciliation_diagnostics }}
