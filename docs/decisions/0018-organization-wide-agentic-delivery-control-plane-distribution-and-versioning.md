@@ -229,8 +229,15 @@ supported event/action, delivery ID and repository identity. It emits a
 versioned event envelope and signs the complete envelope with a separate
 central HMAC dispatch secret. To meet GitHub's ten-property limit for
 `repository_dispatch` `client_payload`, the gateway carries the envelope in
-the single `client_payload.envelope` property; the wrapper itself is not part
-of the HMAC. The observation workflow's trusted `github.sha` revision
+the single `client_payload.envelope` property. Its transport container holds
+`json`, the complete signed envelope serialized as opaque JSON text, and
+`delivery_id`, an identity copy used for workflow concurrency. Object-key
+reordering in transport cannot change the JSON text. Normalization requires
+that the copied delivery ID equal the ID inside the decoded envelope and
+rejects malformed containers before any pinned reader runs. The wrapper
+itself is not part of the HMAC. Legacy object wrappers remain readable for
+deployment compatibility; the version-1 envelope and HMAC algorithm do not
+change. The observation workflow's trusted `github.sha` revision
 normalizes that wrapper into the direct `client_payload` shape, then verifies
 the envelope signature, bounded timestamp, and controller pin against the
 participant registry before checking out the selected controller commit.

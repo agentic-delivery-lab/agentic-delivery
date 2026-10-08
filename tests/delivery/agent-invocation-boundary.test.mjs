@@ -102,7 +102,7 @@ test('repository dispatch envelopes use a separate time-bounded HMAC', () => {
   assert.equal(validateDispatchEnvelopeSignature({ secret, envelope: signed, now: 1789991969000 }).valid, false);
 });
 
-test('repository dispatch transport wraps the signed envelope in one client payload property', () => {
+test('repository dispatch transport preserves signed JSON in one client payload property', () => {
   const envelope = {
     version: 1,
     delivery_id: '12345678-1234-4234-8234-123456789012',
@@ -111,6 +111,8 @@ test('repository dispatch transport wraps the signed envelope in one client payl
   };
   const packed = packRepositoryDispatchClientPayload(envelope);
   assert.deepEqual(Object.keys(packed), ['envelope']);
+  assert.equal(packed.envelope.json, JSON.stringify(envelope));
+  assert.equal(packed.envelope.delivery_id, envelope.delivery_id);
   assert.deepEqual(unwrapRepositoryDispatchClientPayload(packed), envelope);
   assert.equal(unwrapRepositoryDispatchClientPayload(envelope), envelope);
   assert.throws(() => packRepositoryDispatchClientPayload(null), /envelope is required/);
@@ -771,8 +773,10 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
   assert.equal(duplicate.accepted, false);
 
   const tamperedEvent = JSON.parse(await readFile(eventPath, 'utf8'));
-  tamperedEvent.client_payload.envelope.installation_id = '999';
-  tamperedEvent.client_payload.envelope.delivery_id = '22345678-1234-4234-8234-123456789012';
+  const tamperedEnvelope = unwrapRepositoryDispatchClientPayload(tamperedEvent.client_payload);
+  tamperedEnvelope.installation_id = '999';
+  tamperedEnvelope.delivery_id = '22345678-1234-4234-8234-123456789012';
+  tamperedEvent.client_payload = packRepositoryDispatchClientPayload(tamperedEnvelope);
   await writeFile(eventPath, JSON.stringify(tamperedEvent));
   await assert.rejects(
     prepareAgentInvocation({ env: baseEnv, fetchImpl }),
@@ -827,8 +831,10 @@ test('central preflight rejects a tampered signed dispatch envelope', async (t) 
   const accepted = await prepareAgentInvocation({ env, fetchImpl, now: () => Number(dispatchTimestamp) });
   assert.equal(accepted.accepted, true);
   const tampered = JSON.parse(await readFile(eventPath, 'utf8'));
-  tampered.client_payload.envelope.repository_id = '777777777';
-  tampered.client_payload.envelope.delivery_id = 'a2345678-1234-4234-8234-123456789012';
+  const tamperedEnvelope = unwrapRepositoryDispatchClientPayload(tampered.client_payload);
+  tamperedEnvelope.repository_id = '777777777';
+  tamperedEnvelope.delivery_id = 'a2345678-1234-4234-8234-123456789012';
+  tampered.client_payload = packRepositoryDispatchClientPayload(tamperedEnvelope);
   await writeFile(eventPath, JSON.stringify(tampered));
   await assert.rejects(
     prepareAgentInvocation({ env, fetchImpl, now: () => Number(dispatchTimestamp) }),

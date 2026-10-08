@@ -320,7 +320,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   const participantPolicy = resolver.steps.find((step) => step.name === 'Resolve caller and participant policy from trusted inputs');
   assert.equal(participantPolicy.id, 'participant-policy');
   assert.equal(participantPolicy.env.CALLER_WORKFLOW_REF, '${{ github.workflow_ref }}');
-  assert.equal(participantPolicy.env.EVENT_PAYLOAD_PATH, '${{ github.event_path }}');
+  assert.equal(participantPolicy.env.EVENT_PAYLOAD_PATH, '${{ steps.normalized-event.outputs.event_path || github.event_path }}');
   assert.equal(participantPolicy.env.FORCE_READ_ONLY, "${{ github.event_name == 'workflow_dispatch' && format('{0}', github.event.inputs.force_read_only) || 'unset' }}");
   assert.match(participantPolicy.run, /resolve-delivery-participant\.mjs/);
   assert.equal(resolver.outputs.controller_commit, '${{ steps.participant-policy.outputs.controller_commit }}');

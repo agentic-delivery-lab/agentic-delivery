@@ -104,6 +104,14 @@ jobs:
       controller_commit: ${{ steps.participant-policy.outputs.controller_commit }}
       read_only_run: ${{ steps.participant-policy.outputs.read_only_run }}
     steps:
+      - name: Check out dispatch normalization boundary
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          path: dispatch-boundary
+          persist-credentials: false
+
       - name: Check out trusted participant registry bootstrap
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -117,10 +125,21 @@ jobs:
         with:
           runtime: node@24
           install: false
+          package-json-file: trusted-bootstrap/package.json
 
       - name: Install trusted bootstrap validation dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
         working-directory: trusted-bootstrap
+
+      - name: Normalize repository dispatch for pinned reader
+        id: normalized-event
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        env:
+          SOURCE_EVENT_PATH: ${{ github.event_path }}
+          NORMALIZED_EVENT_PATH: ${{ runner.temp }}/agentic-delivery-participant-event.json
+        run: |
+          node dispatch-boundary/scripts/normalize-repository-dispatch-event.mjs "$SOURCE_EVENT_PATH" "$NORMALIZED_EVENT_PATH"
+          echo "event_path=$NORMALIZED_EVENT_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Resolve caller and participant policy from trusted inputs
         id: participant-policy
@@ -133,7 +152,7 @@ jobs:
           ORIGIN_REPOSITORY: ${{ inputs.origin_repository || github.repository }}
           ORIGIN_REPOSITORY_ID: ${{ inputs.origin_repository_id || github.event.repository.id }}
           FORCE_READ_ONLY: ${{ github.event_name == 'workflow_dispatch' && format('{0}', github.event.inputs.force_read_only) || 'unset' }}
-          EVENT_PAYLOAD_PATH: ${{ github.event_path }}
+          EVENT_PAYLOAD_PATH: ${{ steps.normalized-event.outputs.event_path || github.event_path }}
         run: node scripts/lib/resolve-delivery-participant.mjs >> "$GITHUB_OUTPUT"
 
   deliver:
@@ -163,6 +182,32 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]
+
+      - name: Check out dispatch normalization boundary
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          path: dispatch-boundary
+          persist-credentials: false
+
+      - name: Set up dispatch normalization runtime
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+          package-json-file: dispatch-boundary/package.json
+
+      - name: Normalize repository dispatch for pinned reader
+        id: normalized-event
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        env:
+          SOURCE_EVENT_PATH: ${{ github.event_path }}
+          NORMALIZED_EVENT_PATH: ${{ runner.temp }}/agentic-delivery-source-event.json
+        run: |
+          node dispatch-boundary/scripts/normalize-repository-dispatch-event.mjs "$SOURCE_EVENT_PATH" "$NORMALIZED_EVENT_PATH"
+          echo "event_path=$NORMALIZED_EVENT_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Check out pinned controller
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -198,6 +243,7 @@ jobs:
 
       - name: Run source issue delivery
         env:
+          CONTROLLER_EVENT_PATH: ${{ steps.normalized-event.outputs.event_path || github.event_path }}
           GH_TOKEN: ${{ github.token }}
           GITHUB_GRAPHQL: 'true'
           CODEX_DELIVERY_APP_ID: ${{ vars.CODEX_DELIVERY_APP_ID }}
@@ -219,4 +265,4 @@ jobs:
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
           ISSUE_FIELD_BINDINGS_JSON: ${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}
           CODEX_MCP_SERVERS: ${{ vars.CODEX_MCP_SERVERS }}
-        run: GITHUB_EVENT_NAME="$CONTROLLER_EVENT_NAME" GITHUB_TRIGGERING_ACTOR="$CONTROLLER_TRIGGERING_ACTOR" node scripts/codex-delivery.mjs
+        run: GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" GITHUB_EVENT_NAME="$CONTROLLER_EVENT_NAME" GITHUB_TRIGGERING_ACTOR="$CONTROLLER_TRIGGERING_ACTOR" node scripts/codex-delivery.mjs

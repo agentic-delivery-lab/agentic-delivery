@@ -13,7 +13,12 @@ future clock-skew allowance. New webhook deliveries always include it. The
 gateway signs the complete version-1 envelope with the separate
 `AGENTIC_DELIVERY_DISPATCH_SECRET` using HMAC-SHA256, then sends it as the sole
 top-level `client_payload.envelope` property. This keeps the payload within
-GitHub's limit of 10 top-level properties. The invocation and observation
+GitHub's limit of 10 top-level properties. The transport wrapper contains
+opaque `json` text and a `delivery_id` copy for concurrency. Its decoder
+checks that the copied identity matches the signed envelope before restoring
+that envelope. Keeping the signed JSON as text prevents transport object-key
+reordering from invalidating the existing HMAC. Legacy object wrappers remain
+readable during deployment. The invocation and observation
 workflows copy the envelope into a per-run event file in the direct shape
 expected by the pinned controller readers; those readers validate the original
 schema and signature. The

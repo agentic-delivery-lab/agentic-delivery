@@ -2,6 +2,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { unwrapRepositoryDispatchClientPayload } from './lib/repository-dispatch-transport.mjs';
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -16,10 +17,11 @@ export function normalizeRepositoryDispatchEvent(event) {
   const clientPayload = event.client_payload;
   if (!isRecord(clientPayload)) throw new Error('A repository dispatch client payload is required.');
   if (!Object.hasOwn(clientPayload, 'envelope')) return event;
-  if (Object.keys(clientPayload).length !== 1 || !isRecord(clientPayload.envelope)) {
+  const envelope = unwrapRepositoryDispatchClientPayload(clientPayload);
+  if (envelope === clientPayload) {
     throw new Error('The wrapped repository dispatch envelope is malformed.');
   }
-  return { ...event, client_payload: clientPayload.envelope };
+  return { ...event, client_payload: envelope };
 }
 
 export async function normalizeRepositoryDispatchEventFile(sourcePath, targetPath) {

@@ -160,7 +160,15 @@ The ingress verifies the webhook signature and delivery ID, checks the exact
 actor catalog, and signs the complete version-1 dispatch envelope with the
 separate dispatch secret. It sends that envelope as the only top-level
 `client_payload` property, named `envelope`, to stay within GitHub's limit of
-10 top-level properties. The invocation preflight checks the signature and
+10 top-level properties. The wrapper contains `json`, opaque JSON text with
+the complete signed envelope, and `delivery_id`, a copy used for concurrency.
+The normalizer rejects a copied ID that differs from the decoded envelope,
+extra container keys, and invalid JSON without printing parser excerpts.
+This preserves the sender's property order for the existing HMAC algorithm.
+Legacy object wrappers and direct envelopes remain readable. Each reusable
+delivery job also normalizes its own event file before the immutable participant
+resolver or controller reads it; those jobs cannot share temporary files.
+The invocation preflight checks the signature and
 participant pin with the fixed bootstrap before checking out the selected
 controller. It then re-fetches the current comment or review, maps a pull
 request to its issue-linked source, and invokes the existing issue intake.

@@ -33,7 +33,7 @@ test('central delivery uses the explicit originating repository identity', () =>
 test('central delivery normalizes the controller event to the authenticated origin identity', () => {
   const normalized = normalizeOriginEvent({
     repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
-    client_payload: packRepositoryDispatchClientPayload({ event: 'issues', action: 'opened', source: { kind: 'issue', issue_number: 12 } }),
+    client_payload: packRepositoryDispatchClientPayload({ delivery_id: '12345678-1234-4234-8234-123456789012', event: 'issues', action: 'opened', source: { kind: 'issue', issue_number: 12 } }),
   }, {
     ORIGIN_REPOSITORY: 'agentic-delivery-lab/service-a', ORIGIN_REPOSITORY_ID: '777777777',
   });
