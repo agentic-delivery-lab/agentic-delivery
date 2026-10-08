@@ -374,8 +374,6 @@ export function routingOutcomeSchema(config) {
       route: { type: 'string', enum: [...ROUTES] },
       workType: { type: ['string', 'null'], enum: [...types, null] },
       lifecycleStage: { type: 'string', enum: stages },
-      // Temporary response compatibility alias. It is never used for writes.
-      state: { type: 'string', enum: [...new Set((config.legacy?.state_labels ? Object.keys(config.legacy.state_labels).map((label) => label.replace(/^state:/, '')) : stages))] },
       readiness: { type: 'string', enum: readiness },
       governance: { type: 'array', items: { type: 'string', enum: governanceDefinitions(config).map((item) => item.name ?? item.label) } },
       orchestrationPattern: { type: ['string', 'null'], enum: [...patterns, null] },

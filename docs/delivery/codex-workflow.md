@@ -44,6 +44,12 @@ the parent without a fixed child checklist. After discovery children provide
 new evidence, a repository-writer comment can request another refinement wave
 on the coordinating parent.
 
+The routing output schema uses only canonical fields and requires every property,
+as required by [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
+The proposal reader still accepts historical `state` aliases; the model is not asked
+to emit one. The router may read its isolated evidence file, with the existing file
+and network permissions enforcing that boundary.
+
 People do not set lifecycle fields during normal work. The routing model
 proposes a stage and readiness value, and the deterministic readiness gate must
 pass before GPT-6 Sol High starts Plan mode. After a successful plan, the
