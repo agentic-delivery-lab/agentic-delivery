@@ -195,6 +195,28 @@ jobs:
               const fresh = freshHistory.get(row.delivery_guid);
               return { ...row, fresh_delivery_id: fresh?.id ?? null, fresh_delivered_at: fresh?.delivered_at ?? null, fresh_installation_id: fresh?.installation_id ?? null, fresh_repository_id: fresh?.repository_id ?? null, fresh_webhook_status: fresh?.status_code ?? null, fresh_event: fresh?.event ?? null, fresh_action: fresh?.action ?? null, proposed_action: route ? 'complete_history_audit_first' : !fresh ? 'operator_disposition_required' : fresh.status_code >= 200 && fresh.status_code < 400 ? 'refresh_successful_observation' : 'inspect_before_requeue' };
             }) } }));
+            stage = 'pending-controller-delivery-metadata';
+            const pending = await sql.transaction([
+              sql`SELECT split_part(replay_key, ':', 2) AS guid, github_delivery_id::text AS id, status, attempt_count FROM public.webhook_controller_receipts WHERE status <> 'completed' ORDER BY created_at LIMIT 20`,
+            ], { readOnly: true, isolationLevel: 'RepeatableRead', fetchOptions: { signal: AbortSignal.timeout(30000) } });
+            for (const receipt of pending[0]) {
+              if (!/^[1-9][0-9]*$/.test(receipt.id ?? '')) throw new Error('Invalid pending delivery identity.');
+              const result = await api(`/app/hook/deliveries/${receipt.id}`, jwt);
+              const delivery = result.data;
+              const payload = delivery?.request?.payload;
+              console.log(JSON.stringify({ pending_controller_delivery: {
+                ...receipt, delivery_api_status: result.status,
+                guid_matches: delivery ? delivery.guid === receipt.guid : null,
+                delivered_at: delivery?.delivered_at ?? null,
+                event: delivery?.event ?? null, action: delivery?.action ?? null,
+                installation_id: delivery?.installation_id ?? null,
+                repository_id: String(payload?.repository?.id ?? ''),
+                repository: payload?.repository?.full_name ?? null,
+                issue_number: payload?.issue?.number ?? null,
+                pull_request_payload: Boolean(payload?.pull_request || payload?.issue?.pull_request),
+                webhook_status: delivery?.status_code ?? null,
+              } }));
+            }
             stage = 'exhausted-delivery-metadata';
             for (const row of [...exhausted].sort((a, b) => b.attempt_count - a.attempt_count || Number(b.observed_delivery_id !== b.stored_delivery_id) - Number(a.observed_delivery_id !== a.stored_delivery_id)).slice(0, 10)) {
               const id = freshHistory.get(row.delivery_guid)?.id ?? row.observed_delivery_id ?? row.stored_delivery_id;
