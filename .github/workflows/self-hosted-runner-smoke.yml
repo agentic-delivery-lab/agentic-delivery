@@ -9,6 +9,11 @@ on:
         type: boolean
         default: false
 
+      routing_schema_probe:
+        description: Diagnose one original and one corrected routing schema using isolated synthetic input
+        type: boolean
+        default: false
+
       codex_error_diagnostics:
         description: Classify recent runner errors without printing messages or starting a model turn
         type: boolean
@@ -67,6 +72,54 @@ jobs:
       - name: Check actual tool isolation without model execution
         if: inputs.codex
         run: node scripts/codex-sandbox-check.mjs
+
+      - name: Install isolated routing diagnostic dependencies
+        if: inputs.codex && inputs.routing_schema_probe
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Diagnose the routing output schema using synthetic input
+        if: inputs.codex && inputs.routing_schema_probe
+        run: |
+          node --input-type=module <<'NODE'
+          import { CodexClient } from './scripts/lib/codex-client.mjs';
+          import { runTurn } from './scripts/lib/codex-loop.mjs';
+          import { reasonIssueRouting } from './scripts/lib/issue-routing-agent.mjs';
+          import { loadLifecycleConfig } from './scripts/issue-intake.mjs';
+          const config = await loadLifecycleConfig();
+          const proposal = { route: 'hold', workType: null, lifecycleStage: config.fields.lifecycle_stage.options[0].id,
+            readiness: config.fields.readiness.options[0].id, governance: [], orchestrationPattern: null,
+            summary: 'Synthetic schema diagnostic', message: '' };
+          for (const corrected of [false, true]) {
+            const evidence = { corrected, invalid_schema: false, missing_state: false, completed: false };
+            try {
+              const result = await reasonIssueRouting({ repositoryRoot: process.cwd(), config,
+                issue: { number: 62, state: 'open', title: 'Synthetic schema diagnostic', body: '', labels: [] },
+                event: { kind: 'issues', action: 'edited' },
+                createClient(options) {
+                  const client = new CodexClient(options);
+                  client.on('message', ({ method, params }) => {
+                    if (!['error', 'turn/completed'].includes(method)) return;
+                    const message = String(params?.error?.message ?? params?.turn?.error?.message ?? '');
+                    evidence.invalid_schema ||= /invalid schema/i.test(message);
+                    evidence.missing_state ||= /(?:missing|include|including|required)[^\n]*['"]state['"]/i.test(message);
+                  });
+                  return client;
+                },
+                performTurn(options) {
+                  const schema = structuredClone(options.schema);
+                  if (corrected) delete schema.properties.state;
+                  return runTurn({ ...options, schema, prompt: `Return exactly this JSON proposal without tools: ${JSON.stringify(proposal)}`, stallTimeoutMs: 90000 });
+                },
+              });
+              evidence.completed = result.route === proposal.route && !Object.hasOwn(result, 'state');
+            } catch { /* Raw diagnostics and credentials remain private. */ }
+            console.log(JSON.stringify({ routing_schema_diagnostic: evidence }));
+            if ((!corrected && !(evidence.invalid_schema && evidence.missing_state)) || (corrected && !evidence.completed)) {
+              process.exitCode = 1;
+              break;
+            }
+          }
+          NODE
 
       - name: Classify recent Codex error metadata without a model turn
         if: inputs.codex && inputs.codex_error_diagnostics
