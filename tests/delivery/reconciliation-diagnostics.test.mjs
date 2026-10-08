@@ -19,7 +19,7 @@ test('reconciliation diagnostics require manual opt-in and isolate secrets from 
   assert.equal(job.env, undefined);
 });
 
-async function exercise({ excessivePermissions = false, deliverySample = false, missingDelivery = false, freshHistory = false, badPagination = false } = {}) {
+async function exercise({ excessivePermissions = false, deliverySample = false, missingDelivery = false, freshHistory = false, badPagination = false, continuedHistory = false } = {}) {
   const calls = [], output = [], transactions = [];
   const env = { CODEX_DELIVERY_APP_INSTALLATION_ID: '123', CODEX_DELIVERY_APP_ID: '456', CODEX_DELIVERY_APP_PRIVATE_KEY: 'private-key-fixture', CODEX_DELIVERY_DISPATCH_SECRET: 'secret-fixture-value-with-32-characters', AGENTIC_DELIVERY_REPLAY_DATABASE_URL: 'database-fixture-secret' };
   const processMock = { env };
@@ -29,7 +29,7 @@ async function exercise({ excessivePermissions = false, deliverySample = false, 
     const route = new URL(url).pathname;
     calls.push({ route, ...options });
     if (route.startsWith('/app/hook/deliveries/')) return new Response(JSON.stringify({ guid: '12345678-1234-4234-8234-123456789012', status_code: 500, delivered_at: '2026-10-08T00:00:00Z', event: 'pull_request', action: 'closed', request: { payload: { private: 'PRIVATE-DELIVERY-CONTENT' } } }), { status: missingDelivery ? 404 : 200 });
-    if (route === '/app/hook/deliveries' && new URL(url).searchParams.get('per_page') === '100' && freshHistory) return new Response('[{"id":3846548593221574658,"guid":"12345678-1234-4234-8234-123456789012","delivered_at":"2026-10-08T01:00:00Z","status_code":202}]', { headers: badPagination ? { link: '<https://untrusted.invalid/steal>; rel="next"' } : {} });
+    if (route === '/app/hook/deliveries' && new URL(url).searchParams.get('per_page') === '100' && freshHistory) return new Response('[{"id":3846548593221574658,"guid":"12345678-1234-4234-8234-123456789012","delivered_at":"2026-10-08T01:00:00Z","status_code":202}]', { headers: badPagination ? { link: '<https://untrusted.invalid/steal>; rel="next"' } : continuedHistory ? { link: '<https://api.github.com/app/hook/deliveries?per_page=100&cursor=fixture>; rel="next"' } : {} });
     const data = route.endsWith('/access_tokens') ? { token: 'temporary-token-fixture', permissions: excessivePermissions ? { contents: 'write' } : { metadata: 'read' } }
       : route === '/installation/repositories' ? { repositories: [{ id: 1, full_name: 'agentic-delivery-lab/agentic-delivery' }] }
       : route === '/app/hook/deliveries' ? []
@@ -95,4 +95,11 @@ test('fresh history audit preserves numeric ID tokens and rejects pagination out
   assert.equal(rejected.processMock.exitCode, 1);
   assert.match(rejected.output.join('\n'), /failed at fresh-webhook-history/);
   assert.equal(rejected.calls.at(-1).method, 'DELETE');
+});
+
+test('fresh history follows valid cursors but stops at its explicit twenty-page bound', async () => {
+  const result = await exercise({ freshHistory: true, continuedHistory: true });
+  assert.equal(result.processMock.exitCode, undefined);
+  assert.equal(result.calls.filter((item) => item.route === '/app/hook/deliveries').length, 21);
+  assert.match(result.output.join('\n'), /pages":20,"incomplete":true/);
 });

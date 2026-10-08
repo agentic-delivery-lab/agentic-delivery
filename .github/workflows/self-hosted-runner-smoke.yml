@@ -178,7 +178,7 @@ jobs:
             let route = '/app/hook/deliveries?per_page=100';
             let pages = 0;
             const freshHistory = new Map();
-            while (route && pages < 5) {
+            while (route && pages < 20) {
               const result = await api(route, jwt);
               if (!Array.isArray(result.data)) throw new Error('Invalid history page.');
               pages += 1;
