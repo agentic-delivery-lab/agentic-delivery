@@ -111,11 +111,12 @@ jobs:
               ...(body ? { body: JSON.stringify(body) } : {}),
               signal: AbortSignal.timeout(30000),
             });
+            if (response.status === 404 && method === 'GET' && /^\/app\/hook\/deliveries\/[1-9][0-9]*$/.test(route)) return { data: null, status: 404 };
             if (!response.ok) {
               console.log(JSON.stringify({ diagnostic_stage: stage, http_status: response.status }));
               throw new Error('Diagnostic API request failed.');
             }
-            return { data: response.status === 204 ? null : await response.json(), next: (response.headers.get('link') ?? '').includes('rel="next"') };
+            return { status: response.status, data: response.status === 204 ? null : await response.json(), next: (response.headers.get('link') ?? '').includes('rel="next"') };
           }
           try {
             const installationId = process.env.CODEX_DELIVERY_APP_INSTALLATION_ID;
@@ -156,8 +157,18 @@ jobs:
               sql`SELECT request_status, count(*)::text AS count, max(attempt_count) AS max_attempts, min(requested_at) AS oldest_request FROM public.webhook_redelivery_requests GROUP BY request_status`,
               sql`SELECT checkpoint_at, updated_at, (scan_cursor IS NOT NULL) AS scan_pending FROM public.webhook_reconciler_state`,
               sql`SELECT count(*)::text AS observations FROM public.webhook_reconciler_observations`,
+              sql`SELECT q.delivery_guid, q.github_delivery_id::text AS stored_delivery_id, q.attempt_count, q.requested_at, o.newest_delivery_id::text AS observed_delivery_id, o.newest_delivery_at, o.has_success, c.status AS controller_status FROM public.webhook_redelivery_requests q LEFT JOIN public.webhook_reconciler_observations o USING (delivery_guid) LEFT JOIN public.webhook_controller_receipts c ON split_part(c.replay_key, ':', 2) = q.delivery_guid WHERE q.request_status = 'exhausted' ORDER BY q.attempt_count, q.requested_at, q.delivery_guid LIMIT 250`,
             ], { readOnly: true, isolationLevel: 'RepeatableRead', fetchOptions: { signal: AbortSignal.timeout(30000) } });
             console.log(JSON.stringify({ neon_read_only_snapshot: { columns: results[0], dispatches: results[1], receipts: results[2], redeliveries: results[3], scan: results[4], observations: results[5] } }));
+            const exhausted = results[6];
+            console.log(JSON.stringify({ exhausted_audit: { bounded_rows: exhausted.length, limit_reached: exhausted.length === 250, with_observation: exhausted.filter((row) => row.observed_delivery_id !== null).length, with_successful_webhook: exhausted.filter((row) => row.has_success === true).length, changed_delivery_id: exhausted.filter((row) => row.observed_delivery_id !== null && row.observed_delivery_id !== row.stored_delivery_id).length, below_attempt_limit: exhausted.filter((row) => row.attempt_count < 8).length, with_controller_receipt: exhausted.filter((row) => row.controller_status !== null).length } }));
+            stage = 'exhausted-delivery-metadata';
+            for (const row of exhausted.slice(0, 10)) {
+              const id = row.observed_delivery_id ?? row.stored_delivery_id;
+              if (!/^[1-9][0-9]*$/.test(id)) throw new Error('Invalid exact delivery identity.');
+              const result = await api(`/app/hook/deliveries/${id}`, jwt);
+              console.log(JSON.stringify({ exhausted_delivery_sample: { delivery_guid: row.delivery_guid, stored_delivery_id: row.stored_delivery_id, observed_delivery_id: row.observed_delivery_id, attempts: row.attempt_count, requested_at: row.requested_at, observed_success: row.has_success, controller_status: row.controller_status, delivery_api_status: result.status, guid_matches: result.data ? result.data.guid === row.delivery_guid : null, webhook_status: result.data?.status_code ?? null, delivered_at: result.data?.delivered_at ?? null, event: result.data?.event ?? null, action: result.data?.action ?? null } }));
+            }
           } catch {
             console.error(`Reconciliation diagnostic failed at ${stage}; raw errors and credentials omitted.`);
             process.exitCode = 1;

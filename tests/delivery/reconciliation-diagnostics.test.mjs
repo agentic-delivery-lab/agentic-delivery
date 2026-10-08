@@ -19,15 +19,16 @@ test('reconciliation diagnostics require manual opt-in and isolate secrets from 
   assert.equal(job.env, undefined);
 });
 
-async function exercise({ excessivePermissions = false } = {}) {
+async function exercise({ excessivePermissions = false, deliverySample = false, missingDelivery = false } = {}) {
   const calls = [], output = [], transactions = [];
   const env = { CODEX_DELIVERY_APP_INSTALLATION_ID: '123', CODEX_DELIVERY_APP_ID: '456', CODEX_DELIVERY_APP_PRIVATE_KEY: 'private-key-fixture', CODEX_DELIVERY_DISPATCH_SECRET: 'secret-fixture-value-with-32-characters', AGENTIC_DELIVERY_REPLAY_DATABASE_URL: 'database-fixture-secret' };
   const processMock = { env };
   const sql = (parts, ...values) => ({ statement: parts.join('?'), values });
-  sql.transaction = async (queries, options) => { transactions.push({ queries, options }); return queries.map(() => []); };
+  sql.transaction = async (queries, options) => { transactions.push({ queries, options }); return queries.map((_, index) => index === 6 && deliverySample ? Array.from({ length: 11 }, () => ({ delivery_guid: '12345678-1234-4234-8234-123456789012', stored_delivery_id: '3846548593221574656', observed_delivery_id: '3846548593221574657', attempt_count: 1, requested_at: '2026-10-05T00:00:00Z', newest_delivery_at: '2026-10-08T00:00:00Z', has_success: false, controller_status: null })) : []); };
   const fetchMock = async (url, options) => {
     const route = new URL(url).pathname;
     calls.push({ route, ...options });
+    if (route.startsWith('/app/hook/deliveries/')) return new Response(JSON.stringify({ guid: '12345678-1234-4234-8234-123456789012', status_code: 500, delivered_at: '2026-10-08T00:00:00Z', event: 'pull_request', action: 'closed', request: { payload: { private: 'PRIVATE-DELIVERY-CONTENT' } } }), { status: missingDelivery ? 404 : 200 });
     const data = route.endsWith('/access_tokens') ? { token: 'temporary-token-fixture', permissions: excessivePermissions ? { contents: 'write' } : { metadata: 'read' } }
       : route === '/installation/repositories' ? { repositories: [{ id: 1, full_name: 'agentic-delivery-lab/agentic-delivery' }] }
       : route === '/app/hook/deliveries' ? []
@@ -64,4 +65,20 @@ test('diagnostics reject excessive temporary-token permissions and still revoke 
   assert.equal(result.transactions.length, 0);
   assert.equal(result.calls.at(-1).method, 'DELETE');
   assert.match(result.output.join('\n'), /failed at metadata-token; raw errors and credentials omitted/);
+});
+
+test('exhausted metadata audit preserves exact IDs, bounds API reads and omits delivery content', async () => {
+  for (const missingDelivery of [false, true]) {
+    const result = await exercise({ deliverySample: true, missingDelivery });
+    assert.equal(result.processMock.exitCode, undefined);
+    const reads = result.calls.filter((item) => item.route.startsWith('/app/hook/deliveries/'));
+    assert.equal(reads.length, 10);
+    assert.ok(reads.every((item) => item.method === 'GET' && item.route.endsWith('/3846548593221574657')));
+    assert.ok(result.transactions[0].queries.every((item) => /^SELECT /i.test(item.statement)));
+    const output = result.output.join('\n');
+    assert.ok(!output.includes('PRIVATE-DELIVERY-CONTENT'));
+    assert.match(output, /changed_delivery_id":11/);
+    assert.match(output, new RegExp(`delivery_api_status":${missingDelivery ? 404 : 200}`));
+    assert.equal(result.calls.at(-1).method, 'DELETE');
+  }
 });
