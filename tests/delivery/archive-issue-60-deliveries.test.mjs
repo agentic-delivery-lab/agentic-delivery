@@ -93,6 +93,7 @@ test('approved operator fixture previews without writes and applies one serializ
   assert.equal(validateManifest(text).length, 161);
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   const env = { RECOVERY_MANIFEST: text, GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+    GITHUB_REPOSITORY_ID: '1358455028',
     GITHUB_REF: 'refs/heads/main', GITHUB_SHA: 'a'.repeat(40), GITHUB_RUN_ID: '123', GITHUB_ACTOR: 'operator',
     CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060', CODEX_DELIVERY_APP_ID: '5011055',
     CODEX_DELIVERY_APP_PRIVATE_KEY: privateKey.export({ type: 'pkcs8', format: 'pem' }) };

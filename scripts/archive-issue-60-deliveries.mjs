@@ -60,7 +60,8 @@ export async function verifyAbsentHistory(rows, jwt, fetchImpl = fetch) {
 export async function recover({ env = process.env, sql, fetchImpl = fetch } = {}) {
   if (!['preview', 'apply'].includes(env.RECOVERY_MODE)) throw new Error('Select preview or apply explicitly.');
   const rows = validateManifest(env.RECOVERY_MANIFEST);
-  if (env.GITHUB_REPOSITORY !== 'agentic-delivery-lab/agentic-delivery'
+  if (env.GITHUB_REPOSITORY_ID !== '1358455028'
+    || !/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(env.GITHUB_REPOSITORY ?? '')
     || env.CODEX_DELIVERY_APP_INSTALLATION_ID !== INSTALLATION_ID) {
     throw new Error('The recovery repository or installation is invalid.');
   }
@@ -95,7 +96,7 @@ export async function recover({ env = process.env, sql, fetchImpl = fetch } = {}
   if (env.RECOVERY_MODE === 'preview') return { mode: 'preview', candidates: rows.length, history_pages: history.pages };
   if (!/^[0-9]+$/.test(env.GITHUB_RUN_ID ?? '') || !/^[0-9a-f]{40}$/.test(env.GITHUB_SHA ?? '')
     || !/^[a-zA-Z0-9-]+$/.test(env.GITHUB_ACTOR ?? '')) throw new Error('Missing operator audit identity.');
-  const evidence = { source_issue: 'https://github.com/agentic-delivery-lab/agentic-delivery/issues/60',
+  const evidence = { source_issue: `https://github.com/${env.GITHUB_REPOSITORY}/issues/60`,
     approved_evidence_run: '37762823635', evidence_sha256: EVIDENCE_SHA256,
     manifest_sha256: MANIFEST_SHA256, history, operator: env.GITHUB_ACTOR,
     run_id: env.GITHUB_RUN_ID, implementation_commit: env.GITHUB_SHA };
