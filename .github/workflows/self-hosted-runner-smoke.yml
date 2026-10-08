@@ -20,12 +20,23 @@ on:
         type: string
         default: ''
 
+      reconciliation_followup:
+        description: Issue 60 follow-up (scan sends no replay; replay_one sends at most one)
+        type: choice
+        options: [disabled, inspect, scan, replay_one]
+        default: disabled
+
+      recovery_delivery_guid:
+        description: Exact approved canary GUID for replay_one
+        type: string
+        default: ''
+
 permissions:
   contents: read
 
 jobs:
   smoke:
-    if: ${{ inputs.reconciliation_recovery == 'disabled' }}
+    if: ${{ inputs.reconciliation_recovery == 'disabled' && inputs.reconciliation_followup == 'disabled' }}
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 5
     env:
@@ -70,7 +81,7 @@ jobs:
         run: node scripts/codex-sandbox-check.mjs
 
   reconciliation-recovery:
-    if: ${{ inputs.reconciliation_recovery != 'disabled' && github.ref == 'refs/heads/main' }}
+    if: ${{ inputs.reconciliation_recovery != 'disabled' && inputs.reconciliation_followup == 'disabled' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 7
     concurrency:
@@ -99,3 +110,33 @@ jobs:
           CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
           AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}
         run: node scripts/archive-issue-60-deliveries.mjs
+
+  reconciliation-followup:
+    if: ${{ inputs.reconciliation_followup != 'disabled' && inputs.reconciliation_recovery == 'disabled' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    concurrency:
+      group: issue-60-reconciliation-recovery
+      cancel-in-progress: false
+    steps:
+      - name: Check out the reviewed recovery implementation
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Install recovery dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Inspect, scan without replays, or recover one canary
+        env:
+          CODEX_DELIVERY_APP_ID: ${{ vars.CODEX_DELIVERY_APP_ID }}
+          CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ vars.CODEX_DELIVERY_APP_INSTALLATION_ID }}
+          CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
+          AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}
+        run: node scripts/recover-issue-60-reconciliation.mjs

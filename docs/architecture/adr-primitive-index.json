@@ -302,6 +302,7 @@
         "github-app-token-provider",
         "intake-caller-provenance-guard",
         "intake-participation-policy",
+        "issue-60-bounded-reconciliation-recovery",
         "issue-60-webhook-delivery-archive",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
@@ -363,6 +364,7 @@
         "github-app-token-provider",
         "intake-caller-provenance-guard",
         "intake-participation-policy",
+        "issue-60-bounded-reconciliation-recovery",
         "issue-60-webhook-delivery-archive",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
@@ -809,6 +811,19 @@
       "path": "scripts/lib/intake-policy.mjs",
       "location": "scripts/lib/intake-policy.mjs",
       "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "issue-60-bounded-reconciliation-recovery",
+      "path": "scripts/recover-issue-60-reconciliation.mjs",
+      "location": "scripts/recover-issue-60-reconciliation.mjs",
+      "kind": "script",
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0018"

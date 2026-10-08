@@ -85,7 +85,7 @@ test('recovery workflow keeps protected credentials step-scoped and defaults to 
   assert.match(workflow, /permissions:\s+contents: read/);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /frozen-lockfile --ignore-scripts/);
-  assert.match(workflow, /inputs.reconciliation_recovery != 'disabled' && github.ref == 'refs\/heads\/main'/);
+  assert.match(workflow, /inputs.reconciliation_recovery != 'disabled' && inputs.reconciliation_followup == 'disabled' && github.ref == 'refs\/heads\/main'/);
   assert.doesNotMatch(workflow, /secrets: inherit|\$\{\{ inputs.recovery_manifest \}\}/);
 });
 

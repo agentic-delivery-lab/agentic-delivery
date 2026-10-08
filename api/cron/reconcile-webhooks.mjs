@@ -395,7 +395,10 @@ async function requestRedelivery({ deliveryId, guid, jwt, fetchImpl, store, logg
   return { requested: true };
 }
 
-export async function reconcileWebhookDeliveries({ req, res, env = process.env, fetchImpl = fetch, store, logger, now = () => Date.now() }) {
+export async function reconcileWebhookDeliveries({ req, res, env = process.env, fetchImpl = fetch, store, logger, now = () => Date.now(), redeliveryLimit = CONTROLLER_RECEIPT_LIMIT }) {
+  if (!Number.isInteger(redeliveryLimit) || redeliveryLimit < 0 || redeliveryLimit > CONTROLLER_RECEIPT_LIMIT) {
+    return response(res, 400, { error: 'The operator redelivery limit is invalid.' });
+  }
   if (req.method !== 'GET') return response(res, 405, { error: 'GET is required.' });
   const config = configFrom(env);
   if (!bearerMatches(req.headers?.authorization ?? req.headers?.Authorization, config.cronSecret)) {
@@ -475,8 +478,8 @@ export async function reconcileWebhookDeliveries({ req, res, env = process.env, 
     }
     await activeStore.queueRedeliveryRequests([...redeliveryQueue.values()]);
 
-    const dueRedeliveries = await activeStore.dueRedeliveryRequests({
-      limit: CONTROLLER_RECEIPT_LIMIT,
+    const dueRedeliveries = redeliveryLimit === 0 ? [] : await activeStore.dueRedeliveryRequests({
+      limit: redeliveryLimit,
       includeQueued: !nextCursor,
     });
     let requested = 0;

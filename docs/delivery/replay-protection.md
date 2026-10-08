@@ -186,6 +186,40 @@ bounded steps and verify checkpoint progress separately. Recover pending
 controller receipts with fresh, limited delivery and sufficient runner capacity.
 Keep the five-minute signed-envelope window and participant modes unchanged.
 
+The same reviewed-main operator workflow provides `reconciliation_followup`:
+
+- `inspect` reads archive count, guard enforcement, queue states, scan state and
+  pending receipt identities in a read-only repeatable-read transaction.
+- `scan` uses the normal reconciliation algorithm with an internal zero-request
+  limit. It updates observations, receipt links and queue outcomes, preserves
+  unresolved checkpoint holds, and sends no redelivery API requests. Repeat
+  while `scan_continuation_pending` is true. A pending queue can retain the last
+  cursor after a complete scan; this does not establish receipt completion.
+- `replay_one` requires an explicit `recovery_delivery_guid`. Before writing,
+  a fresh delivery-detail response must match the exact receipt ID, GUID, App
+  installation and enrolled repository, and an actual issue payload from an
+  `issues` or `issue_comment` event (pull requests are rejected). Only central issue #62 and public
+  `.github` issue #11 are approved recovery canaries. The delivery timestamp
+  must be valid and younger than three days minus the operator job's seven-minute
+  execution margin before any audit/requeue write. Migration 0007 retains the
+  full original queue and receipt metadata plus operator and source evidence.
+  The selected queue is aligned to the exact freshly verified receipt delivery ID;
+  an older queue ID remains in the audit snapshot. An exhausted selected queue
+  can then be requeued with its retry count reset;
+  receipt counters are unchanged. The normal claim remains authoritative.
+  Every API write is limited to one POST for the verified exact delivery ID;
+  foreign endpoints and additional POSTs fail closed. A changed target or a run
+  without exactly one accepted request fails instead of claiming recovery.
+
+Keep archival and follow-up inputs mutually exclusive. Both operations share
+an operator concurrency group and run without a Codex model turn. Before a
+replay, verify that the self-hosted runner is online and idle and that the model
+budget allows the downstream invocation. After acceptance, wait for actual
+receipt completion and independently read back issue state before choosing
+another GUID. Keep the five-minute signing window, participant modes, pins and
+issue fields intact. Preserve migration 0007 and its audit during rollback;
+never reset all pending receipts or queue counts in bulk.
+
 For rollback, retain migration 0006 and the archive. After stopping concurrent
 reconciliation, review each original `queue_snapshot` before restoring a specific
 queue row to `exhausted`; never bulk reset attempt counters or claim success.

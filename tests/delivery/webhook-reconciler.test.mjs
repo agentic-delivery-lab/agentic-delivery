@@ -1005,3 +1005,48 @@ test('reconciler rejects missing and incorrect Cron bearer credentials before ac
     assert.equal(res.statusCode, 401);
   }
 });
+
+test('operator zero-request scan refreshes success and links pending receipts while retaining checkpoint hold', async () => {
+  const store = makeStore({ dueReceipts: [{ replay_key: `163255060:${deliveryB}`, github_delivery_id: '100' }] });
+  store.redeliveryQueue.set(deliveryA, { delivery_guid: deliveryA, github_delivery_id: '101', request_status: 'accepted', attempt_count: 8 });
+  store.dueRedeliveryRequests = async () => assert.fail('Scan must not select replays.');
+  const res = output();
+  await reconcileWebhookDeliveries({ req: cronRequest(), res, env: cronEnv(), store, redeliveryLimit: 0,
+    fetchImpl: async (_, options) => {
+      assert.notEqual(options.method, 'POST');
+      return response(200, [deliveryA, deliveryB].map((guid, index) => ({ id: 101 - index, guid,
+        delivered_at: new Date().toISOString(), status: 'OK', installation_id: '163255060' })));
+    } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(JSON.parse(res.body).redelivery_requests, 0);
+  assert.ok(store.completed.includes(deliveryA));
+  assert.ok(store.linked.some((entry) => entry.key === `163255060:${deliveryB}`));
+  assert.equal(store.redeliveryQueue.get(deliveryB).request_status, 'queued');
+  assert.equal(store.advanced.length, 0);
+  assert.equal(JSON.parse(res.body).redelivery_queue_pending, true);
+});
+
+test('operator one-request limit permits one replay among multiple failed deliveries', async () => {
+  const store = makeStore();
+  const res = output();
+  let posts = 0;
+  await reconcileWebhookDeliveries({ req: cronRequest(), res, env: cronEnv(), store, redeliveryLimit: 1,
+    fetchImpl: async (_, options) => {
+      if (options.method === 'POST') { posts += 1; return response(202); }
+      return response(200, [deliveryA, deliveryB].map((guid, index) => ({ id: 101 - index, guid,
+        delivered_at: new Date().toISOString(), status: 'FAIL', installation_id: '163255060' })));
+    } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(posts, 1);
+  assert.equal(JSON.parse(res.body).redelivery_requests, 1);
+  assert.equal(store.advanced.length, 0);
+});
+
+test('operator limit rejects invalid values before accessing configuration or the network', async () => {
+  for (const redeliveryLimit of [-1, 251, 0.5, '0']) {
+    const res = output();
+    await reconcileWebhookDeliveries({ req: cronRequest(), res, env: {}, redeliveryLimit,
+      fetchImpl: async () => assert.fail('No network expected.') });
+    assert.equal(res.statusCode, 400);
+  }
+});
