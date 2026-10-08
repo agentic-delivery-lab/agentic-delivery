@@ -82,6 +82,9 @@ SELECT pg_temp.archive_issue_60_deliveries(${manifest}, '{"manifest_sha256":"fix
 ${bind(claim)};
 ${bind(requeue)};
 ${bind(complete)};
+-- Replay the old negative status check and old unconditional completion path.
+${bind(claim).replace("stored.request_status IN ('queued', 'requesting', 'accepted')", "stored.request_status <> 'exhausted'")};
+DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = '${firstGuid}';
 CREATE TEMP TABLE due_results AS ${bind(due)};
 CREATE TEMP TABLE pending_results AS ${bind(pending)};
 DO $$ BEGIN
@@ -100,7 +103,17 @@ DO $$ DECLARE rejected boolean := false; BEGIN
 END $$;
 DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = '${firstGuid}';
 DELETE FROM public.webhook_reconciler_observations;
-DO $$ BEGIN IF (SELECT count(*) FROM public.webhook_redelivery_archive) <> 161 THEN RAISE EXCEPTION 'Audit must survive normal cleanup'; END IF; END $$;
+DO $$ BEGIN
+  IF (SELECT count(*) FROM public.webhook_redelivery_archive) <> 161
+    OR (SELECT count(*) FROM public.webhook_redelivery_requests WHERE request_status = 'archived') <> 161
+  THEN RAISE EXCEPTION 'Archive and guard must survive legacy cleanup'; END IF;
+END $$;
+-- Explicit rollback first restores the blocking state; normal cleanup then works.
+UPDATE public.webhook_redelivery_requests SET request_status = 'exhausted' WHERE delivery_guid = '${firstGuid}';
+DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = '${firstGuid}';
+DO $$ BEGIN IF (SELECT count(*) FROM public.webhook_redelivery_requests) <> 160
+  OR (SELECT count(*) FROM public.webhook_redelivery_archive) <> 161
+  THEN RAISE EXCEPTION 'Explicit restoration must retain the audit'; END IF; END $$;
 ROLLBACK;
 `;
   const directory = await mkdtemp(path.join(os.tmpdir(), 'issue-60-postgres-'));

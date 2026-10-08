@@ -159,6 +159,10 @@ The queue row remains as `archived`, preserving its retry counters and delivery
 identity. Queue claims, due selection and automatic requeue exclude that state.
 Successful observations also retain the archived queue row, so a later scan
 cannot recreate an automatic retry for the same GUID.
+A database trigger preserves the guard against older pinned claim and completion
+code sharing the store: deletion and transitions back to automatic retry states
+are skipped. Explicit operator restoration to the blocking `exhausted` state
+remains possible. This trigger and the archive are retained during rollback.
 It does not hold the checkpoint and does not mean the original work completed.
 
 For the explicitly approved Issue #60 recovery, use `self-hosted-runner-smoke`

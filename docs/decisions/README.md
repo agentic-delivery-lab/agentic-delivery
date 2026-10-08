@@ -70,7 +70,8 @@ After a successful merge, remove active labels and close the ADR tracking issue.
 ## Records
 
 Issue #60 also tracks the explicit operator disposition amendment to ADR-0018
-in the webhook delivery archive review pull request. It retains historical
+in [PR #96](https://github.com/agentic-delivery-lab/agentic-delivery/pull/96).
+It retains historical
 delivery metadata without claiming work completion. The broader source issue
 remains open for reconciliation and controller receipt recovery.
 

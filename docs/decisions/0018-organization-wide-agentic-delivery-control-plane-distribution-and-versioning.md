@@ -265,7 +265,11 @@ that no controller receipt is linked. A durable webhook delivery archive
 retains the original queue, observation and scan metadata, reason and operator
 evidence. The terminal `archived` queue status prevents automatic retry and
 checkpoint blocking, without establishing completion of original work. Age
-alone cannot select a disposition. The reviewed operator operation checks an
+alone cannot select a disposition.
+The database also retains the queue guard against deletion or automatic retry
+updates from older immutable controller pins sharing the store. An explicit
+operator restoration to the blocking exhausted state can release that guard.
+The reviewed operator operation checks an
 exact approved manifest and current rows, then archives and restarts stale
 pagination atomically; ordinary reconciliation advances its own checkpoint.
 Retaining exhausted rows indefinitely remains the default when explicit
