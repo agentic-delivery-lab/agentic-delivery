@@ -165,6 +165,9 @@ the complete signed envelope, and `delivery_id`, a copy used for concurrency.
 The normalizer rejects a copied ID that differs from the decoded envelope,
 extra container keys, and invalid JSON without printing parser excerpts.
 This preserves the sender's property order for the existing HMAC algorithm.
+The immutable observation validator reads the registry from the trusted workflow
+revision, matching the pre-check; its historical bundled registry cannot define
+the current enrollment or controller selection.
 Legacy object wrappers and direct envelopes remain readable. Each reusable
 delivery job also normalizes its own event file before the immutable participant
 resolver or controller reads it; those jobs cannot share temporary files.

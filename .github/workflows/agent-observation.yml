@@ -71,4 +71,4 @@ jobs:
           CONTROLLER_EVENT_PATH: ${{ steps.normalized-event.outputs.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}
-        run: GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node controller/scripts/validate-observation-event.mjs controller
+        run: GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node controller/scripts/validate-observation-event.mjs dispatch-boundary
