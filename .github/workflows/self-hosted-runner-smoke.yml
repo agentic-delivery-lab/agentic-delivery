@@ -9,11 +9,17 @@ on:
         type: boolean
         default: false
 
+      reconciliation_diagnostics:
+        description: Read App installation metadata and Neon reconciliation state without changing work state
+        type: boolean
+        default: false
+
 permissions:
   contents: read
 
 jobs:
   smoke:
+    if: ${{ !inputs.reconciliation_diagnostics }}
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 5
     env:
@@ -56,3 +62,110 @@ jobs:
       - name: Check actual tool isolation without model execution
         if: inputs.codex
         run: node scripts/codex-sandbox-check.mjs
+
+  reconciliation-diagnostics:
+    if: ${{ inputs.reconciliation_diagnostics }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the diagnostic revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Install diagnostic dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Read protected reconciliation configuration and state
+        env:
+          CODEX_DELIVERY_APP_ID: ${{ vars.CODEX_DELIVERY_APP_ID }}
+          CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ vars.CODEX_DELIVERY_APP_INSTALLATION_ID }}
+          CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
+          CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}
+          AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { neon } from '@neondatabase/serverless';
+          import { createGithubAppJwt } from './scripts/lib/github-app.mjs';
+          import { loadParticipantRegistry } from './scripts/lib/participant-registry.mjs';
+
+          let stage = 'configuration';
+          let installationToken;
+          async function api(route, token, method = 'GET', body) {
+            const response = await fetch(`https://api.github.com${route}`, {
+              method,
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2026-03-10',
+                'Content-Type': 'application/json',
+              },
+              ...(body ? { body: JSON.stringify(body) } : {}),
+              signal: AbortSignal.timeout(30000),
+            });
+            if (!response.ok) {
+              console.log(JSON.stringify({ diagnostic_stage: stage, http_status: response.status }));
+              throw new Error('Diagnostic API request failed.');
+            }
+            return { data: response.status === 204 ? null : await response.json(), next: (response.headers.get('link') ?? '').includes('rel="next"') };
+          }
+          try {
+            const installationId = process.env.CODEX_DELIVERY_APP_INSTALLATION_ID;
+            if (!/^[1-9][0-9]*$/.test(installationId ?? '')) throw new Error('Missing installation identity.');
+            const registry = await loadParticipantRegistry();
+            if (!registry.valid) throw new Error('Invalid participant registry.');
+            const jwt = createGithubAppJwt({ appId: process.env.CODEX_DELIVERY_APP_ID, privateKey: process.env.CODEX_DELIVERY_APP_PRIVATE_KEY });
+            stage = 'app-installation';
+            const { data: installation } = await api(`/app/installations/${installationId}`, jwt);
+            console.log(JSON.stringify({ installation_id: installation.id, app_id: installation.app_id, repository_selection: installation.repository_selection, suspended: installation.suspended_at !== null }));
+            stage = 'metadata-token';
+            // Full installation metadata is needed to audit its repository selection.
+            // This temporary token cannot read issue content or change repository state.
+            const { data: issued } = await api(`/app/installations/${installationId}/access_tokens`, jwt, 'POST', { permissions: { metadata: 'read' } });
+            installationToken = issued.token;
+            if (!installationToken || Object.entries(issued.permissions ?? {}).some(([key, value]) => key !== 'metadata' || value !== 'read')) throw new Error('Unexpected token permissions.');
+            stage = 'repository-selection';
+            const selected = [];
+            let incomplete = true;
+            for (let page = 1; page <= 5; page += 1) {
+              const result = await api(`/installation/repositories?per_page=100&page=${page}`, installationToken);
+              selected.push(...result.data.repositories);
+              if (!result.next) { incomplete = false; break; }
+            }
+            const expected = [...registry.participants.values()].filter((item) => item.mode !== 'disabled');
+            console.log(JSON.stringify({ repository_scan_incomplete: incomplete, selected_count: selected.length, unexpected_count: selected.filter((item) => !expected.some((entry) => String(entry.repositoryId) === String(item.id))).length, participants: expected.map((entry) => ({ repository: entry.expectedFullName, selected_with_expected_identity: selected.some((item) => String(item.id) === String(entry.repositoryId) && item.full_name === entry.expectedFullName) })) }));
+            stage = 'recent-webhook-deliveries';
+            const { data: deliveries } = await api('/app/hook/deliveries?per_page=3', jwt);
+            console.log(JSON.stringify({ recent_webhook_deliveries: deliveries.map((item) => ({ delivered_at: item.delivered_at, status_code: item.status_code, event: item.event, action: item.action })) }));
+            const secret = process.env.CODEX_DELIVERY_DISPATCH_SECRET ?? '';
+            console.log(JSON.stringify({ dispatch_secret_present: secret.length > 0, dispatch_secret_minimum_length_met: secret.length >= 32, dispatch_secret_boundary_whitespace: secret !== secret.trim() }));
+            stage = 'neon-read-only-snapshot';
+            const sql = neon(process.env.AGENTIC_DELIVERY_REPLAY_DATABASE_URL);
+            const results = await sql.transaction([
+              sql`SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('webhook_replay_claims', 'webhook_controller_receipts', 'webhook_reconciler_state', 'webhook_redelivery_requests', 'webhook_reconciler_observations') ORDER BY table_name, ordinal_position`,
+              sql`SELECT dispatch_status, count(*)::text AS count FROM public.webhook_replay_claims GROUP BY dispatch_status`,
+              sql`SELECT status, count(*)::text AS count, max(attempt_count) AS max_attempts FROM public.webhook_controller_receipts GROUP BY status`,
+              sql`SELECT request_status, count(*)::text AS count, max(attempt_count) AS max_attempts, min(requested_at) AS oldest_request FROM public.webhook_redelivery_requests GROUP BY request_status`,
+              sql`SELECT checkpoint_at, updated_at, (scan_cursor IS NOT NULL) AS scan_pending FROM public.webhook_reconciler_state`,
+              sql`SELECT count(*)::text AS observations FROM public.webhook_reconciler_observations`,
+            ], { readOnly: true, isolationLevel: 'RepeatableRead', fetchOptions: { signal: AbortSignal.timeout(30000) } });
+            console.log(JSON.stringify({ neon_read_only_snapshot: { columns: results[0], dispatches: results[1], receipts: results[2], redeliveries: results[3], scan: results[4], observations: results[5] } }));
+          } catch {
+            console.error(`Reconciliation diagnostic failed at ${stage}; raw errors and credentials omitted.`);
+            process.exitCode = 1;
+          } finally {
+            if (installationToken) {
+              stage = 'revoke-metadata-token';
+              try { await api('/installation/token', installationToken, 'DELETE'); }
+              catch { console.error('Temporary metadata token revocation failed; token expires automatically.'); process.exitCode = 1; }
+            }
+          }
+          NODE

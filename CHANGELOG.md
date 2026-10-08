@@ -489,6 +489,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Added
 
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) adds an opt-in reconciliation diagnostic job that reads App repository selection and aggregate Neon state without printing credentials or changing work state.
+
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds a Neon-backed atomic webhook replay store, a repeatable minimal schema migration, and bounded cleanup of expired claims.
 
 - Added a redacted, read-only GitHub organization inventory command and v1
