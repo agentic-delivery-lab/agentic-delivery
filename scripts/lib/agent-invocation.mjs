@@ -45,24 +45,7 @@ export function bodyDigest(body) {
   return createHash('sha256').update(String(body ?? ''), 'utf8').digest('hex');
 }
 
-// GitHub limits repository_dispatch client_payload to 10 top-level properties.
-// Keep the signed versioned envelope intact as one transport property.
-export function packRepositoryDispatchClientPayload(envelope) {
-  if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
-    throw new Error('A repository dispatch envelope is required.');
-  }
-  return { envelope };
-}
-
-export function unwrapRepositoryDispatchClientPayload(clientPayload) {
-  if (!clientPayload || typeof clientPayload !== 'object' || Array.isArray(clientPayload)) return clientPayload;
-  const keys = Object.keys(clientPayload);
-  if (keys.length !== 1 || keys[0] !== 'envelope') return clientPayload;
-  const { envelope } = clientPayload;
-  return envelope && typeof envelope === 'object' && !Array.isArray(envelope)
-    ? envelope
-    : clientPayload;
-}
+export { packRepositoryDispatchClientPayload, unwrapRepositoryDispatchClientPayload } from './repository-dispatch-transport.mjs';
 
 function unsignedDispatchEnvelope(envelope) {
   if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) return envelope;

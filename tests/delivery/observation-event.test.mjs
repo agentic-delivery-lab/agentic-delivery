@@ -6,7 +6,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
-import { invocationEnvelope, packRepositoryDispatchClientPayload } from '../../scripts/lib/agent-invocation.mjs';
+import { invocationEnvelope, packRepositoryDispatchClientPayload, unwrapRepositoryDispatchClientPayload } from '../../scripts/lib/agent-invocation.mjs';
 import { loadParticipantRegistry, participantForRepository } from '../../scripts/lib/participant-registry.mjs';
 import { normalizeRepositoryDispatchEventFile } from '../../scripts/normalize-repository-dispatch-event.mjs';
 import { ObservationValidationError, validateObservationEvent } from '../../scripts/validate-observation-event.mjs';
@@ -109,7 +109,9 @@ test('observation validator rejects a tampered central dispatch envelope', async
   });
   const eventPath = await writeEvent(t, envelope);
   const event = JSON.parse(await readFile(eventPath, 'utf8'));
-  event.client_payload.envelope.repository_id = '777777777';
+  const tamperedEnvelope = unwrapRepositoryDispatchClientPayload(event.client_payload);
+  tamperedEnvelope.repository_id = '777777777';
+  event.client_payload = packRepositoryDispatchClientPayload(tamperedEnvelope);
   await writeFile(eventPath, JSON.stringify(event));
   await assert.rejects(
     validateObservationEvent({ eventPath, repositoryRoot, dispatchSecret: 'dispatch-secret', now: () => 1789992000000 }),
