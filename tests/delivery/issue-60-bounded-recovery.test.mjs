@@ -69,6 +69,9 @@ test('one replay preparation preserves exact 64-bit IDs and snapshots before a s
   assert.deepEqual(operation.values.slice(0, 4), [`163255060:${guid}`, guid, id, '123']);
   assert.equal(JSON.parse(operation.values[4]).repository_id, '1358455028');
   assert.match(operation.statement, /FOR UPDATE OF q, c/);
+  assert.match(operation.statement, /github_delivery_id = \$3::bigint/);
+  assert.match(operation.statement, /c.github_delivery_id::text = \$3/);
+  assert.doesNotMatch(operation.statement, /q.github_delivery_id::text = \$3/);
   assert.match(operation.statement, /queue_before, receipt_before/);
   assert.equal(calls.at(-1).options.isolationLevel, 'Serializable');
   const expired = recordingSql();

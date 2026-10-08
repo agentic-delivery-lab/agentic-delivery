@@ -119,7 +119,7 @@ DO $$ BEGIN IF (SELECT count(*) FROM public.webhook_redelivery_requests) <> 160
   THEN RAISE EXCEPTION 'Explicit restoration must retain the audit'; END IF; END $$;
 -- Targeted receipt recovery must preserve the original eight-attempt state.
 INSERT INTO public.webhook_redelivery_requests(delivery_guid, requested_at, request_status, github_delivery_id, attempt_count, next_attempt_at)
-  VALUES ('${firstGuid}', clock_timestamp(), 'exhausted', 3847041198202052608, 8, clock_timestamp());
+  VALUES ('${firstGuid}', clock_timestamp(), 'exhausted', 3845978218578313000, 8, clock_timestamp());
 INSERT INTO public.webhook_controller_receipts(replay_key, github_delivery_id, expires_at)
   VALUES ('163255060:${firstGuid}', 3847041198202052608, clock_timestamp() + interval '1 day');
 ${prepare('901', '3847041198202052609')};
@@ -128,7 +128,7 @@ DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM public.webhook_redelivery_requests WHER
 ${prepare('902')};
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.webhook_redelivery_requests WHERE delivery_guid = '${firstGuid}' AND request_status = 'queued' AND attempt_count = 0 AND github_delivery_id = 3847041198202052608)
-    OR NOT EXISTS (SELECT 1 FROM public.webhook_reconciliation_recoveries WHERE run_id = '902' AND queue_before->>'attempt_count' = '8' AND queue_before->>'request_status' = 'exhausted' AND queue_before->>'github_delivery_id' = '3847041198202052608' AND receipt_before->>'status' = 'pending')
+    OR NOT EXISTS (SELECT 1 FROM public.webhook_reconciliation_recoveries WHERE run_id = '902' AND queue_before->>'attempt_count' = '8' AND queue_before->>'request_status' = 'exhausted' AND queue_before->>'github_delivery_id' = '3845978218578313000' AND receipt_before->>'status' = 'pending')
     OR NOT EXISTS (SELECT 1 FROM public.webhook_controller_receipts WHERE replay_key = '163255060:${firstGuid}' AND status = 'pending' AND attempt_count = 0)
   THEN RAISE EXCEPTION 'Targeted retry must preserve metadata and receipt counters'; END IF;
 END $$;

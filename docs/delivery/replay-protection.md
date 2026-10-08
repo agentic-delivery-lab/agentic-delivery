@@ -203,7 +203,9 @@ The same reviewed-main operator workflow provides `reconciliation_followup`:
   must be valid and younger than three days minus the operator job's seven-minute
   execution margin before any audit/requeue write. Migration 0007 retains the
   full original queue and receipt metadata plus operator and source evidence.
-  An exhausted selected queue can then be requeued with its retry count reset;
+  The selected queue is aligned to the exact freshly verified receipt delivery ID;
+  an older queue ID remains in the audit snapshot. An exhausted selected queue
+  can then be requeued with its retry count reset;
   receipt counters are unchanged. The normal claim remains authoritative.
   Every API write is limited to one POST for the verified exact delivery ID;
   foreign endpoints and additional POSTs fail closed. A changed target or a run
