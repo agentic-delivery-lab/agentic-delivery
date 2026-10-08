@@ -259,6 +259,19 @@ authenticates GitHub ingress, while the latter authenticates the gateway-to-
 controller handoff. Neither is available to an origin repository or model
 process.
 
+Unavailable historical webhook deliveries may receive an explicitly approved
+operator disposition after a complete fresh history audit and verification
+that no controller receipt is linked. A durable webhook delivery archive
+retains the original queue, observation and scan metadata, reason and operator
+evidence. The terminal `archived` queue status prevents automatic retry and
+checkpoint blocking, without establishing completion of original work. Age
+alone cannot select a disposition. The reviewed operator operation checks an
+exact approved manifest and current rows, then archives and restarts stale
+pagination atomically; ordinary reconciliation advances its own checkpoint.
+Retaining exhausted rows indefinitely remains the default when explicit
+disposition evidence or authorization is missing. Deleting historical rows or
+marking them successful would lose evidence or assert an unverified outcome.
+
 An event is input, not a lifecycle transition. The lifecycle policy decides
 whether an issue, comment, pull request, review, workflow or Project event is
 ignored, observed, routed or authorized. Conversation-driven execution still

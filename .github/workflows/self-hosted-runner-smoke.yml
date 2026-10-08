@@ -9,11 +9,23 @@ on:
         type: boolean
         default: false
 
+      reconciliation_recovery:
+        description: Issue 60 recovery (preview reads only; apply requires reviewed main)
+        type: choice
+        options: [disabled, preview, apply]
+        default: disabled
+
+      recovery_manifest:
+        description: Exact approved 161-delivery metadata manifest (no webhook bodies)
+        type: string
+        default: ''
+
 permissions:
   contents: read
 
 jobs:
   smoke:
+    if: ${{ inputs.reconciliation_recovery == 'disabled' }}
     runs-on: [self-hosted, linux, x64, omarchy]
     timeout-minutes: 5
     env:
@@ -56,3 +68,35 @@ jobs:
       - name: Check actual tool isolation without model execution
         if: inputs.codex
         run: node scripts/codex-sandbox-check.mjs
+
+  reconciliation-recovery:
+    if: ${{ inputs.reconciliation_recovery != 'disabled' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    concurrency:
+      group: issue-60-reconciliation-recovery
+      cancel-in-progress: false
+    steps:
+      - name: Check out the recovery implementation
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Install recovery dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Preview or apply the approved recovery
+        env:
+          RECOVERY_MODE: ${{ inputs.reconciliation_recovery }}
+          RECOVERY_MANIFEST: ${{ inputs.recovery_manifest }}
+          CODEX_DELIVERY_APP_ID: ${{ vars.CODEX_DELIVERY_APP_ID }}
+          CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ vars.CODEX_DELIVERY_APP_INSTALLATION_ID }}
+          CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
+          AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}
+        run: node scripts/archive-issue-60-deliveries.mjs

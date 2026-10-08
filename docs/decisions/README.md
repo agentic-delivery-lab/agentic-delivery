@@ -69,6 +69,11 @@ After a successful merge, remove active labels and close the ADR tracking issue.
 
 ## Records
 
+Issue #60 also tracks the explicit operator disposition amendment to ADR-0018
+in the webhook delivery archive review pull request. It retains historical
+delivery metadata without claiming work completion. The broader source issue
+remains open for reconciliation and controller receipt recovery.
+
 Use four digits and a lowercase dashed name:
 
 ```text

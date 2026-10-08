@@ -489,6 +489,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Added
 
+- Issue #60 adds an explicitly approved, audit-preserving disposition for unavailable historical webhook deliveries. Archived queue records stop holding reconciliation progress and cannot be automatically retried; the protected recovery operation checks fresh history and commits the exact approved set with its scan restart atomically.
+
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds a Neon-backed atomic webhook replay store, a repeatable minimal schema migration, and bounded cleanup of expired claims.
 
 - Added a redacted, read-only GitHub organization inventory command and v1

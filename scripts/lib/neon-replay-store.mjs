@@ -624,7 +624,7 @@ export class NeonReplayStore {
            attempt_count = stored.attempt_count + 1,
            next_attempt_at = clock_timestamp() + ($2::double precision * INTERVAL '1 millisecond')
        WHERE (stored.request_status = 'queued' OR stored.next_attempt_at <= clock_timestamp())
-         AND stored.request_status <> 'exhausted'
+         AND stored.request_status IN ('queued', 'requesting', 'accepted')
          AND stored.attempt_count < $4
        RETURNING delivery_guid`,
       [guid.toLowerCase(), cooldownMs, String(githubDeliveryId), CONTROLLER_MAX_ATTEMPTS],
