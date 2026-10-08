@@ -16,7 +16,12 @@ export function validateRecoveryContext(env, mode) {
     || env.CODEX_DELIVERY_APP_INSTALLATION_ID !== '163255060') throw new Error('Invalid recovery context.');
 }
 
-export function validateCanaryDelivery(delivery, { guid, deliveryId, registry, centralRepositoryId }) {
+export function validateCanaryDelivery(delivery, { guid, deliveryId, registry, centralRepositoryId, now = Date.now() }) {
+  // GitHub's window is three days; retain the operator job's seven-minute margin.
+  const age = now - Date.parse(delivery?.delivered_at);
+  if (!Number.isFinite(age) || age < 0 || age >= (3 * 24 * 60 - 7) * 60_000) {
+    throw new Error('The delivery is outside the safe redelivery window.');
+  }
   const payload = delivery?.request?.payload;
   const repository = payload?.repository;
   const participant = participantForRepository(registry, repository?.id);
@@ -98,7 +103,7 @@ export async function prepareOneReplay(sql, env, guid, fetchImpl, registryLoader
   return id;
 }
 
-export async function followUp({ env = process.env, mode, guid, sql, fetchImpl = fetch } = {}) {
+export async function followUp({ env = process.env, mode, guid, sql, store, fetchImpl = fetch } = {}) {
   validateRecoveryContext(env, mode);
   const databaseUrl = new URL(env.AGENTIC_DELIVERY_REPLAY_DATABASE_URL);
   databaseUrl.hostname = databaseUrl.hostname.replace('-pooler.', '.');
@@ -108,14 +113,14 @@ export async function followUp({ env = process.env, mode, guid, sql, fetchImpl =
   if (before.archived !== '161' || !before.archive_guard_enabled) throw new Error('The archive recovery prerequisite is missing.');
   const safeFetch = boundedFetch({ fetchImpl });
   const targetId = mode === 'replay_one' ? await prepareOneReplay(client, env, guid, safeFetch) : null;
-  const store = new NeonReplayStore({ client });
-  const selectedStore = targetId ? new Proxy(store, { get(target, property) {
+  const replayStore = store ?? new NeonReplayStore({ client });
+  const selectedStore = targetId ? new Proxy(replayStore, { get(target, property) {
     if (property === 'dueRedeliveryRequests') return async () => client`SELECT delivery_guid, github_delivery_id::text AS github_delivery_id, attempt_count
       FROM public.webhook_redelivery_requests WHERE delivery_guid = ${guid} AND github_delivery_id::text = ${targetId}
       AND attempt_count < 8 AND (request_status = 'queued' OR (request_status IN ('accepted', 'requesting') AND next_attempt_at <= clock_timestamp()))`;
     const member = Reflect.get(target, property);
     return typeof member === 'function' ? member.bind(target) : member;
-  } }) : store;
+  } }) : replayStore;
   const cronSecret = randomBytes(32).toString('hex');
   const output = { statusCode: null, setHeader() {}, end(value) { this.body = JSON.parse(value); } };
   await reconcileWebhookDeliveries({ req: { method: 'GET', headers: { authorization: `Bearer ${cronSecret}` } },

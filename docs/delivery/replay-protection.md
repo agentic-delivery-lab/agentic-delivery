@@ -199,7 +199,9 @@ The same reviewed-main operator workflow provides `reconciliation_followup`:
   a fresh delivery-detail response must match the exact receipt ID, GUID, App
   installation and enrolled repository, and an actual issue payload from an
   `issues` or `issue_comment` event (pull requests are rejected). Only central issue #62 and public
-  `.github` issue #11 are approved recovery canaries. Migration 0007 retains the
+  `.github` issue #11 are approved recovery canaries. The delivery timestamp
+  must be valid and younger than three days minus the operator job's seven-minute
+  execution margin before any audit/requeue write. Migration 0007 retains the
   full original queue and receipt metadata plus operator and source evidence.
   An exhausted selected queue can then be requeued with its retry count reset;
   receipt counters are unchanged. The normal claim remains authoritative.
