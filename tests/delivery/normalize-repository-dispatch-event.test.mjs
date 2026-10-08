@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -46,7 +46,8 @@ test('signed envelopes survive object-key reordering in repository dispatch tran
 });
 
 test('the dispatch normalizer decodes opaque JSON without installed packages and redacts malformed text', async (t) => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'dispatch-standalone-'));
+  // macOS /var is a symlink; Node resolves the module path before the main guard.
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dispatch-standalone-')));
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(path.join(root, 'lib'));
   await copyFile(path.join(repositoryRoot, 'scripts/normalize-repository-dispatch-event.mjs'), path.join(root, 'normalizer.mjs'));
