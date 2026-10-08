@@ -116,7 +116,19 @@ jobs:
               console.log(JSON.stringify({ diagnostic_stage: stage, http_status: response.status }));
               throw new Error('Diagnostic API request failed.');
             }
-            return { status: response.status, data: response.status === 204 ? null : await response.json(), next: (response.headers.get('link') ?? '').includes('rel="next"') };
+            const nextMatch = /<([^>]+)>;\s*rel="next"/.exec(response.headers.get('link') ?? '');
+            let nextRoute = null;
+            if (nextMatch) {
+              const nextUrl = new URL(nextMatch[1]);
+              if (nextUrl.origin !== 'https://api.github.com' || nextUrl.pathname !== new URL(route, 'https://api.github.com').pathname) throw new Error('Unexpected history pagination.');
+              nextRoute = `${nextUrl.pathname}${nextUrl.search}`;
+            }
+            const data = response.status === 204 ? null : JSON.parse(await response.text(), (key, value, context) => {
+              if (key !== 'id' || typeof value !== 'number') return value;
+              if (typeof context?.source !== 'string' || !/^[1-9][0-9]*$/.test(context.source)) throw new Error('Invalid exact API identity.');
+              return context.source;
+            });
+            return { status: response.status, data, next: (response.headers.get('link') ?? '').includes('rel="next"'), nextRoute };
           }
           try {
             const installationId = process.env.CODEX_DELIVERY_APP_INSTALLATION_ID;
@@ -162,12 +174,28 @@ jobs:
             console.log(JSON.stringify({ neon_read_only_snapshot: { columns: results[0], dispatches: results[1], receipts: results[2], redeliveries: results[3], scan: results[4], observations: results[5] } }));
             const exhausted = results[6];
             console.log(JSON.stringify({ exhausted_audit: { bounded_rows: exhausted.length, limit_reached: exhausted.length === 250, with_observation: exhausted.filter((row) => row.observed_delivery_id !== null).length, with_successful_webhook: exhausted.filter((row) => row.has_success === true).length, changed_delivery_id: exhausted.filter((row) => row.observed_delivery_id !== null && row.observed_delivery_id !== row.stored_delivery_id).length, below_attempt_limit: exhausted.filter((row) => row.attempt_count < 8).length, with_controller_receipt: exhausted.filter((row) => row.controller_status !== null).length } }));
+            stage = 'fresh-webhook-history';
+            let route = '/app/hook/deliveries?per_page=100';
+            let pages = 0;
+            const freshHistory = new Map();
+            while (route && pages < 5) {
+              const result = await api(route, jwt);
+              if (!Array.isArray(result.data)) throw new Error('Invalid history page.');
+              pages += 1;
+              for (const item of result.data) {
+                if (!/^[1-9][0-9]*$/.test(item.id ?? '') || !Number.isFinite(Date.parse(item.delivered_at))) throw new Error('Invalid delivery metadata.');
+                const current = freshHistory.get(item.guid);
+                if (!current || Date.parse(item.delivered_at) > Date.parse(current.delivered_at) || (item.delivered_at === current.delivered_at && BigInt(item.id) > BigInt(current.id))) freshHistory.set(item.guid, item);
+              }
+              route = result.nextRoute;
+            }
+            console.log(JSON.stringify({ fresh_history_audit: { pages, incomplete: Boolean(route), unique_guids: freshHistory.size, exhausted_matched: exhausted.filter((row) => freshHistory.has(row.delivery_guid)).length, exhausted_changed_id: exhausted.filter((row) => freshHistory.has(row.delivery_guid) && freshHistory.get(row.delivery_guid).id !== row.stored_delivery_id).length } }));
             stage = 'exhausted-delivery-metadata';
-            for (const row of exhausted.slice(0, 10)) {
-              const id = row.observed_delivery_id ?? row.stored_delivery_id;
+            for (const row of [...exhausted].sort((a, b) => b.attempt_count - a.attempt_count || Number(b.observed_delivery_id !== b.stored_delivery_id) - Number(a.observed_delivery_id !== a.stored_delivery_id)).slice(0, 10)) {
+              const id = freshHistory.get(row.delivery_guid)?.id ?? row.observed_delivery_id ?? row.stored_delivery_id;
               if (!/^[1-9][0-9]*$/.test(id)) throw new Error('Invalid exact delivery identity.');
               const result = await api(`/app/hook/deliveries/${id}`, jwt);
-              console.log(JSON.stringify({ exhausted_delivery_sample: { delivery_guid: row.delivery_guid, stored_delivery_id: row.stored_delivery_id, observed_delivery_id: row.observed_delivery_id, attempts: row.attempt_count, requested_at: row.requested_at, observed_success: row.has_success, controller_status: row.controller_status, delivery_api_status: result.status, guid_matches: result.data ? result.data.guid === row.delivery_guid : null, webhook_status: result.data?.status_code ?? null, delivered_at: result.data?.delivered_at ?? null, event: result.data?.event ?? null, action: result.data?.action ?? null } }));
+              console.log(JSON.stringify({ exhausted_delivery_sample: { delivery_guid: row.delivery_guid, stored_delivery_id: row.stored_delivery_id, observed_delivery_id: row.observed_delivery_id, fresh_delivery_id: freshHistory.get(row.delivery_guid)?.id ?? null, attempts: row.attempt_count, requested_at: row.requested_at, observed_success: row.has_success, controller_status: row.controller_status, delivery_api_status: result.status, guid_matches: result.data ? result.data.guid === row.delivery_guid : null, webhook_status: result.data?.status_code ?? null, delivered_at: result.data?.delivered_at ?? null, event: result.data?.event ?? null, action: result.data?.action ?? null } }));
             }
           } catch {
             console.error(`Reconciliation diagnostic failed at ${stage}; raw errors and credentials omitted.`);
