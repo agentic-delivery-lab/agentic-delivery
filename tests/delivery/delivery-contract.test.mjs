@@ -145,7 +145,7 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.ok(observationText.includes('pnpm --dir dispatch-boundary install --frozen-lockfile --ignore-scripts'));
   assert.ok(observationText.includes('pnpm --dir controller install --frozen-lockfile --ignore-scripts'));
   assert.ok(observationText.includes('path: controller'));
-  assert.ok(observationText.includes('node controller/scripts/validate-observation-event.mjs controller'));
+  assert.ok(observationText.includes('node controller/scripts/validate-observation-event.mjs dispatch-boundary'));
   assert.ok(!observationText.includes('ref: main'));
   assert.ok(!observationText.includes('CODEX_DELIVERY_APP_PRIVATE_KEY'));
   assert.ok(!observationText.includes('AGENTIC_DELIVERY_WEBHOOK_SECRET'));
