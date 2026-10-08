@@ -75,7 +75,7 @@ jobs:
           import { existsSync } from 'node:fs';
           import { DatabaseSync } from 'node:sqlite';
           import { createHash } from 'node:crypto';
-          const databasePath = '/var/lib/github-runner/.codex/logs_1.sqlite';
+          const databasePath = '/var/lib/github-runner/.codex/logs_2.sqlite';
           if (!existsSync(databasePath)) {
             console.log(JSON.stringify({ codex_error_log_available: false }));
           } else {
