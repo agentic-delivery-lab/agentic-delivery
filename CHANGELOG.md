@@ -530,6 +530,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- Issue #60 recovery can refresh delivery history without sending replays, then retry one verified canary at a time with a durable snapshot before any exhausted retry counter is reset.
+
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) validates observations against the trusted workflow registry while retaining the immutable validator implementation, avoiding rejection against its historical registry copy.
 
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) preserves signed JSON as opaque dispatch text so transport object-key reordering cannot invalidate the existing signature. Pinned readers keep their direct version-1 envelope input.

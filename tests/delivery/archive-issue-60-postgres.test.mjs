@@ -21,7 +21,7 @@ test('isolated PostgreSQL proves atomic archive guards, preserved metadata and r
   const root = new URL('../../', import.meta.url);
   const names = ['0001-webhook-replay-claims.sql', '0002-recoverable-webhook-delivery.sql',
     '0003-resumable-webhook-scan.sql', '0004-aggregate-webhook-scan-observations.sql',
-    '0005-queue-webhook-redeliveries.sql', '0006-archive-unavailable-webhook-deliveries.sql'];
+    '0005-queue-webhook-redeliveries.sql', '0006-archive-unavailable-webhook-deliveries.sql', '0007-audit-targeted-reconciliation-recovery.sql'];
   const migrations = await Promise.all(names.map((name) => readFile(new URL(`api/github/migrations/${name}`, root), 'utf8')));
   const operation = await readFile(new URL('scripts/issue-60-archive-unavailable.sql', root), 'utf8');
   const rows = Array.from({ length: 161 }, (_, index) => ({
@@ -45,6 +45,9 @@ test('isolated PostgreSQL proves atomic archive guards, preserved metadata and r
   calls.length = 0;
   await store.completeRedelivery(firstGuid);
   const complete = calls.shift();
+  const replaySql = await readFile(new URL('scripts/issue-60-prepare-one-replay.sql', root), 'utf8');
+  const prepare = (runId, exactId = '3847041198202052608') => bind({ statement: replaySql.trim().replace(/;$/, ''),
+    values: [`163255060:${firstGuid}`, firstGuid, exactId, runId, JSON.stringify({ operator: 'fixture', delivery_id: exactId })] });
   const script = `BEGIN;
 ${migrations.join('\n')}
 ${operation}
@@ -114,6 +117,32 @@ DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = '${firstGui
 DO $$ BEGIN IF (SELECT count(*) FROM public.webhook_redelivery_requests) <> 160
   OR (SELECT count(*) FROM public.webhook_redelivery_archive) <> 161
   THEN RAISE EXCEPTION 'Explicit restoration must retain the audit'; END IF; END $$;
+-- Targeted receipt recovery must preserve the original eight-attempt state.
+INSERT INTO public.webhook_redelivery_requests(delivery_guid, requested_at, request_status, github_delivery_id, attempt_count, next_attempt_at)
+  VALUES ('${firstGuid}', clock_timestamp(), 'exhausted', 3847041198202052608, 8, clock_timestamp());
+INSERT INTO public.webhook_controller_receipts(replay_key, github_delivery_id, expires_at)
+  VALUES ('163255060:${firstGuid}', 3847041198202052608, clock_timestamp() + interval '1 day');
+${prepare('901', '3847041198202052609')};
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM public.webhook_redelivery_requests WHERE delivery_guid = '${firstGuid}' AND request_status = 'exhausted' AND attempt_count = 8) OR EXISTS (SELECT 1 FROM public.webhook_reconciliation_recoveries)
+  THEN RAISE EXCEPTION 'Mismatched exact ID must not reset or audit'; END IF; END $$;
+${prepare('902')};
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.webhook_redelivery_requests WHERE delivery_guid = '${firstGuid}' AND request_status = 'queued' AND attempt_count = 0 AND github_delivery_id = 3847041198202052608)
+    OR NOT EXISTS (SELECT 1 FROM public.webhook_reconciliation_recoveries WHERE run_id = '902' AND queue_before->>'attempt_count' = '8' AND queue_before->>'request_status' = 'exhausted' AND queue_before->>'github_delivery_id' = '3847041198202052608' AND receipt_before->>'status' = 'pending')
+    OR NOT EXISTS (SELECT 1 FROM public.webhook_controller_receipts WHERE replay_key = '163255060:${firstGuid}' AND status = 'pending' AND attempt_count = 0)
+  THEN RAISE EXCEPTION 'Targeted retry must preserve metadata and receipt counters'; END IF;
+END $$;
+UPDATE public.webhook_redelivery_requests SET request_status = 'exhausted', attempt_count = 8 WHERE delivery_guid = '${firstGuid}';
+UPDATE public.webhook_controller_receipts SET status = 'running' WHERE replay_key = '163255060:${firstGuid}';
+${prepare('903')};
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM public.webhook_redelivery_requests WHERE delivery_guid = '${firstGuid}' AND request_status = 'exhausted' AND attempt_count = 8)
+  THEN RAISE EXCEPTION 'Running receipt must preserve exhausted state'; END IF; END $$;
+UPDATE public.webhook_controller_receipts SET status = 'pending' WHERE replay_key = '163255060:${firstGuid}';
+UPDATE public.webhook_redelivery_requests SET request_status = 'archived' WHERE delivery_guid = '${firstGuid}';
+${prepare('904')};
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM public.webhook_redelivery_requests WHERE delivery_guid = '${firstGuid}' AND request_status = 'archived' AND attempt_count = 8)
+  OR (SELECT count(*) FROM public.webhook_reconciliation_recoveries) <> 1
+  THEN RAISE EXCEPTION 'Running receipts and archived queues must not be requeued'; END IF; END $$;
 ROLLBACK;
 `;
   const directory = await mkdtemp(path.join(os.tmpdir(), 'issue-60-postgres-'));
