@@ -530,6 +530,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- Issue routing now supplies a strict Structured Outputs schema with every property required, avoiding rejection of the optional legacy `state` alias. Legacy proposals remain readable, and the router may read its isolated evidence file.
+
 - Issue #60 recovery can refresh delivery history without sending replays, then retry one verified canary at a time with a durable snapshot before any exhausted retry counter is reset.
 
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) validates observations against the trusted workflow registry while retaining the immutable validator implementation, avoiding rejection against its historical registry copy.
