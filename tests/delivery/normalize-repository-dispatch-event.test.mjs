@@ -86,6 +86,9 @@ test('normalized event consumers pass the event path at process launch instead o
     }
   }
   assert.equal(consumers, 5);
+  const observation = parseRepositoryYaml(await readFile(path.join(repositoryRoot, '.github/workflows/agent-observation.yml'), 'utf8'), 'observation');
+  const pinnedObservation = observation.jobs.validate.steps.find((step) => step.name === 'Recheck with the immutable pinned observation validator');
+  assert.match(pinnedObservation.run, /node controller\/scripts\/validate-observation-event.mjs dispatch-boundary$/);
   const delivery = parseRepositoryYaml(await readFile(path.join(repositoryRoot, '.github/workflows/codex-delivery.yml'), 'utf8'), 'codex delivery');
   const job = delivery.jobs.deliver;
   assert.equal(job.env.GITHUB_EVENT_NAME, undefined);
@@ -234,7 +237,7 @@ test('normalized events pass invocation, observation, and finalizer readers at t
   const observationReader = await import(pathToFileURL(path.join(observationRoot, 'scripts/validate-observation-event.mjs')).href);
   const observationRegistryReader = await import(pathToFileURL(path.join(observationRoot, 'scripts/lib/participant-registry.mjs')).href);
   const invocationRegistry = await invocationRegistryReader.loadParticipantRegistry(invocationRoot);
-  const observationRegistry = await observationRegistryReader.loadParticipantRegistry(observationRoot);
+  const observationRegistry = await observationRegistryReader.loadParticipantRegistry(repositoryRoot);
   assert.equal(invocationRegistry.valid, true);
   assert.equal(observationRegistry.valid, true);
   const invocationParticipant = invocationRegistryReader.participantForRepository(invocationRegistry, '1358455028');
@@ -301,9 +304,14 @@ test('normalized events pass invocation, observation, and finalizer readers at t
     assert.equal(normalized.client_payload.delivery_id, envelope.delivery_id);
 
     if (fields.reader === 'observation') {
+      await assert.rejects(observationReader.validateObservationEvent({
+        eventPath: normalizedPath, repositoryRoot: observationRoot,
+        controllerRepository: 'agentic-delivery-lab/agentic-delivery',
+        dispatchSecret: secret, now: () => dispatchTimestamp,
+      }), /controller pin does not match/);
       const result = await observationReader.validateObservationEvent({
         eventPath: normalizedPath,
-        repositoryRoot: observationRoot,
+        repositoryRoot,
         controllerRepository: 'agentic-delivery-lab/agentic-delivery',
         dispatchSecret: secret,
         now: () => dispatchTimestamp,
