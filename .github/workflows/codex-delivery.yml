@@ -154,8 +154,8 @@ jobs:
       PARTICIPANT_MODE: ${{ needs.resolve.outputs.participant_mode }}
       READ_ONLY_RUN: ${{ needs.resolve.outputs.read_only_run }}
       CONTROL_PLANE_COMMIT: ${{ needs.resolve.outputs.controller_commit }}
-      GITHUB_EVENT_NAME: ${{ inputs.invocation_event_name == 'issues' && 'issues' || (inputs.invocation_event_name != '' && 'issue_comment' || github.event_name) }}
-      GITHUB_TRIGGERING_ACTOR: ${{ inputs.invocation_actor || github.triggering_actor || github.actor }}
+      CONTROLLER_EVENT_NAME: ${{ inputs.invocation_event_name == 'issues' && 'issues' || (inputs.invocation_event_name != '' && 'issue_comment' || github.event_name) }}
+      CONTROLLER_TRIGGERING_ACTOR: ${{ inputs.invocation_actor || github.triggering_actor || github.actor }}
     steps:
       - name: Validate resolved controller pin
         env:
@@ -219,4 +219,4 @@ jobs:
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
           ISSUE_FIELD_BINDINGS_JSON: ${{ secrets.ISSUE_FIELD_BINDINGS_JSON }}
           CODEX_MCP_SERVERS: ${{ vars.CODEX_MCP_SERVERS }}
-        run: node scripts/codex-delivery.mjs
+        run: GITHUB_EVENT_NAME="$CONTROLLER_EVENT_NAME" GITHUB_TRIGGERING_ACTOR="$CONTROLLER_TRIGGERING_ACTOR" node scripts/codex-delivery.mjs

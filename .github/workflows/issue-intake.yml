@@ -203,11 +203,11 @@ jobs:
           CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ vars.CODEX_DELIVERY_APP_INSTALLATION_ID }}
           CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}
           AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}
-          GITHUB_EVENT_PATH: ${{ steps.normalized-event.outputs.event_path || github.event_path }}
+          CONTROLLER_EVENT_PATH: ${{ steps.normalized-event.outputs.event_path || github.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CODEX_DELIVERY_STATE_DIR: ${{ vars.CODEX_DELIVERY_STATE_DIR }}
           RUNNER_TEMP: ${{ runner.temp }}
-        run: node scripts/prepare-agent-invocation.mjs
+        run: GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node scripts/prepare-agent-invocation.mjs
         working-directory: trusted-intake
 
       - name: Resolve participant and read-only run policy
@@ -271,16 +271,16 @@ jobs:
           INVOCATION_EVENT: ${{ inputs.agent_invocation && 'true' || 'false' }}
           INVOCATION_ACTOR_KIND: ${{ steps.invocation.outputs.invocation_actor_kind }}
           INVOCATION_AUTHORIZED: ${{ steps.invocation.outputs.invocation_authorized }}
-          GITHUB_EVENT_NAME: ${{ inputs.agent_invocation && (steps.invocation.outputs.invocation_event_name == 'issues' && 'issues' || 'issue_comment') || github.event_name }}
-          GITHUB_EVENT_PATH: ${{ steps.invocation.outputs.event_path || github.event_path }}
-          GITHUB_TRIGGERING_ACTOR: ${{ steps.invocation.outputs.invocation_actor || github.triggering_actor || github.actor }}
+          CONTROLLER_EVENT_NAME: ${{ inputs.agent_invocation && (steps.invocation.outputs.invocation_event_name == 'issues' && 'issues' || 'issue_comment') || github.event_name }}
+          CONTROLLER_EVENT_PATH: ${{ steps.invocation.outputs.event_path || github.event_path }}
+          CONTROLLER_TRIGGERING_ACTOR: ${{ steps.invocation.outputs.invocation_actor || github.triggering_actor || github.actor }}
           ORIGIN_REPOSITORY: ${{ steps.invocation.outputs.origin_repository || github.repository }}
           ORIGIN_REPOSITORY_ID: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
           PARTICIPANT_MODE: ${{ steps.intake-policy.outputs.participant_mode }}
           READ_ONLY_RUN: ${{ steps.intake-policy.outputs.read_only_run }}
           FORCE_READ_ONLY: ${{ inputs.force_read_only || false }}
           CONTROL_PLANE_COMMIT: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}
-        run: node scripts/issue-intake.mjs
+        run: GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" GITHUB_EVENT_NAME="$CONTROLLER_EVENT_NAME" GITHUB_TRIGGERING_ACTOR="$CONTROLLER_TRIGGERING_ACTOR" node scripts/issue-intake.mjs
 
   deliver:
     needs: classify
@@ -381,6 +381,6 @@ jobs:
       - name: Persist invocation completion or retryability
         env:
           AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}
-          GITHUB_EVENT_PATH: ${{ steps.normalized-finalizer-event.outputs.event_path }}
+          CONTROLLER_EVENT_PATH: ${{ steps.normalized-finalizer-event.outputs.event_path }}
           INVOCATION_RESULT: ${{ needs.classify.result == 'success' && (needs.deliver.result == 'success' || needs.deliver.result == 'skipped') && 'success' || 'failure' }}
-        run: node scripts/finalize-agent-invocation.mjs
+        run: GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node scripts/finalize-agent-invocation.mjs

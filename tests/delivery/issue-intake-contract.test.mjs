@@ -169,7 +169,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(finalizerNormalize.id, 'normalized-finalizer-event');
   assert.equal(finalizerNormalize.env.SOURCE_EVENT_PATH, '${{ github.event_path }}');
   assert.match(finalizerNormalize.run, /node dispatch-boundary\/scripts\/normalize-repository-dispatch-event\.mjs/);
-  assert.equal(finalizeReceipt.env.GITHUB_EVENT_PATH, '${{ steps.normalized-finalizer-event.outputs.event_path }}');
+  assert.equal(finalizeReceipt.env.CONTROLLER_EVENT_PATH, '${{ steps.normalized-finalizer-event.outputs.event_path }}');
   assert.equal(finalizerPinValidation.env.CONTROLLER_COMMIT, '${{ needs.classify.outputs.controller_commit }}');
   assert.match(finalizerPinValidation.run, /\^\[0-9a-f\]\{40\}\$/);
   assert.equal(finalizerCheckout.with.ref, '${{ needs.classify.outputs.controller_commit }}');

@@ -130,12 +130,12 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.match(setupNode.uses, /^pnpm\/setup@[0-9a-f]{40}$/);
   assert.equal(setupNode.with['package-json-file'], 'dispatch-boundary/package.json');
   assert.equal(normalizeObservation.id, 'normalized-event');
-  assert.equal(trustedValidation.env.GITHUB_EVENT_PATH, '${{ steps.normalized-event.outputs.event_path }}');
+  assert.equal(trustedValidation.env.CONTROLLER_EVENT_PATH, '${{ steps.normalized-event.outputs.event_path }}');
   assert.equal(trustedValidation.env.CODEX_DELIVERY_DISPATCH_SECRET, '${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}');
   assert.match(trustedValidation.run, /node dispatch-boundary\/scripts\/validate-observation-event\.mjs dispatch-boundary/);
   assert.equal(pinValidation.env.CONTROLLER_COMMIT, '${{ steps.trusted-validation.outputs.controller_commit }}');
   assert.equal(pinnedCheckout.with.ref, '${{ steps.trusted-validation.outputs.controller_commit }}');
-  assert.equal(pinnedValidation.env.GITHUB_EVENT_PATH, '${{ steps.normalized-event.outputs.event_path }}');
+  assert.equal(pinnedValidation.env.CONTROLLER_EVENT_PATH, '${{ steps.normalized-event.outputs.event_path }}');
   assert.ok(observationStepIndex(boundaryCheckout.name) < observationStepIndex(normalizeObservation.name));
   assert.ok(observationStepIndex(normalizeObservation.name) < observationStepIndex(trustedValidation.name));
   assert.ok(observationStepIndex(trustedValidation.name) < observationStepIndex(pinValidation.name));

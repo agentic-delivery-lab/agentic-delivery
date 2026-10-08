@@ -44,10 +44,10 @@ jobs:
       - name: Verify the signed event and registry pin before pinned checkout
         id: trusted-validation
         env:
-          GITHUB_EVENT_PATH: ${{ steps.normalized-event.outputs.event_path }}
+          CONTROLLER_EVENT_PATH: ${{ steps.normalized-event.outputs.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}
-        run: node dispatch-boundary/scripts/validate-observation-event.mjs dispatch-boundary
+        run: GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node dispatch-boundary/scripts/validate-observation-event.mjs dispatch-boundary
 
       - name: Validate the trusted controller pin
         env:
@@ -68,7 +68,7 @@ jobs:
 
       - name: Recheck with the immutable pinned observation validator
         env:
-          GITHUB_EVENT_PATH: ${{ steps.normalized-event.outputs.event_path }}
+          CONTROLLER_EVENT_PATH: ${{ steps.normalized-event.outputs.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CODEX_DELIVERY_DISPATCH_SECRET: ${{ secrets.CODEX_DELIVERY_DISPATCH_SECRET }}
-        run: node controller/scripts/validate-observation-event.mjs controller
+        run: GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node controller/scripts/validate-observation-event.mjs controller
