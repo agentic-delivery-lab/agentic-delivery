@@ -302,6 +302,7 @@
         "github-app-token-provider",
         "intake-caller-provenance-guard",
         "intake-participation-policy",
+        "issue-60-webhook-delivery-archive",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "organization-metadata-runbook",
@@ -362,6 +363,7 @@
         "github-app-token-provider",
         "intake-caller-provenance-guard",
         "intake-participation-policy",
+        "issue-60-webhook-delivery-archive",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "organization-metadata-runbook",
@@ -807,6 +809,19 @@
       "path": "scripts/lib/intake-policy.mjs",
       "location": "scripts/lib/intake-policy.mjs",
       "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "issue-60-webhook-delivery-archive",
+      "path": "scripts/archive-issue-60-deliveries.mjs",
+      "location": "scripts/archive-issue-60-deliveries.mjs",
+      "kind": "script",
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0018"

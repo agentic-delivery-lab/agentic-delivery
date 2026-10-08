@@ -65,7 +65,7 @@ controller repository secret.
 
 ## Migration and configuration
 
-Apply all five migrations to the selected Neon database with a direct, unpooled
+Apply the first five migrations to the selected Neon database with a direct, unpooled
 connection before deploying code that uses the new schema:
 
 ```sh
@@ -82,7 +82,11 @@ psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
 ```
 
 Run them from a protected terminal. Never print the connection string or add
-it to source control. All migrations are safe to run more than once.
+it to source control. All migrations are safe to run more than once. Migration
+0006 adds the durable archive and the manual `archived` queue status. Deploy
+the queue claim status allowlist before applying any archival disposition.
+The Issue #60 operator operation applies migration 0006 in its guarded
+transaction; ordinary reconciliation never applies a migration.
 
 Configure these protected values before production activation:
 
@@ -136,12 +140,62 @@ current scan advance, while the accepted request stays durable for follow-up.
 If the eighth accepted attempt's cooldown expires without a successful history
 result, the reconciler marks it `exhausted` before its next checkpoint update.
 That unresolved row stays durable and blocks further checkpoint progress until
-an operator diagnoses the cause and requeues it.
+an operator diagnoses the cause and explicitly requeues or archives it.
 Exhausted requests have no age-based deletion. An operator must diagnose and
-explicitly requeue them; the requeued request stays durable and holds the
+explicitly requeue them when replay is possible; the requeued request stays durable and holds the
 checkpoint until GitHub accepts it. If its final accepted attempt does not
 produce a successful history result before cooldown expires, it becomes
 exhausted again and continues to hold progress.
+
+### Manual disposition of unavailable historical deliveries
+
+An operator may explicitly approve a **webhook delivery archive** when a
+complete fresh GitHub history audit establishes that the delivery is unavailable
+and no controller receipt is linked to it. Age alone never triggers archiving.
+The archive retains the original queue, observation and scan metadata, the
+reason, source issue, evidence and manifest SHA-256 digests, operator identity,
+implementation commit and Actions run. It contains no webhook body or secret.
+The queue row remains as `archived`, preserving its retry counters and delivery
+identity. Queue claims, due selection and automatic requeue exclude that state.
+Successful observations also retain the archived queue row, so a later scan
+cannot recreate an automatic retry for the same GUID.
+A database trigger preserves the guard against older pinned claim and completion
+code sharing the store: deletion and transitions back to automatic retry states
+are skipped. Explicit operator restoration to the blocking `exhausted` state
+remains possible. This trigger and the archive are retained during rollback.
+It does not hold the checkpoint and does not mean the original work completed.
+
+For the explicitly approved Issue #60 recovery, use `self-hosted-runner-smoke`
+with `reconciliation_recovery=preview` and the exact 161-row `recovery_manifest`
+saved from evidence run 37762823635. The manifest is protected operator input,
+read from the runner event file rather than printed step environment values.
+It is not a checked-in list. Its SHA-256 is
+`d16f6bff149ffaabe3e67a324a1a2ff489fe03bff4fb0ad76d7d88424dc84055`.
+Both modes require the reviewed implementation on `main`. Preview reads only.
+`apply` requires
+a fresh complete history scan, unchanged exhausted queue and observation IDs,
+one attempt per candidate and no linked receipt. Locks and a single transaction
+ensure all 161 dispositions and the stale pagination restart commit together.
+A mismatch, timeout or repeated application fails without changing records.
+The completed checkpoint and observations remain intact; normal reconciliation
+must observe fresh outcomes and advance the checkpoint itself.
+
+After application, verify the archive count and digest, queue status counts and
+the scan restart using protected read-only diagnostics. Run reconciliation in
+bounded steps and verify checkpoint progress separately. Recover pending
+controller receipts with fresh, limited delivery and sufficient runner capacity.
+Keep the five-minute signed-envelope window and participant modes unchanged.
+
+For rollback, retain migration 0006 and the archive. After stopping concurrent
+reconciliation, review each original `queue_snapshot` before restoring a specific
+queue row to `exhausted`; never bulk reset attempt counters or claim success.
+Do not restore an opaque historical cursor without auditing its current validity.
+Before reverting the queue claim allowlist, restore all `archived` rows to a
+blocking status, otherwise older claim code could retry them. The audit survives
+normal successful queue completion and checkpoint observation cleanup.
+
+### Controller receipt reconciliation
+
 It also redelivers due controller receipts even when GitHub recorded the
 original webhook delivery as successful. Before advancing its checkpoint, the
 reconciler links every observed delivery GUID's numeric GitHub API ID to a

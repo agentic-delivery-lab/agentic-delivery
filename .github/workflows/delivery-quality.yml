@@ -18,6 +18,41 @@ permissions:
   pull-requests: read
 
 jobs:
+  recovery-sql:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: recovery_test
+          POSTGRES_USER: recovery_test
+          POSTGRES_PASSWORD: disposable-fixture
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify recovery against disposable PostgreSQL
+        env:
+          ISSUE_60_RECOVERY_TEST_DATABASE_URL: postgresql://recovery_test:disposable-fixture@localhost:5432/recovery_test
+        run: node --test tests/delivery/archive-issue-60-postgres.test.mjs
+
   quality:
     # Run deterministic validation on an ephemeral hosted runner so it can
     # finish while Harness occupies the single persistent Codex runner.
