@@ -749,7 +749,7 @@ export class NeonReplayStore {
 
   async completeRedelivery(guid) {
     if (typeof guid !== 'string' || !/^[0-9a-f-]{20,}$/i.test(guid)) throw new ReplayProtectionError('The delivery GUID is invalid.');
-    await this.#query('DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = $1', [guid.toLowerCase()]);
+    await this.#query("DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = $1 AND request_status <> 'archived'", [guid.toLowerCase()]);
   }
 
   async markRedeliveryRejected(guid, githubDeliveryId) {

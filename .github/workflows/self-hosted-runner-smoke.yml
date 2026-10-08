@@ -94,7 +94,6 @@ jobs:
       - name: Preview or apply the approved recovery
         env:
           RECOVERY_MODE: ${{ inputs.reconciliation_recovery }}
-          RECOVERY_MANIFEST: ${{ inputs.recovery_manifest }}
           CODEX_DELIVERY_APP_ID: ${{ vars.CODEX_DELIVERY_APP_ID }}
           CODEX_DELIVERY_APP_INSTALLATION_ID: ${{ vars.CODEX_DELIVERY_APP_INSTALLATION_ID }}
           CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}

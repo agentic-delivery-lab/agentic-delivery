@@ -116,6 +116,10 @@ export async function recover({ env = process.env, sql, fetchImpl = fetch } = {}
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { console.log(JSON.stringify(await recover())); }
+  try {
+    // Workflow inputs are read from the runner event file, avoiding env log output.
+    const event = JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH, 'utf8'));
+    console.log(JSON.stringify(await recover({ env: { ...process.env, RECOVERY_MANIFEST: event.inputs?.recovery_manifest } })));
+  }
   catch { console.error('Recovery failed; inspect the approved manifest and protected state before retrying.'); process.exitCode = 1; }
 }

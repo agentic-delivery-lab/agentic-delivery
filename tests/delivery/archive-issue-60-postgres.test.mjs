@@ -42,6 +42,9 @@ test('isolated PostgreSQL proves atomic archive guards, preserved metadata and r
   const due = calls.shift(); calls.length = 0;
   await store.hasPendingRedeliveryRequests();
   const pending = calls.shift();
+  calls.length = 0;
+  await store.completeRedelivery(firstGuid);
+  const complete = calls.shift();
   const script = `BEGIN;
 ${migrations.join('\n')}
 ${operation}
@@ -78,6 +81,7 @@ UPDATE public.webhook_redelivery_requests SET github_delivery_id = ${rows[0].sto
 SELECT pg_temp.archive_issue_60_deliveries(${manifest}, '{"manifest_sha256":"fixture"}'::jsonb, '2026-10-06 04:39:05.528123+00');
 ${bind(claim)};
 ${bind(requeue)};
+${bind(complete)};
 CREATE TEMP TABLE due_results AS ${bind(due)};
 CREATE TEMP TABLE pending_results AS ${bind(pending)};
 DO $$ BEGIN

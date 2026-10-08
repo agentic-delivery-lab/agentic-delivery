@@ -72,6 +72,9 @@ test('archived records are excluded from direct claims, automatic requeue, due s
   await store.dueRedeliveryRequests();
   assert.doesNotMatch(calls[0].statement, /archived/);
   calls.length = 0;
+  await store.completeRedelivery(candidates[0].delivery_guid);
+  assert.match(calls[0].statement, /DELETE .*AND request_status <> 'archived'/);
+  calls.length = 0;
   assert.equal(await store.hasPendingRedeliveryRequests(), false);
   assert.doesNotMatch(calls[0].statement, /archived/);
 });
@@ -83,7 +86,7 @@ test('recovery workflow keeps protected credentials step-scoped and defaults to 
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /frozen-lockfile --ignore-scripts/);
   assert.match(workflow, /inputs.reconciliation_recovery != 'disabled' && github.ref == 'refs\/heads\/main'/);
-  assert.doesNotMatch(workflow, /secrets: inherit|\$\{\{ inputs.recovery_manifest \}\}.*\n.*run:/);
+  assert.doesNotMatch(workflow, /secrets: inherit|\$\{\{ inputs.recovery_manifest \}\}/);
 });
 
 test('approved operator fixture previews without writes and applies one serializable transaction with exact timestamp evidence', {

@@ -157,12 +157,15 @@ reason, source issue, evidence and manifest SHA-256 digests, operator identity,
 implementation commit and Actions run. It contains no webhook body or secret.
 The queue row remains as `archived`, preserving its retry counters and delivery
 identity. Queue claims, due selection and automatic requeue exclude that state.
+Successful observations also retain the archived queue row, so a later scan
+cannot recreate an automatic retry for the same GUID.
 It does not hold the checkpoint and does not mean the original work completed.
 
 For the explicitly approved Issue #60 recovery, use `self-hosted-runner-smoke`
 with `reconciliation_recovery=preview` and the exact 161-row `recovery_manifest`
 saved from evidence run 37762823635. The manifest is protected operator input,
-not a checked-in list. Its SHA-256 is
+read from the runner event file rather than printed step environment values.
+It is not a checked-in list. Its SHA-256 is
 `d16f6bff149ffaabe3e67a324a1a2ff489fe03bff4fb0ad76d7d88424dc84055`.
 Both modes require the reviewed implementation on `main`. Preview reads only.
 `apply` requires
