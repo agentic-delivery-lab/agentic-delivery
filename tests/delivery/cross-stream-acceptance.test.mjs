@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { parseParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
+import { authorizeParticipation, parseParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
 import { resolveDeliveryParticipant } from '../../scripts/lib/resolve-delivery-participant.mjs';
 import { invocationEventSupported } from '../../scripts/lib/agent-invocation.mjs';
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
@@ -67,6 +67,24 @@ async function runIssueRoute(scenario, options = {}) {
     protectedEffects: [],
     modelIssue: null,
   };
+  const registry = fixtureRegistry(sourceIssue);
+  assert.equal(registry.valid, true, registry.errors.join('; '));
+  const participantAuthorization = authorizeParticipation({
+    registry,
+    repositoryId: eventRepositoryId,
+    repositoryFullName: eventRepository,
+    appRepositoryIds: [sourceIssue.repositoryId],
+  });
+  if (!participantAuthorization.allowed) {
+    return {
+      result: null,
+      trace,
+      participantAuthorization,
+      deliveryPolicy: null,
+      deliveryAuthorizationError: new Error(participantAuthorization.reason),
+    };
+  }
+
   const basePath = `/repos/${sourceIssue.repositoryFullName}`;
   const fetchImpl = async (url, options = {}) => {
     const parsed = new URL(url);
@@ -183,20 +201,21 @@ async function runIssueRoute(scenario, options = {}) {
       eventRepository,
       eventRepositoryId: String(eventRepositoryId),
       ...(manualRecovery ? { forceReadOnly: false } : {}),
-    }, fixtureRegistry(sourceIssue), {
+    }, registry, {
       repository: { id: Number(eventRepositoryId), full_name: eventRepository },
     });
   } catch (error) {
     deliveryAuthorizationError = error;
   }
-  return { result, trace, deliveryPolicy, deliveryAuthorizationError };
+  return { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError };
 }
 
 test('factory capability work is routed only from its revalidated synthetic source Issue', async () => {
   assert.equal(fixtures.evidenceClass, 'offline-fixture');
   const scenario = fixtures.scenarios.factoryCapability;
 
-  const { result, trace, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario);
+  const { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario);
+  assert.equal(participantAuthorization.allowed, true);
   assert.equal(deliveryAuthorizationError, null);
   assert.equal(deliveryPolicy.participantMode, 'active');
   assert.equal(deliveryPolicy.readOnlyRun, false);
@@ -217,7 +236,8 @@ test('synthetic product planning remains bound to its source Issue and does not 
   assert.equal(scenario.realProductRepository, null);
   assert.equal(scenario.productSteward, null);
 
-  const { result, trace, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario);
+  const { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario);
+  assert.equal(participantAuthorization.allowed, true);
   assert.equal(deliveryAuthorizationError, null);
   assert.equal(deliveryPolicy.participantMode, 'active');
   assert.equal(result.route, 'plan');
@@ -249,7 +269,7 @@ test('Project priority and status do not change the source-Issue route', async (
   assert.deepEqual(altered.trace.protectedEffects, []);
 });
 
-test('same-number Issues stay isolated across synthetic repositories', async () => {
+test('same-number Issues stay isolated when both source repositories are routed', async () => {
   const factory = fixtures.scenarios.factoryCapability.sourceIssue;
   const product = fixtures.scenarios.productFeature.sourceIssue;
   assert.equal(factory.issueNumber, product.issueNumber);
@@ -262,6 +282,22 @@ test('same-number Issues stay isolated across synthetic repositories', async () 
     assert.ok(Number.isSafeInteger(scenario.sourceIssue.issueNumber));
     assert.match(scenario.sourceIssue.issueNodeId, /^ISSUE_FIXTURE_/);
   }
+  const factoryRoute = await runIssueRoute(fixtures.scenarios.factoryCapability);
+  const productRoute = await runIssueRoute(fixtures.scenarios.productFeature);
+  assert.equal(factoryRoute.result.route, 'implement');
+  assert.equal(productRoute.result.route, 'plan');
+  assert.deepEqual(factoryRoute.trace.trustedIssueReads, [{
+    repository: factory.repositoryFullName,
+    issueNumber: factory.issueNumber,
+  }]);
+  assert.deepEqual(productRoute.trace.trustedIssueReads, [{
+    repository: product.repositoryFullName,
+    issueNumber: product.issueNumber,
+  }]);
+  assert.equal(factoryRoute.trace.modelIssue.id, factory.issueNodeId);
+  assert.equal(productRoute.trace.modelIssue.id, product.issueNodeId);
+  assert.equal(factoryRoute.participantAuthorization.allowed, true);
+  assert.equal(productRoute.participantAuthorization.allowed, true);
 });
 
 test('duplicate and out-of-order Issue events keep the same source identity and route', async () => {
@@ -316,16 +352,19 @@ test('Project-only events cannot enter Issue routing even when the card referenc
   assert.equal(modelCalls, 0);
 });
 
-test('a selected Issue route cannot reach delivery when the triggering repository ID mismatches', async () => {
+test('a repository ID mismatch is rejected before route reasoning or model invocation', async () => {
   const scenario = fixtures.scenarios.factoryCapability;
-  const { result, trace, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario, {
+  const { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario, {
     eventRepositoryId: '9000001999',
   });
-  assert.equal(result.route, 'implement');
-  assert.equal(trace.modelCalls, 1, 'semantic route selection precedes the reusable delivery authorization boundary');
+  assert.equal(result, null);
+  assert.equal(participantAuthorization.allowed, false);
+  assert.match(participantAuthorization.reason, /not enrolled in the participant registry/);
+  assert.equal(trace.modelCalls, 0);
   assert.equal(deliveryPolicy, null);
-  assert.match(deliveryAuthorizationError.message, /does not match the triggering event/);
-  assert.deepEqual(trace.protectedEffects, [], 'a rejected delivery policy must block downstream protected effects');
+  assert.match(deliveryAuthorizationError.message, /not enrolled in the participant registry/);
+  assert.deepEqual(trace.restReads, []);
+  assert.deepEqual(trace.protectedEffects, []);
 });
 
 test('synthetic evaluation evidence is retained on an owner hold without model or protected effects', () => {
@@ -364,7 +403,8 @@ test('missing Project read scope records a planning gap while Issue-first recove
   assert.equal(scenario.projectPlanningGap.code, 'PROJECT_READ_SCOPE_MISSING');
   assert.equal(scenario.projectPlanningGap.executionAuthorized, false);
 
-  const { result, trace, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario, { manualRecovery: true });
+  const { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario, { manualRecovery: true });
+  assert.equal(participantAuthorization.allowed, true);
   assert.equal(deliveryAuthorizationError, null);
   assert.equal(deliveryPolicy.participantMode, 'active');
   assert.equal(result.route, 'resume');
