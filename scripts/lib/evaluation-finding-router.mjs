@@ -116,29 +116,51 @@ function repositoryForIssueUrl(value, description) {
   return `${owner}/${name}`;
 }
 
-function validateRegistry(registry) {
-  if (!registry?.valid || !(registry.participants instanceof Map)) {
-    throw new EvaluationFindingRoutingError('A valid participant registry is required to resolve canonical owners.');
-  }
-}
-
-function canonicalOwnerExists(registry, repository) {
-  return [...registry.participants.values()].some((participant) => participant?.expectedFullName === repository);
-}
-
 function compareMeasurements(report) {
   const baseline = report.baseline.measurement;
   const candidate = report.comparison.candidateMeasurement;
   if (MEASURED_CLAIMS.has(report.comparison.claim) && (!baseline || !candidate || report.baseline.status !== 'measured')) {
     throw new EvaluationFindingRoutingError(`The ${report.comparison.claim} claim requires measured baseline and candidate measurements.`);
   }
-  if (!baseline || !candidate) return;
+  if (!baseline || !candidate) {
+    return { status: 'not-assessed', reason: 'A measured baseline and candidate are not both present.' };
+  }
 
   for (const key of ['metricId', 'unit', 'observationWindow']) {
     if (baseline[key] !== candidate[key]) {
       throw new EvaluationFindingRoutingError(`Baseline and candidate measurements are incomparable because ${key} differs.`);
     }
   }
+
+  const { claim, comparator } = report.comparison;
+  if (!MEASURED_CLAIMS.has(claim)) {
+    return { status: 'not-asserted', reason: `The report claim is ${claim}.` };
+  }
+  if (comparator.method !== 'absolute-difference' || !['higher-is-better', 'lower-is-better'].includes(comparator.direction)) {
+    return {
+      status: 'requires-human-comparator-review',
+      reason: 'The pinned comparator definition was not retrieved, so this claim cannot be checked from values and direction alone.',
+    };
+  }
+
+  const baselineValue = baseline.value;
+  const candidateValue = candidate.value;
+  const observedClaim = baselineValue === candidateValue
+    ? 'no-change'
+    : ((candidateValue > baselineValue) === (comparator.direction === 'higher-is-better') ? 'improvement' : 'regression');
+
+  if (claim === 'no-change' && observedClaim !== 'no-change') {
+    return {
+      status: 'requires-human-comparator-review',
+      reason: 'Different values may be treated as no change by comparator-specific tolerance rules that are not available locally.',
+    };
+  }
+  if (claim !== observedClaim) {
+    throw new EvaluationFindingRoutingError(
+      `The ${claim} claim contradicts measured values and comparator direction (observed direction: ${observedClaim}).`,
+    );
+  }
+  return { status: 'directionally-consistent', observedClaim };
 }
 
 function collectSourcePins(report) {
@@ -160,7 +182,7 @@ function validateReport(report, schemaContract) {
   if (report.$schema !== EVALUATION_REPORT_SCHEMA_URL) {
     throw new EvaluationFindingRoutingError('Evaluation report must reference the exact immutable Architecture schema pin.');
   }
-  compareMeasurements(report);
+  return compareMeasurements(report);
 }
 
 function buildReportReference(report, schemaContract, canonicalReport) {
@@ -176,16 +198,33 @@ function buildReportReference(report, schemaContract, canonicalReport) {
   };
 }
 
-function routeOne(report, { schemaContract, participantRegistry, sourceIssueUrl, canonicalReport }) {
+function buildSourceEvidence(report) {
+  return {
+    verification: 'references-preserved-but-not-retrieved',
+    evidence: structuredClone(report.evidence),
+    sourcePins: collectSourcePins(report),
+    uncertainty: structuredClone(report.uncertainty),
+    review: structuredClone(report.review),
+  };
+}
+
+function routeOne(report, { schemaContract, sourceIssueUrl, canonicalReport, comparisonVerification }) {
   const reportReference = buildReportReference(report, schemaContract, canonicalReport);
   const action = report.recommendation.action;
+  const shared = {
+    reportId: report.reportId,
+    layer: report.layer,
+    reportReference,
+    comparisonVerification,
+    sourceEvidence: buildSourceEvidence(report),
+    sourceReport: structuredClone(report),
+  };
 
   if (action !== 'owner-issue') {
     return {
-      reportId: report.reportId,
+      ...shared,
       action,
       status: action === 'human-review' ? 'awaiting-human-review' : 'no-action',
-      reportReference,
     };
   }
 
@@ -195,40 +234,29 @@ function routeOne(report, { schemaContract, participantRegistry, sourceIssueUrl,
 
   const targetUrl = canonicalIssueUrl(report.recommendation.ownerIssue, 'Recommendation ownerIssue');
   const targetRepository = repositoryForIssueUrl(targetUrl, 'Recommendation ownerIssue');
-  const subjectRepository = report.subject.sourcePin.repository;
-  if (targetRepository !== subjectRepository) {
-    throw new EvaluationFindingRoutingError('Recommendation owner must match the subject sourcePin repository.');
-  }
-  if (!canonicalOwnerExists(participantRegistry, targetRepository)) {
-    throw new EvaluationFindingRoutingError(`Canonical owner ${targetRepository} is not present in the participant registry.`);
-  }
   if (targetUrl === sourceIssueUrl) {
     throw new EvaluationFindingRoutingError('Recommendation ownerIssue must not target the source Issue.');
   }
 
   return {
-    reportId: report.reportId,
+    ...shared,
     duplicateCount: 1,
-    layer: report.layer,
     target: { repository: targetRepository, issueUrl: targetUrl },
+    ownershipVerification: {
+      status: 'unverified-report-claim',
+      source: 'recommendation.ownerIssue',
+      requiresHumanConfirmation: true,
+    },
     sourceIssueUrl,
     planningStatus: 'awaiting-human-prioritization',
     executionAuthorized: false,
-    reportReference,
-    sourceEvidence: {
-      verification: 'references-preserved-but-not-retrieved',
-      evidence: structuredClone(report.evidence),
-      sourcePins: collectSourcePins(report),
-    },
-    sourceReport: structuredClone(report),
   };
 }
 
-export function routeEvaluationReports({ reports, schemaContract, participantRegistry, sourceIssueUrl } = {}) {
+export function routeEvaluationReports({ reports, schemaContract, sourceIssueUrl } = {}) {
   if (!COMPILED_CONTRACTS.has(schemaContract)) {
     throw new EvaluationFindingRoutingError('A schema contract compiled from the pinned Architecture bytes is required.');
   }
-  validateRegistry(participantRegistry);
   const canonicalSourceIssue = canonicalIssueUrl(sourceIssueUrl, 'Source Issue');
   if (!Array.isArray(reports) || reports.length === 0) {
     throw new EvaluationFindingRoutingError('At least one evaluation report is required.');
@@ -236,7 +264,7 @@ export function routeEvaluationReports({ reports, schemaContract, participantReg
 
   const uniqueReports = new Map();
   for (const report of reports) {
-    validateReport(report, schemaContract);
+    const comparisonVerification = validateReport(report, schemaContract);
     const canonicalReport = canonicalJson(report);
     const fingerprint = sha256(canonicalReport);
     const previous = uniqueReports.get(report.reportId);
@@ -247,17 +275,17 @@ export function routeEvaluationReports({ reports, schemaContract, participantReg
       previous.duplicateCount += 1;
       continue;
     }
-    uniqueReports.set(report.reportId, { report, canonicalReport, fingerprint, duplicateCount: 1 });
+    uniqueReports.set(report.reportId, { report, canonicalReport, fingerprint, duplicateCount: 1, comparisonVerification });
   }
 
   const proposals = [];
   const dispositions = [];
-  for (const { report, canonicalReport, duplicateCount } of uniqueReports.values()) {
+  for (const { report, canonicalReport, duplicateCount, comparisonVerification } of uniqueReports.values()) {
     const result = routeOne(report, {
       schemaContract,
-      participantRegistry,
       sourceIssueUrl: canonicalSourceIssue,
       canonicalReport,
+      comparisonVerification,
     });
     if (result.target) {
       result.duplicateCount = duplicateCount;

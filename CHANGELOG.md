@@ -9,8 +9,6 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- [Issue #103](https://github.com/agentic-delivery-lab/agentic-delivery/issues/103) adds an offline evaluation-finding router that validates the pinned report schema, preserves report and source evidence, rejects ambiguous or incomparable routing data, and emits human-review proposals without Issue, Project, or execution authority. It depends on Architecture PR #14 and does not enable a live consumer.
-
 - The draft controller release `0.2.0-draft.66` pins the strict routing-schema repair at `08728c4210ec2d227eec2b6c182dcf3bafd80db1` for the central shadow participant. Draft65 remains available for rollback. Intake continues to use draft65 until a separate reviewed bootstrap update selects the new registry.
 
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds Neon-backed dispatch leases and controller receipts, persists cursors for bounded delivery-history scans, stores GitHub delivery IDs before advancing checkpoints, aggregates attempt outcomes across scan segments, and keeps active or uncertain webhook outcomes retryable.
@@ -494,6 +492,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) aligns the invocation identity with the registered `Agentic Delivery Lab Invoker 7F3A` GitHub App name, slug, mention, and bot login across the actor catalog, code, tests, and agentic documentation.
 
 ### Added
+
+- [Issue #103](https://github.com/agentic-delivery-lab/agentic-delivery/issues/103) adds an offline evaluation-finding router that validates the pinned report schema, preserves full report evidence across proposals and dispositions, marks owner candidates and comparator-dependent claims for human review, and grants no Issue, Project, or execution authority. It depends on Architecture PR #14 and does not enable a live consumer.
 
 - Issue #60 adds an explicitly approved, audit-preserving disposition for unavailable historical webhook deliveries. Archived queue records stop holding reconciliation progress and cannot be automatically retried; the protected recovery operation checks fresh history and commits the exact approved set with its scan restart atomically.
 

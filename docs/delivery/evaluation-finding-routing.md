@@ -9,31 +9,36 @@ PR #14 and must not be merged before that contract is reviewed and merged. The
 existing participant registry and controller release do not adopt the proposed
 schema as a default dependency.
 
-An actionable report must name a canonical GitHub Issue in the same repository
-as its subject source pin. That repository must appear in the local participant
-registry. The router validates the complete report, checks measured comparison
-claims for a measured baseline and matching metric, unit, and observation
-window, and fails closed on invalid pins, unsupported versions, or ambiguous
-ownership. Repeated identical reports with the same `reportId` become one
+The router validates the complete report, requires a measured baseline and
+matching metric, unit, and observation window for measured claims, and checks
+the direction of `absolute-difference` claims against the values and comparator
+direction. A contradiction is rejected. Claims that depend on an unavailable
+comparator definition, including unequal measurements claimed as `no-change`,
+are marked for human comparator review. Invalid pins and unsupported versions
+are rejected. Repeated identical reports with the same `reportId` become one
 proposal; conflicting content under the same ID is rejected. Synthetic reports
 cannot produce owner Issue proposals.
 
-The report does not define a separate owner mapping, so routing never guesses
-from its prose or layer name: `ownerIssue` must belong to the repository in
-`subject.sourcePin`. A product owner absent from the participant registry is
-rejected for a later ownership decision; this tool does not enroll or activate
-that repository.
+`recommendation.ownerIssue` is a report-asserted candidate target. The router
+checks that it is a canonical GitHub Issue URL and prevents it from targeting
+the source Issue, but it does not establish the target repository's ownership,
+the Issue's existence or accessibility, or a relationship between that target
+and the subject source pin. Participant enrollment is not used as evidence of
+ownership. Every proposal marks ownership as unverified and requires a human
+to confirm the target organization, repository, and Issue before prioritizing
+or acting on it.
 
-Each proposal retains the complete source report, its evidence references,
-every source pin, and a canonical SHA-256 reference to the report. The router
+Every proposal and disposition retains the complete source report, evidence
+references, every source pin, uncertainty, review state, a comparison
+verification status, and a SHA-256 reference to the report. The router
 verifies the schema bytes and report digest locally; it preserves source pins
-after schema validation but does not retrieve source repositories or verify
-their referenced content. Its planning status is
-`awaiting-human-prioritization`; it has no Issue priority, lifecycle, readiness,
-Project, or execution fields. Reports recommending human review or no action
-produce dispositions without an Issue proposal. The command reads local files
-and writes JSON to standard output; it does not call GitHub or change
-repository, Issue, Project, policy, participant, or release state.
+after schema validation but does not retrieve source repositories, comparator
+definitions, or referenced content. A proposal's planning status is
+`awaiting-human-prioritization`; it has no Issue priority, lifecycle,
+readiness, Project, or execution fields. Reports recommending human review or
+no action produce dispositions with the same provenance. The command reads
+local files and writes JSON to standard output; it does not call GitHub or
+change repository, Issue, Project, policy, participant, or release state.
 The `--source-issue` value supplies context for self-target detection only; it
 does not verify actor permissions or authorize a later mutation.
 

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
@@ -9,13 +10,12 @@ import {
   loadPinnedEvaluationReportSchema,
   routeEvaluationReports,
 } from '../../scripts/lib/evaluation-finding-router.mjs';
-import { loadParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
+import { createEvaluationFindingProposals } from '../../scripts/route-evaluation-findings.mjs';
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const architectureRoot = process.env.EVALUATION_ARCHITECTURE_ROOT;
 const schemaContract = architectureRoot ? await loadPinnedEvaluationReportSchema(architectureRoot) : null;
-const participantRegistry = await loadParticipantRegistry(repositoryRoot);
 const syntheticUnmeasuredReport = parseRepositoryYaml(
   await readFile(path.join(repositoryRoot, 'tests/fixtures/evaluation-reports/synthetic-unmeasured-report.yml'), 'utf8'),
   'synthetic evaluation report fixture',
@@ -64,7 +64,6 @@ function route(reports) {
   return routeEvaluationReports({
     reports,
     schemaContract,
-    participantRegistry,
     sourceIssueUrl,
   });
 }
@@ -80,6 +79,11 @@ routeTest('routes a measured report into a review proposal while preserving the 
   assert.equal(result.sourceIssueUrl, sourceIssueUrl);
   assert.equal(result.proposals[0].planningStatus, 'awaiting-human-prioritization');
   assert.equal(result.proposals[0].executionAuthorized, false);
+  assert.deepEqual(result.proposals[0].ownershipVerification, {
+    status: 'unverified-report-claim',
+    source: 'recommendation.ownerIssue',
+    requiresHumanConfirmation: true,
+  });
   assert.deepEqual(result.proposals[0].sourceReport, input);
   assert.equal(result.proposals[0].reportReference.sha256.length, 64);
   assert.equal(result.proposals[0].reportReference.algorithm, 'sha256-canonical-json-v1');
@@ -103,16 +107,35 @@ routeTest('keeps the synthetic unmeasured Architecture example as a no-action di
   assert.equal(result.dispositions[0].action, 'no-action');
   assert.equal(result.dispositions[0].status, 'no-action');
   assert.equal(result.dispositions[0].reportReference.reportId, syntheticUnmeasuredReport.reportId);
+  assert.deepEqual(result.dispositions[0].sourceReport, syntheticUnmeasuredReport);
+  assert.deepEqual(result.dispositions[0].sourceEvidence.evidence, syntheticUnmeasuredReport.evidence);
+  assert.deepEqual(result.dispositions[0].sourceEvidence.uncertainty, syntheticUnmeasuredReport.uncertainty);
+  assert.deepEqual(result.dispositions[0].sourceEvidence.review, syntheticUnmeasuredReport.review);
+  assert.equal(result.dispositions[0].sourceEvidence.sourcePins.length, 7);
   assert.equal(result.mutationsRequested, false);
 });
 
 routeTest('keeps human-review recommendations as dispositions without creating owner proposals', () => {
-  const result = route([report({
+  const input = report({
     recommendation: { action: 'human-review', rationale: 'A human must interpret the evidence.' },
-  })]);
+  });
 
+  const result = route([input]);
   assert.equal(result.proposals.length, 0);
   assert.equal(result.dispositions[0].status, 'awaiting-human-review');
+  const disposition = result.dispositions[0];
+  assert.deepEqual(disposition.sourceReport, input);
+  assert.deepEqual(disposition.sourceEvidence.uncertainty, input.uncertainty);
+  assert.deepEqual(disposition.sourceEvidence.review, input.review);
+  assert.deepEqual(disposition.sourceEvidence.sourcePins, [
+    { role: 'subject', pin: input.subject.sourcePin },
+    { role: 'dataset', pin: input.dataset.sourcePin },
+    { role: 'dependency:0:evaluation-runner', pin: input.dependencies[0].sourcePin },
+    { role: 'grader:deterministic', pin: input.graders.deterministic.sourcePin },
+    { role: 'grader:semantic', pin: input.graders.semantic.sourcePin },
+    { role: 'baseline-definition', pin: input.baseline.definitionPin },
+    { role: 'comparator', pin: input.comparison.comparator.sourcePin },
+  ]);
 });
 
 routeTest('does not route synthetic evaluation data as an actionable Issue proposal', () => {
@@ -154,6 +177,70 @@ routeTest('rejects incomparable baseline and candidate measurements', () => {
     },
   });
   assert.throws(() => route([incomparable]), /incomparable/);
+});
+
+routeTest('checks directional absolute-difference claims against the measurements', () => {
+  const improvement = route([report()]).proposals[0];
+  assert.equal(improvement.comparisonVerification.status, 'directionally-consistent');
+
+  const lowerIsBetterRegression = report({
+    baseline: { ...report().baseline, measurement: measurement(0.4) },
+    comparison: {
+      ...report().comparison,
+      claim: 'regression',
+      comparator: { ...report().comparison.comparator, direction: 'lower-is-better' },
+      candidateMeasurement: measurement(0.6),
+    },
+  });
+  assert.equal(route([lowerIsBetterRegression]).proposals[0].comparisonVerification.status, 'directionally-consistent');
+
+  const equalValues = report({
+    baseline: { ...report().baseline, measurement: measurement(0.6) },
+    comparison: { ...report().comparison, claim: 'no-change', candidateMeasurement: measurement(0.6) },
+  });
+  assert.equal(route([equalValues]).proposals[0].comparisonVerification.status, 'directionally-consistent');
+
+  const contradiction = report({
+    comparison: { ...report().comparison, candidateMeasurement: measurement(0.2) },
+  });
+  assert.throws(() => route([contradiction]), /contradicts measured values and comparator direction/);
+
+  const unequalNoChange = report({
+    comparison: { ...report().comparison, claim: 'no-change' },
+  });
+  assert.equal(route([unequalNoChange]).proposals[0].comparisonVerification.status, 'requires-human-comparator-review');
+});
+
+routeTest('marks comparator-dependent claims for human review when the comparator definition is unavailable', () => {
+  for (const comparator of [
+    { method: 'relative-change', direction: 'higher-is-better' },
+    { method: 'threshold', direction: 'lower-is-better' },
+    { method: 'absolute-difference', direction: 'target-range' },
+  ]) {
+    const candidate = report({
+      comparison: {
+        ...report().comparison,
+        comparator: { ...report().comparison.comparator, ...comparator },
+      },
+    });
+    assert.equal(route([candidate]).proposals[0].comparisonVerification.status, 'requires-human-comparator-review');
+  }
+});
+
+routeTest('runs the proposal CLI without loading a participant registry', async () => {
+  const emptyWorkspace = await mkdtemp(path.join(tmpdir(), 'evaluation-finding-router-'));
+  try {
+    const result = await createEvaluationFindingProposals([
+      '--architecture-root', architectureRoot,
+      '--source-issue', sourceIssueUrl,
+      '--report', path.join(repositoryRoot, 'tests/fixtures/evaluation-reports/measured-owner-issue.yml'),
+    ], { cwd: emptyWorkspace });
+
+    assert.equal(result.proposals.length, 1);
+    assert.equal(result.proposals[0].ownershipVerification.status, 'unverified-report-claim');
+  } finally {
+    await rm(emptyWorkspace, { recursive: true, force: true });
+  }
 });
 
 routeTest('retains deterministic failures, semantic uncertainty, review state, and regression severity', () => {
@@ -208,26 +295,35 @@ routeTest('deduplicates exact replay by report ID and rejects conflicting reuse 
   assert.throws(() => route([repeated, conflicting]), /conflicting reports share reportId/);
 });
 
-routeTest('rejects non-canonical, unregistered, self-targeting, and ambiguous owners', () => {
-  assert.throws(() => route([report({
-    recommendation: { action: 'owner-issue', ownerIssue: 'https://github.com/agentic-delivery-lab/agentic-delivery-primitives/issues/3', rationale: 'Wrong owner.' },
-  })]), /must match the subject sourcePin repository/);
+routeTest('keeps a report-asserted owner candidate unverified when it differs from the subject repository or participant registry', () => {
+  const candidateUrl = 'https://github.com/example-product/unregistered/issues/42';
+  const candidate = report({
+    subject: { ...report().subject, sourcePin: pin('example-product/source-repo', '8') },
+    recommendation: { action: 'owner-issue', ownerIssue: candidateUrl, rationale: 'The report proposes a separate product owner.' },
+  });
+  const proposal = route([candidate]).proposals[0];
 
-  assert.throws(() => route([report({
-    subject: { ...report().subject, sourcePin: pin('agentic-delivery-lab/unknown-product', '8') },
-    recommendation: { action: 'owner-issue', ownerIssue: 'https://github.com/agentic-delivery-lab/unknown-product/issues/3', rationale: 'Unknown owner.' },
-  })]), /not present in the participant registry/);
-
-  assert.throws(() => route([report({
-    recommendation: { action: 'owner-issue', ownerIssue: sourceIssueUrl, rationale: 'Recursive self-target.' },
-  })]), /must not target the source Issue/);
+  assert.equal(proposal.target.repository, 'example-product/unregistered');
+  assert.equal(proposal.target.issueUrl, candidateUrl);
+  assert.deepEqual(proposal.ownershipVerification, {
+    status: 'unverified-report-claim',
+    source: 'recommendation.ownerIssue',
+    requiresHumanConfirmation: true,
+  });
 
   assert.throws(() => route([report({
     recommendation: { action: 'owner-issue', ownerIssue: 'https://github.com/agentic-delivery-lab/agentic-delivery/issues/101?state=open', rationale: 'Non-canonical owner URI.' },
   })]), /canonical GitHub Issue URL/);
 });
 
-routeTest('preserves the layer and its pinned canonical owner without collapsing reports', () => {
+routeTest('rejects self-targeting owner Issues', () => {
+
+  assert.throws(() => route([report({
+    recommendation: { action: 'owner-issue', ownerIssue: sourceIssueUrl, rationale: 'Recursive self-target.' },
+  })]), /must not target the source Issue/);
+});
+
+routeTest('preserves the layer and each report-asserted owner candidate without collapsing reports', () => {
   const examples = [
     ['agent-capability', 'agentic-delivery-lab/agentic-delivery-primitives', 'a'],
     ['factory', ownerRepository, 'b'],

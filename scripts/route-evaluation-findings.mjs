@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
 import { loadPinnedEvaluationReportSchema, routeEvaluationReports } from './lib/evaluation-finding-router.mjs';
-import { parseParticipantRegistry } from './lib/participant-registry.mjs';
 
 export class EvaluationFindingCliError extends Error {
   constructor(message) {
@@ -16,7 +15,7 @@ export class EvaluationFindingCliError extends Error {
 
 function parseArguments(argv) {
   const options = { reports: [] };
-  const single = new Set(['--architecture-root', '--participants', '--source-issue']);
+  const single = new Set(['--architecture-root', '--source-issue']);
 
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
@@ -42,13 +41,6 @@ function parseArguments(argv) {
 
 export async function createEvaluationFindingProposals(argv, { cwd = process.cwd() } = {}) {
   const options = parseArguments(argv);
-  const registryPath = path.resolve(cwd, options['--participants'] ?? 'config/participants.yml');
-  const registrySource = await readFile(registryPath, 'utf8');
-  const participantRegistry = parseParticipantRegistry(parseRepositoryYaml(registrySource, 'participant registry'));
-  if (!participantRegistry.valid) {
-    throw new EvaluationFindingCliError(`Participant registry is invalid: ${participantRegistry.errors.join('; ')}.`);
-  }
-
   const reports = [];
   for (const reportPath of options.reports) {
     const absolutePath = path.resolve(cwd, reportPath);
@@ -60,7 +52,6 @@ export async function createEvaluationFindingProposals(argv, { cwd = process.cwd
   return routeEvaluationReports({
     reports,
     schemaContract,
-    participantRegistry,
     sourceIssueUrl: options['--source-issue'],
   });
 }
