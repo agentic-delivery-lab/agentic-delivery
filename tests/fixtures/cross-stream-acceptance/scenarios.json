@@ -203,9 +203,9 @@
         "results": {
           "deterministicChecks": [
             {
-              "checkId": "synthetic-project-context-is-not-authority",
+              "checkId": "synthetic-evaluation-owner-resolution",
               "outcome": "fail",
-              "details": "Planning context alone did not authorize an Issue route.",
+              "details": "The synthetic report supplies no canonical owner or actionable repository target, so the improvement handoff is not actionable.",
               "evidenceRefs": [
                 "fixtures/cross-stream-acceptance/scenarios.json"
               ]
