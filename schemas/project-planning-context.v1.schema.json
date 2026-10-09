@@ -94,5 +94,49 @@
       }
     },
     "requiredBeforeExecution": { "const": "revalidate-origin-issue-authorization" }
-  }
+  },
+  "allOf": [
+    {
+      "properties": {
+        "planningFields": {
+          "type": "array",
+          "contains": {
+            "type": "object",
+            "required": ["key"],
+            "properties": { "key": { "const": "portfolio-group" } }
+          },
+          "minContains": 0,
+          "maxContains": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "planningFields": {
+          "type": "array",
+          "contains": {
+            "type": "object",
+            "required": ["key"],
+            "properties": { "key": { "const": "portfolio-sequence" } }
+          },
+          "minContains": 0,
+          "maxContains": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "planningFields": {
+          "type": "array",
+          "contains": {
+            "type": "object",
+            "required": ["key"],
+            "properties": { "key": { "const": "planning-dependencies" } }
+          },
+          "minContains": 0,
+          "maxContains": 1
+        }
+      }
+    }
+  ]
 }

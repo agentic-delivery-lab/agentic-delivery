@@ -5,7 +5,11 @@
       "projectRead": "granted",
       "sourceIssueRead": "granted"
     },
-    "actorPermission": "write",
+    "actorAuthorization": {
+      "authorized": true,
+      "actorKind": "repository-writer",
+      "permission": "write"
+    },
     "approvedProject": {
       "nodeId": "project-fixture-01",
       "fieldSchemaSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

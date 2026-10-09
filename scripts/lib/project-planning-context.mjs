@@ -17,6 +17,19 @@ function validTimestamp(value) {
   return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }
 
+function normalizeRepositoryId(value) {
+  if (typeof value === 'string' && REPOSITORY_ID.test(value)) return value;
+  if (Number.isSafeInteger(value) && value > 0) return String(value);
+  return null;
+}
+
+function authorizedSourceIssueWriter(authorization) {
+  if (authorization?.authorized !== true) return false;
+  if (authorization.actorKind === 'internal-automation') return true;
+  return authorization.actorKind === 'repository-writer'
+    && WRITER_PERMISSIONS.has(authorization.permission);
+}
+
 function validatePlanningFields(fields) {
   if (!Array.isArray(fields)) return 'PROJECT_FIELDS_INVALID';
   const seen = new Set();
@@ -37,7 +50,7 @@ function validatePlanningFields(fields) {
     if (key === 'planning-dependencies') {
       if (!Array.isArray(field.value)) return 'PROJECT_FIELDS_INVALID';
       for (const dependency of field.value) {
-        if (!dependency || !REPOSITORY_ID.test(String(dependency.repositoryId ?? ''))
+        if (!dependency || !normalizeRepositoryId(dependency.repositoryId)
           || !FULL_NAME.test(String(dependency.repositoryFullName ?? ''))
           || !Number.isSafeInteger(dependency.issueNumber) || dependency.issueNumber < 1
           || typeof dependency.issueNodeId !== 'string' || dependency.issueNodeId.length === 0) {
@@ -53,7 +66,8 @@ function validatePlanningFields(fields) {
  * Normalize an offline Project read into planning-only context. This function
  * performs no GitHub access, authorization write-back, or execution dispatch.
  */
-export function normalizeProjectPlanningInput(input = {}) {
+export function normalizeProjectPlanningInput(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return fail('PLANNING_INPUT_INVALID');
   const access = input.access ?? {};
   if (!PROJECT_READ_STATES.has(access.projectRead)) return fail('PROJECT_READ_ACCESS_UNKNOWN');
   if (access.projectRead === 'missing-scope') return fail('PROJECT_READ_SCOPE_MISSING');
@@ -61,7 +75,7 @@ export function normalizeProjectPlanningInput(input = {}) {
 
   if (!ISSUE_READ_STATES.has(access.sourceIssueRead)) return fail('SOURCE_ISSUE_ACCESS_UNKNOWN');
   if (access.sourceIssueRead !== 'granted') return fail('SOURCE_ISSUE_ACCESS_DENIED');
-  if (!WRITER_PERMISSIONS.has(input.actorPermission)) return fail('SOURCE_ISSUE_PERMISSION_DENIED');
+  if (!authorizedSourceIssueWriter(input.actorAuthorization)) return fail('SOURCE_ISSUE_PERMISSION_DENIED');
 
   const approvedProject = input.approvedProject;
   if (!approvedProject || typeof approvedProject.nodeId !== 'string' || approvedProject.nodeId.length === 0) {
@@ -88,20 +102,24 @@ export function normalizeProjectPlanningInput(input = {}) {
 
   const originRepository = input.originRepository;
   const sourceIssue = input.sourceIssue;
-  if (!originRepository || !REPOSITORY_ID.test(String(originRepository.id ?? ''))
+  const originRepositoryId = normalizeRepositoryId(originRepository?.id);
+  const sourceRepositoryId = normalizeRepositoryId(sourceIssue?.repositoryId);
+  const contentRepositoryId = normalizeRepositoryId(content.repositoryId);
+  if (!originRepositoryId
     || !FULL_NAME.test(String(originRepository.fullName ?? ''))
-    || !sourceIssue || !REPOSITORY_ID.test(String(sourceIssue.repositoryId ?? ''))
+    || !sourceRepositoryId
     || !FULL_NAME.test(String(sourceIssue.repositoryFullName ?? ''))
     || !Number.isSafeInteger(sourceIssue.number) || sourceIssue.number < 1
     || typeof sourceIssue.nodeId !== 'string' || sourceIssue.nodeId.length === 0
     || !validTimestamp(sourceIssue.updatedAt)) {
     return fail('SOURCE_ISSUE_IDENTITY_INVALID');
   }
-  if (sourceIssue.repositoryId !== originRepository.id
+  if (!contentRepositoryId) return fail('PROJECT_SOURCE_ISSUE_MISMATCH');
+  if (sourceRepositoryId !== originRepositoryId
     || sourceIssue.repositoryFullName !== originRepository.fullName) {
     return fail('ORIGIN_REPOSITORY_IDENTITY_MISMATCH');
   }
-  if (content.repositoryId !== sourceIssue.repositoryId
+  if (contentRepositoryId !== sourceRepositoryId
     || content.repositoryFullName !== sourceIssue.repositoryFullName
     || content.issueNumber !== sourceIssue.number
     || content.issueNodeId !== sourceIssue.nodeId
@@ -135,7 +153,7 @@ export function normalizeProjectPlanningInput(input = {}) {
       },
       sourceIssue: {
         repository: {
-          id: sourceIssue.repositoryId,
+          id: sourceRepositoryId,
           fullName: sourceIssue.repositoryFullName,
         },
         number: sourceIssue.number,
@@ -145,7 +163,7 @@ export function normalizeProjectPlanningInput(input = {}) {
         key,
         value: key === 'planning-dependencies'
           ? value.map(({ repositoryId, repositoryFullName, issueNumber, issueNodeId }) => ({
-            repositoryId,
+            repositoryId: normalizeRepositoryId(repositoryId),
             repositoryFullName,
             issueNumber,
             issueNodeId,
