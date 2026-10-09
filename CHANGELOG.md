@@ -493,6 +493,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Added
 
+- [Issue #103](https://github.com/agentic-delivery-lab/agentic-delivery/issues/103) adds an offline evaluation-finding router that validates the pinned report schema, preserves full report evidence, holds owner-Issue assertions as `awaiting-owner-verification` dispositions until an authoritative owner map exists, and marks comparator-dependent claims for human review. It grants no Issue, Project, or execution authority, depends on Architecture PR #14, and does not enable a live consumer.
+
 - Issue #60 adds an explicitly approved, audit-preserving disposition for unavailable historical webhook deliveries. Archived queue records stop holding reconciliation progress and cannot be automatically retried; the protected recovery operation checks fresh history and commits the exact approved set with its scan restart atomically.
 
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds a Neon-backed atomic webhook replay store, a repeatable minimal schema migration, and bounded cleanup of expired claims.
