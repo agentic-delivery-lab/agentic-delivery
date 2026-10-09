@@ -106,7 +106,7 @@ jobs:
         with:
           repository: agentic-delivery-lab/agentic-delivery-architecture
           ref: 06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed
-          path: .codex-delivery/architecture-report-contract
+          path: node_modules/architecture-report-contract
           persist-credentials: false
 
       - name: Exercise offline evaluation routing against the immutable contract
@@ -115,7 +115,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/route-evaluation-findings.mjs \
-            --architecture-root "$GITHUB_WORKSPACE/.codex-delivery/architecture-report-contract" \
+            --architecture-root "$GITHUB_WORKSPACE/node_modules/architecture-report-contract" \
             --source-issue https://github.com/agentic-delivery-lab/agentic-delivery/issues/103 \
             --report tests/fixtures/evaluation-reports/synthetic-unmeasured-report.yml \
             > "$EVALUATION_ROUTE_OUTPUT"
@@ -148,7 +148,7 @@ jobs:
 
       - name: Run repository tests
         env:
-          EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/.codex-delivery/architecture-report-contract
+          EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-report-contract
         run: pnpm test
 
       - name: Validate changelog structure
@@ -210,14 +210,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check out the pinned Architecture report contract
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          repository: agentic-delivery-lab/agentic-delivery-architecture
-          ref: 06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed
-          path: .codex-delivery/architecture-report-contract
-          persist-credentials: false
-
       - name: Set up pnpm and Node.js
         uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
@@ -231,7 +223,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Check out the pinned Architecture report contract
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-architecture
+          ref: 06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed
+          path: node_modules/architecture-report-contract
+          persist-credentials: false
+
       - name: Run repository tests
         env:
-          EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/.codex-delivery/architecture-report-contract
+          EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-report-contract
         run: pnpm test
