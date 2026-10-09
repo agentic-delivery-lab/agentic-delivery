@@ -267,7 +267,7 @@ test('unapproved or mismatched Project identity fails closed', async () => {
   assertBlocked(normalizeProjectPlanningInput(mismatchedIdentity), 'PROJECT_IDENTITY_MISMATCH');
 });
 
-test('stale linked Issues, stale field schemas, and unsupported Project fields are rejected', async () => {
+test('stale linked Issues, stale field schemas, unsupported Project fields, and Issue-owned fields are rejected', async () => {
   const staleIssue = await validInput();
   staleIssue.sourceIssue.updatedAt = '2026-10-09T09:05:00Z';
   assertBlocked(normalizeProjectPlanningInput(staleIssue), 'STALE_PROJECT_ISSUE_SNAPSHOT');
@@ -280,9 +280,11 @@ test('stale linked Issues, stale field schemas, and unsupported Project fields a
   unsupportedField.planningFields.push({ key: 'sprint', value: 'week 42' });
   assertBlocked(normalizeProjectPlanningInput(unsupportedField), 'UNSUPPORTED_PROJECT_FIELD');
 
-  const duplicatedIssueAuthority = await validInput();
-  duplicatedIssueAuthority.planningFields.push({ key: 'issue-priority', value: 'P0' });
-  assertBlocked(normalizeProjectPlanningInput(duplicatedIssueAuthority), 'ISSUE_OWNED_FIELD_IN_PROJECT');
+  for (const key of ['issue-priority', 'lifecycle-stage', 'delivery-state', 'execution-state']) {
+    const duplicatedIssueAuthority = await validInput();
+    duplicatedIssueAuthority.planningFields = [{ key, value: 'offline-fixture-value' }];
+    assertBlocked(normalizeProjectPlanningInput(duplicatedIssueAuthority), 'ISSUE_OWNED_FIELD_IN_PROJECT');
+  }
 });
 
 test('a Project item linked to a foreign repository Issue cannot be normalized', async () => {
