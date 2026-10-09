@@ -56,7 +56,7 @@
             "required": ["key", "value"],
             "properties": {
               "key": { "const": "portfolio-group" },
-              "value": { "type": "string", "minLength": 1, "maxLength": 200 }
+              "value": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S" }
             }
           },
           {

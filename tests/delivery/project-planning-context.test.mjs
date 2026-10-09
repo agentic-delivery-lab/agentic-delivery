@@ -119,8 +119,24 @@ test('the context schema rejects duplicate supported planning-field keys', async
   assertBlocked(normalizeProjectPlanningInput(input), 'DUPLICATE_PROJECT_FIELD');
 });
 
+test('the context schema rejects whitespace-only portfolio groups', async () => {
+  const input = await validInput();
+  input.planningFields = [{ key: 'portfolio-group', value: 'service reliability' }];
+  const result = normalizeProjectPlanningInput(input);
+  assert.equal(result.valid, true);
+
+  const whitespaceContext = structuredClone(result.value);
+  whitespaceContext.planningFields[0].value = '   ';
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  assert.equal(ajv.validate(schema, whitespaceContext), false);
+
+  input.planningFields[0].value = '   ';
+  assertBlocked(normalizeProjectPlanningInput(input), 'PROJECT_FIELDS_INVALID');
+});
+
 test('a valid Project planning fixture still re-fetches and authorizes its origin Issue through existing gates', async () => {
   const input = await validInput();
+  const linkedProjectItemContent = structuredClone(input.item.content);
   const calls = [];
   const fetchImpl = async (url) => {
     calls.push(url);
@@ -163,8 +179,6 @@ test('a valid Project planning fixture still re-fetches and authorizes its origi
     id: currentRepository.id,
     fullName: currentRepository.full_name,
   };
-  input.item.content.repositoryId = currentRepository.id;
-  input.item.content.repositoryFullName = currentRepository.full_name;
   input.sourceIssue = {
     repositoryId: currentRepository.id,
     repositoryFullName: currentRepository.full_name,
@@ -172,6 +186,7 @@ test('a valid Project planning fixture still re-fetches and authorizes its origi
     nodeId: currentIssue.node_id,
     updatedAt: currentIssue.updated_at,
   };
+  assert.deepEqual(input.item.content, linkedProjectItemContent);
   const planningContext = normalizeProjectPlanningInput(input);
 
   assert.equal(planningContext.valid, true);
