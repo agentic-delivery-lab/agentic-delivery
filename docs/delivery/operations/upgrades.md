@@ -33,5 +33,27 @@ verify both masker working directories and that each masker runs before its
 consumer. Until the second change merges, intake continues to resolve the old
 participant pin.
 
+## Issue #60: staged routing repair
+
+Draft `0.2.0-draft.66` pins the merged routing-schema repair at
+`08728c4210ec2d227eec2b6c182dcf3bafd80db1`. The first change updates only the
+central participant's controller version and commit. All participants remain
+in shadow mode, their interface contracts and dependency pins stay unchanged,
+and draft65 remains supported for rollback.
+
+The bootstrap remains `01503edac6533370b24f2e882e6ea1f7b2a21304` during this
+first step. After its review pull request merges, prepare the second change
+using that merge commit as the bootstrap source. Record both review links and
+the operator approval before retrying the remaining approved central issue
+canary. A merged manifest alone does not prove live semantic routing recovery.
+
+The existing Distribution bundle still pins draft37 and Architecture draft8.
+The explicit-root release-chain check therefore reports seven mismatches on
+both the previous manifest and this draft. Controller-local checks and
+reproduced dependency digests do not establish a synchronized Distribution
+release. Record this limitation separately from central shadow intake evidence;
+participant activation and a Distribution upgrade require their own reviewed
+changes and complete release-chain verification.
+
 Incompatible changes use expand/migrate/contract. A security withdrawal may
 fail closed, but the incident and replacement commit must be recorded.
