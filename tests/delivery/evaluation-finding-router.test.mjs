@@ -68,35 +68,39 @@ function route(reports) {
   });
 }
 
-routeTest('routes a measured report into a review proposal while preserving the complete report', () => {
+routeTest('holds a report-asserted owner target as a disposition until a canonical owner is established', () => {
   const input = report();
   const result = route([input]);
+  const disposition = result.dispositions[0];
 
-  assert.equal(result.proposals.length, 1);
-  assert.equal(result.proposals[0].target.repository, ownerRepository);
-  assert.equal(result.proposals[0].target.issueUrl, ownerIssueUrl);
-  assert.equal(result.proposals[0].sourceIssueUrl, sourceIssueUrl);
+  assert.equal(result.proposals.length, 0);
+  assert.equal(result.dispositions.length, 1);
+  assert.equal(disposition.action, 'owner-issue');
+  assert.equal(disposition.status, 'awaiting-owner-verification');
+  assert.equal(disposition.candidateTarget.repository, ownerRepository);
+  assert.equal(disposition.candidateTarget.issueUrl, ownerIssueUrl);
+  assert.equal('target' in disposition, false);
   assert.equal(result.sourceIssueUrl, sourceIssueUrl);
-  assert.equal(result.proposals[0].planningStatus, 'awaiting-human-prioritization');
-  assert.equal(result.proposals[0].executionAuthorized, false);
-  assert.deepEqual(result.proposals[0].ownershipVerification, {
-    status: 'unverified-report-claim',
+  assert.equal(disposition.executionAuthorized, false);
+  assert.deepEqual(disposition.ownershipVerification, {
+    status: 'unresolved',
     source: 'recommendation.ownerIssue',
     requiresHumanConfirmation: true,
+    reason: 'No authoritative owner mapping is pinned for this report layer.',
   });
-  assert.deepEqual(result.proposals[0].sourceReport, input);
-  assert.equal(result.proposals[0].reportReference.sha256.length, 64);
-  assert.equal(result.proposals[0].reportReference.algorithm, 'sha256-canonical-json-v1');
-  assert.equal(result.proposals[0].sourceEvidence.verification, 'references-preserved-but-not-retrieved');
-  assert.deepEqual(result.proposals[0].sourceEvidence.evidence, input.evidence);
-  assert.deepEqual(result.proposals[0].sourceEvidence.sourcePins.map(({ role }) => role), [
+  assert.deepEqual(disposition.sourceReport, input);
+  assert.equal(disposition.reportReference.sha256.length, 64);
+  assert.equal(disposition.reportReference.algorithm, 'sha256-canonical-json-v1');
+  assert.equal(disposition.sourceEvidence.verification, 'references-preserved-but-not-retrieved');
+  assert.deepEqual(disposition.sourceEvidence.evidence, input.evidence);
+  assert.deepEqual(disposition.sourceEvidence.sourcePins.map(({ role }) => role), [
     'subject', 'dataset', 'dependency:0:evaluation-runner', 'grader:deterministic',
     'grader:semantic', 'baseline-definition', 'comparator',
   ]);
-  assert.equal('priority' in result.proposals[0], false);
-  assert.equal('lifecycleStage' in result.proposals[0], false);
-  assert.equal('readiness' in result.proposals[0], false);
-  assert.equal('projectItem' in result.proposals[0], false);
+  assert.equal('priority' in disposition, false);
+  assert.equal('lifecycleStage' in disposition, false);
+  assert.equal('readiness' in disposition, false);
+  assert.equal('projectItem' in disposition, false);
   assert.equal(result.mutationsRequested, false);
 });
 
@@ -180,7 +184,7 @@ routeTest('rejects incomparable baseline and candidate measurements', () => {
 });
 
 routeTest('checks directional absolute-difference claims against the measurements', () => {
-  const improvement = route([report()]).proposals[0];
+  const improvement = route([report()]).dispositions[0];
   assert.equal(improvement.comparisonVerification.status, 'directionally-consistent');
 
   const lowerIsBetterRegression = report({
@@ -192,13 +196,13 @@ routeTest('checks directional absolute-difference claims against the measurement
       candidateMeasurement: measurement(0.6),
     },
   });
-  assert.equal(route([lowerIsBetterRegression]).proposals[0].comparisonVerification.status, 'directionally-consistent');
+  assert.equal(route([lowerIsBetterRegression]).dispositions[0].comparisonVerification.status, 'directionally-consistent');
 
   const equalValues = report({
     baseline: { ...report().baseline, measurement: measurement(0.6) },
     comparison: { ...report().comparison, claim: 'no-change', candidateMeasurement: measurement(0.6) },
   });
-  assert.equal(route([equalValues]).proposals[0].comparisonVerification.status, 'directionally-consistent');
+  assert.equal(route([equalValues]).dispositions[0].comparisonVerification.status, 'directionally-consistent');
 
   const contradiction = report({
     comparison: { ...report().comparison, candidateMeasurement: measurement(0.2) },
@@ -208,7 +212,7 @@ routeTest('checks directional absolute-difference claims against the measurement
   const unequalNoChange = report({
     comparison: { ...report().comparison, claim: 'no-change' },
   });
-  assert.equal(route([unequalNoChange]).proposals[0].comparisonVerification.status, 'requires-human-comparator-review');
+  assert.equal(route([unequalNoChange]).dispositions[0].comparisonVerification.status, 'requires-human-comparator-review');
 });
 
 routeTest('marks comparator-dependent claims for human review when the comparator definition is unavailable', () => {
@@ -223,7 +227,7 @@ routeTest('marks comparator-dependent claims for human review when the comparato
         comparator: { ...report().comparison.comparator, ...comparator },
       },
     });
-    assert.equal(route([candidate]).proposals[0].comparisonVerification.status, 'requires-human-comparator-review');
+    assert.equal(route([candidate]).dispositions[0].comparisonVerification.status, 'requires-human-comparator-review');
   }
 });
 
@@ -236,8 +240,9 @@ routeTest('runs the proposal CLI without loading a participant registry', async 
       '--report', path.join(repositoryRoot, 'tests/fixtures/evaluation-reports/measured-owner-issue.yml'),
     ], { cwd: emptyWorkspace });
 
-    assert.equal(result.proposals.length, 1);
-    assert.equal(result.proposals[0].ownershipVerification.status, 'unverified-report-claim');
+    assert.equal(result.proposals.length, 0);
+    assert.equal(result.dispositions[0].status, 'awaiting-owner-verification');
+    assert.equal(result.dispositions[0].candidateTarget.repository, ownerRepository);
   } finally {
     await rm(emptyWorkspace, { recursive: true, force: true });
   }
@@ -276,39 +281,44 @@ routeTest('retains deterministic failures, semantic uncertainty, review state, a
   delete failure.comparison.candidateMeasurement;
 
   const result = route([failure]);
-  assert.equal(result.proposals[0].sourceReport.results.deterministicChecks[0].outcome, 'fail');
-  assert.equal(result.proposals[0].sourceReport.results.semanticJudgments[0].outcome, 'inconclusive');
-  assert.equal(result.proposals[0].sourceReport.uncertainty.level, 'high');
-  assert.equal(result.proposals[0].sourceReport.review.status, 'pending');
-  assert.equal(result.proposals[0].sourceReport.regressionAssessment.severity, 'high');
-  assert.equal(result.proposals[0].executionAuthorized, false);
+  assert.equal(result.dispositions[0].sourceReport.results.deterministicChecks[0].outcome, 'fail');
+  assert.equal(result.dispositions[0].sourceReport.results.semanticJudgments[0].outcome, 'inconclusive');
+  assert.equal(result.dispositions[0].sourceReport.uncertainty.level, 'high');
+  assert.equal(result.dispositions[0].sourceReport.review.status, 'pending');
+  assert.equal(result.dispositions[0].sourceReport.regressionAssessment.severity, 'high');
+  assert.equal(result.dispositions[0].executionAuthorized, false);
 });
 
 routeTest('deduplicates exact replay by report ID and rejects conflicting reuse of that identity', () => {
   const repeated = report();
   const result = route([repeated, structuredClone(repeated)]);
-  assert.equal(result.proposals.length, 1);
-  assert.equal(result.proposals[0].duplicateCount, 2);
+  assert.equal(result.proposals.length, 0);
+  assert.equal(result.dispositions.length, 1);
+  assert.equal(result.dispositions[0].duplicateCount, 2);
 
   const conflicting = structuredClone(repeated);
   conflicting.recommendation.rationale = 'A conflicting meaning for the same report ID.';
   assert.throws(() => route([repeated, conflicting]), /conflicting reports share reportId/);
 });
 
-routeTest('keeps a report-asserted owner candidate unverified when it differs from the subject repository or participant registry', () => {
+routeTest('does not route an owner candidate that differs from the subject repository or participant registry', () => {
   const candidateUrl = 'https://github.com/example-product/unregistered/issues/42';
   const candidate = report({
     subject: { ...report().subject, sourcePin: pin('example-product/source-repo', '8') },
     recommendation: { action: 'owner-issue', ownerIssue: candidateUrl, rationale: 'The report proposes a separate product owner.' },
   });
-  const proposal = route([candidate]).proposals[0];
+  const result = route([candidate]);
+  const disposition = result.dispositions[0];
 
-  assert.equal(proposal.target.repository, 'example-product/unregistered');
-  assert.equal(proposal.target.issueUrl, candidateUrl);
-  assert.deepEqual(proposal.ownershipVerification, {
-    status: 'unverified-report-claim',
+  assert.equal(result.proposals.length, 0);
+  assert.equal(disposition.status, 'awaiting-owner-verification');
+  assert.equal(disposition.candidateTarget.repository, 'example-product/unregistered');
+  assert.equal(disposition.candidateTarget.issueUrl, candidateUrl);
+  assert.deepEqual(disposition.ownershipVerification, {
+    status: 'unresolved',
     source: 'recommendation.ownerIssue',
     requiresHumanConfirmation: true,
+    reason: 'No authoritative owner mapping is pinned for this report layer.',
   });
 
   assert.throws(() => route([report({
@@ -323,7 +333,7 @@ routeTest('rejects self-targeting owner Issues', () => {
   })]), /must not target the source Issue/);
 });
 
-routeTest('preserves the layer and each report-asserted owner candidate without collapsing reports', () => {
+routeTest('preserves each report layer and owner candidate without collapsing dispositions', () => {
   const examples = [
     ['agent-capability', 'agentic-delivery-lab/agentic-delivery-primitives', 'a'],
     ['factory', ownerRepository, 'b'],
@@ -344,7 +354,8 @@ routeTest('preserves the layer and each report-asserted owner candidate without 
   });
 
   const result = route(reports);
-  assert.deepEqual(result.proposals.map(({ layer, target }) => [layer, target.repository]), examples.map(([layer, owner]) => [layer, owner]));
+  assert.equal(result.proposals.length, 0);
+  assert.deepEqual(result.dispositions.map(({ layer, candidateTarget }) => [layer, candidateTarget.repository]), examples.map(([layer, owner]) => [layer, owner]));
 });
 
 routeTest('rejects schema bytes that differ from the pinned Architecture digest', () => {

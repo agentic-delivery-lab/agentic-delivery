@@ -240,15 +240,15 @@ function routeOne(report, { schemaContract, sourceIssueUrl, canonicalReport, com
 
   return {
     ...shared,
-    duplicateCount: 1,
-    target: { repository: targetRepository, issueUrl: targetUrl },
+    action,
+    status: 'awaiting-owner-verification',
+    candidateTarget: { repository: targetRepository, issueUrl: targetUrl },
     ownershipVerification: {
-      status: 'unverified-report-claim',
+      status: 'unresolved',
       source: 'recommendation.ownerIssue',
       requiresHumanConfirmation: true,
+      reason: 'No authoritative owner mapping is pinned for this report layer.',
     },
-    sourceIssueUrl,
-    planningStatus: 'awaiting-human-prioritization',
     executionAuthorized: false,
   };
 }

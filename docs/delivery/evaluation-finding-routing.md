@@ -19,26 +19,29 @@ are rejected. Repeated identical reports with the same `reportId` become one
 proposal; conflicting content under the same ID is rejected. Synthetic reports
 cannot produce owner Issue proposals.
 
-`recommendation.ownerIssue` is a report-asserted candidate target. The router
-checks that it is a canonical GitHub Issue URL and prevents it from targeting
-the source Issue, but it does not establish the target repository's ownership,
-the Issue's existence or accessibility, or a relationship between that target
-and the subject source pin. Participant enrollment is not used as evidence of
-ownership. Every proposal marks ownership as unverified and requires a human
-to confirm the target organization, repository, and Issue before prioritizing
-or acting on it.
+`recommendation.ownerIssue` is only a report-asserted candidate target. The
+router checks that it is a canonical GitHub Issue URL and prevents it from
+targeting the source Issue, but it cannot establish the target repository's
+ownership, the Issue's existence or accessibility, or a relationship between
+that target and the subject source pin. Participant enrollment is not evidence
+of ownership. Since the pinned Architecture contract contains no authoritative
+layer-to-repository owner map, every `owner-issue` recommendation becomes an
+`awaiting-owner-verification` disposition with no actionable `target`. A
+human-owned, pinned owner mapping is required before the Control Plane can
+emit an Issue proposal for any report layer.
 
 Every proposal and disposition retains the complete source report, evidence
 references, every source pin, uncertainty, review state, a comparison
 verification status, and a SHA-256 reference to the report. The router
 verifies the schema bytes and report digest locally; it preserves source pins
 after schema validation but does not retrieve source repositories, comparator
-definitions, or referenced content. A proposal's planning status is
-`awaiting-human-prioritization`; it has no Issue priority, lifecycle,
-readiness, Project, or execution fields. Reports recommending human review or
-no action produce dispositions with the same provenance. The command reads
-local files and writes JSON to standard output; it does not call GitHub or
-change repository, Issue, Project, policy, participant, or release state.
+definitions, or referenced content. Human-review, no-action, and unresolved
+owner recommendations all produce dispositions with the same provenance. The
+command reads local files and writes JSON to standard output; it does not call
+GitHub or change repository, Issue, Project, policy, participant, or release
+state. After a future authoritative owner mapping is pinned and the target
+Issue is verified, resulting work must still be human-prioritized and pass all
+existing execution authorization gates.
 The `--source-issue` value supplies context for self-target detection only; it
 does not verify actor permissions or authorize a later mutation.
 
