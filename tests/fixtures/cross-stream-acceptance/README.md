@@ -15,15 +15,18 @@ can reach planning in this synthetic harness, but it does not claim that a
 product repository or steward exists.
 
 The Project-only webhook case includes a Project item linked to a synthetic
-Issue, but has no source Issue event or source Issue number. It is rejected
-before API access, and the current invocation catalog does not accept Project
-item events. The route harness checks trusted participant and App access
+Issue, but has no source Issue event or Issue number. The actual webhook handler
+returns 204 from its event catalog before App-token or API access, and the
+direct Issue classifier rejects it when no source Issue number is supplied.
+The route harness checks trusted participant and App access
 before route reasoning, then passes the selected route and triggering
 repository identity through the trusted delivery-participant resolver. A
 repository ID mismatch is rejected before API or model-adapter access.
 Same-number Issues are routed in both synthetic repositories and retain their
-distinct Issue nodes. The Project-read failure case records the missing-scope
-planning gap and exercises the existing Issue-first manual recovery route.
+distinct Issue nodes. A delayed event with stale Issue fields still re-fetches
+the current synthetic Issue before reasoning. The Project-read failure case
+records the missing-scope planning gap and exercises the existing Issue-first
+manual recovery route.
 
 The evaluation scenario retains the full synthetic report and its evidence by
 report ID, then records a non-actionable hold with no owner target. It does not

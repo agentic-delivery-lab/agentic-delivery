@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 
 import { authorizeParticipation, parseParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
 import { resolveDeliveryParticipant } from '../../scripts/lib/resolve-delivery-participant.mjs';
-import { invocationEventSupported } from '../../scripts/lib/agent-invocation.mjs';
+import { invocationEventSupported, webhookEventSupported } from '../../scripts/lib/agent-invocation.mjs';
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 import { classifyAndRoute, loadLifecycleConfig } from '../../scripts/issue-intake.mjs';
+import { handleWebhook } from '../../api/github/webhook.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const fixturePath = path.join(repositoryRoot, 'tests/fixtures/cross-stream-acceptance/scenarios.json');
@@ -174,7 +176,7 @@ async function runIssueRoute(scenario, options = {}) {
     env,
     event: {
       action: manualRecovery ? 'requested' : eventAction,
-      issue: { number: sourceIssue.issueNumber },
+      issue: { number: sourceIssue.issueNumber, ...(options.eventIssue ?? {}) },
       repository: { id: Number(eventRepositoryId), full_name: eventRepository },
     },
     fetchImpl,
@@ -303,7 +305,10 @@ test('same-number Issues stay isolated when both source repositories are routed'
 test('duplicate and out-of-order Issue events keep the same source identity and route', async () => {
   const scenario = fixtures.scenarios.factoryCapability;
   const later = await runIssueRoute(scenario, { eventAction: 'edited' });
-  const delayedEarlier = await runIssueRoute(scenario, { eventAction: 'opened' });
+  const delayedEarlier = await runIssueRoute(scenario, {
+    eventAction: 'opened',
+    eventIssue: { state: 'closed', title: 'stale out-of-order title', body: 'stale out-of-order body' },
+  });
   const duplicate = await runIssueRoute(scenario, { eventAction: 'edited' });
   assert.equal(later.result.route, 'implement');
   assert.equal(delayedEarlier.result.route, later.result.route);
@@ -314,15 +319,61 @@ test('duplicate and out-of-order Issue events keep the same source identity and 
       issueNumber: scenario.sourceIssue.issueNumber,
     }]);
     assert.deepEqual(run.trace.protectedEffects, []);
+    assert.equal(run.trace.modelIssue.state, 'open');
+    assert.equal(run.trace.modelIssue.title, scenario.sourceIssue.title);
   }
+  assert.equal(delayedEarlier.trace.modelIssue.body, scenario.sourceIssue.body);
 });
 
 test('Project-only events cannot enter Issue routing even when the card references an Issue', async () => {
   assert.equal(invocationEventSupported('projects_v2_item', 'edited'), false);
-  let fetches = 0;
-  let modelCalls = 0;
+  assert.equal(webhookEventSupported('projects_v2_item', 'edited'), false);
   const sourceIssue = fixtures.scenarios.factoryCapability.sourceIssue;
   const origin = sourceIssue.repositoryFullName;
+  const payload = {
+    action: 'edited',
+    organization: { login: 'agentic-delivery-lab', id: 327861320 },
+    installation: { id: 163255060 },
+    repository: { id: Number(sourceIssue.repositoryId), full_name: origin },
+    projects_v2_item: {
+      content_node_id: sourceIssue.issueNodeId,
+      content_type: 'Issue',
+    },
+    sender: { login: 'fixture-writer', type: 'User' },
+  };
+  const body = JSON.stringify(payload);
+  const signature = `sha256=${createHmac('sha256', 'offline-fixture-webhook-secret').update(body, 'utf8').digest('hex')}`;
+  const webhookResponse = {
+    setHeader() {},
+    end(value) { this.body = value; },
+  };
+  let webhookFetches = 0;
+  let tokenRequests = 0;
+  await handleWebhook({
+    method: 'POST',
+    headers: {
+      'x-hub-signature-256': signature,
+      'x-github-event': 'projects_v2_item',
+      'x-github-delivery': 'PROJECT_FIXTURE_0001',
+    },
+    body,
+  }, webhookResponse, {
+    env: {
+      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '1358455028',
+      AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
+      AGENTIC_DELIVERY_WEBHOOK_SECRET: 'offline-fixture-webhook-secret',
+      AGENTIC_DELIVERY_DISPATCH_SECRET: 'offline-fixture-dispatch-secret',
+    },
+    tokenProvider: { token: async () => { tokenRequests += 1; return 'offline-fixture-token'; } },
+    fetchImpl: async () => { webhookFetches += 1; throw new Error('Unsupported Project events must not reach GitHub.'); },
+  });
+  assert.equal(webhookResponse.statusCode, 204);
+  assert.equal(tokenRequests, 0);
+  assert.equal(webhookFetches, 0);
+
+  let fetches = 0;
+  let modelCalls = 0;
   await assert.rejects(classifyAndRoute({
     env: {
       GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
