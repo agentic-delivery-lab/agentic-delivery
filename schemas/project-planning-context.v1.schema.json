@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "project-planning-context.v1.schema.json",
-  "title": "Project planning context v1",
-  "description": "A normalized, untrusted planning projection. It never authorizes execution and always requires source-Issue revalidation.",
+  "title": "Project planning context proposal, offline format v1",
+  "description": "Provisional offline fixture format for the proposed Project planning context; it is not an adopted consumer interface. It is an untrusted planning projection that never authorizes execution and always requires source-Issue revalidation. Adoption is gated on reviewed and merged Architecture Authority Issue #11 and ADR-0023.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "authority", "trust", "project", "item", "sourceIssue", "planningFields", "requiredBeforeExecution"],

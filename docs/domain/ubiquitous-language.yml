@@ -262,7 +262,7 @@ terms:
     definition: "The versioned executable implementation that receives eligible GitHub events, applies semantic routing followed by deterministic authorization, orchestrates bounded work, and performs controlled write-back to the originating repository."
   - context: "agentic-delivery-control-plane"
     term: "Project planning context"
-    definition: "An untrusted normalized projection of an approved organization Project item and its linked source Issue identity. It may carry distinct portfolio grouping, sequence, and planned dependencies, but it never authorizes execution or replaces Issue-owned work state."
+    definition: "A provisional, untrusted normalized projection of an approved organization Project item and its linked source Issue identity. The offline format has not been adopted as a consumer interface; it may carry distinct portfolio grouping, sequence, and planned dependencies, but it never authorizes execution or replaces Issue-owned work state. Adoption requires reviewed and merged Architecture Authority Issue #11 and ADR-0023."
   - context: "agentic-delivery-control-plane"
     term: "participating repository"
     definition: "An organization repository that is explicitly enrolled for Agentic Delivery through both App installation access and an active or shadow entry in the central participant registry."
