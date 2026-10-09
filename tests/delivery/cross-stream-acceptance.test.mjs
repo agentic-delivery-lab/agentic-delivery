@@ -20,18 +20,19 @@ const participantSource = parseRepositoryYaml(
   'participant registry',
 );
 
-function fixtureRegistry(sourceIssue) {
+function fixtureRegistry(sourceIssue, additionalParticipants = []) {
   const existing = Object.values(participantSource.repositories)[0];
+  const repositories = structuredClone(participantSource.repositories);
+  for (const candidate of [sourceIssue, ...additionalParticipants]) {
+    repositories[candidate.repositoryId] = {
+      ...structuredClone(existing),
+      expectedFullName: candidate.repositoryFullName,
+      mode: 'active',
+    };
+  }
   const value = {
     ...structuredClone(participantSource),
-    repositories: {
-      ...structuredClone(participantSource.repositories),
-      [sourceIssue.repositoryId]: {
-        ...structuredClone(existing),
-        expectedFullName: sourceIssue.repositoryFullName,
-        mode: 'active',
-      },
-    },
+    repositories,
   };
   return parseParticipantRegistry(value);
 }
@@ -69,13 +70,13 @@ async function runIssueRoute(scenario, options = {}) {
     protectedEffects: [],
     modelIssue: null,
   };
-  const registry = fixtureRegistry(sourceIssue);
+  const registry = fixtureRegistry(sourceIssue, options.registryParticipants ?? []);
   assert.equal(registry.valid, true, registry.errors.join('; '));
   const participantAuthorization = authorizeParticipation({
     registry,
     repositoryId: eventRepositoryId,
     repositoryFullName: eventRepository,
-    appRepositoryIds: [sourceIssue.repositoryId],
+    appRepositoryIds: options.appRepositoryIds ?? [sourceIssue.repositoryId],
   });
   if (!participantAuthorization.allowed) {
     return {
@@ -403,17 +404,19 @@ test('Project-only events cannot enter Issue routing even when the card referenc
   assert.equal(modelCalls, 0);
 });
 
-test('a repository ID mismatch is rejected before route reasoning or model invocation', async () => {
+test('swapping enrolled same-number repository identities is rejected before route reasoning', async () => {
   const scenario = fixtures.scenarios.factoryCapability;
+  const otherSourceIssue = fixtures.scenarios.productFeature.sourceIssue;
   const { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario, {
-    eventRepositoryId: '9000001999',
+    eventRepositoryId: otherSourceIssue.repositoryId,
+    registryParticipants: [otherSourceIssue],
   });
   assert.equal(result, null);
   assert.equal(participantAuthorization.allowed, false);
-  assert.match(participantAuthorization.reason, /not enrolled in the participant registry/);
+  assert.match(participantAuthorization.reason, /repository full name does not match the participant registry/);
   assert.equal(trace.modelCalls, 0);
   assert.equal(deliveryPolicy, null);
-  assert.match(deliveryAuthorizationError.message, /not enrolled in the participant registry/);
+  assert.match(deliveryAuthorizationError.message, /repository full name does not match the participant registry/);
   assert.deepEqual(trace.restReads, []);
   assert.deepEqual(trace.protectedEffects, []);
 });
@@ -424,6 +427,7 @@ test('synthetic evaluation evidence is retained on an owner hold without model o
   assert.equal(report.classification, 'synthetic');
   assert.equal(report.results.deterministicChecks[0].outcome, 'fail');
   assert.match(report.results.deterministicChecks[0].details, /no canonical owner or actionable repository target/);
+  assert.equal(report.results.deterministicChecks[0].evidenceRefs[0], 'tests/fixtures/cross-stream-acceptance/scenarios.json');
   assert.equal(scenario.disposition.status, 'hold');
   assert.equal(scenario.disposition.ownership.status, 'unresolved');
   assert.equal(scenario.disposition.ownership.actionableTarget, null);
@@ -435,6 +439,7 @@ test('synthetic evaluation evidence is retained on an owner hold without model o
   assert.deepEqual(scenario.disposition.protectedEffects, []);
   assert.equal(scenario.disposition.modelInvocations, 0);
   assert.deepEqual(report.evidence.map(({ kind }) => kind), ['source', 'result']);
+  assert.equal(report.evidence[0].ref, 'tests/fixtures/cross-stream-acceptance/scenarios.json');
   assert.deepEqual(Object.keys(report).sort(), [
     '$schema', 'baseline', 'classification', 'comparison', 'contractVersion', 'dataset', 'dependencies',
     'evidence', 'evaluationMode', 'generatedAt', 'graders', 'layer', 'limitations', 'recommendation',

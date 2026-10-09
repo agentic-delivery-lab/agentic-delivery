@@ -207,7 +207,7 @@
               "outcome": "fail",
               "details": "The synthetic report supplies no canonical owner or actionable repository target, so the improvement handoff is not actionable.",
               "evidenceRefs": [
-                "fixtures/cross-stream-acceptance/scenarios.json"
+                "tests/fixtures/cross-stream-acceptance/scenarios.json"
               ]
             }
           ],
@@ -257,7 +257,7 @@
         "evidence": [
           {
             "kind": "source",
-            "ref": "fixtures/cross-stream-acceptance/scenarios.json"
+            "ref": "tests/fixtures/cross-stream-acceptance/scenarios.json"
           },
           {
             "kind": "result",
