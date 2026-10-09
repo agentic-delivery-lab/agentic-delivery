@@ -88,6 +88,21 @@ test('safe numeric GitHub repository IDs normalize to schema strings', async () 
   assert.equal(ajv.validate(schema, result.value), true, JSON.stringify(ajv.errors));
 });
 
+test('dependency repository names must be strings instead of coercible arrays', async () => {
+  const input = await validInput();
+  input.planningFields = [{
+    key: 'planning-dependencies',
+    value: [{
+      repositoryId: '888888888',
+      repositoryFullName: ['agentic-delivery-lab/service-b'],
+      issueNumber: 43,
+      issueNodeId: 'issue-fixture-43',
+    }],
+  }];
+
+  assertBlocked(normalizeProjectPlanningInput(input), 'PROJECT_FIELDS_INVALID');
+});
+
 test('the context schema rejects duplicate supported planning-field keys', async () => {
   const input = await validInput();
   const result = normalizeProjectPlanningInput(input);

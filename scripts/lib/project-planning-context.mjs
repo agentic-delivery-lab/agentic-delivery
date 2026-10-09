@@ -23,6 +23,10 @@ function normalizeRepositoryId(value) {
   return null;
 }
 
+function validRepositoryFullName(value) {
+  return typeof value === 'string' && FULL_NAME.test(value);
+}
+
 function authorizedSourceIssueWriter(authorization) {
   if (authorization?.authorized !== true) return false;
   if (authorization.actorKind === 'internal-automation') return true;
@@ -51,7 +55,7 @@ function validatePlanningFields(fields) {
       if (!Array.isArray(field.value)) return 'PROJECT_FIELDS_INVALID';
       for (const dependency of field.value) {
         if (!dependency || !normalizeRepositoryId(dependency.repositoryId)
-          || !FULL_NAME.test(String(dependency.repositoryFullName ?? ''))
+          || !validRepositoryFullName(dependency.repositoryFullName)
           || !Number.isSafeInteger(dependency.issueNumber) || dependency.issueNumber < 1
           || typeof dependency.issueNodeId !== 'string' || dependency.issueNodeId.length === 0) {
           return 'PROJECT_FIELDS_INVALID';
@@ -106,9 +110,9 @@ export function normalizeProjectPlanningInput(input) {
   const sourceRepositoryId = normalizeRepositoryId(sourceIssue?.repositoryId);
   const contentRepositoryId = normalizeRepositoryId(content.repositoryId);
   if (!originRepositoryId
-    || !FULL_NAME.test(String(originRepository.fullName ?? ''))
+    || !validRepositoryFullName(originRepository?.fullName)
     || !sourceRepositoryId
-    || !FULL_NAME.test(String(sourceIssue.repositoryFullName ?? ''))
+    || !validRepositoryFullName(sourceIssue?.repositoryFullName)
     || !Number.isSafeInteger(sourceIssue.number) || sourceIssue.number < 1
     || typeof sourceIssue.nodeId !== 'string' || sourceIssue.nodeId.length === 0
     || !validTimestamp(sourceIssue.updatedAt)) {
