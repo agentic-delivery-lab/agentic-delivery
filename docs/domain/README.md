@@ -57,6 +57,14 @@ That evidence explains why semantic review could not conclude; it is not a
 semantic conclusion, deterministic validation, or participant evidence
 contract.
 
+The proposed `Project planning context` is an untrusted projection of an
+approved organization Project item and its linked source Issue identity. It
+can carry distinct portfolio grouping, sequence, and planned dependencies;
+it cannot invoke delivery, authorize execution, or replace Issue-owned work
+state. The offline contract remains provisional until Architecture Authority
+Issue #11 and ADR-0023 are reviewed and merged. No live Project read or write
+path is enabled by this proposal.
+
 Participant compatibility with the delivery evidence contract is declared as
 SemVer in release and participant metadata. The integer `schemaVersion` inside
 each current delivery evidence record identifies its record format major; it

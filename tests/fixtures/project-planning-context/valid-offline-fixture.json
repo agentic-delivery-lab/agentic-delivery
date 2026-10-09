@@ -1,0 +1,56 @@
+{
+  "evidenceKind": "offline-only",
+  "input": {
+    "access": {
+      "projectRead": "granted",
+      "sourceIssueRead": "granted"
+    },
+    "actorPermission": "write",
+    "approvedProject": {
+      "nodeId": "project-fixture-01",
+      "fieldSchemaSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "project": {
+      "nodeId": "project-fixture-01",
+      "fieldSchemaSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "item": {
+      "nodeId": "item-fixture-01",
+      "projectNodeId": "project-fixture-01",
+      "content": {
+        "type": "issue",
+        "repositoryId": "777777777",
+        "repositoryFullName": "agentic-delivery-lab/service-a",
+        "issueNumber": 44,
+        "issueNodeId": "issue-fixture-44",
+        "updatedAt": "2026-10-09T09:00:00Z"
+      }
+    },
+    "originRepository": {
+      "id": "777777777",
+      "fullName": "agentic-delivery-lab/service-a"
+    },
+    "sourceIssue": {
+      "repositoryId": "777777777",
+      "repositoryFullName": "agentic-delivery-lab/service-a",
+      "number": 44,
+      "nodeId": "issue-fixture-44",
+      "updatedAt": "2026-10-09T09:00:00Z"
+    },
+    "planningFields": [
+      { "key": "portfolio-group", "value": "service reliability" },
+      { "key": "portfolio-sequence", "value": 2 },
+      {
+        "key": "planning-dependencies",
+        "value": [
+          {
+            "repositoryId": "777777777",
+            "repositoryFullName": "agentic-delivery-lab/service-a",
+            "issueNumber": 43,
+            "issueNodeId": "issue-fixture-43"
+          }
+        ]
+      }
+    ]
+  }
+}

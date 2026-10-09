@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "project-planning-context.v1.schema.json",
+  "title": "Project planning context v1",
+  "description": "A normalized, untrusted planning projection. It never authorizes execution and always requires source-Issue revalidation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "authority", "trust", "project", "item", "sourceIssue", "planningFields", "requiredBeforeExecution"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "authority": { "const": "planning-only" },
+    "trust": { "const": "untrusted-planning-data" },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeId", "fieldSchemaSha256"],
+      "properties": {
+        "nodeId": { "type": "string", "minLength": 1 },
+        "fieldSchemaSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeId", "projectNodeId"],
+      "properties": {
+        "nodeId": { "type": "string", "minLength": 1 },
+        "projectNodeId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "sourceIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "number", "nodeId"],
+      "properties": {
+        "repository": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "fullName"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+            "fullName": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" }
+          }
+        },
+        "number": { "type": "integer", "minimum": 1 },
+        "nodeId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "planningFields": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "value"],
+            "properties": {
+              "key": { "const": "portfolio-group" },
+              "value": { "type": "string", "minLength": 1, "maxLength": 200 }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "value"],
+            "properties": {
+              "key": { "const": "portfolio-sequence" },
+              "value": { "type": "integer", "minimum": 1 }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "value"],
+            "properties": {
+              "key": { "const": "planning-dependencies" },
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["repositoryId", "repositoryFullName", "issueNumber", "issueNodeId"],
+                  "properties": {
+                    "repositoryId": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                    "repositoryFullName": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+                    "issueNumber": { "type": "integer", "minimum": 1 },
+                    "issueNodeId": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "requiredBeforeExecution": { "const": "revalidate-origin-issue-authorization" }
+  }
+}
