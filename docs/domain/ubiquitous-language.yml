@@ -311,3 +311,6 @@ terms:
   - context: "agentic-delivery-control-plane"
     term: "state-machine version"
     definition: "The explicit version of the lifecycle transition contract used to validate a delivery proposal; it is persisted with execution state and is not inferred from a mutable branch."
+  - context: "agentic-delivery-control-plane"
+    term: "evaluation finding proposal"
+    definition: "An offline review proposal derived from a pinned evaluation report that preserves its evidence and canonical owner while granting no Issue-field, Project, or execution authority."

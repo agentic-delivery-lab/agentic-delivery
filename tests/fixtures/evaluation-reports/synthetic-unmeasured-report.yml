@@ -1,0 +1,101 @@
+$schema: https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed/architecture/contracts/evaluation-report.schema.json
+contractVersion: 1.0.0
+reportId: synthetic:agent-capability:example-v1
+generatedAt: '2026-10-09T09:00:00Z'
+classification: synthetic
+evaluationMode: offline
+layer: agent-capability
+subject:
+  layer: agent-capability
+  id: example-code-review-capability
+  version: 0.1.0
+  sourcePin:
+    repository: agentic-delivery-lab/agentic-delivery-primitives
+    commit: 0123456789abcdef0123456789abcdef01234567
+    path: skills/example-code-review/SKILL.md
+    sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+dataset:
+  id: synthetic-review-cases
+  version: 1.0.0
+  sourcePin:
+    repository: agentic-delivery-lab/agentic-delivery-primitives
+    commit: 1123456789abcdef0123456789abcdef01234567
+    path: evaluations/datasets/synthetic-review-cases.yml
+    sha256: 1123456789abcdef0123456789abcdef1123456789abcdef0123456789abcdef
+  caseIds: [synthetic-safe-change-001]
+dependencies:
+  - id: example-evaluation-runner
+    version: 1.0.0
+    sourcePin:
+      repository: agentic-delivery-lab/agentic-delivery-primitives
+      commit: 2123456789abcdef0123456789abcdef01234567
+      path: tools/evaluation-runner.mjs
+      sha256: 2123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+graders:
+  deterministic:
+    id: example-deterministic-grader
+    version: 1.0.0
+    sourcePin:
+      repository: agentic-delivery-lab/agentic-delivery-primitives
+      commit: 3123456789abcdef0123456789abcdef01234567
+      path: evaluations/graders/deterministic.yml
+      sha256: 3123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  semantic:
+    id: example-semantic-review-rubric
+    version: 1.0.0
+    sourcePin:
+      repository: agentic-delivery-lab/agentic-delivery-primitives
+      commit: 4123456789abcdef0123456789abcdef01234567
+      path: evaluations/graders/semantic-review.yml
+      sha256: 4123456789abcdef0123456789abcdef4123456789abcdef0123456789abcdef
+results:
+  deterministicChecks:
+    - checkId: synthetic-contract-shape
+      outcome: pass
+      details: The synthetic fixture contains a source pin and one named case.
+      evidenceRefs: [architecture/evaluation/examples/agent-capability-report.yml]
+  semanticJudgments: []
+baseline:
+  status: unmeasured
+  definitionPin:
+    repository: agentic-delivery-lab/agentic-delivery-primitives
+    commit: 5123456789abcdef0123456789abcdef01234567
+    path: evaluations/baselines/example.yml
+    sha256: 5123456789abcdef0123456789abcdef5123456789abcdef0123456789abcdef
+  reasonUnmeasured: This illustrative fixture has no observed or comparable baseline.
+comparison:
+  claim: not-compared
+  comparator:
+    id: example-task-success-comparator
+    version: 1.0.0
+    sourcePin:
+      repository: agentic-delivery-lab/agentic-delivery-primitives
+      commit: 6123456789abcdef0123456789abcdef01234567
+      path: evaluations/comparators/task-success.yml
+      sha256: 6123456789abcdef0123456789abcdef6123456789abcdef0123456789abcdef
+    method: absolute-difference
+    direction: higher-is-better
+uncertainty:
+  level: high
+  summary: Synthetic structure validation says nothing about real capability performance.
+  factors:
+    - The subject and evaluation material are illustrative and not executed artifacts.
+review:
+  status: not-applicable
+  reviewerId: null
+  rationale: Synthetic example only; no result is presented for independent review.
+regressionAssessment:
+  severity: unknown
+  rationale: No candidate or baseline was evaluated, so regression severity is unknown.
+evidence:
+  - kind: source
+    ref: architecture/evaluation/README.md
+  - kind: result
+    ref: architecture/evaluation/examples/agent-capability-report.yml
+recommendation:
+  action: no-action
+  rationale: The example is documentation and must not create or authorize work.
+limitations:
+  - This is a synthetic contract fixture, not an evaluation run or live evidence.
+  - All source pin values are format-only placeholders and do not resolve to real artifacts.
+  - No paid model calls, repository writes, Issue writes, Project writes, activation, merge, or release occurred.

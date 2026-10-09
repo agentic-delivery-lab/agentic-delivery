@@ -101,6 +101,32 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Check out the pinned Architecture report contract
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-architecture
+          ref: 06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed
+          path: architecture
+          persist-credentials: false
+
+      - name: Exercise offline evaluation routing against the immutable contract
+        env:
+          EVALUATION_ROUTE_OUTPUT: ${{ runner.temp }}/evaluation-route.json
+        run: |
+          set -euo pipefail
+          node scripts/route-evaluation-findings.mjs \
+            --architecture-root "$GITHUB_WORKSPACE/architecture" \
+            --source-issue https://github.com/agentic-delivery-lab/agentic-delivery/issues/103 \
+            --report tests/fixtures/evaluation-reports/synthetic-unmeasured-report.yml \
+            > "$EVALUATION_ROUTE_OUTPUT"
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const result = JSON.parse(readFileSync(process.env.EVALUATION_ROUTE_OUTPUT, "utf8"));
+            if (result.mutationsRequested !== false || result.proposals.length !== 0 || result.dispositions[0]?.status !== "no-action") {
+              throw new Error("Offline evaluation routing did not remain a no-action disposition.");
+            }
+          '
+
       - name: Validate pull-request title
         if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
         env:
@@ -121,6 +147,8 @@ jobs:
         run: node scripts/validate-main-history.mjs "$BASE_SHA" "$HEAD_SHA"
 
       - name: Run repository tests
+        env:
+          EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/architecture
         run: pnpm test
 
       - name: Validate changelog structure
@@ -182,6 +210,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Check out the pinned Architecture report contract
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-architecture
+          ref: 06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed
+          path: architecture
+          persist-credentials: false
+
       - name: Set up pnpm and Node.js
         uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
@@ -196,4 +232,6 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Run repository tests
+        env:
+          EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/architecture
         run: pnpm test

@@ -9,6 +9,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [Issue #103](https://github.com/agentic-delivery-lab/agentic-delivery/issues/103) adds an offline evaluation-finding router that validates the pinned report schema, preserves report and source evidence, rejects ambiguous or incomparable routing data, and emits human-review proposals without Issue, Project, or execution authority. It depends on Architecture PR #14 and does not enable a live consumer.
+
 - The draft controller release `0.2.0-draft.66` pins the strict routing-schema repair at `08728c4210ec2d227eec2b6c182dcf3bafd80db1` for the central shadow participant. Draft65 remains available for rollback. Intake continues to use draft65 until a separate reviewed bootstrap update selects the new registry.
 
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds Neon-backed dispatch leases and controller receipts, persists cursors for bounded delivery-history scans, stores GitHub delivery IDs before advancing checkpoints, aggregates attempt outcomes across scan segments, and keeps active or uncertain webhook outcomes retryable.

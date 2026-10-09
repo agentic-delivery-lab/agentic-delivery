@@ -296,6 +296,8 @@
         "curated-changelog",
         "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
+        "evaluation-finding-router",
+        "evaluation-finding-router-cli",
         "event-catalog",
         "event-catalog-validator",
         "github-app-publication-boundary",
@@ -358,6 +360,8 @@
         "curated-changelog",
         "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
+        "evaluation-finding-router",
+        "evaluation-finding-router-cli",
         "event-catalog",
         "event-catalog-validator",
         "github-app-publication-boundary",
@@ -707,6 +711,32 @@
       ],
       "domains": [
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "evaluation-finding-router",
+      "path": "scripts/lib/evaluation-finding-router.mjs",
+      "location": "scripts/lib/evaluation-finding-router.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "evaluation-finding-router-cli",
+      "path": "scripts/route-evaluation-findings.mjs",
+      "location": "scripts/route-evaluation-findings.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {
