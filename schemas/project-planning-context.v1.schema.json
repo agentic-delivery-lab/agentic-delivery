@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "project-planning-context.v1.schema.json",
+  "title": "Project planning context proposal, offline format v1",
+  "description": "Provisional offline fixture format for the proposed Project planning context; it is not an adopted consumer interface. It is an untrusted planning projection that never authorizes execution and always requires source-Issue revalidation. The source-Issue authorization precondition is not a complete execution gate: future consumers must independently enforce Lifecycle Stage, Delivery State/readiness, plan, and downstream gates. Adoption is gated on reviewed and merged Architecture Authority Issue #11 and ADR-0023.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "authority", "trust", "project", "item", "sourceIssue", "planningFields", "sourceIssueAuthorizationPrecondition"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "authority": { "const": "planning-only" },
+    "trust": { "const": "untrusted-planning-data" },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeId", "fieldSchemaSha256"],
+      "properties": {
+        "nodeId": { "type": "string", "minLength": 1 },
+        "fieldSchemaSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeId", "projectNodeId"],
+      "properties": {
+        "nodeId": { "type": "string", "minLength": 1 },
+        "projectNodeId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "sourceIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "number", "nodeId"],
+      "properties": {
+        "repository": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "fullName"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+            "fullName": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" }
+          }
+        },
+        "number": { "type": "integer", "minimum": 1 },
+        "nodeId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "planningFields": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "value"],
+            "properties": {
+              "key": { "const": "portfolio-group" },
+              "value": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S" }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "value"],
+            "properties": {
+              "key": { "const": "portfolio-sequence" },
+              "value": { "type": "integer", "minimum": 1 }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "value"],
+            "properties": {
+              "key": { "const": "planning-dependencies" },
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["repositoryId", "repositoryFullName", "issueNumber", "issueNodeId"],
+                  "properties": {
+                    "repositoryId": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                    "repositoryFullName": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+                    "issueNumber": { "type": "integer", "minimum": 1 },
+                    "issueNodeId": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "sourceIssueAuthorizationPrecondition": {
+      "const": "revalidate-origin-issue-authorization-at-runtime-before-consumption",
+      "description": "This names only origin-Issue authorization. A future consumer must independently enforce Lifecycle Stage, Delivery State/readiness, plan, and downstream execution gates."
+    }
+  },
+  "allOf": [
+    {
+      "properties": {
+        "planningFields": {
+          "type": "array",
+          "contains": {
+            "type": "object",
+            "required": ["key"],
+            "properties": { "key": { "const": "portfolio-group" } }
+          },
+          "minContains": 0,
+          "maxContains": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "planningFields": {
+          "type": "array",
+          "contains": {
+            "type": "object",
+            "required": ["key"],
+            "properties": { "key": { "const": "portfolio-sequence" } }
+          },
+          "minContains": 0,
+          "maxContains": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "planningFields": {
+          "type": "array",
+          "contains": {
+            "type": "object",
+            "required": ["key"],
+            "properties": { "key": { "const": "planning-dependencies" } }
+          },
+          "minContains": 0,
+          "maxContains": 1
+        }
+      }
+    }
+  ]
+}
