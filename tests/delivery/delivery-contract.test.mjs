@@ -77,13 +77,13 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.ok(intake.includes('controller_commit: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}'));
   assert.ok(!intake.includes('inputs.controller_commit'));
   assert.equal((intake.match(/ref: main/g) ?? []).length, 0);
-  assert.ok(intake.includes('ref: 01503edac6533370b24f2e882e6ea1f7b2a21304'));
+  assert.ok(intake.includes('ref: 0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80'));
   assert.ok(intake.includes('ref: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}'));
   assert.ok(intake.includes('Validate the selected controller commit'));
   const release = JSON.parse(await text('config/controller-release.json'));
   assert.equal(release.version, '0.2.0-draft.66');
   assert.equal(release.commit, '08728c4210ec2d227eec2b6c182dcf3bafd80db1');
-  assert.equal(release.bootstrapCommit, '01503edac6533370b24f2e882e6ea1f7b2a21304');
+  assert.equal(release.bootstrapCommit, '0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80');
   assert.ok(!delivery.includes('types: [opened]'));
   const consumerContract = parseRepositoryYaml(await text('.github/workflows/agentic-delivery-quality.yml'), 'consumer contract workflow');
   assert.ok(consumerContract.on.workflow_call);

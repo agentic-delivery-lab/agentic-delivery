@@ -57,7 +57,7 @@ test('local release graph reproduces all pinned digests and publication refs', a
   assert.equal(result.status, 'passed');
   assert.equal(result.controller.version, '0.2.0-draft.66');
   assert.equal(result.controller.commit, '08728c4210ec2d227eec2b6c182dcf3bafd80db1');
-  assert.equal(result.controller.bootstrapCommit, '01503edac6533370b24f2e882e6ea1f7b2a21304');
+  assert.equal(result.controller.bootstrapCommit, '0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80');
   assert.equal(result.controller.githubAppContractVersion, '2.0.0');
   assert.equal(result.architecture.contentSha256, '5352c13fd6c3da425f427c8ac3ddc3deb9c52bdbac2837563ac580b4da4b71fb');
   assert.equal(result.primitives.contentSha256, '36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0');
