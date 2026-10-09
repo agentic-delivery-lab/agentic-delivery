@@ -1,0 +1,354 @@
+{
+  "evidenceClass": "offline-fixture",
+  "liveGitHubVerification": "not-run",
+  "projectAssociation": "none; inventory found no live Project",
+  "scenarios": {
+    "factoryCapability": {
+      "scenarioId": "synthetic-factory-capability-delivery",
+      "evidenceClass": "offline-fixture",
+      "planningContext": {
+        "authority": "planning-only",
+        "trust": "untrusted-planning-data",
+        "project": {
+          "nodeId": "PROJECT_FIXTURE_FACTORY_EVOLUTION"
+        },
+        "item": {
+          "nodeId": "ITEM_FIXTURE_FACTORY_17"
+        },
+        "planningFields": [
+          {
+            "key": "portfolio-group",
+            "value": "factory evolution"
+          },
+          {
+            "key": "portfolio-sequence",
+            "value": 1
+          }
+        ]
+      },
+      "sourceIssue": {
+        "repositoryId": "9000001081",
+        "repositoryFullName": "agentic-delivery-lab/fixture-factory-evolution",
+        "issueNumber": 17,
+        "issueNodeId": "ISSUE_FIXTURE_FACTORY_17",
+        "issueType": "implementation",
+        "lifecycleStage": "execution",
+        "deliveryState": "ready",
+        "actorPermission": "write",
+        "title": "Synthetic factory capability improvement",
+        "body": "A synthetic authorized implementation issue.",
+        "plan": {
+          "exists": true,
+          "valid": true,
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "session": {
+          "exists": false,
+          "resumable": false,
+          "id": null
+        },
+        "execution": {
+          "status": "idle",
+          "operation": null
+        },
+        "routingProposal": {
+          "route": "implement",
+          "workType": "implementation",
+          "lifecycleStage": "execution",
+          "readiness": "ready",
+          "governance": [],
+          "orchestrationPattern": "implementation-existing-plan",
+          "summary": "Continue only the authorized Issue plan.",
+          "message": ""
+        }
+      }
+    },
+    "productFeature": {
+      "scenarioId": "synthetic-product-feature-planning",
+      "evidenceClass": "offline-fixture",
+      "realProductRepository": null,
+      "productSteward": null,
+      "planningContext": {
+        "authority": "planning-only",
+        "trust": "untrusted-planning-data",
+        "project": {
+          "nodeId": "PROJECT_FIXTURE_PRODUCT_DELIVERY"
+        },
+        "item": {
+          "nodeId": "ITEM_FIXTURE_PRODUCT_17"
+        },
+        "planningFields": [
+          {
+            "key": "portfolio-group",
+            "value": "synthetic product delivery"
+          },
+          {
+            "key": "portfolio-sequence",
+            "value": 3
+          }
+        ]
+      },
+      "sourceIssue": {
+        "repositoryId": "9000001082",
+        "repositoryFullName": "agentic-delivery-lab/fixture-product-service",
+        "issueNumber": 17,
+        "issueNodeId": "ISSUE_FIXTURE_PRODUCT_17",
+        "issueType": "feature",
+        "lifecycleStage": "planning",
+        "deliveryState": "ready",
+        "actorPermission": "write",
+        "title": "Synthetic product feature",
+        "body": "A synthetic feature Issue; no product repository or steward was discovered.",
+        "plan": {
+          "exists": false,
+          "valid": false,
+          "digest": null
+        },
+        "session": {
+          "exists": false,
+          "resumable": false,
+          "id": null
+        },
+        "execution": {
+          "status": "idle",
+          "operation": null
+        },
+        "routingProposal": {
+          "route": "plan",
+          "workType": "feature",
+          "lifecycleStage": "planning",
+          "readiness": "ready",
+          "governance": [],
+          "orchestrationPattern": "implementation-fresh",
+          "summary": "Prepare a plan from the synthetic source Issue.",
+          "message": ""
+        }
+      }
+    },
+    "evaluationFinding": {
+      "scenarioId": "synthetic-evaluation-finding-owner-hold",
+      "evidenceClass": "offline-fixture",
+      "contractAdoption": {
+        "status": "review-pending",
+        "routerVersion": "1.0.0",
+        "architectureProposalVersion": "2.0.0",
+        "schemaCommit": "06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed"
+      },
+      "report": {
+        "$schema": "https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed/architecture/contracts/evaluation-report.schema.json",
+        "contractVersion": "1.0.0",
+        "reportId": "synthetic:agent-capability:cross-stream-example-v1",
+        "generatedAt": "2026-10-09T09:00:00Z",
+        "classification": "synthetic",
+        "evaluationMode": "offline",
+        "layer": "agent-capability",
+        "subject": {
+          "layer": "agent-capability",
+          "id": "synthetic-issue-routing-capability",
+          "version": "0.1.0",
+          "sourcePin": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "commit": "0123456789abcdef0123456789abcdef01234567",
+            "path": "skills/synthetic-issue-routing/SKILL.md",
+            "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          }
+        },
+        "dataset": {
+          "id": "synthetic-cross-stream-cases",
+          "version": "1.0.0",
+          "sourcePin": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "commit": "1123456789abcdef0123456789abcdef01234567",
+            "path": "evaluations/datasets/synthetic-cross-stream-cases.yml",
+            "sha256": "1123456789abcdef0123456789abcdef1123456789abcdef0123456789abcdef"
+          },
+          "caseIds": [
+            "synthetic-project-only-card-001"
+          ]
+        },
+        "dependencies": [
+          {
+            "id": "synthetic-evaluation-runner",
+            "version": "1.0.0",
+            "sourcePin": {
+              "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+              "commit": "2123456789abcdef0123456789abcdef01234567",
+              "path": "tools/evaluation-runner.mjs",
+              "sha256": "2123456789abcdef0123456789abcdef2123456789abcdef0123456789abcdef"
+            }
+          }
+        ],
+        "graders": {
+          "deterministic": {
+            "id": "synthetic-deterministic-grader",
+            "version": "1.0.0",
+            "sourcePin": {
+              "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+              "commit": "3123456789abcdef0123456789abcdef01234567",
+              "path": "evaluations/graders/synthetic-deterministic.yml",
+              "sha256": "3123456789abcdef0123456789abcdef3123456789abcdef0123456789abcdef"
+            }
+          },
+          "semantic": {
+            "id": "synthetic-semantic-review-rubric",
+            "version": "1.0.0",
+            "sourcePin": {
+              "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+              "commit": "4123456789abcdef0123456789abcdef01234567",
+              "path": "evaluations/graders/synthetic-semantic-review.yml",
+              "sha256": "4123456789abcdef0123456789abcdef4123456789abcdef0123456789abcdef"
+            }
+          }
+        },
+        "results": {
+          "deterministicChecks": [
+            {
+              "checkId": "synthetic-project-context-is-not-authority",
+              "outcome": "fail",
+              "details": "Planning context alone did not authorize an Issue route.",
+              "evidenceRefs": [
+                "fixtures/cross-stream-acceptance/scenarios.json"
+              ]
+            }
+          ],
+          "semanticJudgments": []
+        },
+        "baseline": {
+          "status": "unmeasured",
+          "definitionPin": {
+            "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+            "commit": "5123456789abcdef0123456789abcdef01234567",
+            "path": "evaluations/baselines/synthetic-issue-routing.yml",
+            "sha256": "5123456789abcdef0123456789abcdef5123456789abcdef0123456789abcdef"
+          },
+          "reasonUnmeasured": "This offline fixture has no observed or comparable baseline."
+        },
+        "comparison": {
+          "claim": "not-compared",
+          "comparator": {
+            "id": "synthetic-task-success-comparator",
+            "version": "1.0.0",
+            "sourcePin": {
+              "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+              "commit": "6123456789abcdef0123456789abcdef01234567",
+              "path": "evaluations/comparators/synthetic-task-success.yml",
+              "sha256": "6123456789abcdef0123456789abcdef6123456789abcdef0123456789abcdef"
+            },
+            "method": "absolute-difference",
+            "direction": "higher-is-better"
+          }
+        },
+        "uncertainty": {
+          "level": "high",
+          "summary": "Synthetic structure validation says nothing about live capability performance.",
+          "factors": [
+            "No real product repository, Project, owner mapping, or evaluation run is represented."
+          ]
+        },
+        "review": {
+          "status": "not-applicable",
+          "reviewerId": null,
+          "rationale": "Synthetic fixture only; no result is presented for independent review."
+        },
+        "regressionAssessment": {
+          "severity": "unknown",
+          "rationale": "No candidate or baseline was evaluated."
+        },
+        "evidence": [
+          {
+            "kind": "source",
+            "ref": "fixtures/cross-stream-acceptance/scenarios.json"
+          },
+          {
+            "kind": "result",
+            "ref": "synthetic:project-only-card-001"
+          }
+        ],
+        "recommendation": {
+          "action": "human-review",
+          "rationale": "Retain this failed synthetic evaluation for human Project triage; do not create or authorize work."
+        },
+        "limitations": [
+          "This is a synthetic contract fixture, not an evaluation run or live evidence.",
+          "All source pin values are format-only placeholders and do not resolve to real artifacts.",
+          "Evaluation Report 1.0.0 remains under review and conflicts with proposed 2.0.0."
+        ]
+      },
+      "disposition": {
+        "status": "hold",
+        "ownership": {
+          "status": "unresolved",
+          "reason": "No canonical owner mapping has been adopted.",
+          "actionableTarget": null
+        },
+        "sourceReportRef": "synthetic:agent-capability:cross-stream-example-v1",
+        "sourceEvidenceRef": "synthetic:agent-capability:cross-stream-example-v1#evidence",
+        "improvementIssueProposal": {
+          "kind": "improvement-issue",
+          "status": "proposed-for-human-project-triage",
+          "projectNodeId": "PROJECT_FIXTURE_EVALUATION_TRIAGE",
+          "createdIssue": false
+        },
+        "executionAuthorized": false,
+        "modelInvocations": 0,
+        "protectedEffects": []
+      },
+      "sourceIssue": {
+        "repositoryId": "9000001083",
+        "repositoryFullName": "agentic-delivery-lab/fixture-evaluation-evidence",
+        "issueNumber": 17,
+        "issueNodeId": "ISSUE_FIXTURE_EVALUATION_17"
+      }
+    },
+    "projectReadFailure": {
+      "scenarioId": "synthetic-project-read-scope-missing-issue-recovery",
+      "evidenceClass": "offline-fixture",
+      "projectPlanningGap": {
+        "code": "PROJECT_READ_SCOPE_MISSING",
+        "planningOnly": true,
+        "executionAuthorized": false
+      },
+      "sourceIssue": {
+        "repositoryId": "9000001084",
+        "repositoryFullName": "agentic-delivery-lab/fixture-security-recovery",
+        "issueNumber": 19,
+        "issueNodeId": "ISSUE_FIXTURE_SECURITY_RECOVERY_19",
+        "issueType": "task",
+        "lifecycleStage": "execution",
+        "deliveryState": "working",
+        "actorPermission": "write",
+        "title": "Synthetic Issue-first security recovery",
+        "body": "Resume an already authorized recovery after Project planning access failed.",
+        "plan": {
+          "exists": true,
+          "valid": true,
+          "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "session": {
+          "exists": true,
+          "resumable": true,
+          "id": "019fb023-24b8-7881-9119-509f078b610e"
+        },
+        "execution": {
+          "status": "paused",
+          "operation": "implementation"
+        },
+        "routingProposal": null
+      }
+    }
+  },
+  "contractsUnderReview": {
+    "projectPlanning": {
+      "pullRequest": 102,
+      "status": "review-pending"
+    },
+    "evaluationFindingRouter": {
+      "pullRequest": 104,
+      "status": "review-pending"
+    },
+    "architectureEvaluationReport": {
+      "pullRequest": 14,
+      "proposedVersion": "2.0.0"
+    }
+  }
+}
