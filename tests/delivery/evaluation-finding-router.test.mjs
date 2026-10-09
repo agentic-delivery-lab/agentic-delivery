@@ -10,7 +10,7 @@ import {
   loadPinnedEvaluationReportSchema,
   routeEvaluationReports,
 } from '../../scripts/lib/evaluation-finding-router.mjs';
-import { createEvaluationFindingProposals } from '../../scripts/route-evaluation-findings.mjs';
+import { routeEvaluationFindingReports } from '../../scripts/route-evaluation-findings.mjs';
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
@@ -184,8 +184,14 @@ routeTest('rejects incomparable baseline and candidate measurements', () => {
 });
 
 routeTest('checks directional absolute-difference claims against the measurements', () => {
-  const improvement = route([report()]).dispositions[0];
-  assert.equal(improvement.comparisonVerification.status, 'directionally-consistent');
+  const improvement = route([report()]).dispositions[0].comparisonAssessment;
+  assert.equal(improvement.claimConsistency, 'directionally-consistent');
+  assert.deepEqual(improvement.semanticComparability, {
+    status: 'unverified',
+    matchingDeclarations: ['metricId', 'unit', 'observationWindow'],
+    pinnedDefinitions: 'not-retrieved',
+    reason: 'Matching measurement labels do not establish semantic comparability; the pinned baseline and comparator definitions were not retrieved.',
+  });
 
   const lowerIsBetterRegression = report({
     baseline: { ...report().baseline, measurement: measurement(0.4) },
@@ -196,13 +202,13 @@ routeTest('checks directional absolute-difference claims against the measurement
       candidateMeasurement: measurement(0.6),
     },
   });
-  assert.equal(route([lowerIsBetterRegression]).dispositions[0].comparisonVerification.status, 'directionally-consistent');
+  assert.equal(route([lowerIsBetterRegression]).dispositions[0].comparisonAssessment.claimConsistency, 'directionally-consistent');
 
   const equalValues = report({
     baseline: { ...report().baseline, measurement: measurement(0.6) },
     comparison: { ...report().comparison, claim: 'no-change', candidateMeasurement: measurement(0.6) },
   });
-  assert.equal(route([equalValues]).dispositions[0].comparisonVerification.status, 'directionally-consistent');
+  assert.equal(route([equalValues]).dispositions[0].comparisonAssessment.claimConsistency, 'directionally-consistent');
 
   const contradiction = report({
     comparison: { ...report().comparison, candidateMeasurement: measurement(0.2) },
@@ -212,7 +218,7 @@ routeTest('checks directional absolute-difference claims against the measurement
   const unequalNoChange = report({
     comparison: { ...report().comparison, claim: 'no-change' },
   });
-  assert.equal(route([unequalNoChange]).dispositions[0].comparisonVerification.status, 'requires-human-comparator-review');
+  assert.equal(route([unequalNoChange]).dispositions[0].comparisonAssessment.claimConsistency, 'requires-human-comparator-review');
 });
 
 routeTest('marks comparator-dependent claims for human review when the comparator definition is unavailable', () => {
@@ -227,14 +233,16 @@ routeTest('marks comparator-dependent claims for human review when the comparato
         comparator: { ...report().comparison.comparator, ...comparator },
       },
     });
-    assert.equal(route([candidate]).dispositions[0].comparisonVerification.status, 'requires-human-comparator-review');
+    const assessment = route([candidate]).dispositions[0].comparisonAssessment;
+    assert.equal(assessment.claimConsistency, 'requires-human-comparator-review');
+    assert.equal(assessment.semanticComparability.status, 'unverified');
   }
 });
 
-routeTest('runs the proposal CLI without loading a participant registry', async () => {
+routeTest('runs the report-router CLI without loading a participant registry', async () => {
   const emptyWorkspace = await mkdtemp(path.join(tmpdir(), 'evaluation-finding-router-'));
   try {
-    const result = await createEvaluationFindingProposals([
+    const result = await routeEvaluationFindingReports([
       '--architecture-root', architectureRoot,
       '--source-issue', sourceIssueUrl,
       '--report', path.join(repositoryRoot, 'tests/fixtures/evaluation-reports/measured-owner-issue.yml'),

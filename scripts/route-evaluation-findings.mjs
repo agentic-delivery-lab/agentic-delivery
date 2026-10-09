@@ -34,12 +34,12 @@ function parseArguments(argv) {
   }
 
   if (!options['--architecture-root']) throw new EvaluationFindingCliError('--architecture-root is required and must contain the pinned Architecture commit.');
-  if (!options['--source-issue']) throw new EvaluationFindingCliError('--source-issue is required to prevent a proposal from targeting its own source Issue.');
+  if (!options['--source-issue']) throw new EvaluationFindingCliError('--source-issue is required to detect an owner candidate that targets its own source Issue.');
   if (options.reports.length === 0) throw new EvaluationFindingCliError('At least one --report file is required.');
   return options;
 }
 
-export async function createEvaluationFindingProposals(argv, { cwd = process.cwd() } = {}) {
+export async function routeEvaluationFindingReports(argv, { cwd = process.cwd() } = {}) {
   const options = parseArguments(argv);
   const reports = [];
   for (const reportPath of options.reports) {
@@ -59,7 +59,7 @@ export async function createEvaluationFindingProposals(argv, { cwd = process.cwd
 const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMainModule) {
   try {
-    const result = await createEvaluationFindingProposals(process.argv.slice(2));
+    const result = await routeEvaluationFindingReports(process.argv.slice(2));
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   } catch (error) {
     process.stderr.write(`${error.message}\n`);

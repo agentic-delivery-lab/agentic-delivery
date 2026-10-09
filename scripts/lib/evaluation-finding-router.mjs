@@ -123,23 +123,40 @@ function compareMeasurements(report) {
     throw new EvaluationFindingRoutingError(`The ${report.comparison.claim} claim requires measured baseline and candidate measurements.`);
   }
   if (!baseline || !candidate) {
-    return { status: 'not-assessed', reason: 'A measured baseline and candidate are not both present.' };
+    return {
+      claimConsistency: 'not-assessed',
+      semanticComparability: {
+        status: 'not-assessed',
+        reason: 'A measured baseline and candidate are not both present.',
+      },
+    };
   }
 
   for (const key of ['metricId', 'unit', 'observationWindow']) {
     if (baseline[key] !== candidate[key]) {
-      throw new EvaluationFindingRoutingError(`Baseline and candidate measurements are incomparable because ${key} differs.`);
+      throw new EvaluationFindingRoutingError(`Baseline and candidate are structurally incomparable because declared ${key} values differ.`);
     }
   }
 
+  const semanticComparability = {
+    status: 'unverified',
+    matchingDeclarations: ['metricId', 'unit', 'observationWindow'],
+    pinnedDefinitions: 'not-retrieved',
+    reason: 'Matching measurement labels do not establish semantic comparability; the pinned baseline and comparator definitions were not retrieved.',
+  };
   const { claim, comparator } = report.comparison;
   if (!MEASURED_CLAIMS.has(claim)) {
-    return { status: 'not-asserted', reason: `The report claim is ${claim}.` };
+    return {
+      claimConsistency: 'not-asserted',
+      reason: `The report claim is ${claim}.`,
+      semanticComparability,
+    };
   }
   if (comparator.method !== 'absolute-difference' || !['higher-is-better', 'lower-is-better'].includes(comparator.direction)) {
     return {
-      status: 'requires-human-comparator-review',
+      claimConsistency: 'requires-human-comparator-review',
       reason: 'The pinned comparator definition was not retrieved, so this claim cannot be checked from values and direction alone.',
+      semanticComparability,
     };
   }
 
@@ -151,8 +168,9 @@ function compareMeasurements(report) {
 
   if (claim === 'no-change' && observedClaim !== 'no-change') {
     return {
-      status: 'requires-human-comparator-review',
+      claimConsistency: 'requires-human-comparator-review',
       reason: 'Different values may be treated as no change by comparator-specific tolerance rules that are not available locally.',
+      semanticComparability,
     };
   }
   if (claim !== observedClaim) {
@@ -160,7 +178,7 @@ function compareMeasurements(report) {
       `The ${claim} claim contradicts measured values and comparator direction (observed direction: ${observedClaim}).`,
     );
   }
-  return { status: 'directionally-consistent', observedClaim };
+  return { claimConsistency: 'directionally-consistent', observedClaim, semanticComparability };
 }
 
 function collectSourcePins(report) {
@@ -208,14 +226,14 @@ function buildSourceEvidence(report) {
   };
 }
 
-function routeOne(report, { schemaContract, sourceIssueUrl, canonicalReport, comparisonVerification }) {
+function routeOne(report, { schemaContract, sourceIssueUrl, canonicalReport, comparisonAssessment }) {
   const reportReference = buildReportReference(report, schemaContract, canonicalReport);
   const action = report.recommendation.action;
   const shared = {
     reportId: report.reportId,
     layer: report.layer,
     reportReference,
-    comparisonVerification,
+    comparisonAssessment,
     sourceEvidence: buildSourceEvidence(report),
     sourceReport: structuredClone(report),
   };
@@ -264,7 +282,7 @@ export function routeEvaluationReports({ reports, schemaContract, sourceIssueUrl
 
   const uniqueReports = new Map();
   for (const report of reports) {
-    const comparisonVerification = validateReport(report, schemaContract);
+    const comparisonAssessment = validateReport(report, schemaContract);
     const canonicalReport = canonicalJson(report);
     const fingerprint = sha256(canonicalReport);
     const previous = uniqueReports.get(report.reportId);
@@ -275,17 +293,17 @@ export function routeEvaluationReports({ reports, schemaContract, sourceIssueUrl
       previous.duplicateCount += 1;
       continue;
     }
-    uniqueReports.set(report.reportId, { report, canonicalReport, fingerprint, duplicateCount: 1, comparisonVerification });
+    uniqueReports.set(report.reportId, { report, canonicalReport, fingerprint, duplicateCount: 1, comparisonAssessment });
   }
 
   const proposals = [];
   const dispositions = [];
-  for (const { report, canonicalReport, duplicateCount, comparisonVerification } of uniqueReports.values()) {
+  for (const { report, canonicalReport, duplicateCount, comparisonAssessment } of uniqueReports.values()) {
     const result = routeOne(report, {
       schemaContract,
       sourceIssueUrl: canonicalSourceIssue,
       canonicalReport,
-      comparisonVerification,
+      comparisonAssessment,
     });
     if (result.target) {
       result.duplicateCount = duplicateCount;

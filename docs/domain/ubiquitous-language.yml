@@ -312,5 +312,5 @@ terms:
     term: "state-machine version"
     definition: "The explicit version of the lifecycle transition contract used to validate a delivery proposal; it is persisted with execution state and is not inferred from a mutable branch."
   - context: "agentic-delivery-control-plane"
-    term: "evaluation finding proposal"
-    definition: "An actionable issue proposal that can be emitted only when a pinned evaluation report is tied to an authoritative owner mapping; a report-asserted Issue URL alone remains a disposition for owner verification."
+    term: "evaluation finding disposition"
+    definition: "A non-actionable offline record derived from a pinned evaluation report that preserves its evidence and report-asserted owner candidate; without a pinned authoritative owner mapping, it cannot create or prioritize work."
