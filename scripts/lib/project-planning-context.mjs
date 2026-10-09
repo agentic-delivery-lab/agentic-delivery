@@ -174,7 +174,7 @@ export function normalizeProjectPlanningInput(input) {
           }))
           : value,
       })),
-      requiredBeforeExecution: 'revalidate-origin-issue-authorization',
+      sourceIssueAuthorizationPrecondition: 'revalidate-origin-issue-authorization-at-runtime-before-consumption',
     },
   };
 }

@@ -55,7 +55,7 @@ test('Project planning input is normalized as non-authorizing context with immut
       nodeId: 'issue-fixture-44',
     },
     planningFields: input.planningFields,
-    requiredBeforeExecution: 'revalidate-origin-issue-authorization',
+    sourceIssueAuthorizationPrecondition: 'revalidate-origin-issue-authorization-at-runtime-before-consumption',
   });
 
   const ajv = new Ajv2020({ allErrors: true, strict: true });
@@ -196,7 +196,7 @@ test('a valid Project planning fixture still re-fetches and authorizes its origi
     `https://api.github.com/repos/${input.originRepository.fullName}/issues/44`,
   ]);
   assert.equal(planningContext.value.sourceIssue.number, 44);
-  assert.equal(planningContext.value.requiredBeforeExecution, 'revalidate-origin-issue-authorization');
+  assert.equal(planningContext.value.sourceIssueAuthorizationPrecondition, 'revalidate-origin-issue-authorization-at-runtime-before-consumption');
 });
 
 test('approved internal automation can pass the source-Issue gate without a collaborator permission field', async () => {
@@ -320,7 +320,7 @@ test('a Project dependency alone remains planning-only and cannot authorize or b
 
   assert.equal(result.valid, true);
   assert.equal(result.value.authority, 'planning-only');
-  assert.equal(result.value.requiredBeforeExecution, 'revalidate-origin-issue-authorization');
+  assert.equal(result.value.sourceIssueAuthorizationPrecondition, 'revalidate-origin-issue-authorization-at-runtime-before-consumption');
   assert.deepEqual(result.value.planningFields[0].value, [{
     repositoryId: '777777777',
     repositoryFullName: 'agentic-delivery-lab/service-a',

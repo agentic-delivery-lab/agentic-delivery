@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "project-planning-context.v1.schema.json",
   "title": "Project planning context proposal, offline format v1",
-  "description": "Provisional offline fixture format for the proposed Project planning context; it is not an adopted consumer interface. It is an untrusted planning projection that never authorizes execution and always requires source-Issue revalidation. Adoption is gated on reviewed and merged Architecture Authority Issue #11 and ADR-0023.",
+  "description": "Provisional offline fixture format for the proposed Project planning context; it is not an adopted consumer interface. It is an untrusted planning projection that never authorizes execution and always requires source-Issue revalidation. The source-Issue authorization precondition is not a complete execution gate: future consumers must independently enforce Lifecycle Stage, Delivery State/readiness, plan, and downstream gates. Adoption is gated on reviewed and merged Architecture Authority Issue #11 and ADR-0023.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "authority", "trust", "project", "item", "sourceIssue", "planningFields", "requiredBeforeExecution"],
+  "required": ["schemaVersion", "authority", "trust", "project", "item", "sourceIssue", "planningFields", "sourceIssueAuthorizationPrecondition"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "authority": { "const": "planning-only" },
@@ -93,7 +93,10 @@
         ]
       }
     },
-    "requiredBeforeExecution": { "const": "revalidate-origin-issue-authorization" }
+    "sourceIssueAuthorizationPrecondition": {
+      "const": "revalidate-origin-issue-authorization-at-runtime-before-consumption",
+      "description": "This names only origin-Issue authorization. A future consumer must independently enforce Lifecycle Stage, Delivery State/readiness, plan, and downstream execution gates."
+    }
   },
   "allOf": [
     {
