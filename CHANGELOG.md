@@ -106,6 +106,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Central intake and delivery select the reviewed draft66 participant registry through bootstrap `0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80`. The controller includes the strict routing-schema repair; all participants remain in shadow mode. The previous bootstrap remains available for rollback.
+
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.52` at
   `8a2acddf07d0b70b11fc5d9c1f5143e54abf9185`, retaining draft51 and draft50

@@ -41,11 +41,20 @@ central participant's controller version and commit. All participants remain
 in shadow mode, their interface contracts and dependency pins stay unchanged,
 and draft65 remains supported for rollback.
 
-The bootstrap remains `01503edac6533370b24f2e882e6ea1f7b2a21304` during this
-first step. After its review pull request merges, prepare the second change
-using that merge commit as the bootstrap source. Record both review links and
-the operator approval before retrying the remaining approved central issue
-canary. A merged manifest alone does not prove live semantic routing recovery.
+[PR #99](https://github.com/agentic-delivery-lab/agentic-delivery/pull/99)
+merged the first step at `0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80`, retaining
+bootstrap `01503edac6533370b24f2e882e6ea1f7b2a21304`. The second change sets
+`bootstrapCommit` and the matching intake and delivery checkout refs to that
+first merge commit. After its approved merge, the central shadow participant
+can select draft66. The other five participant controller pins stay unchanged.
+
+Record the second review link and operator approval before retrying the
+remaining approved central issue canary. Confirm successful semantic routing,
+receipt completion and unchanged issue fields independently. A merged manifest
+or green workflow alone does not prove live semantic routing recovery. To
+roll back the bootstrap, restore `config/controller-release.json.bootstrapCommit`
+and all four matching workflow checkout refs to
+`01503edac6533370b24f2e882e6ea1f7b2a21304` through a reviewed change.
 
 The existing Distribution bundle still pins draft37 and Architecture draft8.
 The explicit-root release-chain check therefore reports seven mismatches on
