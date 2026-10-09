@@ -335,9 +335,16 @@ routeTest('does not route an owner candidate that differs from the subject repos
 });
 
 routeTest('rejects self-targeting owner Issues', () => {
-
   assert.throws(() => route([report({
     recommendation: { action: 'owner-issue', ownerIssue: sourceIssueUrl, rationale: 'Recursive self-target.' },
+  })]), /must not target the source Issue/);
+
+  assert.throws(() => route([report({
+    recommendation: {
+      action: 'owner-issue',
+      ownerIssue: 'https://github.com/AGENTIC-DELIVERY-LAB/Agentic-Delivery/issues/103',
+      rationale: 'A case-insensitive recursive self-target.',
+    },
   })]), /must not target the source Issue/);
 });
 

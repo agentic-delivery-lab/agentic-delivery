@@ -116,6 +116,14 @@ function repositoryForIssueUrl(value, description) {
   return `${owner}/${name}`;
 }
 
+function sameGitHubIssue(left, right) {
+  const leftParts = GITHUB_ISSUE_URL.exec(left);
+  const rightParts = GITHUB_ISSUE_URL.exec(right);
+  return leftParts[1].toLowerCase() === rightParts[1].toLowerCase()
+    && leftParts[2].toLowerCase() === rightParts[2].toLowerCase()
+    && leftParts[3] === rightParts[3];
+}
+
 function compareMeasurements(report) {
   const baseline = report.baseline.measurement;
   const candidate = report.comparison.candidateMeasurement;
@@ -252,7 +260,7 @@ function routeOne(report, { schemaContract, sourceIssueUrl, canonicalReport, com
 
   const targetUrl = canonicalIssueUrl(report.recommendation.ownerIssue, 'Recommendation ownerIssue');
   const targetRepository = repositoryForIssueUrl(targetUrl, 'Recommendation ownerIssue');
-  if (targetUrl === sourceIssueUrl) {
+  if (sameGitHubIssue(targetUrl, sourceIssueUrl)) {
     throw new EvaluationFindingRoutingError('Recommendation ownerIssue must not target the source Issue.');
   }
 
