@@ -312,6 +312,7 @@
         "participant-registry-validator",
         "primitive-selection-contract",
         "primitive-selection-validator",
+        "project-planning-context-validator",
         "quota-diagnostics-contract",
         "repository-dispatch-event-normalizer",
         "repository-dispatch-transport",
@@ -374,6 +375,7 @@
         "participant-registry-validator",
         "primitive-selection-contract",
         "primitive-selection-validator",
+        "project-planning-context-validator",
         "quota-diagnostics-contract",
         "repository-dispatch-event-normalizer",
         "repository-dispatch-transport",
@@ -1108,6 +1110,19 @@
       "id": "primitive-selection-validator",
       "path": "scripts/lib/primitive-selection.mjs",
       "location": "scripts/lib/primitive-selection.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "project-planning-context-validator",
+      "path": "scripts/lib/project-planning-context.mjs",
+      "location": "scripts/lib/project-planning-context.mjs",
       "kind": "validator",
       "enforcement": "deterministic",
       "adrs": [
