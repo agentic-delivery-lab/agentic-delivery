@@ -11,6 +11,8 @@ import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 import { classifyAndRoute, loadLifecycleConfig } from '../../scripts/issue-intake.mjs';
 import { handleWebhook } from '../../api/github/webhook.mjs';
 import { loadPinnedEvaluationReportSchema, routeEvaluationReports } from '../../scripts/lib/evaluation-finding-router.mjs';
+import { normalizeProjectPlanningInput } from '../../scripts/lib/project-planning-context.mjs';
+import { InMemoryReplayStore, replayKey } from '../../scripts/lib/replay-protection.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const fixturePath = path.join(repositoryRoot, 'tests/fixtures/cross-stream-acceptance/scenarios.json');
@@ -74,7 +76,11 @@ async function runIssueRoute(scenario, options = {}) {
     modelCalls: 0,
     protectedEffects: [],
     modelIssue: null,
+    projectPlanningResult: null,
   };
+  if (options.projectPlanningInput) {
+    trace.projectPlanningResult = normalizeProjectPlanningInput(options.projectPlanningInput);
+  }
   const registry = fixtureRegistry(sourceIssue, options.registryParticipants ?? []);
   assert.equal(registry.valid, true, registry.errors.join('; '));
   const participantAuthorization = authorizeParticipation({
@@ -202,8 +208,8 @@ async function runIssueRoute(scenario, options = {}) {
       controllerRepository: 'agentic-delivery-lab/agentic-delivery',
       eventName: manualRecovery ? 'workflow_dispatch' : 'issues',
       githubRef: 'refs/heads/main',
-      callerWorkflowRef: `agentic-delivery-lab/agentic-delivery/.github/workflows/${manualRecovery ? 'codex-delivery' : 'issue-intake'}.yml@refs/heads/main`,
-      route: manualRecovery ? '' : result.route,
+      callerWorkflowRef: 'agentic-delivery-lab/agentic-delivery/.github/workflows/issue-intake.yml@refs/heads/main',
+      route: result.route,
       originRepository: sourceIssue.repositoryFullName,
       originRepositoryId: sourceIssue.repositoryId,
       eventRepository,
@@ -216,6 +222,61 @@ async function runIssueRoute(scenario, options = {}) {
     deliveryAuthorizationError = error;
   }
   return { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError };
+}
+
+async function runIssueWebhook(scenario, { action, issue, deliveryId, replayStore, dispatches }) {
+  const sourceIssue = scenario.sourceIssue;
+  const registry = fixtureRegistry(sourceIssue);
+  const payload = {
+    organization: { login: 'agentic-delivery-lab', id: 327861320 },
+    installation: { id: 163255060 },
+    action,
+    repository: { full_name: sourceIssue.repositoryFullName, id: Number(sourceIssue.repositoryId) },
+    issue: { number: sourceIssue.issueNumber, ...issue },
+    sender: { login: 'fixture-writer', type: 'User' },
+  };
+  const body = JSON.stringify(payload);
+  const secret = 'offline-fixture-webhook-secret';
+  const signature = `sha256=${createHmac('sha256', secret).update(body, 'utf8').digest('hex')}`;
+  const output = {
+    statusCode: null,
+    headers: {},
+    body: null,
+    setHeader(name, value) { this.headers[name] = value; },
+    end(value) { this.body = value ?? null; },
+  };
+  await handleWebhook({
+    method: 'POST',
+    headers: {
+      'x-hub-signature-256': signature,
+      'x-github-event': 'issues',
+      'x-github-delivery': deliveryId,
+    },
+    body,
+  }, output, {
+    env: {
+      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
+      AGENTIC_DELIVERY_CONTROLLER_REPOSITORY_ID: '1358455028',
+      AGENTIC_DELIVERY_APP_INSTALLATION_ID: '163255060',
+      AGENTIC_DELIVERY_WEBHOOK_SECRET: secret,
+      AGENTIC_DELIVERY_DISPATCH_SECRET: 'offline-fixture-dispatch-secret',
+    },
+    participantRegistry: registry,
+    replayStore,
+    tokenProvider: { token: async () => 'offline-fixture-token' },
+    fetchImpl: async (url, options = {}) => {
+      const pathname = new URL(url).pathname;
+      if (pathname.endsWith('/collaborators/fixture-writer/permission')) {
+        return new Response(JSON.stringify({ permission: 'write' }), { status: 200 });
+      }
+      if (pathname === '/repos/agentic-delivery-lab/agentic-delivery/dispatches' && options.method === 'POST') {
+        dispatches.push(JSON.parse(options.body));
+        return new Response(null, { status: 204 });
+      }
+      throw new Error('Unexpected offline webhook request: ' + pathname);
+    },
+  });
+  return output;
 }
 
 test('factory capability work is routed only from its revalidated synthetic source Issue', async () => {
@@ -308,18 +369,42 @@ test('same-number Issues stay isolated when both source repositories are routed'
   assert.equal(productRoute.participantAuthorization.allowed, true);
 });
 
-test('duplicate and out-of-order Issue events keep the same source identity and route', async () => {
+test('shared webhook replay state suppresses duplicate delivery and stale Issue payload cannot change the route', async () => {
   const scenario = fixtures.scenarios.factoryCapability;
-  const later = await runIssueRoute(scenario, { eventAction: 'edited' });
-  const delayedEarlier = await runIssueRoute(scenario, {
-    eventAction: 'opened',
-    eventIssue: { state: 'closed', title: 'stale out-of-order title', body: 'stale out-of-order body' },
+  const replayStore = new InMemoryReplayStore();
+  const dispatches = [];
+  const laterDeliveryId = '9a1e4c20-8101-4e50-8f35-000000000001';
+  const delayedDeliveryId = '9a1e4c20-8101-4e50-8f35-000000000002';
+  const currentIssue = { state: 'open', title: scenario.sourceIssue.title, body: scenario.sourceIssue.body, updated_at: '2026-10-11T10:00:00Z' };
+  const staleIssue = { state: 'closed', title: 'stale out-of-order title', body: 'stale out-of-order body', updated_at: '2026-10-11T09:00:00Z' };
+  const laterWebhook = await runIssueWebhook(scenario, {
+    action: 'edited', issue: currentIssue, deliveryId: laterDeliveryId, replayStore, dispatches,
   });
-  const duplicate = await runIssueRoute(scenario, { eventAction: 'edited' });
+  const delayedWebhook = await runIssueWebhook(scenario, {
+    action: 'opened', issue: staleIssue, deliveryId: delayedDeliveryId, replayStore, dispatches,
+  });
+  const duplicateWebhook = await runIssueWebhook(scenario, {
+    action: 'edited', issue: currentIssue, deliveryId: laterDeliveryId, replayStore, dispatches,
+  });
+  assert.equal(laterWebhook.statusCode, 202);
+  assert.equal(delayedWebhook.statusCode, 202);
+  assert.equal(duplicateWebhook.statusCode, 503);
+  assert.match(duplicateWebhook.body, /"retryable":true/);
+  assert.equal(dispatches.length, 2, 'the duplicate delivery GUID must not create another repository dispatch');
+  assert.equal(dispatches[0].event_type, 'agent_invocation');
+  assert.equal(dispatches[1].event_type, 'agent_invocation');
+  const laterEnvelope = JSON.parse(dispatches[0].client_payload.envelope.json);
+  const delayedEnvelope = JSON.parse(dispatches[1].client_payload.envelope.json);
+  assert.equal(laterEnvelope.delivery_id, laterDeliveryId);
+  assert.equal(delayedEnvelope.delivery_id, delayedDeliveryId);
+  assert.equal(laterEnvelope.repository_id, scenario.sourceIssue.repositoryId);
+  assert.equal(delayedEnvelope.repository_id, scenario.sourceIssue.repositoryId);
+
+  const later = await runIssueRoute(scenario, { eventAction: 'edited', eventIssue: currentIssue });
+  const delayedEarlier = await runIssueRoute(scenario, { eventAction: 'opened', eventIssue: staleIssue });
   assert.equal(later.result.route, 'implement');
   assert.equal(delayedEarlier.result.route, later.result.route);
-  assert.equal(duplicate.result.route, later.result.route);
-  for (const run of [later, delayedEarlier, duplicate]) {
+  for (const run of [later, delayedEarlier]) {
     assert.deepEqual(run.trace.trustedIssueReads, [{
       repository: scenario.sourceIssue.repositoryFullName,
       issueNumber: scenario.sourceIssue.issueNumber,
@@ -329,6 +414,16 @@ test('duplicate and out-of-order Issue events keep the same source identity and 
     assert.equal(run.trace.modelIssue.title, scenario.sourceIssue.title);
   }
   assert.equal(delayedEarlier.trace.modelIssue.body, scenario.sourceIssue.body);
+
+  const completedKey = replayKey({ installationId: '163255060', deliveryId: laterDeliveryId });
+  assert.equal((await replayStore.claimController(completedKey)).status, 'claimed');
+  await replayStore.completeController(completedKey);
+  const completedDuplicate = await runIssueWebhook(scenario, {
+    action: 'edited', issue: currentIssue, deliveryId: laterDeliveryId, replayStore, dispatches,
+  });
+  assert.equal(completedDuplicate.statusCode, 200);
+  assert.match(completedDuplicate.body, /"completed":true/);
+  assert.equal(dispatches.length, 2);
 });
 
 test('Project-only events cannot enter Issue routing even when the card references an Issue', async () => {
@@ -480,17 +575,49 @@ test('synthetic Evaluation Report 2.0.0 routes to a non-actionable owner hold', 
 
 test('missing Project read scope records a planning gap while Issue-first recovery remains authorized', async () => {
   const scenario = fixtures.scenarios.projectReadFailure;
-  assert.equal(scenario.projectPlanningGap.code, 'PROJECT_READ_SCOPE_MISSING');
-  assert.equal(scenario.projectPlanningGap.executionAuthorized, false);
+  const planningFixture = JSON.parse(await readFile(
+    path.join(repositoryRoot, 'tests/fixtures/project-planning-context/valid-offline-fixture.json'),
+    'utf8',
+  ));
+  const projectPlanningInput = structuredClone(planningFixture.input);
+  projectPlanningInput.access.projectRead = 'missing-scope';
 
-  const { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario, { manualRecovery: true });
+  const { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario, {
+    manualRecovery: true,
+    projectPlanningInput,
+  });
+  assert.deepEqual(trace.projectPlanningResult, { valid: false, errors: ['PROJECT_READ_SCOPE_MISSING'] });
+  assert.equal(scenario.projectPlanningGap.code, trace.projectPlanningResult.errors[0]);
+  assert.equal(scenario.projectPlanningGap.planningOnly, true);
+  assert.equal(scenario.projectPlanningGap.executionAuthorized, false);
   assert.equal(participantAuthorization.allowed, true);
   assert.equal(deliveryAuthorizationError, null);
   assert.equal(deliveryPolicy.participantMode, 'active');
+  assert.equal(deliveryPolicy.readOnlyRun, false);
   assert.equal(result.route, 'resume');
   assert.equal(result.metadata.lifecycleStage, 'execution');
   assert.equal(result.metadata.readiness, 'working');
   assert.equal(trace.modelCalls, 0, 'manual Issue-first recovery must not invoke a model');
   assert.equal(trace.actorPermissionReads.length, 1);
   assert.deepEqual(trace.protectedEffects, []);
+});
+
+test('direct recovery still requires the codex-delivery workflow and remains shadow read-only', () => {
+  const registry = parseParticipantRegistry(participantSource);
+  const directRecovery = resolveDeliveryParticipant({
+    controllerRepository: 'agentic-delivery-lab/agentic-delivery',
+    eventName: 'workflow_dispatch',
+    githubRef: 'refs/heads/main',
+    callerWorkflowRef: 'agentic-delivery-lab/agentic-delivery/.github/workflows/codex-delivery.yml@refs/heads/main',
+    route: '',
+    originRepository: 'agentic-delivery-lab/agentic-delivery',
+    originRepositoryId: '1358455028',
+    eventRepository: 'agentic-delivery-lab/agentic-delivery',
+    eventRepositoryId: '1358455028',
+    forceReadOnly: false,
+  }, registry, {
+    repository: { id: 1358455028, full_name: 'agentic-delivery-lab/agentic-delivery' },
+  });
+  assert.equal(directRecovery.participantMode, 'shadow');
+  assert.equal(directRecovery.readOnlyRun, true);
 });
