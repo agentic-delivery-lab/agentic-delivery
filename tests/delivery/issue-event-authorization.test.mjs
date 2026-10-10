@@ -14,6 +14,7 @@ test('downstream invocation events do not need a second collaborator lookup', as
     fetchImpl: async () => { calls += 1; return response(500); },
   });
   assert.equal(result.authorized, true);
+  assert.equal(result.actorKind, 'downstream-invocation');
   assert.equal(calls, 0);
 });
 
@@ -21,8 +22,10 @@ test('issue events allow writers and reject readers or unknown collaborators', a
   const base = { GITHUB_EVENT_NAME: 'issues', GITHUB_REPOSITORY: 'owner/repo', GITHUB_ACTOR: 'writer', GH_TOKEN: 'token', GITHUB_OUTPUT: '' };
   const writer = await authorizeIssueEvent({ env: base, fetchImpl: async () => response(200, { permission: 'write' }) });
   assert.equal(writer.authorized, true);
+  assert.equal(writer.actorKind, 'repository-writer');
   const reader = await authorizeIssueEvent({ env: { ...base, GITHUB_ACTOR: 'reader' }, fetchImpl: async () => response(200, { permission: 'read' }) });
   assert.equal(reader.authorized, false);
+  assert.equal(reader.actorKind, 'repository-member');
   const unknown = await authorizeIssueEvent({ env: { ...base, GITHUB_ACTOR: 'unknown' }, fetchImpl: async () => response(404) });
   assert.equal(unknown.authorized, false);
 });
@@ -35,6 +38,7 @@ test('only exact internal automation identities bypass the collaborator lookup',
       fetchImpl: async () => { calls += 1; return response(500); },
     });
     assert.equal(result.authorized, true);
+    assert.equal(result.actorKind, 'internal-automation');
     assert.equal(calls, 0);
   }
   await assert.rejects(
