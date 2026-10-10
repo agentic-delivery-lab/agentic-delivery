@@ -11,6 +11,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- [Issue #103](https://github.com/agentic-delivery-lab/agentic-delivery/issues/103) adds an offline evaluation-finding router that validates the pinned report schema, preserves full report evidence, holds owner-Issue assertions as `awaiting-owner-verification` dispositions until an authoritative owner map exists, and marks comparator-dependent claims for human review. It grants no Issue, Project, or execution authority, depends on Architecture PR #14, and does not enable a live consumer.
+
 - [Issue #101](https://github.com/agentic-delivery-lab/agentic-delivery/issues/101) proposes an offline-only Project planning context schema and fail-closed fixtures. The proposal keeps Project identity and planning facts separate from source-Issue authorization; live Project access and integration remain out of scope.
 
 - The draft controller release `0.2.0-draft.66` pins the strict routing-schema repair at `08728c4210ec2d227eec2b6c182dcf3bafd80db1` for the central shadow participant. Draft65 remains available for rollback. Intake continues to use draft65 until a separate reviewed bootstrap update selects the new registry.
