@@ -1,0 +1,53 @@
+# Project planning context selection
+
+This is an offline-only selection contract for choosing one Project planning
+context linked to an exact source Issue. It does not read GitHub, change Project
+or Issue data, authorize a run, or select a delivery route.
+
+## Selection policy
+
+A version 1 selection policy identifies a topology, its allowed Project node
+IDs, each Project's pinned field-schema digest, and an explicit numeric priority
+for each Project. The policy's SHA-256 is calculated over canonical JSON with
+the fields `schemaVersion`, `policyId`, `version`, `topologyId`, and `projects`;
+the Project entries are sorted by ascending priority and contain only
+`projectNodeId`, `fieldSchemaSha256`, and `priority`. The selector checks both
+the policy's digest and a separately supplied expected digest.
+
+The expected digest must come from a reviewed immutable release that has
+already resolved the topology and policy approval. This selector checks policy
+integrity and binding; it cannot prove who approved a policy. No live Project or
+approved topology exists in the current inventory, so the test policy uses
+synthetic IDs and is not an organization configuration.
+
+## Candidate handling
+
+Each candidate must pass the existing Project planning normalizer. The selector
+then binds its Project item to the source repository ID, repository name, Issue
+number, and Issue node ID. Equal Issue numbers in different repositories are
+different source Issues.
+
+The policy priority resolves candidates from different approved Projects.
+Project display names, API order, and Project field values do not affect the
+choice. A Project with multiple views remains one Project; repeated identical
+observations of the same Project item collapse to one candidate. Conflicting
+observations or multiple distinct items from one Project produce a fixed hold
+result. Fields from non-selected Projects are never combined with the selected
+context.
+
+Missing or mismatched policy pins, unapproved or inaccessible Projects,
+incomplete reads, invalid source identities, and ambiguous candidates return a
+stable error code with no selected context. The selected output retains the
+existing planning-only authority and untrusted-data marker. It cannot overwrite
+Issue-owned priority, lifecycle, readiness, or runner state.
+
+Project access is optional planning context. A selection gap does not change
+the separate source-Issue authorization result for an otherwise eligible
+security or recovery task. Any future runtime integration must independently
+validate the pinned policy source, Project access, source-Issue authorization,
+and all lifecycle and downstream execution gates.
+
+The policy and result schemas and synthetic tests are offline evidence only.
+They do not show live Project operation. Architecture Issue #15 remains the
+human topology decision; no Project identity or policy should be introduced
+until that decision and its release gates are complete.
