@@ -21,6 +21,7 @@
     "control-plane:check": "node scripts/validate-controller-release.mjs",
     "release-chain:check": "node scripts/validate-release-chain.mjs",
     "architecture:pin:check": "node scripts/validate-architecture-pin.mjs",
+    "evaluation:route": "node scripts/route-evaluation-findings.mjs",
     "github-app:check": "node scripts/validate-github-app-contract.mjs",
     "control-plane:boundary": "node scripts/validate-control-plane-boundary.mjs",
     "acceptance:check": "node scripts/validate-multi-repository-acceptance.mjs",
@@ -37,6 +38,7 @@
     "@commitlint/cli": "21.2.2",
     "@commitlint/config-conventional": "21.2.2",
     "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
     "gitmojis": "3.15.0",
     "yaml": "2.9.0"
   },

@@ -296,6 +296,8 @@
         "curated-changelog",
         "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
+        "evaluation-finding-router",
+        "evaluation-finding-router-cli",
         "event-catalog",
         "event-catalog-validator",
         "github-app-publication-boundary",
@@ -312,6 +314,7 @@
         "participant-registry-validator",
         "primitive-selection-contract",
         "primitive-selection-validator",
+        "project-planning-context-validator",
         "quota-diagnostics-contract",
         "repository-dispatch-event-normalizer",
         "repository-dispatch-transport",
@@ -358,6 +361,8 @@
         "curated-changelog",
         "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
+        "evaluation-finding-router",
+        "evaluation-finding-router-cli",
         "event-catalog",
         "event-catalog-validator",
         "github-app-publication-boundary",
@@ -374,6 +379,7 @@
         "participant-registry-validator",
         "primitive-selection-contract",
         "primitive-selection-validator",
+        "project-planning-context-validator",
         "quota-diagnostics-contract",
         "repository-dispatch-event-normalizer",
         "repository-dispatch-transport",
@@ -707,6 +713,32 @@
       ],
       "domains": [
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "evaluation-finding-router",
+      "path": "scripts/lib/evaluation-finding-router.mjs",
+      "location": "scripts/lib/evaluation-finding-router.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "evaluation-finding-router-cli",
+      "path": "scripts/route-evaluation-findings.mjs",
+      "location": "scripts/route-evaluation-findings.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {
@@ -1108,6 +1140,19 @@
       "id": "primitive-selection-validator",
       "path": "scripts/lib/primitive-selection.mjs",
       "location": "scripts/lib/primitive-selection.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "project-planning-context-validator",
+      "path": "scripts/lib/project-planning-context.mjs",
+      "location": "scripts/lib/project-planning-context.mjs",
       "kind": "validator",
       "enforcement": "deterministic",
       "adrs": [

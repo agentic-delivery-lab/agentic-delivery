@@ -18,7 +18,12 @@ export async function authorizeIssueEvent({ env = process.env, fetchImpl = fetch
   const eventName = String(env.GITHUB_EVENT_NAME ?? '');
   if (eventName !== 'issues') {
     await output('authorized', 'true', env);
-    return { authorized: true, actor: null, reason: 'The event is already behind a downstream invocation boundary.' };
+    return {
+      authorized: true,
+      actor: null,
+      actorKind: 'downstream-invocation',
+      reason: 'The event is already behind a downstream invocation boundary.',
+    };
   }
   const repository = String(env.GITHUB_REPOSITORY ?? '');
   const actor = String(env.GITHUB_ACTOR ?? '');
@@ -27,7 +32,12 @@ export async function authorizeIssueEvent({ env = process.env, fetchImpl = fetch
   }
   if (INTERNAL_BOTS.has(actor)) {
     await output('authorized', 'true', env);
-    return { authorized: true, actor, reason: 'The actor is an exact internal automation identity.' };
+    return {
+      authorized: true,
+      actor,
+      actorKind: 'internal-automation',
+      reason: 'The actor is an exact internal automation identity.',
+    };
   }
   if (!env.GH_TOKEN) throw new Error('GH_TOKEN is required for issue-event authorization.');
   const response = await fetchImpl(`https://api.github.com/repos/${repository}/collaborators/${encodeURIComponent(actor)}/permission`, {
@@ -40,13 +50,19 @@ export async function authorizeIssueEvent({ env = process.env, fetchImpl = fetch
   });
   if (response.status === 404) {
     await output('authorized', 'false', env);
-    return { authorized: false, actor, reason: 'The actor is not a repository collaborator.' };
+    return { authorized: false, actor, actorKind: 'not-a-collaborator', reason: 'The actor is not a repository collaborator.' };
   }
   if (!response.ok) throw new Error(`GitHub collaborator permission lookup failed (${response.status}).`);
   const permission = (await response.json())?.permission;
   const authorized = WRITER_PERMISSIONS.has(permission);
   await output('authorized', authorized ? 'true' : 'false', env);
-  return { authorized, actor, permission, reason: authorized ? 'The actor has repository write permission.' : 'The actor lacks repository write permission.' };
+  return {
+    authorized,
+    actor,
+    actorKind: authorized ? 'repository-writer' : 'repository-member',
+    permission,
+    reason: authorized ? 'The actor has repository write permission.' : 'The actor lacks repository write permission.',
+  };
 }
 
 const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

@@ -1,0 +1,120 @@
+$schema: https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed/architecture/contracts/evaluation-report.schema.json
+contractVersion: 1.0.0
+reportId: eval:agent-capability:router-test-001
+generatedAt: '2026-10-09T09:00:00Z'
+classification: observed
+evaluationMode: offline
+layer: agent-capability
+subject:
+  layer: agent-capability
+  id: review-agent
+  version: 0.1.0
+  sourcePin:
+    repository: agentic-delivery-lab/agentic-delivery
+    commit: '1111111111111111111111111111111111111111'
+    path: evidence/1/artifact.yml
+    sha256: '1111111111111111111111111111111111111111111111111111111111111111'
+dataset:
+  id: review-cases
+  version: 1.0.0
+  sourcePin:
+    repository: agentic-delivery-lab/agentic-delivery-primitives
+    commit: '2222222222222222222222222222222222222222'
+    path: evidence/2/artifact.yml
+    sha256: '2222222222222222222222222222222222222222222222222222222222222222'
+  caseIds: [case-001]
+dependencies:
+  - id: evaluation-runner
+    version: 1.0.0
+    sourcePin:
+      repository: agentic-delivery-lab/agentic-delivery-primitives
+      commit: '3333333333333333333333333333333333333333'
+      path: evidence/3/artifact.yml
+      sha256: '3333333333333333333333333333333333333333333333333333333333333333'
+graders:
+  deterministic:
+    id: deterministic-grader
+    version: 1.0.0
+    sourcePin:
+      repository: agentic-delivery-lab/agentic-delivery-primitives
+      commit: '4444444444444444444444444444444444444444'
+      path: evidence/4/artifact.yml
+      sha256: '4444444444444444444444444444444444444444444444444444444444444444'
+  semantic:
+    id: semantic-rubric
+    version: 1.0.0
+    sourcePin:
+      repository: agentic-delivery-lab/agentic-delivery-primitives
+      commit: '5555555555555555555555555555555555555555'
+      path: evidence/5/artifact.yml
+      sha256: '5555555555555555555555555555555555555555555555555555555555555555'
+results:
+  deterministicChecks:
+    - checkId: contract-check
+      outcome: pass
+      evidenceRefs: [https://example.invalid/evaluations/run-1/checks/contract]
+  semanticJudgments:
+    - criterionId: review-quality
+      outcome: acceptable
+      reviewer:
+        id: reviewer-1
+        kind: human
+        relationshipToAuthor: independent
+      confidence: 0.8
+      rationale: The output follows the review rubric.
+      evidenceRefs: [https://example.invalid/evaluations/run-1/reviews/1]
+baseline:
+  status: measured
+  definitionPin:
+    repository: agentic-delivery-lab/agentic-delivery-primitives
+    commit: '6666666666666666666666666666666666666666'
+    path: evidence/6/artifact.yml
+    sha256: '6666666666666666666666666666666666666666666666666666666666666666'
+  measurement:
+    metricId: task-success
+    value: 0.4
+    unit: ratio
+    observationWindow: 100 named cases
+    observedAt: '2026-10-09T09:00:00Z'
+    evidenceRefs: [https://example.invalid/evaluations/run-1]
+comparison:
+  claim: improvement
+  comparator:
+    id: task-success-comparator
+    version: 1.0.0
+    sourcePin:
+      repository: agentic-delivery-lab/agentic-delivery-primitives
+      commit: '7777777777777777777777777777777777777777'
+      path: evidence/7/artifact.yml
+      sha256: '7777777777777777777777777777777777777777777777777777777777777777'
+    method: absolute-difference
+    direction: higher-is-better
+  candidateMeasurement:
+    metricId: task-success
+    value: 0.6
+    unit: ratio
+    observationWindow: 100 named cases
+    observedAt: '2026-10-09T09:00:00Z'
+    evidenceRefs: [https://example.invalid/evaluations/run-1]
+uncertainty:
+  level: low
+  summary: The named cases were reviewed.
+  factors: [Small fixture dataset.]
+review:
+  status: independent
+  reviewerId: reviewer-1
+  rationale: Independent review completed.
+regressionAssessment:
+  severity: none
+  rationale: No regressions were found.
+evidence:
+  - kind: result
+    ref: https://example.invalid/evaluations/run-1
+  - kind: review
+    ref: https://example.invalid/evaluations/run-1/review
+recommendation:
+  action: owner-issue
+  ownerIssue: https://github.com/agentic-delivery-lab/agentic-delivery/issues/101
+  rationale: Review the measured change.
+limitations:
+  - This is test-only offline data and does not describe a real evaluation run.
