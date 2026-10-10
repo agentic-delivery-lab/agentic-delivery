@@ -193,6 +193,7 @@ export function selectProjectPlanningContext(input) {
       issueNumber: normalized.value.sourceIssue.number,
       issueNodeId: normalized.value.sourceIssue.nodeId,
     });
+    if (!candidateIssue) return fail('SOURCE_ISSUE_IDENTITY_INVALID');
     if (!sameSourceIssue(candidateIssue, targetIssue)) return fail('SOURCE_ISSUE_IDENTITY_MISMATCH');
 
     const context = canonicalPlanningContext(normalized.value);

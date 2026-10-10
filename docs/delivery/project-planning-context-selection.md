@@ -48,6 +48,9 @@ validate the pinned policy source, Project access, source-Issue authorization,
 and all lifecycle and downstream execution gates.
 
 The policy and result schemas and synthetic tests are offline evidence only.
-They do not show live Project operation. Architecture Issue #15 remains the
-human topology decision; no Project identity or policy should be introduced
-until that decision and its release gates are complete.
+They do not show live Project operation. Adoption requires the Architecture
+#11 strategy and contract work and ADR-0023 to complete their reviewed
+Architecture release path, plus the human topology decision in Architecture
+#15. Any runtime consumer must receive the policy and its expected digest from
+that approved immutable release and separately verify Project access and
+configuration. No real Project identity or live read is introduced here.

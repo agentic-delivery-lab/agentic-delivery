@@ -219,6 +219,18 @@ test('same-number Issues from different repositories remain isolated', async () 
   );
 });
 
+test('whitespace-only candidate Issue node IDs return a stable identity error', async () => {
+  const base = await validProjectInput();
+  const malformed = candidateFor(base);
+  malformed.sourceIssue.nodeId = '   ';
+  malformed.item.content.issueNodeId = '   ';
+
+  assertBlocked(
+    selectProjectPlanningContext(selectionInput(base, [malformed])),
+    'SOURCE_ISSUE_IDENTITY_INVALID',
+  );
+});
+
 test('two different items for one Project remain ambiguous', async () => {
   const base = await validProjectInput();
   const first = candidateFor(base, { itemNodeId: 'item-first' });
@@ -314,4 +326,23 @@ test('selector and versioned schemas are mapped to the Project-planning review s
   assert.ok(projectPlanningSurface.paths.includes('schemas/project-planning-selection.v1.schema.json'));
   assert.ok(projectPlanningSurface.paths.includes('docs/delivery/project-planning-context-selection.md'));
   assert.ok(projectPlanningSurface.paths.includes('tests/delivery/project-planning-selection.test.mjs'));
+});
+
+test('Project planning selection policy has one registered Control Plane meaning', async () => {
+  const domainLanguage = parseRepositoryYaml(
+    await readFile(path.join(root, 'docs/domain/ubiquitous-language.yml'), 'utf8'),
+    'Ubiquitous language',
+  );
+  const matches = domainLanguage.terms.filter(({ context, term }) => (
+    context === 'agentic-delivery-control-plane'
+    && term === 'Project planning selection policy'
+  ));
+
+  assert.equal(matches.length, 1);
+  assert.match(matches[0].definition, /immutable.*release/i);
+  assert.match(matches[0].definition, /approval/i);
+  assert.match(
+    await readFile(path.join(root, 'docs/domain/README.md'), 'utf8'),
+    /Project planning selection policy/,
+  );
 });
