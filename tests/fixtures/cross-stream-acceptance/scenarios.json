@@ -129,14 +129,14 @@
       "scenarioId": "synthetic-evaluation-finding-owner-hold",
       "evidenceClass": "offline-fixture",
       "contractAdoption": {
-        "status": "review-pending",
-        "routerVersion": "1.0.0",
-        "architectureProposalVersion": "2.0.0",
-        "schemaCommit": "06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed"
+        "status": "offline-provisional",
+        "routerVersion": "2.0.0",
+        "architectureReleaseVersion": "0.1.0-draft.24",
+        "schemaCommit": "7b1d21462f70c411e75ae67ce80dcf688c9973e8"
       },
       "report": {
-        "$schema": "https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed/architecture/contracts/evaluation-report.schema.json",
-        "contractVersion": "1.0.0",
+        "$schema": "https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/7b1d21462f70c411e75ae67ce80dcf688c9973e8/architecture/contracts/evaluation-report.schema.json",
+        "contractVersion": "2.0.0",
         "reportId": "synthetic:agent-capability:cross-stream-example-v1",
         "generatedAt": "2026-10-09T09:00:00Z",
         "classification": "synthetic",
@@ -164,7 +164,31 @@
           },
           "caseIds": [
             "synthetic-project-only-card-001"
-          ]
+          ],
+          "partition": "synthetic",
+          "selection": {
+            "policyPin": {
+              "repository": "agentic-delivery-lab/agentic-delivery-primitives",
+              "commit": "8888888888888888888888888888888888888888",
+              "path": "evaluations/fixtures/8-selection-policy.yml",
+              "sha256": "8888888888888888888888888888888888888888888888888888888888888888"
+            },
+            "registeredAt": "2026-10-09T08:50:00Z",
+            "sampling": "census",
+            "eligiblePopulation": "The single synthetic Project-only card fixture.",
+            "inclusionCriteria": [
+              "Include the complete synthetic fixture case set."
+            ],
+            "exclusions": []
+          },
+          "integrity": {
+            "contaminationStatus": "unknown",
+            "assessedAt": "2026-10-09T08:45:00Z",
+            "provenanceBasis": "Synthetic fixture only; no empirical contamination assessment was performed.",
+            "evidenceRefs": [
+              "synthetic:dataset-integrity-not-assessed"
+            ]
+          }
         },
         "dependencies": [
           {
@@ -187,6 +211,19 @@
               "commit": "3123456789abcdef0123456789abcdef01234567",
               "path": "evaluations/graders/synthetic-deterministic.yml",
               "sha256": "3123456789abcdef0123456789abcdef3123456789abcdef0123456789abcdef"
+            },
+            "evaluator": {
+              "id": "synthetic-deterministic-evaluator",
+              "kind": "deterministic-tool",
+              "version": "placeholder-1.0.0"
+            },
+            "independence": {
+              "relation": "unknown",
+              "basis": "Synthetic fixture only; no evaluator or candidate execution occurred."
+            },
+            "calibration": {
+              "status": "not-applicable",
+              "rationale": "Synthetic fixture only; no evaluator calibration was run."
             }
           },
           "semantic": {
@@ -197,6 +234,19 @@
               "commit": "4123456789abcdef0123456789abcdef01234567",
               "path": "evaluations/graders/synthetic-semantic-review.yml",
               "sha256": "4123456789abcdef0123456789abcdef4123456789abcdef0123456789abcdef"
+            },
+            "evaluator": {
+              "id": "synthetic-semantic-evaluator",
+              "kind": "model",
+              "version": "placeholder-1.0.0"
+            },
+            "independence": {
+              "relation": "unknown",
+              "basis": "Synthetic fixture only; no evaluator or candidate execution occurred."
+            },
+            "calibration": {
+              "status": "not-applicable",
+              "rationale": "Synthetic fixture only; no evaluator calibration was run."
             }
           }
         },
@@ -208,7 +258,8 @@
               "details": "The synthetic report supplies no canonical owner or actionable repository target, so the improvement handoff is not actionable.",
               "evidenceRefs": [
                 "tests/fixtures/cross-stream-acceptance/scenarios.json"
-              ]
+              ],
+              "failureClass": "other"
             }
           ],
           "semanticJudgments": []
@@ -265,30 +316,48 @@
           }
         ],
         "recommendation": {
-          "action": "human-review",
-          "rationale": "Retain this failed synthetic evaluation for human Project triage; do not create or authorize work."
+          "action": "owner-issue",
+          "ownerIssue": "https://github.com/agentic-delivery-lab/fixture-owner/issues/44",
+          "rationale": "Synthetic owner assertion is retained for human review only."
         },
         "limitations": [
           "This is a synthetic contract fixture, not an evaluation run or live evidence.",
           "All source pin values are format-only placeholders and do not resolve to real artifacts.",
-          "Evaluation Report 1.0.0 remains under review and conflicts with proposed 2.0.0."
-        ]
+          "The schema is read from an immutable Architecture draft release; this fixture does not approve runtime adoption."
+        ],
+        "runStartedAt": "2026-10-09T08:59:00Z",
+        "cases": [
+          {
+            "caseId": "synthetic-project-only-card-001",
+            "task": "Route a synthetic evaluation report containing an owner-Issue recommendation.",
+            "stimulus": "The report is synthetic and has no authoritative owner map or observed evaluation run.",
+            "expectedOutcome": {
+              "description": "Retain the complete report while exposing no candidate or actionable Issue target.",
+              "acceptanceCriteria": [
+                "Synthetic evidence cannot authorize an Issue, Project, or execution side effect."
+              ]
+            },
+            "observedOutcome": "No live evaluation, model invocation, or repository effect occurred.",
+            "outcome": "inconclusive",
+            "evidenceRefs": [
+              "tests/fixtures/cross-stream-acceptance/scenarios.json"
+            ]
+          }
+        ],
+        "improvementHypothesis": {
+          "status": "not-proposed",
+          "rationale": "No measured candidate or baseline supports an improvement hypothesis."
+        }
       },
       "disposition": {
-        "status": "hold",
+        "status": "awaiting-owner-verification",
         "ownership": {
           "status": "unresolved",
-          "reason": "No canonical owner mapping has been adopted.",
+          "reason": "Synthetic reports expose no owner target, and no authoritative owner mapping is pinned.",
           "actionableTarget": null
         },
         "sourceReportRef": "synthetic:agent-capability:cross-stream-example-v1",
         "sourceEvidenceRef": "synthetic:agent-capability:cross-stream-example-v1#evidence",
-        "improvementIssueProposal": {
-          "kind": "improvement-issue",
-          "status": "proposed-for-human-project-triage",
-          "projectNodeId": "PROJECT_FIXTURE_EVALUATION_TRIAGE",
-          "createdIssue": false
-        },
         "executionAuthorized": false,
         "modelInvocations": 0,
         "protectedEffects": []
@@ -337,18 +406,23 @@
       }
     }
   },
-  "contractsUnderReview": {
+  "contracts": {
     "projectPlanning": {
       "pullRequest": 102,
-      "status": "review-pending"
+      "status": "merged"
     },
     "evaluationFindingRouter": {
       "pullRequest": 104,
-      "status": "review-pending"
+      "status": "merged",
+      "contractVersion": "2.0.0"
     },
     "architectureEvaluationReport": {
       "pullRequest": 14,
-      "proposedVersion": "2.0.0"
+      "status": "merged",
+      "contractVersion": "2.0.0",
+      "releaseVersion": "0.1.0-draft.24",
+      "releaseStatus": "draft",
+      "schemaCommit": "7b1d21462f70c411e75ae67ce80dcf688c9973e8"
     }
   }
 }

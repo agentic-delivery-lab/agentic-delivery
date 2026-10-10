@@ -13,10 +13,10 @@ const MEASURED_CLAIMS = new Set(['improvement', 'regression', 'no-change']);
 
 export const EVALUATION_REPORT_SCHEMA_PIN = Object.freeze({
   repository: 'agentic-delivery-lab/agentic-delivery-architecture',
-  version: '0.1.0-draft.20',
-  commit: '06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed',
+  version: '0.1.0-draft.24',
+  commit: '7b1d21462f70c411e75ae67ce80dcf688c9973e8',
   path: 'architecture/contracts/evaluation-report.schema.json',
-  sha256: '4906c3741ed7e04a4fb655763cea7dcfec5d06000aace38a69aa133035a064cd',
+  sha256: '02ae624c21234bb7494dfc3308fe5cd54c112909e215192e2a07307651ebf55d',
 });
 
 export const EVALUATION_REPORT_SCHEMA_URL = `https://github.com/${EVALUATION_REPORT_SCHEMA_PIN.repository}/blob/${EVALUATION_REPORT_SCHEMA_PIN.commit}/${EVALUATION_REPORT_SCHEMA_PIN.path}`;
@@ -193,6 +193,7 @@ function collectSourcePins(report) {
   const pins = [
     { role: 'subject', pin: report.subject.sourcePin },
     { role: 'dataset', pin: report.dataset.sourcePin },
+    { role: 'dataset-selection-policy', pin: report.dataset.selection.policyPin },
     ...report.dependencies.map((dependency, index) => ({ role: `dependency:${index}:${dependency.id}`, pin: dependency.sourcePin })),
     { role: 'grader:deterministic', pin: report.graders.deterministic.sourcePin },
     { role: 'grader:semantic', pin: report.graders.semantic.sourcePin },
@@ -204,7 +205,7 @@ function collectSourcePins(report) {
 
 function validateReport(report, schemaContract) {
   const valid = schemaContract.validate(report);
-  if (!valid) throw new EvaluationFindingRoutingError(`Evaluation report violates contract 1.0.0: ${schemaValidationErrors(schemaContract.validate.errors)}.`);
+  if (!valid) throw new EvaluationFindingRoutingError(`Evaluation report violates contract 2.0.0: ${schemaValidationErrors(schemaContract.validate.errors)}.`);
   if (report.$schema !== EVALUATION_REPORT_SCHEMA_URL) {
     throw new EvaluationFindingRoutingError('Evaluation report must reference the exact immutable Architecture schema pin.');
   }
@@ -254,14 +255,25 @@ function routeOne(report, { schemaContract, sourceIssueUrl, canonicalReport, com
     };
   }
 
-  if (report.classification !== 'observed') {
-    throw new EvaluationFindingRoutingError('Synthetic reports cannot propose owner Issues.');
-  }
-
   const targetUrl = canonicalIssueUrl(report.recommendation.ownerIssue, 'Recommendation ownerIssue');
   const targetRepository = repositoryForIssueUrl(targetUrl, 'Recommendation ownerIssue');
   if (sameGitHubIssue(targetUrl, sourceIssueUrl)) {
     throw new EvaluationFindingRoutingError('Recommendation ownerIssue must not target the source Issue.');
+  }
+
+  if (report.classification === 'synthetic') {
+    return {
+      ...shared,
+      action,
+      status: 'awaiting-owner-verification',
+      ownershipVerification: {
+        status: 'unresolved',
+        source: 'recommendation.ownerIssue',
+        requiresHumanConfirmation: true,
+        reason: 'Synthetic reports cannot expose an owner target, and no authoritative owner mapping is pinned.',
+      },
+      executionAuthorized: false,
+    };
   }
 
   return {

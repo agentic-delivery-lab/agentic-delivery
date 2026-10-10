@@ -10,10 +10,15 @@ import { invocationEventSupported, webhookEventSupported } from '../../scripts/l
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 import { classifyAndRoute, loadLifecycleConfig } from '../../scripts/issue-intake.mjs';
 import { handleWebhook } from '../../api/github/webhook.mjs';
+import { loadPinnedEvaluationReportSchema, routeEvaluationReports } from '../../scripts/lib/evaluation-finding-router.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const fixturePath = path.join(repositoryRoot, 'tests/fixtures/cross-stream-acceptance/scenarios.json');
 const fixtures = JSON.parse(await readFile(fixturePath, 'utf8'));
+const evaluationArchitectureRoot = process.env.EVALUATION_ARCHITECTURE_ROOT;
+const evaluationSchemaContract = evaluationArchitectureRoot
+  ? await loadPinnedEvaluationReportSchema(evaluationArchitectureRoot)
+  : null;
 const config = await loadLifecycleConfig(repositoryRoot);
 const participantSource = parseRepositoryYaml(
   await readFile(path.join(repositoryRoot, 'config/participants.yml'), 'utf8'),
@@ -421,37 +426,56 @@ test('swapping enrolled same-number repository identities is rejected before rou
   assert.deepEqual(trace.protectedEffects, []);
 });
 
-test('synthetic evaluation evidence is retained on an owner hold without model or protected effects', () => {
+test('synthetic Evaluation Report 2.0.0 routes to a non-actionable owner hold', {
+  skip: evaluationSchemaContract ? false : 'Set EVALUATION_ARCHITECTURE_ROOT to the pinned Architecture checkout.',
+}, () => {
   const scenario = fixtures.scenarios.evaluationFinding;
   const report = scenario.report;
   assert.equal(report.classification, 'synthetic');
+  assert.equal(report.contractVersion, '2.0.0');
   assert.equal(report.results.deterministicChecks[0].outcome, 'fail');
   assert.match(report.results.deterministicChecks[0].details, /no canonical owner or actionable repository target/);
   assert.equal(report.results.deterministicChecks[0].evidenceRefs[0], 'tests/fixtures/cross-stream-acceptance/scenarios.json');
-  assert.equal(scenario.disposition.status, 'hold');
+  const routed = routeEvaluationReports({
+    reports: [report],
+    schemaContract: evaluationSchemaContract,
+    sourceIssueUrl: `https://github.com/${scenario.sourceIssue.repositoryFullName}/issues/${scenario.sourceIssue.issueNumber}`,
+  });
+  const disposition = routed.dispositions[0];
+  assert.equal(routed.schemaPin.commit, scenario.contractAdoption.schemaCommit);
+  assert.equal(routed.proposals.length, 0);
+  assert.equal(routed.mutationsRequested, false);
+  assert.equal(disposition.action, 'owner-issue');
+  assert.equal(disposition.status, 'awaiting-owner-verification');
+  assert.equal('candidateTarget' in disposition, false);
+  assert.equal('target' in disposition, false);
+  assert.equal(disposition.executionAuthorized, false);
+  assert.deepEqual(disposition.sourceReport, report);
+  assert.deepEqual(disposition.sourceEvidence.evidence, report.evidence);
+  assert.equal(disposition.sourceEvidence.sourcePins.length, 8);
+  assert.equal(scenario.disposition.status, disposition.status);
   assert.equal(scenario.disposition.ownership.status, 'unresolved');
   assert.equal(scenario.disposition.ownership.actionableTarget, null);
   assert.equal(scenario.disposition.executionAuthorized, false);
   assert.equal(scenario.disposition.sourceReportRef, report.reportId);
   assert.equal(scenario.disposition.sourceEvidenceRef, `${report.reportId}#evidence`);
-  assert.equal(scenario.disposition.improvementIssueProposal.createdIssue, false);
-  assert.equal(scenario.disposition.improvementIssueProposal.status, 'proposed-for-human-project-triage');
   assert.deepEqual(scenario.disposition.protectedEffects, []);
   assert.equal(scenario.disposition.modelInvocations, 0);
   assert.deepEqual(report.evidence.map(({ kind }) => kind), ['source', 'result']);
   assert.equal(report.evidence[0].ref, 'tests/fixtures/cross-stream-acceptance/scenarios.json');
   assert.deepEqual(Object.keys(report).sort(), [
-    '$schema', 'baseline', 'classification', 'comparison', 'contractVersion', 'dataset', 'dependencies',
-    'evidence', 'evaluationMode', 'generatedAt', 'graders', 'layer', 'limitations', 'recommendation',
-    'regressionAssessment', 'reportId', 'results', 'review', 'subject', 'uncertainty',
+    '$schema', 'baseline', 'cases', 'classification', 'comparison', 'contractVersion', 'dataset', 'dependencies',
+    'evidence', 'evaluationMode', 'generatedAt', 'graders', 'improvementHypothesis', 'layer', 'limitations',
+    'recommendation', 'regressionAssessment', 'reportId', 'results', 'review', 'runStartedAt', 'subject', 'uncertainty',
   ].sort());
   assert.equal(scenario.sourceIssue.repositoryId, '9000001083');
   assert.equal(scenario.sourceIssue.issueNodeId, 'ISSUE_FIXTURE_EVALUATION_17');
-  assert.equal(scenario.contractAdoption.status, 'review-pending');
-  assert.equal(scenario.contractAdoption.routerVersion, '1.0.0');
-  assert.equal(scenario.contractAdoption.architectureProposalVersion, '2.0.0');
-  assert.equal(fixtures.contractsUnderReview.projectPlanning.pullRequest, 102);
-  assert.equal(fixtures.contractsUnderReview.projectPlanning.status, 'review-pending');
+  assert.equal(scenario.contractAdoption.status, 'offline-provisional');
+  assert.equal(scenario.contractAdoption.routerVersion, '2.0.0');
+  assert.equal(scenario.contractAdoption.architectureReleaseVersion, '0.1.0-draft.24');
+  assert.equal(fixtures.contracts.evaluationFindingRouter.status, 'merged');
+  assert.equal(fixtures.contracts.projectPlanning.pullRequest, 102);
+  assert.equal(fixtures.contracts.projectPlanning.status, 'merged');
 });
 
 test('missing Project read scope records a planning gap while Issue-first recovery remains authorized', async () => {

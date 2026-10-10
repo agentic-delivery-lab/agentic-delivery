@@ -1,7 +1,7 @@
-$schema: https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed/architecture/contracts/evaluation-report.schema.json
-contractVersion: 1.0.0
+$schema: https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/7b1d21462f70c411e75ae67ce80dcf688c9973e8/architecture/contracts/evaluation-report.schema.json
+contractVersion: 2.0.0
 reportId: eval:agent-capability:router-test-001
-generatedAt: '2026-10-09T09:00:00Z'
+generatedAt: 2026-10-09T09:00:00Z
 classification: observed
 evaluationMode: offline
 layer: agent-capability
@@ -11,48 +11,89 @@ subject:
   version: 0.1.0
   sourcePin:
     repository: agentic-delivery-lab/agentic-delivery
-    commit: '1111111111111111111111111111111111111111'
+    commit: "1111111111111111111111111111111111111111"
     path: evidence/1/artifact.yml
-    sha256: '1111111111111111111111111111111111111111111111111111111111111111'
+    sha256: "1111111111111111111111111111111111111111111111111111111111111111"
 dataset:
   id: review-cases
   version: 1.0.0
   sourcePin:
     repository: agentic-delivery-lab/agentic-delivery-primitives
-    commit: '2222222222222222222222222222222222222222'
+    commit: "2222222222222222222222222222222222222222"
     path: evidence/2/artifact.yml
-    sha256: '2222222222222222222222222222222222222222222222222222222222222222'
-  caseIds: [case-001]
+    sha256: "2222222222222222222222222222222222222222222222222222222222222222"
+  caseIds:
+    - case-001
+  partition: validation
+  selection:
+    policyPin:
+      repository: agentic-delivery-lab/agentic-delivery-primitives
+      commit: "8888888888888888888888888888888888888888"
+      path: evaluations/fixtures/8-selection-policy.yml
+      sha256: "8888888888888888888888888888888888888888888888888888888888888888"
+    registeredAt: 2026-10-09T08:50:00Z
+    sampling: census
+    eligiblePopulation: The single named case in this offline test fixture.
+    inclusionCriteria:
+      - Include the complete fixture case set.
+    exclusions: []
+  integrity:
+    contaminationStatus: unknown
+    assessedAt: 2026-10-09T08:45:00Z
+    provenanceBasis: Offline synthetic test data; no empirical contamination assessment was performed.
+    evidenceRefs:
+      - https://example.invalid/evaluations/integrity/not-assessed
 dependencies:
   - id: evaluation-runner
     version: 1.0.0
     sourcePin:
       repository: agentic-delivery-lab/agentic-delivery-primitives
-      commit: '3333333333333333333333333333333333333333'
+      commit: "3333333333333333333333333333333333333333"
       path: evidence/3/artifact.yml
-      sha256: '3333333333333333333333333333333333333333333333333333333333333333'
+      sha256: "3333333333333333333333333333333333333333333333333333333333333333"
 graders:
   deterministic:
     id: deterministic-grader
     version: 1.0.0
     sourcePin:
       repository: agentic-delivery-lab/agentic-delivery-primitives
-      commit: '4444444444444444444444444444444444444444'
+      commit: "4444444444444444444444444444444444444444"
       path: evidence/4/artifact.yml
-      sha256: '4444444444444444444444444444444444444444444444444444444444444444'
+      sha256: "4444444444444444444444444444444444444444444444444444444444444444"
+    evaluator:
+      id: synthetic-deterministic-evaluator
+      kind: deterministic-tool
+      version: placeholder-1.0.0
+    independence:
+      relation: unknown
+      basis: Offline test fixture; no evaluator or candidate run establishes independence.
+    calibration:
+      status: not-applicable
+      rationale: Offline test fixture; no evaluator calibration was run.
   semantic:
     id: semantic-rubric
     version: 1.0.0
     sourcePin:
       repository: agentic-delivery-lab/agentic-delivery-primitives
-      commit: '5555555555555555555555555555555555555555'
+      commit: "5555555555555555555555555555555555555555"
       path: evidence/5/artifact.yml
-      sha256: '5555555555555555555555555555555555555555555555555555555555555555'
+      sha256: "5555555555555555555555555555555555555555555555555555555555555555"
+    evaluator:
+      id: synthetic-semantic-evaluator
+      kind: human
+      version: placeholder-1.0.0
+    independence:
+      relation: unknown
+      basis: Offline test fixture; no evaluator or candidate run establishes independence.
+    calibration:
+      status: not-applicable
+      rationale: Offline test fixture; no evaluator calibration was run.
 results:
   deterministicChecks:
     - checkId: contract-check
       outcome: pass
-      evidenceRefs: [https://example.invalid/evaluations/run-1/checks/contract]
+      evidenceRefs:
+        - https://example.invalid/evaluations/run-1/checks/contract
   semanticJudgments:
     - criterionId: review-quality
       outcome: acceptable
@@ -62,21 +103,23 @@ results:
         relationshipToAuthor: independent
       confidence: 0.8
       rationale: The output follows the review rubric.
-      evidenceRefs: [https://example.invalid/evaluations/run-1/reviews/1]
+      evidenceRefs:
+        - https://example.invalid/evaluations/run-1/reviews/1
 baseline:
   status: measured
   definitionPin:
     repository: agentic-delivery-lab/agentic-delivery-primitives
-    commit: '6666666666666666666666666666666666666666'
+    commit: "6666666666666666666666666666666666666666"
     path: evidence/6/artifact.yml
-    sha256: '6666666666666666666666666666666666666666666666666666666666666666'
+    sha256: "6666666666666666666666666666666666666666666666666666666666666666"
   measurement:
     metricId: task-success
     value: 0.4
     unit: ratio
     observationWindow: 100 named cases
-    observedAt: '2026-10-09T09:00:00Z'
-    evidenceRefs: [https://example.invalid/evaluations/run-1]
+    observedAt: 2026-10-09T09:00:00Z
+    evidenceRefs:
+      - https://example.invalid/evaluations/run-1
 comparison:
   claim: improvement
   comparator:
@@ -84,9 +127,9 @@ comparison:
     version: 1.0.0
     sourcePin:
       repository: agentic-delivery-lab/agentic-delivery-primitives
-      commit: '7777777777777777777777777777777777777777'
+      commit: "7777777777777777777777777777777777777777"
       path: evidence/7/artifact.yml
-      sha256: '7777777777777777777777777777777777777777777777777777777777777777'
+      sha256: "7777777777777777777777777777777777777777777777777777777777777777"
     method: absolute-difference
     direction: higher-is-better
   candidateMeasurement:
@@ -94,12 +137,14 @@ comparison:
     value: 0.6
     unit: ratio
     observationWindow: 100 named cases
-    observedAt: '2026-10-09T09:00:00Z'
-    evidenceRefs: [https://example.invalid/evaluations/run-1]
+    observedAt: 2026-10-09T09:00:00Z
+    evidenceRefs:
+      - https://example.invalid/evaluations/run-1
 uncertainty:
   level: low
   summary: The named cases were reviewed.
-  factors: [Small fixture dataset.]
+  factors:
+    - Small fixture dataset.
 review:
   status: independent
   reviewerId: reviewer-1
@@ -118,3 +163,22 @@ recommendation:
   rationale: Review the measured change.
 limitations:
   - This is test-only offline data and does not describe a real evaluation run.
+runStartedAt: 2026-10-09T08:59:00Z
+cases:
+  - caseId: case-001
+    task: Exercise the pinned evaluation report contract with offline fixture data.
+    stimulus: Route a complete report while preserving source evidence and withholding unauthorized work.
+    expectedOutcome:
+      description: The report is retained as a non-actionable offline disposition.
+      acceptanceCriteria:
+        - The source report and evidence remain unchanged.
+    observedOutcome: The report is fixture data and was not run as a live evaluation.
+    outcome: inconclusive
+    evidenceRefs:
+      - https://example.invalid/evaluations/fixture/case-001
+improvementHypothesis:
+  status: proposed
+  statement: The candidate should improve the task-success ratio over the registered observation window.
+  metricId: task-success
+  expectedDirection: higher-is-better
+  rationale: This hypothesis exists only to exercise the v2 report schema in offline tests.

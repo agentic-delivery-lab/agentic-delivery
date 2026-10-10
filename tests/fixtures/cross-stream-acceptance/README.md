@@ -28,18 +28,18 @@ the current synthetic Issue before reasoning. The Project-read failure case
 records the missing-scope planning gap and exercises the existing Issue-first
 manual recovery route.
 
-The evaluation scenario retains the full synthetic report and its evidence by
-report ID, then records a non-actionable hold with no owner target. It does not
-call the proposed evaluation router: Control Plane PR #104 remains under
-review, pins Evaluation Report 1.0.0, and conflicts with Architecture PR #14's
-proposed 2.0.0 contract. The finding remains synthetic and is not relabeled as
-observed to reach an owner-verification route.
+The evaluation scenario sends its complete synthetic Evaluation Report 2.0.0
+through the offline router using the exact Architecture schema commit recorded
+in the fixture. The report includes an owner-Issue assertion, but routing
+returns an `awaiting-owner-verification` disposition with no candidate target,
+actionable target, proposal, or execution authority. The source report,
+evidence, and pins remain preserved. The report is not relabeled as observed.
 
-These tests provide pre-adoption boundary coverage, not composed Project or
-evaluation contract conformance. Reconcile the contracts and obtain the
-required human review before adding those integrations. API and route-reasoning
-adapters are local mocks: the Project-only event is rejected before either
-adapter runs, and a delivery-policy rejection produces no protected effect.
-No fixture performs a live API or model call, Issue-field mutation, repository
-write, pull request, release, participant change, Project mutation or
-evaluation run.
+The pinned schema belongs to Architecture draft `0.1.0-draft.24`. The test
+demonstrates offline contract conformance only; it does not approve a release,
+change the runtime participant or controller pins, or add a live consumer.
+API and route-reasoning adapters are local mocks: the Project-only event is
+rejected before either adapter runs, and a delivery-policy rejection produces
+no protected effect. No fixture performs a live API or model call, Issue-field
+mutation, repository write, pull request, release, participant change, Project
+mutation or evaluation run.

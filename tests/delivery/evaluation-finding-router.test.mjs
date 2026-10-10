@@ -94,7 +94,7 @@ routeTest('holds a report-asserted owner target as a disposition until a canonic
   assert.equal(disposition.sourceEvidence.verification, 'references-preserved-but-not-retrieved');
   assert.deepEqual(disposition.sourceEvidence.evidence, input.evidence);
   assert.deepEqual(disposition.sourceEvidence.sourcePins.map(({ role }) => role), [
-    'subject', 'dataset', 'dependency:0:evaluation-runner', 'grader:deterministic',
+    'subject', 'dataset', 'dataset-selection-policy', 'dependency:0:evaluation-runner', 'grader:deterministic',
     'grader:semantic', 'baseline-definition', 'comparator',
   ]);
   assert.equal('priority' in disposition, false);
@@ -115,7 +115,7 @@ routeTest('keeps the synthetic unmeasured Architecture example as a no-action di
   assert.deepEqual(result.dispositions[0].sourceEvidence.evidence, syntheticUnmeasuredReport.evidence);
   assert.deepEqual(result.dispositions[0].sourceEvidence.uncertainty, syntheticUnmeasuredReport.uncertainty);
   assert.deepEqual(result.dispositions[0].sourceEvidence.review, syntheticUnmeasuredReport.review);
-  assert.equal(result.dispositions[0].sourceEvidence.sourcePins.length, 7);
+  assert.equal(result.dispositions[0].sourceEvidence.sourcePins.length, 8);
   assert.equal(result.mutationsRequested, false);
 });
 
@@ -134,6 +134,7 @@ routeTest('keeps human-review recommendations as dispositions without creating o
   assert.deepEqual(disposition.sourceEvidence.sourcePins, [
     { role: 'subject', pin: input.subject.sourcePin },
     { role: 'dataset', pin: input.dataset.sourcePin },
+    { role: 'dataset-selection-policy', pin: input.dataset.selection.policyPin },
     { role: 'dependency:0:evaluation-runner', pin: input.dependencies[0].sourcePin },
     { role: 'grader:deterministic', pin: input.graders.deterministic.sourcePin },
     { role: 'grader:semantic', pin: input.graders.semantic.sourcePin },
@@ -142,13 +143,25 @@ routeTest('keeps human-review recommendations as dispositions without creating o
   ]);
 });
 
-routeTest('does not route synthetic evaluation data as an actionable Issue proposal', () => {
+routeTest('holds synthetic owner recommendations without exposing a candidate or actionable target', () => {
   const syntheticAction = report({
     classification: 'synthetic',
     recommendation: { action: 'owner-issue', ownerIssue: ownerIssueUrl, rationale: 'Synthetic only.' },
   });
 
-  assert.throws(() => route([syntheticAction]), /Synthetic reports cannot propose owner Issues/);
+  const result = route([syntheticAction]);
+  const disposition = result.dispositions[0];
+  assert.equal(result.proposals.length, 0);
+  assert.equal(disposition.action, 'owner-issue');
+  assert.equal(disposition.status, 'awaiting-owner-verification');
+  assert.equal('candidateTarget' in disposition, false);
+  assert.equal('target' in disposition, false);
+  assert.equal(disposition.executionAuthorized, false);
+  assert.equal(disposition.ownershipVerification.status, 'unresolved');
+  assert.match(disposition.ownershipVerification.reason, /Synthetic reports cannot expose an owner target/);
+  assert.deepEqual(disposition.sourceReport, syntheticAction);
+  assert.deepEqual(disposition.sourceEvidence.evidence, syntheticAction.evidence);
+  assert.equal(result.mutationsRequested, false);
 });
 
 routeTest('rejects reports with missing pins and schema references that are not immutable', () => {
@@ -161,7 +174,7 @@ routeTest('rejects reports with missing pins and schema references that are not 
 });
 
 routeTest('rejects unsupported contract versions and improvement claims with an unmeasured baseline', () => {
-  assert.throws(() => route([report({ contractVersion: '2.0.0' })]), /contractVersion/);
+  assert.throws(() => route([report({ contractVersion: '1.0.0' })]), /contractVersion/);
 
   const unmeasuredImprovement = report({
     baseline: {
@@ -264,6 +277,7 @@ routeTest('retains deterministic failures, semantic uncertainty, review state, a
       deterministicChecks: [{
         checkId: 'protected-file-write',
         outcome: 'fail',
+        failureClass: 'safety-violation',
         details: 'The candidate attempted to modify a protected file.',
         evidenceRefs: ['https://example.invalid/evaluations/run-2/checks/protected-file'],
       }],
