@@ -95,7 +95,7 @@ function normalizeSourceIssueIdentity(identity) {
   }
   return {
     repositoryId,
-    repositoryFullName: identity.repositoryFullName,
+    repositoryFullName: identity.repositoryFullName.toLowerCase(),
     issueNumber: identity.issueNumber,
     issueNodeId: identity.issueNodeId,
   };

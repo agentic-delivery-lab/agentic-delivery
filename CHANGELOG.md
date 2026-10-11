@@ -149,7 +149,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 Entries that reference issue #52 use it only as the persisted-plan context;
 they do not authorize migration, alter that issue's scope, or close it.
 
-- [Issue #107](https://github.com/agentic-delivery-lab/agentic-delivery/issues/107) adds an offline Project planning-context selector bound to an exact source repository and Issue. It uses a versioned policy with a separately supplied SHA-256 pin and explicit Project priority, rejects malformed source identities, collapses identical repeated items, and holds on unapproved, inaccessible, or ambiguous candidates without granting execution authority or enabling live Project access.
+- [Issue #107](https://github.com/agentic-delivery-lab/agentic-delivery/issues/107) adds an offline Project planning-context selector bound to a source repository and Issue, comparing repository names case-insensitively while retaining stable numeric and node identities. It uses a versioned policy with a separately supplied SHA-256 pin and explicit Project priority, collapses identical repeated items, and holds on unapproved, inaccessible, or ambiguous candidates without granting execution authority or enabling live Project access.
 
 ### Changed
 

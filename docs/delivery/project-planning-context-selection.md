@@ -24,8 +24,10 @@ synthetic IDs and is not an organization configuration.
 
 Each candidate must pass the existing Project planning normalizer. The selector
 then binds its Project item to the source repository ID, repository name, Issue
-number, and Issue node ID. Equal Issue numbers in different repositories are
-different source Issues.
+number, and Issue node ID. Repository names are compared case-insensitively for
+this identity check; repository ID, Issue number, and Issue node ID must still
+match exactly. Equal Issue numbers in different repositories are different
+source Issues.
 
 The policy priority resolves candidates from different approved Projects.
 Project display names, API order, and Project field values do not affect the

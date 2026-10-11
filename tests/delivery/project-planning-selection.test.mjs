@@ -219,6 +219,19 @@ test('same-number Issues from different repositories remain isolated', async () 
   );
 });
 
+test('case differences in repository full names preserve the same source Issue identity', async () => {
+  const base = await validProjectInput();
+  const candidate = candidateFor(base);
+  const input = selectionInput(candidate, [candidate]);
+  input.sourceIssueIdentity.repositoryFullName = 'Agentic-Delivery-Lab/SERVICE-A';
+
+  const result = selectProjectPlanningContext(input);
+
+  assert.equal(result.valid, true, result.errors.join('; '));
+  assert.equal(result.value.selectedProjectNodeId, 'project-fixture-01');
+  assert.equal(result.value.selectedContext.sourceIssue.repository.fullName, 'agentic-delivery-lab/service-a');
+});
+
 test('whitespace-only candidate Issue node IDs return a stable identity error', async () => {
   const base = await validProjectInput();
   const malformed = candidateFor(base);
