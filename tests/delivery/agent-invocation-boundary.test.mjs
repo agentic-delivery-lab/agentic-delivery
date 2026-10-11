@@ -16,11 +16,13 @@ import {
   hasInvocationMention,
   invocationEventSupported,
   observationEventSupported,
+  packRepositoryDispatchClientPayload,
+  unwrapRepositoryDispatchClientPayload,
   webhookEventSupported,
   validateDispatchEnvelopeSignature,
   validateActorCatalog,
 } from '../../scripts/lib/agent-invocation.mjs';
-import { handleWebhook } from '../../api/github/webhook.mjs';
+import { handleWebhook, webhookHandler } from '../../api/github/webhook.mjs';
 import { prepareAgentInvocation } from '../../scripts/prepare-agent-invocation.mjs';
 import { NeonReplayStore } from '../../scripts/lib/neon-replay-store.mjs';
 import { parseParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
@@ -49,6 +51,11 @@ test('the configured App actor and event catalog are deterministic', async () =>
   assert.deepEqual(Object.keys(INVOCATION_EVENTS), ['issues', 'issue_comment', 'pull_request_review', 'pull_request_review_comment']);
   assert.deepEqual(Object.keys(OBSERVATION_EVENTS), ['pull_request']);
   assert.ok((await readFile(path.join(repositoryRoot, 'config/agent-actors.json'), 'utf8')).includes('agentic-delivery-lab-invoker-7f3a[bot]'));
+});
+
+test('Vercel bundles the participant registry with the webhook function', async () => {
+  const config = JSON.parse(await readFile(path.join(repositoryRoot, 'vercel.json'), 'utf8'));
+  assert.equal(config.functions?.['api/github/webhook.mjs']?.includeFiles, 'config/participants.yml');
 });
 
 test('only an explicit first visible line invokes the orchestrator', () => {
@@ -93,6 +100,22 @@ test('repository dispatch envelopes use a separate time-bounded HMAC', () => {
   assert.equal(validateDispatchEnvelopeSignature({ secret, envelope: { ...signed, repository_id: '777777777' }, now: 1789992000000 }).valid, false);
   assert.equal(validateDispatchEnvelopeSignature({ secret, envelope: signed, now: 1790292000001 }).valid, false);
   assert.equal(validateDispatchEnvelopeSignature({ secret, envelope: signed, now: 1789991969000 }).valid, false);
+});
+
+test('repository dispatch transport preserves signed JSON in one client payload property', () => {
+  const envelope = {
+    version: 1,
+    delivery_id: '12345678-1234-4234-8234-123456789012',
+    repository_id: '1358455028',
+    dispatch_timestamp: '1789992000000',
+  };
+  const packed = packRepositoryDispatchClientPayload(envelope);
+  assert.deepEqual(Object.keys(packed), ['envelope']);
+  assert.equal(packed.envelope.json, JSON.stringify(envelope));
+  assert.equal(packed.envelope.delivery_id, envelope.delivery_id);
+  assert.deepEqual(unwrapRepositoryDispatchClientPayload(packed), envelope);
+  assert.equal(unwrapRepositoryDispatchClientPayload(envelope), envelope);
+  assert.throws(() => packRepositoryDispatchClientPayload(null), /envelope is required/);
 });
 
 test('webhook rejects events from another organization or installation', async () => {
@@ -235,9 +258,11 @@ test('webhook dispatches enrolled pull-request observations without granting inv
   assert.equal(calls.length, 1);
   const dispatch = JSON.parse(calls[0].options.body);
   assert.equal(dispatch.event_type, 'agent_observation');
-  assert.equal(dispatch.client_payload.event, 'pull_request');
-  assert.equal(dispatch.client_payload.source.kind, 'pull_request');
-  assert.equal(dispatch.client_payload.source.pull_request_number, 44);
+  assert.equal(Object.keys(dispatch.client_payload).length, 1);
+  const envelope = unwrapRepositoryDispatchClientPayload(dispatch.client_payload);
+  assert.equal(envelope.event, 'pull_request');
+  assert.equal(envelope.source.kind, 'pull_request');
+  assert.equal(envelope.source.pull_request_number, 44);
   assert.equal(await replayStore.controllerReceipt('163255060:12345678-1234-4234-8234-123456789012'), null);
   assert.deepEqual(logs, [{
     event: 'agentic_delivery_webhook',
@@ -418,24 +443,26 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
   assert.equal(calls.length, 2);
   const dispatch = JSON.parse(calls[1].options.body);
   assert.equal(dispatch.event_type, 'agent_invocation');
-  assert.equal(dispatch.client_payload.source.comment_id, 7);
-  assert.equal(dispatch.client_payload.actor.login, 'sjefsharp');
-  assert.equal(dispatch.client_payload.body_digest.length, 64);
+  assert.equal(Object.keys(dispatch.client_payload).length, 1);
+  const envelope = unwrapRepositoryDispatchClientPayload(dispatch.client_payload);
+  assert.equal(envelope.source.comment_id, 7);
+  assert.equal(envelope.actor.login, 'sjefsharp');
+  assert.equal(envelope.body_digest.length, 64);
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
-  assert.deepEqual(dispatch.client_payload.controller, {
+  assert.deepEqual(envelope.controller, {
     version: release.version,
     commit: release.commit,
   });
-  assert.equal(Object.keys(dispatch.client_payload).length, 17);
-  assert.match(dispatch.client_payload.received_at, /^\d{4}-\d{2}-\d{2}T/);
-  assert.equal(dispatch.client_payload.organization_id, '327861320');
-  assert.equal(dispatch.client_payload.installation_id, '163255060');
-  assert.equal(dispatch.client_payload.repository_full_name, 'agentic-delivery-lab/agentic-delivery');
-  assert.match(dispatch.client_payload.dispatch_timestamp, /^[1-9][0-9]*$/);
+  assert.equal(Object.keys(envelope).length, 17);
+  assert.match(envelope.received_at, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(envelope.organization_id, '327861320');
+  assert.equal(envelope.installation_id, '163255060');
+  assert.equal(envelope.repository_full_name, 'agentic-delivery-lab/agentic-delivery');
+  assert.match(envelope.dispatch_timestamp, /^[1-9][0-9]*$/);
   assert.equal(validateDispatchEnvelopeSignature({
     secret: 'dispatch-secret',
-    envelope: dispatch.client_payload,
-    now: Number(dispatch.client_payload.dispatch_timestamp),
+    envelope,
+    now: Number(envelope.dispatch_timestamp),
   }).valid, true);
 });
 
@@ -499,6 +526,52 @@ test('webhook leases a delivery, keeps incomplete work retryable, and releases d
 
   let leaseNow = Date.now();
   const failingStore = new InMemoryReplayStore({ now: () => leaseNow });
+  const loggingStore = new InMemoryReplayStore();
+  const failureLogs = [];
+  const failureRes = result();
+  await webhookHandler(requestFor(), failureRes, {
+    env,
+    replayStore: loggingStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    logger: { error: (line) => failureLogs.push(JSON.parse(line)) },
+    fetchImpl: async (url) => {
+      if (url.includes('/permission')) return response(200, { permission: 'write' });
+      return response(500, { message: 'private GitHub response' });
+    },
+  });
+  assert.equal(failureRes.statusCode, 502);
+  assert.deepEqual(failureLogs, [{
+    event: 'agentic_delivery_webhook',
+    outcome: 'failed',
+    http_status: 502,
+    github_api_status: 500,
+    error_type: 'Error',
+    delivery_id: '98765432-1234-4234-8234-123456789012',
+  }]);
+  assert.doesNotMatch(JSON.stringify(failureLogs), /private GitHub response|installation-token|dispatch-secret/);
+
+  const networkFailure = Object.assign(new Error('private network detail'), { code: 'ECONNRESET' });
+  const networkFailureLogs = [];
+  const networkFailureRes = result();
+  await webhookHandler(requestFor(), networkFailureRes, {
+    env,
+    replayStore: loggingStore,
+    tokenProvider: { token: async () => 'installation-token' },
+    logger: { error: (line) => networkFailureLogs.push(JSON.parse(line)) },
+    fetchImpl: async () => { throw networkFailure; },
+  });
+  assert.equal(networkFailureRes.statusCode, 502);
+  assert.deepEqual(networkFailureLogs, [{
+    event: 'agentic_delivery_webhook',
+    outcome: 'failed',
+    http_status: 502,
+    github_api_status: null,
+    error_type: 'Error',
+    error_code: 'ECONNRESET',
+    delivery_id: '98765432-1234-4234-8234-123456789012',
+  }]);
+  assert.doesNotMatch(JSON.stringify(networkFailureLogs), /private network detail|installation-token|dispatch-secret/);
+
   await assert.rejects(handleWebhook(requestFor(), result(), {
     env,
     replayStore: failingStore,
@@ -581,9 +654,10 @@ test('webhook forwards an enrolled issue lifecycle event without requiring an in
   });
   assert.equal(output.statusCode, 202);
   const dispatch = JSON.parse(calls[1].options.body);
-  assert.equal(dispatch.client_payload.event, 'issues');
-  assert.equal(dispatch.client_payload.source.kind, 'issue');
-  assert.equal(dispatch.client_payload.source.issue_number, 45);
+  const envelope = unwrapRepositoryDispatchClientPayload(dispatch.client_payload);
+  assert.equal(envelope.event, 'issues');
+  assert.equal(envelope.source.kind, 'issue');
+  assert.equal(envelope.source.issue_number, 45);
 });
 
 test('one central webhook accepts a second enrolled repository and dispatches to the controller', async () => {
@@ -641,7 +715,7 @@ test('one central webhook accepts a second enrolled repository and dispatches to
   assert.equal(output.statusCode, 202);
   assert.equal(calls[0].url, 'https://api.github.com/repos/' + repository + '/collaborators/sjefsharp/permission');
   assert.equal(calls[1].url, 'https://api.github.com/repos/agentic-delivery-lab/delivery-control-plane/dispatches');
-  assert.equal(JSON.parse(calls[1].options.body).client_payload.repository_id, repositoryId);
+  assert.equal(unwrapRepositoryDispatchClientPayload(JSON.parse(calls[1].options.body).client_payload).repository_id, repositoryId);
   assert.deepEqual(tokens[0], { repositoryIds: [repositoryId] });
   assert.deepEqual(tokens[1], {
     repositoryIds: ['888888888'],
@@ -658,7 +732,7 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
   const deliveryId = '12345678-1234-4234-8234-123456789012';
   await writeFile(eventPath, JSON.stringify({
     repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
-    client_payload: {
+    client_payload: packRepositoryDispatchClientPayload({
       version: 1,
       delivery_id: deliveryId,
       event: 'issue_comment',
@@ -671,7 +745,7 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
       organization_id: '327861320',
       installation_id: '163255060',
       repository_full_name: 'agentic-delivery-lab/agentic-delivery',
-    },
+    }),
   }));
   const baseEnv = {
     GH_TOKEN: 'token',
@@ -699,8 +773,10 @@ test('agent preflight re-fetches the tagged issue comment and deduplicates deliv
   assert.equal(duplicate.accepted, false);
 
   const tamperedEvent = JSON.parse(await readFile(eventPath, 'utf8'));
-  tamperedEvent.client_payload.installation_id = '999';
-  tamperedEvent.client_payload.delivery_id = '22345678-1234-4234-8234-123456789012';
+  const tamperedEnvelope = unwrapRepositoryDispatchClientPayload(tamperedEvent.client_payload);
+  tamperedEnvelope.installation_id = '999';
+  tamperedEnvelope.delivery_id = '22345678-1234-4234-8234-123456789012';
+  tamperedEvent.client_payload = packRepositoryDispatchClientPayload(tamperedEnvelope);
   await writeFile(eventPath, JSON.stringify(tamperedEvent));
   await assert.rejects(
     prepareAgentInvocation({ env: baseEnv, fetchImpl }),
@@ -733,7 +809,7 @@ test('central preflight rejects a tampered signed dispatch envelope', async (t) 
   const signed = { ...unsigned, dispatch_signature: dispatchEnvelopeSignature({ secret: 'dispatch-secret', envelope: unsigned }) };
   await writeFile(eventPath, JSON.stringify({
     repository: { full_name: 'agentic-delivery-lab/agentic-delivery', id: 1358455028 },
-    client_payload: signed,
+    client_payload: packRepositoryDispatchClientPayload(signed),
   }));
   const env = {
     GH_TOKEN: 'token',
@@ -755,8 +831,10 @@ test('central preflight rejects a tampered signed dispatch envelope', async (t) 
   const accepted = await prepareAgentInvocation({ env, fetchImpl, now: () => Number(dispatchTimestamp) });
   assert.equal(accepted.accepted, true);
   const tampered = JSON.parse(await readFile(eventPath, 'utf8'));
-  tampered.client_payload.repository_id = '777777777';
-  tampered.client_payload.delivery_id = 'a2345678-1234-4234-8234-123456789012';
+  const tamperedEnvelope = unwrapRepositoryDispatchClientPayload(tampered.client_payload);
+  tamperedEnvelope.repository_id = '777777777';
+  tamperedEnvelope.delivery_id = 'a2345678-1234-4234-8234-123456789012';
+  tampered.client_payload = packRepositoryDispatchClientPayload(tamperedEnvelope);
   await writeFile(eventPath, JSON.stringify(tampered));
   await assert.rejects(
     prepareAgentInvocation({ env, fetchImpl, now: () => Number(dispatchTimestamp) }),

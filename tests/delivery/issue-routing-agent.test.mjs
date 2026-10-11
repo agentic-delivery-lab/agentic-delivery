@@ -34,7 +34,8 @@ test('semantic routing uses a closed proposal schema and cleans its isolated run
   assert.deepEqual(result, proposal);
   assert.equal(turnOptions.phase, 'route');
   assert.deepEqual(turnOptions.schema.properties.governance.items.enum, config.governance.map((item) => item.label));
-  assert.deepEqual(turnOptions.schema.properties.state.enum, config.states.map((item) => item.id));
+  assert.deepEqual(Object.keys(turnOptions.schema.properties).sort(), [...turnOptions.schema.required].sort());
+  assert.equal(Object.hasOwn(turnOptions.schema.properties, 'state'), false);
   assert.equal(clientOptions.env.GH_TOKEN, undefined);
   assert.equal(client.closed, true);
   await assert.rejects(access(clientOptions.cwd));

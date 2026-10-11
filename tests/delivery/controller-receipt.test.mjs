@@ -5,6 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { finalizeAgentInvocation } from '../../scripts/finalize-agent-invocation.mjs';
+import { packRepositoryDispatchClientPayload } from '../../scripts/lib/agent-invocation.mjs';
 import {
   DEFAULT_CONTROLLER_MAX_ATTEMPTS,
   FileReplayStore,
@@ -108,7 +109,7 @@ test('controller finalizer records success only after the workflow has completed
   const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-finalize-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const eventPath = path.join(root, 'event.json');
-  await writeFile(eventPath, JSON.stringify({ client_payload: { installation_id: '163255060', delivery_id: deliveryId } }));
+  await writeFile(eventPath, JSON.stringify({ client_payload: packRepositoryDispatchClientPayload({ installation_id: '163255060', delivery_id: deliveryId }) }));
   const store = new InMemoryReplayStore();
   await store.ensureControllerReceipt(receiptKey);
   await store.claimController(receiptKey, { leaseToken: 'local:1' });

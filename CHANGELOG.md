@@ -9,6 +9,14 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- [Issue #103](https://github.com/agentic-delivery-lab/agentic-delivery/issues/103) adds an offline evaluation-finding router that validates the pinned report schema, preserves full report evidence, holds owner-Issue assertions as `awaiting-owner-verification` dispositions until an authoritative owner map exists, and marks comparator-dependent claims for human review. It grants no Issue, Project, or execution authority, depends on Architecture PR #14, and does not enable a live consumer.
+
+- [Issue #101](https://github.com/agentic-delivery-lab/agentic-delivery/issues/101) proposes an offline-only Project planning context schema and fail-closed fixtures. The proposal keeps Project identity and planning facts separate from source-Issue authorization; live Project access and integration remain out of scope.
+
+- The draft controller release `0.2.0-draft.66` pins the strict routing-schema repair at `08728c4210ec2d227eec2b6c182dcf3bafd80db1` for the central shadow participant. Draft65 remains available for rollback. Intake continues to use draft65 until a separate reviewed bootstrap update selects the new registry.
+
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds Neon-backed dispatch leases and controller receipts, persists cursors for bounded delivery-history scans, stores GitHub delivery IDs before advancing checkpoints, aggregates attempt outcomes across scan segments, and keeps active or uncertain webhook outcomes retryable.
 - Failed deliveries are queued durably and drained 250 at a time. Accepted requests retry after a cooldown; unresolved final attempts and definitive rejections become exhausted and hold checkpoint progress until operator diagnosis and explicit retry. Rate-limited 403 responses honor GitHub's retry guidance.
 - Unresolved exhausted redelivery requests no longer expire during ordinary queue claims; clearing their checkpoint hold requires operator diagnosis and an explicit requeue.
@@ -99,11 +107,51 @@ and releases use [Semantic Versioning](https://semver.org/).
   `.github-private` cannot become an implicit organization-wide capability
   distribution surface.
 
+- Issue #60 adds an explicitly approved, audit-preserving disposition for unavailable historical webhook deliveries. Archived queue records stop holding reconciliation progress and cannot be automatically retried; the protected recovery operation checks fresh history and commits the exact approved set with its scan restart atomically.
+
+- [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds a Neon-backed atomic webhook replay store, a repeatable minimal schema migration, and bounded cleanup of expired claims.
+
+- Added a redacted, read-only GitHub organization inventory command and v1
+  evidence schema. It records repository boundaries, rulesets, workflows,
+  open work, labels, cross-repository references, and capability gaps without
+  inferring absence from an inaccessible endpoint or mutating GitHub state.
+
+- Added an offline two-repository acceptance matrix that proves shared
+  controller identity, isolated issue namespaces, compatibility rollback, and
+  the central App credential boundary without claiming live GitHub activation.
+
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) adds a machine-validated organization GitHub App contract and a secret-free, SHA-pinned reusable consumer quality workflow; Distribution records separate workflow-source and Control-Plane release pins.
+- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) adds the versioned participant registry, repository-ID enrollment checks, central-origin webhook/preflight contracts, scoped App-token tests, and multi-repository routing fixtures required for the first Control Plane migration slice.
+
+- [Issue #44](https://github.com/agentic-delivery-lab/agentic-delivery/issues/44) adds a tested pull-request-body check, an explicit Dependabot-only exemption, a versioned required-check ruleset, agent instructions, and a provisional architecture decision. The repository is now public; live ruleset activation remains an authorized post-merge operator step.
+
+- [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) adds the explicit `@agentic-delivery-lab-invoker-7f3a` invocation boundary for issue comments, pull-request conversation comments, formal reviews, and inline review comments, with a versioned actor catalog, GitHub App webhook, Vercel dispatch ingress, and one-hop bot handoff policy.
+
+- [Issue #35](https://github.com/agentic-delivery-lab/agentic-delivery/issues/35) evolves intake to native organization Issue Types, pinned Lifecycle Stage and Delivery Readiness fields, capability-aware orchestration profiles, independent research/requirements/architecture/validation routes, and an idempotent migration path from legacy metadata labels.
+
+- [Issue #32](https://github.com/agentic-delivery-lab/agentic-delivery/issues/32) lets Codex interpret each eligible issue and comment in context, then checks its proposed route and labels against the approved catalog before applying them. People do not need to add labels or use special phrases to continue normal work.
+
+- [Issue #29](https://github.com/agentic-delivery-lab/agentic-delivery/issues/29) adds GitHub-controlled iterative refinement and conditional decomposition, deterministic lifecycle transition validation, separated work and execution state, generated ADR-to-primitive traceability, repository-scoped App publication credentials, and per-issue runner isolation.
+
+- [Issue #25](https://github.com/agentic-delivery-lab/agentic-delivery/issues/25) adds a baseline architecture-conformance review, a versioned delivery evidence contract, and a read-only layered Harness Architecture Review for internal pull requests.
+
+- [Issue #17](https://github.com/agentic-delivery-lab/agentic-delivery/issues/17) adds deterministic issue intake, work-type classification, lifecycle routing, readiness gating, structured forms, and automatic handoff to the reusable Plan → Implement workflow.
+
+- [Issue #15](https://github.com/agentic-delivery-lab/agentic-delivery/issues/15) proposes immediate source issue intake with Codex planning, implementation, issue audit history, review pull requests, and resumable quota pauses on the self-hosted runner.
+
+- [Pull request #2](https://github.com/agentic-delivery-lab/agentic-delivery/pull/2) established the issue-driven architecture decision workflow, including MADR records, linked GitHub Issues, feature-branch review and `main` as the official source.
+- [Pull request #4](https://github.com/agentic-delivery-lab/agentic-delivery/pull/4) introduced adaptive Dutch/English human-agent communication, plain-English repository documentation, a reusable plain-language skill and contract checks.
+- [Pull request #6](https://github.com/agentic-delivery-lab/agentic-delivery/pull/6) introduced context-scoped ubiquitous language for the `agentic-delivery-governance` bounded context, with a canonical register, guidance, validators and CI checks.
+- [Pull request #8](https://github.com/agentic-delivery-lab/agentic-delivery/pull/8) introduced trunk-based delivery, Conventional Commits, Gitmoji, curated changelog validation, delivery-quality CI and repository settings that allow merge commits and delete merged head branches.
+- [Issue #11](https://github.com/agentic-delivery-lab/agentic-delivery/issues/11) adds issue-linked branch names, early validation and an open-source-issue check for supported branch creation and internal pull requests.
+- [Issue #12](https://github.com/agentic-delivery-lab/agentic-delivery/issues/12) adopts exact pnpm tooling with a strict 48-hour dependency release-age policy and portable Node.js ESM governance commands.
+
 Entries that reference issue #52 use it only as the persisted-plan context;
 they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Central intake and delivery select the reviewed draft66 participant registry through bootstrap `0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80`. The controller includes the strict routing-schema repair; all participants remain in shadow mode. The previous bootstrap remains available for rollback.
 - Update the pinned Codex CLI from 0.159.3 to 0.160.0 after verifying the official release asset digest; the pull request waits for no-generation runner capability checks before semantic review.
 
 - The controller release manifest and central participant registry now target
@@ -489,47 +537,24 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #42](https://github.com/agentic-delivery-lab/agentic-delivery/issues/42) makes the published organization issue forms canonical for this repository. The repository has no local issue-form override, blank issues remain available, and CI validates the live organization source.
 - [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) aligns the invocation identity with the registered `Agentic Delivery Lab Invoker 7F3A` GitHub App name, slug, mention, and bot login across the actor catalog, code, tests, and agentic documentation.
 
-### Added
-
-- [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds a Neon-backed atomic webhook replay store, a repeatable minimal schema migration, and bounded cleanup of expired claims.
-
-- Added a redacted, read-only GitHub organization inventory command and v1
-  evidence schema. It records repository boundaries, rulesets, workflows,
-  open work, labels, cross-repository references, and capability gaps without
-  inferring absence from an inaccessible endpoint or mutating GitHub state.
-
-- Added an offline two-repository acceptance matrix that proves shared
-  controller identity, isolated issue namespaces, compatibility rollback, and
-  the central App credential boundary without claiming live GitHub activation.
-
-- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) adds a machine-validated organization GitHub App contract and a secret-free, SHA-pinned reusable consumer quality workflow; Distribution records separate workflow-source and Control-Plane release pins.
-- [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) adds the versioned participant registry, repository-ID enrollment checks, central-origin webhook/preflight contracts, scoped App-token tests, and multi-repository routing fixtures required for the first Control Plane migration slice.
-
-- [Issue #44](https://github.com/agentic-delivery-lab/agentic-delivery/issues/44) adds a tested pull-request-body check, an explicit Dependabot-only exemption, a versioned required-check ruleset, agent instructions, and a provisional architecture decision. The repository is now public; live ruleset activation remains an authorized post-merge operator step.
-
-- [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) adds the explicit `@agentic-delivery-lab-invoker-7f3a` invocation boundary for issue comments, pull-request conversation comments, formal reviews, and inline review comments, with a versioned actor catalog, GitHub App webhook, Vercel dispatch ingress, and one-hop bot handoff policy.
-
-- [Issue #35](https://github.com/agentic-delivery-lab/agentic-delivery/issues/35) evolves intake to native organization Issue Types, pinned Lifecycle Stage and Delivery Readiness fields, capability-aware orchestration profiles, independent research/requirements/architecture/validation routes, and an idempotent migration path from legacy metadata labels.
-
-- [Issue #32](https://github.com/agentic-delivery-lab/agentic-delivery/issues/32) lets Codex interpret each eligible issue and comment in context, then checks its proposed route and labels against the approved catalog before applying them. People do not need to add labels or use special phrases to continue normal work.
-
-- [Issue #29](https://github.com/agentic-delivery-lab/agentic-delivery/issues/29) adds GitHub-controlled iterative refinement and conditional decomposition, deterministic lifecycle transition validation, separated work and execution state, generated ADR-to-primitive traceability, repository-scoped App publication credentials, and per-issue runner isolation.
-
-- [Issue #25](https://github.com/agentic-delivery-lab/agentic-delivery/issues/25) adds a baseline architecture-conformance review, a versioned delivery evidence contract, and a read-only layered Harness Architecture Review for internal pull requests.
-
-- [Issue #17](https://github.com/agentic-delivery-lab/agentic-delivery/issues/17) adds deterministic issue intake, work-type classification, lifecycle routing, readiness gating, structured forms, and automatic handoff to the reusable Plan → Implement workflow.
-
-- [Issue #15](https://github.com/agentic-delivery-lab/agentic-delivery/issues/15) proposes immediate source issue intake with Codex planning, implementation, issue audit history, review pull requests, and resumable quota pauses on the self-hosted runner.
-
-- [Pull request #2](https://github.com/agentic-delivery-lab/agentic-delivery/pull/2) established the issue-driven architecture decision workflow, including MADR records, linked GitHub Issues, feature-branch review and `main` as the official source.
-- [Pull request #4](https://github.com/agentic-delivery-lab/agentic-delivery/pull/4) introduced adaptive Dutch/English human-agent communication, plain-English repository documentation, a reusable plain-language skill and contract checks.
-- [Pull request #6](https://github.com/agentic-delivery-lab/agentic-delivery/pull/6) introduced context-scoped ubiquitous language for the `agentic-delivery-governance` bounded context, with a canonical register, guidance, validators and CI checks.
-- [Pull request #8](https://github.com/agentic-delivery-lab/agentic-delivery/pull/8) introduced trunk-based delivery, Conventional Commits, Gitmoji, curated changelog validation, delivery-quality CI and repository settings that allow merge commits and delete merged head branches.
-- [Issue #11](https://github.com/agentic-delivery-lab/agentic-delivery/issues/11) adds issue-linked branch names, early validation and an open-source-issue check for supported branch creation and internal pull requests.
-- [Issue #12](https://github.com/agentic-delivery-lab/agentic-delivery/issues/12) adopts exact pnpm tooling with a strict 48-hour dependency release-age policy and portable Node.js ESM governance commands.
-
 ### Fixed
 
+- Issue routing now supplies a strict Structured Outputs schema with every property required, avoiding rejection of the optional legacy `state` alias. Legacy proposals remain readable, and the router may read its isolated evidence file.
+
+- Issue #60 recovery can refresh delivery history without sending replays, then retry one verified canary at a time with a durable snapshot before any exhausted retry counter is reset.
+
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) validates observations against the trusted workflow registry while retaining the immutable validator implementation, avoiding rejection against its historical registry copy.
+
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) preserves signed JSON as opaque dispatch text so transport object-key reordering cannot invalidate the existing signature. Pinned readers keep their direct version-1 envelope input.
+
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) passes normalized event paths, event type, and verified actor when launching pinned readers so GitHub runner defaults cannot restore the original dispatch context.
+
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) fixes the truncated `pnpm/setup` pin so repository-dispatch observation jobs can start their validation.
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) normalizes the wrapped event again in the separate receipt-finalizer job so the participant-pinned finalizer completes or retries the same controller receipt.
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) validates the observation event signature and participant pin with the trusted workflow revision before checking out or running a participant-pinned reader.
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) wraps the signed dispatch envelope in one `repository_dispatch` client payload property and restores its direct shape in per-run event files for pinned readers, staying within GitHub's ten-property limit while preserving envelope verification.
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) bundles the participant registry with the Vercel webhook function and records safe system error codes for failed deliveries without logging request contents or error messages.
+- [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) preserves exact large GitHub delivery IDs across paginated history scans, requeues a changed exhausted ID atomically, and waits for the complete scan before retrying. Webhook dispatch failures emit payload-free status evidence.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) adds structured, payload-free logs for accepted webhook deliveries, individual redelivery outcomes, GitHub API status codes, and reconciler run totals; a known API result remains visible when Neon cannot persist it, while the run fails without advancing its checkpoint.
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60)
   preserves safe Codex error categories and HTTP status codes on failed turns

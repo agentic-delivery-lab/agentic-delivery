@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { unwrapRepositoryDispatchClientPayload } from './agent-invocation.mjs';
 import { loadParticipantRegistry, participantForRepository } from './participant-registry.mjs';
 
 const ALLOWED_ROUTES = new Set([
@@ -68,7 +69,7 @@ function validateOrigin(context, event) {
     if (asString(event.repository?.full_name) !== context.controllerRepository) {
       throw new Error('The repository-dispatch event did not target the central controller.');
     }
-    const envelope = event.client_payload;
+    const envelope = unwrapRepositoryDispatchClientPayload(event.client_payload);
     if (!envelope || asString(envelope.repository_id) !== repositoryId) {
       throw new Error('The origin repository ID does not match the dispatch envelope.');
     }

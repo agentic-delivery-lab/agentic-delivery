@@ -9,6 +9,7 @@ import {
   bodyDigest,
   hasInvocationMention,
   observationEventSupported,
+  unwrapRepositoryDispatchClientPayload,
   validateDispatchEnvelopeSignature,
   validateActorCatalog,
 } from './lib/agent-invocation.mjs';
@@ -118,7 +119,7 @@ export async function prepareAgentInvocation({ env = process.env, fetchImpl = fe
   if (!catalog.valid) throw new Error(`The actor catalog is invalid: ${catalog.errors.join(' ')}`);
   if (!env.GH_TOKEN || !env.GITHUB_EVENT_PATH || !env.GITHUB_REPOSITORY) throw new Error('Agent invocation preflight requires GitHub event, repository, and token context.');
   const event = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'));
-  const envelope = event?.client_payload;
+  const envelope = unwrapRepositoryDispatchClientPayload(event?.client_payload);
   const envelopeValidation = validateEventEnvelope(envelope);
   if (!envelopeValidation.valid) throw new Error(`The repository dispatch envelope is invalid: ${envelopeValidation.errors.join(' ')}`);
   if (envelope.received_at !== undefined) {

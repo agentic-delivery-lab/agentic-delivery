@@ -10,8 +10,20 @@ The gateway carries `received_at` in the envelope. The central preflight
 accepts a compatible legacy envelope without that field, but validates a
 present timestamp against the five-minute replay window and a thirty-second
 future clock-skew allowance. New webhook deliveries always include it. The
-gateway also signs the complete `repository_dispatch` client payload with the
-separate `AGENTIC_DELIVERY_DISPATCH_SECRET` using HMAC-SHA256.
+gateway signs the complete version-1 envelope with the separate
+`AGENTIC_DELIVERY_DISPATCH_SECRET` using HMAC-SHA256, then sends it as the sole
+top-level `client_payload.envelope` property. This keeps the payload within
+GitHub's limit of 10 top-level properties. The transport wrapper contains
+opaque `json` text and a `delivery_id` copy for concurrency. Its decoder
+checks that the copied identity matches the signed envelope before restoring
+that envelope. Keeping the signed JSON as text prevents transport object-key
+reordering from invalidating the existing HMAC. Legacy object wrappers remain
+readable during deployment. The invocation and observation
+workflows copy the envelope into a per-run event file in the direct shape
+expected by the pinned controller readers; those readers validate the original
+schema and signature. The
+[GitHub REST API reference](https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event)
+documents this limit.
 
 Neon stores the five-minute gateway replay window and dispatch lease in
 `webhook_replay_claims`. `webhook_controller_receipts` keeps a 30-day status and
@@ -53,7 +65,7 @@ controller repository secret.
 
 ## Migration and configuration
 
-Apply all five migrations to the selected Neon database with a direct, unpooled
+Apply the first five migrations to the selected Neon database with a direct, unpooled
 connection before deploying code that uses the new schema:
 
 ```sh
@@ -70,7 +82,11 @@ psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
 ```
 
 Run them from a protected terminal. Never print the connection string or add
-it to source control. All migrations are safe to run more than once.
+it to source control. All migrations are safe to run more than once. Migration
+0006 adds the durable archive and the manual `archived` queue status. Deploy
+the queue claim status allowlist before applying any archival disposition.
+The Issue #60 operator operation applies migration 0006 in its guarded
+transaction; ordinary reconciliation never applies a migration.
 
 Configure these protected values before production activation:
 
@@ -91,12 +107,25 @@ supports this daily schedule. The Cron route is deployed as code by
 deploy, or activate the App webhook. Vercel Hobby permits one invocation per
 day, while Pro and Enterprise permit per-minute schedules; confirm the project
 plan before changing this cadence ([Cron Jobs usage and pricing](https://vercel.com/docs/cron-jobs/usage-and-pricing)).
+The webhook function reads `config/participants.yml` at runtime, so the
+`vercel.json` function configuration includes that file in its bundle.
 
 ## Recovery and monitoring
 
 GitHub does not automatically redeliver failed App webhook deliveries. The
 scheduled route creates an App JWT, pages through delivery history, groups
 attempts by stable GUID, and requests redelivery when no attempt succeeded.
+The App API returns delivery IDs as JSON integers, and current IDs exceed
+JavaScript's safe integer range. The reconciler retains each original decimal
+number token as a string before comparing, storing, or putting it in a request
+URL. Parsing the value through `Number` rounds it and can make GitHub reject a
+redelivery with HTTP 404. Any segment in a paginated history scan can replace a
+rounded ID at the same timestamp. The observation update and exhausted-row
+requeue happen atomically, so a later page cannot replace the repaired ID with
+an older attempt. The request waits until the history scan finishes before it
+is sent. Reconciliation requeues only when that GUID maps to a different exact
+ID and its retry count remains below the limit. It preserves the retry count
+and leaves unchanged or unmatched exhausted records for operator diagnosis.
 Each run reads at most five 100-delivery pages. If more history remains before
 the prior checkpoint, it saves the opaque cursor and accumulated GUID outcomes
 for the next run; it does not make history-based retry decisions from a partial
@@ -111,12 +140,96 @@ current scan advance, while the accepted request stays durable for follow-up.
 If the eighth accepted attempt's cooldown expires without a successful history
 result, the reconciler marks it `exhausted` before its next checkpoint update.
 That unresolved row stays durable and blocks further checkpoint progress until
-an operator diagnoses the cause and requeues it.
+an operator diagnoses the cause and explicitly requeues or archives it.
 Exhausted requests have no age-based deletion. An operator must diagnose and
-explicitly requeue them; the requeued request stays durable and holds the
+explicitly requeue them when replay is possible; the requeued request stays durable and holds the
 checkpoint until GitHub accepts it. If its final accepted attempt does not
 produce a successful history result before cooldown expires, it becomes
 exhausted again and continues to hold progress.
+
+### Manual disposition of unavailable historical deliveries
+
+An operator may explicitly approve a **webhook delivery archive** when a
+complete fresh GitHub history audit establishes that the delivery is unavailable
+and no controller receipt is linked to it. Age alone never triggers archiving.
+The archive retains the original queue, observation and scan metadata, the
+reason, source issue, evidence and manifest SHA-256 digests, operator identity,
+implementation commit and Actions run. It contains no webhook body or secret.
+The queue row remains as `archived`, preserving its retry counters and delivery
+identity. Queue claims, due selection and automatic requeue exclude that state.
+Successful observations also retain the archived queue row, so a later scan
+cannot recreate an automatic retry for the same GUID.
+A database trigger preserves the guard against older pinned claim and completion
+code sharing the store: deletion and transitions back to automatic retry states
+are skipped. Explicit operator restoration to the blocking `exhausted` state
+remains possible. This trigger and the archive are retained during rollback.
+It does not hold the checkpoint and does not mean the original work completed.
+
+For the explicitly approved Issue #60 recovery, use `self-hosted-runner-smoke`
+with `reconciliation_recovery=preview` and the exact 161-row `recovery_manifest`
+saved from evidence run 37762823635. The manifest is protected operator input,
+read from the runner event file rather than printed step environment values.
+It is not a checked-in list. Its SHA-256 is
+`d16f6bff149ffaabe3e67a324a1a2ff489fe03bff4fb0ad76d7d88424dc84055`.
+Both modes require the reviewed implementation on `main`. Preview reads only.
+`apply` requires
+a fresh complete history scan, unchanged exhausted queue and observation IDs,
+one attempt per candidate and no linked receipt. Locks and a single transaction
+ensure all 161 dispositions and the stale pagination restart commit together.
+A mismatch, timeout or repeated application fails without changing records.
+The completed checkpoint and observations remain intact; normal reconciliation
+must observe fresh outcomes and advance the checkpoint itself.
+
+After application, verify the archive count and digest, queue status counts and
+the scan restart using protected read-only diagnostics. Run reconciliation in
+bounded steps and verify checkpoint progress separately. Recover pending
+controller receipts with fresh, limited delivery and sufficient runner capacity.
+Keep the five-minute signed-envelope window and participant modes unchanged.
+
+The same reviewed-main operator workflow provides `reconciliation_followup`:
+
+- `inspect` reads archive count, guard enforcement, queue states, scan state and
+  pending receipt identities in a read-only repeatable-read transaction.
+- `scan` uses the normal reconciliation algorithm with an internal zero-request
+  limit. It updates observations, receipt links and queue outcomes, preserves
+  unresolved checkpoint holds, and sends no redelivery API requests. Repeat
+  while `scan_continuation_pending` is true. A pending queue can retain the last
+  cursor after a complete scan; this does not establish receipt completion.
+- `replay_one` requires an explicit `recovery_delivery_guid`. Before writing,
+  a fresh delivery-detail response must match the exact receipt ID, GUID, App
+  installation and enrolled repository, and an actual issue payload from an
+  `issues` or `issue_comment` event (pull requests are rejected). Only central issue #62 and public
+  `.github` issue #11 are approved recovery canaries. The delivery timestamp
+  must be valid and younger than three days minus the operator job's seven-minute
+  execution margin before any audit/requeue write. Migration 0007 retains the
+  full original queue and receipt metadata plus operator and source evidence.
+  The selected queue is aligned to the exact freshly verified receipt delivery ID;
+  an older queue ID remains in the audit snapshot. An exhausted selected queue
+  can then be requeued with its retry count reset;
+  receipt counters are unchanged. The normal claim remains authoritative.
+  Every API write is limited to one POST for the verified exact delivery ID;
+  foreign endpoints and additional POSTs fail closed. A changed target or a run
+  without exactly one accepted request fails instead of claiming recovery.
+
+Keep archival and follow-up inputs mutually exclusive. Both operations share
+an operator concurrency group and run without a Codex model turn. Before a
+replay, verify that the self-hosted runner is online and idle and that the model
+budget allows the downstream invocation. After acceptance, wait for actual
+receipt completion and independently read back issue state before choosing
+another GUID. Keep the five-minute signing window, participant modes, pins and
+issue fields intact. Preserve migration 0007 and its audit during rollback;
+never reset all pending receipts or queue counts in bulk.
+
+For rollback, retain migration 0006 and the archive. After stopping concurrent
+reconciliation, review each original `queue_snapshot` before restoring a specific
+queue row to `exhausted`; never bulk reset attempt counters or claim success.
+Do not restore an opaque historical cursor without auditing its current validity.
+Before reverting the queue claim allowlist, restore all `archived` rows to a
+blocking status, otherwise older claim code could retry them. The audit survives
+normal successful queue completion and checkpoint observation cleanup.
+
+### Controller receipt reconciliation
+
 It also redelivers due controller receipts even when GitHub recorded the
 original webhook delivery as successful. Before advancing its checkpoint, the
 reconciler links every observed delivery GUID's numeric GitHub API ID to a
@@ -194,7 +307,11 @@ GitHub accepted the request to retry; check later delivery history to see
 whether that retry succeeded. An outcome ending in `_not_recorded` means GitHub's
 result was known but Neon could not save it; `recovery_status` says whether the
 request was durably deferred. The run then fails with HTTP 503 and does not
-advance its checkpoint. `agentic_delivery_webhook_reconciler_run`
+advance its checkpoint. A failed webhook dispatch emits `outcome: failed` with
+the gateway response status, a GitHub API status when known, a bounded error
+type, an optional sanitized system error code, and the delivery GUID; it
+excludes error messages and request contents.
+`agentic_delivery_webhook_reconciler_run`
 records the Cron endpoint's completed or failed response and its counters.
 There, `http_status` is the Vercel endpoint response and `github_api_status`
 is the GitHub API response when one is known. Capture these events with the

@@ -296,12 +296,16 @@
         "curated-changelog",
         "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
+        "evaluation-finding-router",
+        "evaluation-finding-router-cli",
         "event-catalog",
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
         "intake-caller-provenance-guard",
         "intake-participation-policy",
+        "issue-60-bounded-reconciliation-recovery",
+        "issue-60-webhook-delivery-archive",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "organization-metadata-runbook",
@@ -310,7 +314,10 @@
         "participant-registry-validator",
         "primitive-selection-contract",
         "primitive-selection-validator",
+        "project-planning-context-validator",
         "quota-diagnostics-contract",
+        "repository-dispatch-event-normalizer",
+        "repository-dispatch-transport",
         "repository-governance-instructions",
         "semantic-architecture-review",
         "webhook-delivery-reconciler"
@@ -354,12 +361,16 @@
         "curated-changelog",
         "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
+        "evaluation-finding-router",
+        "evaluation-finding-router-cli",
         "event-catalog",
         "event-catalog-validator",
         "github-app-publication-boundary",
         "github-app-token-provider",
         "intake-caller-provenance-guard",
         "intake-participation-policy",
+        "issue-60-bounded-reconciliation-recovery",
+        "issue-60-webhook-delivery-archive",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "organization-metadata-runbook",
@@ -368,7 +379,10 @@
         "participant-registry-validator",
         "primitive-selection-contract",
         "primitive-selection-validator",
+        "project-planning-context-validator",
         "quota-diagnostics-contract",
+        "repository-dispatch-event-normalizer",
+        "repository-dispatch-transport",
         "repository-governance-instructions",
         "semantic-architecture-review",
         "webhook-delivery-reconciler"
@@ -702,6 +716,32 @@
       ]
     },
     {
+      "id": "evaluation-finding-router",
+      "path": "scripts/lib/evaluation-finding-router.mjs",
+      "location": "scripts/lib/evaluation-finding-router.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "evaluation-finding-router-cli",
+      "path": "scripts/route-evaluation-findings.mjs",
+      "location": "scripts/route-evaluation-findings.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
       "id": "event-catalog",
       "path": "config/event-catalog.yml",
       "location": "config/event-catalog.yml",
@@ -803,6 +843,32 @@
       "path": "scripts/lib/intake-policy.mjs",
       "location": "scripts/lib/intake-policy.mjs",
       "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "issue-60-bounded-reconciliation-recovery",
+      "path": "scripts/recover-issue-60-reconciliation.mjs",
+      "location": "scripts/recover-issue-60-reconciliation.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "issue-60-webhook-delivery-archive",
+      "path": "scripts/archive-issue-60-deliveries.mjs",
+      "location": "scripts/archive-issue-60-deliveries.mjs",
+      "kind": "script",
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0018"
@@ -1084,6 +1150,19 @@
       ]
     },
     {
+      "id": "project-planning-context-validator",
+      "path": "scripts/lib/project-planning-context.mjs",
+      "location": "scripts/lib/project-planning-context.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
       "id": "pull-request-body-check",
       "path": ".github/workflows/pull-request-body.yml",
       "location": ".github/workflows/pull-request-body.yml",
@@ -1152,6 +1231,32 @@
       "domains": [
         "agentic-delivery-control-plane",
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "repository-dispatch-event-normalizer",
+      "path": "scripts/normalize-repository-dispatch-event.mjs",
+      "location": "scripts/normalize-repository-dispatch-event.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "repository-dispatch-transport",
+      "path": "scripts/lib/repository-dispatch-transport.mjs",
+      "location": "scripts/lib/repository-dispatch-transport.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {

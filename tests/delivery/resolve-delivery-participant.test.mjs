@@ -4,6 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
+import { packRepositoryDispatchClientPayload, unwrapRepositoryDispatchClientPayload } from '../../scripts/lib/agent-invocation.mjs';
 import { parseParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
 import { resolveDeliveryParticipant } from '../../scripts/lib/resolve-delivery-participant.mjs';
 
@@ -109,17 +110,21 @@ test('dispatch envelope identity and controller pin must match the registry sele
   });
   const validEvent = {
     repository: { full_name: 'agentic-delivery-lab/agentic-delivery' },
-    client_payload: {
+    client_payload: packRepositoryDispatchClientPayload({
+      delivery_id: '12345678-1234-4234-8234-123456789012',
       repository_id: '1358455028',
       repository_full_name: participant.expectedFullName,
       controller: { version: participant.controller.version, commit: participant.controller.commit },
-    },
+    }),
   };
   assert.equal(resolveDeliveryParticipant(dispatchContext, registry, validEvent).controllerCommit, participant.controller.commit);
   assert.throws(
     () => resolveDeliveryParticipant(dispatchContext, registry, {
       ...validEvent,
-      client_payload: { ...validEvent.client_payload, controller: { ...validEvent.client_payload.controller, commit: 'a'.repeat(40) } },
+      client_payload: packRepositoryDispatchClientPayload({
+        ...unwrapRepositoryDispatchClientPayload(validEvent.client_payload),
+        controller: { ...unwrapRepositoryDispatchClientPayload(validEvent.client_payload).controller, commit: 'a'.repeat(40) },
+      }),
     }),
     /dispatch controller pin does not match/,
   );

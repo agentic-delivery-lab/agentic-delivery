@@ -226,16 +226,55 @@ reusable workflow boundary even when its caller has already applied them.
 
 The App webhook verifies the GitHub signature, installation, organization,
 supported event/action, delivery ID and repository identity. It emits a
-versioned event envelope whose complete `repository_dispatch` payload is
-signed with a separate central HMAC dispatch secret. The controller verifies
-that signature and its bounded timestamp before fetching the current GitHub
-object again, resolving the participant's pinned controller and contract
-versions, asking the semantic router for a proposal, and applying only
-deterministically authorized mutations to the originating repository. The
-webhook secret and dispatch secret are separate credentials: the former
+versioned event envelope and signs the complete envelope with a separate
+central HMAC dispatch secret. To meet GitHub's ten-property limit for
+`repository_dispatch` `client_payload`, the gateway carries the envelope in
+the single `client_payload.envelope` property. Its transport container holds
+`json`, the complete signed envelope serialized as opaque JSON text, and
+`delivery_id`, an identity copy used for workflow concurrency. Object-key
+reordering in transport cannot change the JSON text. Normalization requires
+that the copied delivery ID equal the ID inside the decoded envelope and
+rejects malformed containers before any pinned reader runs. The wrapper
+itself is not part of the HMAC. Legacy object wrappers remain readable for
+deployment compatibility; the version-1 envelope and HMAC algorithm do not
+change. The observation workflow's trusted `github.sha` revision
+normalizes that wrapper into the direct `client_payload` shape, then verifies
+the envelope signature, bounded timestamp, and controller pin against the
+participant registry before checking out the selected controller commit.
+The immutable pinned observation reader verifies the normalized envelope
+again and ends with observation validation; it does not fetch the current
+GitHub object, route work, or mutate issue state. The invocation path
+separately performs its signature and registry-pin checks with the fixed
+bootstrap before checking out the participant pin. Its preflight then fetches
+the current GitHub object, resolves the participant's controller and contract
+versions, asks the semantic router for a proposal, and applies only
+deterministically authorized mutations to the originating repository.
+The invocation finalizer runs in a separate job. It normalizes the original
+dispatch again with the trusted workflow revision, then passes the direct
+version-1 envelope to the participant-pinned receipt finalizer. That finalizer
+uses the same installation and delivery IDs to complete or retry the
+controller receipt.
+The webhook secret and dispatch secret are separate credentials: the former
 authenticates GitHub ingress, while the latter authenticates the gateway-to-
 controller handoff. Neither is available to an origin repository or model
 process.
+
+Unavailable historical webhook deliveries may receive an explicitly approved
+operator disposition after a complete fresh history audit and verification
+that no controller receipt is linked. A durable webhook delivery archive
+retains the original queue, observation and scan metadata, reason and operator
+evidence. The terminal `archived` queue status prevents automatic retry and
+checkpoint blocking, without establishing completion of original work. Age
+alone cannot select a disposition.
+The database also retains the queue guard against deletion or automatic retry
+updates from older immutable controller pins sharing the store. An explicit
+operator restoration to the blocking exhausted state can release that guard.
+The reviewed operator operation checks an
+exact approved manifest and current rows, then archives and restarts stale
+pagination atomically; ordinary reconciliation advances its own checkpoint.
+Retaining exhausted rows indefinitely remains the default when explicit
+disposition evidence or authorization is missing. Deleting historical rows or
+marking them successful would lose evidence or assert an unverified outcome.
 
 An event is input, not a lifecycle transition. The lifecycle policy decides
 whether an issue, comment, pull request, review, workflow or Project event is

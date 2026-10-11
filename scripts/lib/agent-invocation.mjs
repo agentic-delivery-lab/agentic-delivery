@@ -45,6 +45,8 @@ export function bodyDigest(body) {
   return createHash('sha256').update(String(body ?? ''), 'utf8').digest('hex');
 }
 
+export { packRepositoryDispatchClientPayload, unwrapRepositoryDispatchClientPayload } from './repository-dispatch-transport.mjs';
+
 function unsignedDispatchEnvelope(envelope) {
   if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) return envelope;
   const { dispatch_signature: _signature, ...unsigned } = envelope;
