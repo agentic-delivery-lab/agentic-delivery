@@ -195,8 +195,15 @@ function collectSourcePins(report) {
     { role: 'dataset', pin: report.dataset.sourcePin },
     { role: 'dataset-selection-policy', pin: report.dataset.selection.policyPin },
     ...report.dependencies.map((dependency, index) => ({ role: `dependency:${index}:${dependency.id}`, pin: dependency.sourcePin })),
-    { role: 'grader:deterministic', pin: report.graders.deterministic.sourcePin },
-    { role: 'grader:semantic', pin: report.graders.semantic.sourcePin },
+    ...Object.keys(report.graders).sort().flatMap((graderId) => {
+      const grader = report.graders[graderId];
+      return [
+        { role: `grader:${graderId}`, pin: grader.sourcePin },
+        ...(grader.calibration.datasetPin
+          ? [{ role: `calibration:${graderId}:dataset`, pin: grader.calibration.datasetPin }]
+          : []),
+      ];
+    }),
     { role: 'baseline-definition', pin: report.baseline.definitionPin },
     { role: 'comparator', pin: report.comparison.comparator.sourcePin },
   ];

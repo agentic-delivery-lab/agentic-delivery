@@ -143,6 +143,42 @@ routeTest('keeps human-review recommendations as dispositions without creating o
   ]);
 });
 
+routeTest('projects optional grader calibration dataset pins into derived source evidence', () => {
+  const deterministicCalibrationPin = pin('agentic-delivery-lab/agentic-delivery-primitives', '9');
+  const semanticCalibrationPin = pin('agentic-delivery-lab/agentic-delivery-primitives', 'b');
+  const input = report({
+    graders: {
+      deterministic: {
+        ...structuredClone(measuredOwnerIssueReport.graders.deterministic),
+        calibration: {
+          status: 'verified',
+          evaluatorVersion: '1.0.0',
+          datasetPin: deterministicCalibrationPin,
+          resultRef: 'https://example.invalid/calibration/deterministic',
+          rationale: 'Verified calibration fixture.',
+        },
+      },
+      semantic: {
+        ...structuredClone(measuredOwnerIssueReport.graders.semantic),
+        calibration: {
+          status: 'inconclusive',
+          datasetPin: semanticCalibrationPin,
+          rationale: 'Calibration fixture with inconclusive results.',
+        },
+      },
+    },
+  });
+
+  const disposition = route([input]).dispositions[0];
+  assert.deepEqual(disposition.sourceEvidence.sourcePins.slice(4, 8), [
+    { role: 'grader:deterministic', pin: input.graders.deterministic.sourcePin },
+    { role: 'calibration:deterministic:dataset', pin: deterministicCalibrationPin },
+    { role: 'grader:semantic', pin: input.graders.semantic.sourcePin },
+    { role: 'calibration:semantic:dataset', pin: semanticCalibrationPin },
+  ]);
+  assert.deepEqual(disposition.sourceReport.graders, input.graders);
+});
+
 routeTest('holds synthetic owner recommendations without exposing a candidate or actionable target', () => {
   const syntheticAction = report({
     classification: 'synthetic',

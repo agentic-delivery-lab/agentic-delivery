@@ -38,8 +38,9 @@ mapping is required before the Control Plane can emit an Issue proposal for any
 report layer.
 
 Every disposition retains the complete source report, evidence references,
-every source pin, uncertainty, review state, comparison assessment, and a
-SHA-256 reference to the report. The router verifies the schema bytes and
+every source pin, including grader-calibration dataset pins when present,
+uncertainty, review state, comparison assessment, and a SHA-256 reference to
+the report. The router verifies the schema bytes and
 report digest locally; it preserves source pins after schema validation but
 does not retrieve source repositories, comparator definitions, or referenced
 content. Human-review, no-action, and unresolved owner recommendations all
