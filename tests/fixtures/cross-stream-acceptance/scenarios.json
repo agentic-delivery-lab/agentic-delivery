@@ -372,11 +372,6 @@
     "projectReadFailure": {
       "scenarioId": "synthetic-project-read-scope-missing-issue-recovery",
       "evidenceClass": "offline-fixture",
-      "projectPlanningGap": {
-        "code": "PROJECT_READ_SCOPE_MISSING",
-        "planningOnly": true,
-        "executionAuthorized": false
-      },
       "sourceIssue": {
         "repositoryId": "9000001084",
         "repositoryFullName": "agentic-delivery-lab/fixture-security-recovery",

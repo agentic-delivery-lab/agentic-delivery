@@ -627,7 +627,7 @@ test('synthetic Evaluation Report 2.0.0 routes to a non-actionable owner hold', 
   assert.equal(fixtures.contracts.projectPlanning.status, 'merged');
 });
 
-test('missing Project read scope records a planning gap while Issue-first recovery remains authorized', async () => {
+test('missing Project read scope is rejected by the offline normalizer while Issue-first recovery remains authorized', async () => {
   const scenario = fixtures.scenarios.projectReadFailure;
   const planningFixture = JSON.parse(await readFile(
     path.join(repositoryRoot, 'tests/fixtures/project-planning-context/valid-offline-fixture.json'),
@@ -641,9 +641,6 @@ test('missing Project read scope records a planning gap while Issue-first recove
     projectPlanningInput,
   });
   assert.deepEqual(trace.projectPlanningResult, { valid: false, errors: ['PROJECT_READ_SCOPE_MISSING'] });
-  assert.equal(scenario.projectPlanningGap.code, trace.projectPlanningResult.errors[0]);
-  assert.equal(scenario.projectPlanningGap.planningOnly, true);
-  assert.equal(scenario.projectPlanningGap.executionAuthorized, false);
   assert.equal(participantAuthorization.allowed, true);
   assert.equal(deliveryAuthorizationError, null);
   assert.equal(deliveryPolicy.participantMode, 'active');
