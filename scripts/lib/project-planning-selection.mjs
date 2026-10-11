@@ -12,6 +12,35 @@ const POLICY_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const TOPOLOGY_ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/;
 const POLICY_KEYS = new Set(['schemaVersion', 'policyId', 'version', 'topologyId', 'projects', 'sha256']);
 const PROJECT_POLICY_KEYS = new Set(['projectNodeId', 'fieldSchemaSha256', 'priority']);
+const CANDIDATE_FAILURE_PRECEDENCE = [
+  'PROJECT_CANDIDATE_ACCESS_UNKNOWN',
+  'PROJECT_READ_SCOPE_MISSING',
+  'PROJECT_CANDIDATE_INACCESSIBLE',
+  'PROJECT_CANDIDATE_INVALID',
+  'PROJECT_CANDIDATE_NOT_APPROVED',
+  'PROJECT_IDENTITY_NOT_APPROVED',
+  'PROJECT_FIELD_SCHEMA_NOT_APPROVED',
+  'PROJECT_IDENTITY_MISMATCH',
+  'STALE_PROJECT_FIELD_SCHEMA',
+  'PROJECT_ITEM_IDENTITY_MISMATCH',
+  'PROJECT_ONLY_CARD',
+  'SOURCE_ISSUE_IDENTITY_INVALID',
+  'SOURCE_ISSUE_IDENTITY_MISMATCH',
+  'ORIGIN_REPOSITORY_IDENTITY_MISMATCH',
+  'PROJECT_SOURCE_ISSUE_MISMATCH',
+  'STALE_PROJECT_ISSUE_SNAPSHOT',
+  'SOURCE_ISSUE_ACCESS_UNKNOWN',
+  'SOURCE_ISSUE_ACCESS_DENIED',
+  'SOURCE_ISSUE_PERMISSION_DENIED',
+  'PROJECT_FIELDS_INVALID',
+  'ISSUE_OWNED_FIELD_IN_PROJECT',
+  'UNSUPPORTED_PROJECT_FIELD',
+  'DUPLICATE_PROJECT_FIELD',
+  'PROJECT_DUPLICATE_CANDIDATE_CONFLICT',
+];
+const CANDIDATE_FAILURE_RANK = new Map(
+  CANDIDATE_FAILURE_PRECEDENCE.map((code, index) => [code, index]),
+);
 
 function fail(code) {
   return { valid: false, errors: [code] };
@@ -117,12 +146,40 @@ function compareDependency(left, right) {
   return 0;
 }
 
+function compareFailureCode(left, right) {
+  const leftRank = CANDIDATE_FAILURE_RANK.get(left) ?? Number.MAX_SAFE_INTEGER;
+  const rightRank = CANDIDATE_FAILURE_RANK.get(right) ?? Number.MAX_SAFE_INTEGER;
+  if (leftRank !== rightRank) return leftRank - rightRank;
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+
+function stableCandidateFailure(errors) {
+  return [...new Set(errors)].sort(compareFailureCode)[0];
+}
+
 function canonicalPlanningContext(context) {
   return {
     ...context,
+    sourceIssue: {
+      ...context.sourceIssue,
+      repository: {
+        ...context.sourceIssue.repository,
+        fullName: context.sourceIssue.repository.fullName.toLowerCase(),
+      },
+    },
     planningFields: context.planningFields
       .map((field) => (field.key === 'planning-dependencies'
-        ? { ...field, value: [...field.value].sort(compareDependency) }
+        ? {
+          ...field,
+          value: field.value
+            .map((dependency) => ({
+              ...dependency,
+              repositoryFullName: dependency.repositoryFullName.toLowerCase(),
+            }))
+            .sort(compareDependency),
+        }
         : field))
       .sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0)),
   };
@@ -159,18 +216,26 @@ export function selectProjectPlanningContext(input) {
   if (input.candidates.length === 0) return fail('PROJECT_CONTEXT_NOT_FOUND');
 
   const uniqueByItem = new Map();
+  const candidateErrors = [];
   for (const candidate of input.candidates) {
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)
       || !candidate.project || typeof candidate.project.nodeId !== 'string'
       || !candidate.item || typeof candidate.item.nodeId !== 'string') {
-      return fail('PROJECT_CANDIDATE_INVALID');
+      candidateErrors.push('PROJECT_CANDIDATE_INVALID');
+      continue;
     }
 
     const candidateReadFailure = projectReadError(candidate.access?.projectRead);
-    if (candidateReadFailure) return fail(candidateReadFailure);
+    if (candidateReadFailure) {
+      candidateErrors.push(candidateReadFailure);
+      continue;
+    }
 
     const approvedProject = policyResult.projects.get(candidate.project.nodeId);
-    if (!approvedProject) return fail('PROJECT_CANDIDATE_NOT_APPROVED');
+    if (!approvedProject) {
+      candidateErrors.push('PROJECT_CANDIDATE_NOT_APPROVED');
+      continue;
+    }
 
     const normalized = normalizeProjectPlanningInput({
       access: candidate.access,
@@ -185,7 +250,10 @@ export function selectProjectPlanningContext(input) {
       sourceIssue: candidate.sourceIssue,
       planningFields: candidate.planningFields,
     });
-    if (!normalized.valid) return fail(normalized.errors[0] ?? 'PROJECT_CANDIDATE_INVALID');
+    if (!normalized.valid) {
+      candidateErrors.push(normalized.errors[0] ?? 'PROJECT_CANDIDATE_INVALID');
+      continue;
+    }
 
     const candidateIssue = normalizeSourceIssueIdentity({
       repositoryId: normalized.value.sourceIssue.repository.id,
@@ -193,15 +261,21 @@ export function selectProjectPlanningContext(input) {
       issueNumber: normalized.value.sourceIssue.number,
       issueNodeId: normalized.value.sourceIssue.nodeId,
     });
-    if (!candidateIssue) return fail('SOURCE_ISSUE_IDENTITY_INVALID');
-    if (!sameSourceIssue(candidateIssue, targetIssue)) return fail('SOURCE_ISSUE_IDENTITY_MISMATCH');
+    if (!candidateIssue) {
+      candidateErrors.push('SOURCE_ISSUE_IDENTITY_INVALID');
+      continue;
+    }
+    if (!sameSourceIssue(candidateIssue, targetIssue)) {
+      candidateErrors.push('SOURCE_ISSUE_IDENTITY_MISMATCH');
+      continue;
+    }
 
     const context = canonicalPlanningContext(normalized.value);
     const itemKey = JSON.stringify([candidate.project.nodeId, candidate.item.nodeId]);
     const fingerprint = JSON.stringify(context);
     const prior = uniqueByItem.get(itemKey);
     if (prior) {
-      if (prior.fingerprint !== fingerprint) return fail('PROJECT_DUPLICATE_CANDIDATE_CONFLICT');
+      if (prior.fingerprint !== fingerprint) candidateErrors.push('PROJECT_DUPLICATE_CANDIDATE_CONFLICT');
       continue;
     }
 
@@ -212,6 +286,8 @@ export function selectProjectPlanningContext(input) {
       fingerprint,
     });
   }
+
+  if (candidateErrors.length > 0) return fail(stableCandidateFailure(candidateErrors));
 
   const candidates = [...uniqueByItem.values()];
   const itemByProject = new Map();

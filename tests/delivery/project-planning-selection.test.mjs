@@ -293,6 +293,60 @@ test('an inaccessible Project candidate prevents partial selection', async () =>
   );
 });
 
+test('candidate failures use fixed precedence regardless of API order', async () => {
+  const base = await validProjectInput();
+  const inaccessible = candidateFor(base, {
+    projectNodeId: 'project-fixture-02', itemNodeId: 'item-secondary',
+    fieldSchemaSha256: 'b'.repeat(64),
+  });
+  inaccessible.access.projectRead = 'inaccessible';
+  const unapproved = candidateFor(base, {
+    projectNodeId: 'project-not-approved',
+    fieldSchemaSha256: 'c'.repeat(64),
+  });
+
+  const first = selectProjectPlanningContext(selectionInput(base, [unapproved, inaccessible]));
+  const reverse = selectProjectPlanningContext(selectionInput(base, [inaccessible, unapproved]));
+
+  assert.deepEqual(first, reverse);
+  assertBlocked(first, 'PROJECT_CANDIDATE_INACCESSIBLE');
+});
+
+test('duplicate observations normalize repository-name casing before comparison', async () => {
+  const base = await validProjectInput();
+  const lowerCase = candidateFor(base);
+  const upperCase = candidateFor(base);
+  upperCase.originRepository.fullName = 'AGENTIC-DELIVERY-LAB/SERVICE-A';
+  upperCase.sourceIssue.repositoryFullName = 'AGENTIC-DELIVERY-LAB/SERVICE-A';
+  upperCase.item.content.repositoryFullName = 'AGENTIC-DELIVERY-LAB/SERVICE-A';
+  lowerCase.planningFields = [{
+    key: 'planning-dependencies',
+    value: [{
+      repositoryId: '888888888',
+      repositoryFullName: 'agentic-delivery-lab/service-b',
+      issueNumber: 3,
+      issueNodeId: 'issue-service-b-3',
+    }],
+  }];
+  upperCase.planningFields = [{
+    key: 'planning-dependencies',
+    value: [{
+      repositoryId: '888888888',
+      repositoryFullName: 'AGENTIC-DELIVERY-LAB/SERVICE-B',
+      issueNumber: 3,
+      issueNodeId: 'issue-service-b-3',
+    }],
+  }];
+
+  const single = selectProjectPlanningContext(selectionInput(lowerCase, [lowerCase]));
+  const forward = selectProjectPlanningContext(selectionInput(lowerCase, [lowerCase, upperCase]));
+  const reverse = selectProjectPlanningContext(selectionInput(lowerCase, [upperCase, lowerCase]));
+
+  assert.equal(single.valid, true, single.errors.join('; '));
+  assert.deepEqual(forward, single);
+  assert.deepEqual(reverse, single);
+});
+
 test('Project read failure leaves the independent source-Issue authorization route available', async () => {
   const base = await validProjectInput();
   const candidate = candidateFor(base);

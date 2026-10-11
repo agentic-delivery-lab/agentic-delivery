@@ -43,6 +43,10 @@ stable error code with no selected context. The selected output retains the
 existing planning-only authority and untrusted-data marker. It cannot overwrite
 Issue-owned priority, lifecycle, readiness, or runner state.
 
+Candidate-local errors are collected across the supplied observations and
+resolved by a fixed code precedence. The resulting error does not depend on API
+response order.
+
 Project access is optional planning context. A selection gap does not change
 the separate source-Issue authorization result for an otherwise eligible
 security or recovery task. Any future runtime integration must independently
