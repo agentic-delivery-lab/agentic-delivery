@@ -224,6 +224,44 @@ async function runIssueRoute(scenario, options = {}) {
   return { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError };
 }
 
+async function planningInputForScenario(scenario, planningFields) {
+  const fixture = JSON.parse(await readFile(
+    path.join(repositoryRoot, 'tests/fixtures/project-planning-context/valid-offline-fixture.json'),
+    'utf8',
+  ));
+  const input = structuredClone(fixture.input);
+  const { sourceIssue } = scenario;
+  const projectNodeId = scenario.planningContext.project.nodeId;
+  const itemNodeId = scenario.planningContext.item.nodeId;
+  const updatedAt = '2026-10-11T10:00:00Z';
+
+  input.approvedProject.nodeId = projectNodeId;
+  input.project.nodeId = projectNodeId;
+  input.item.nodeId = itemNodeId;
+  input.item.projectNodeId = projectNodeId;
+  input.originRepository = {
+    id: sourceIssue.repositoryId,
+    fullName: sourceIssue.repositoryFullName,
+  };
+  input.sourceIssue = {
+    repositoryId: sourceIssue.repositoryId,
+    repositoryFullName: sourceIssue.repositoryFullName,
+    number: sourceIssue.issueNumber,
+    nodeId: sourceIssue.issueNodeId,
+    updatedAt,
+  };
+  input.item.content = {
+    ...input.item.content,
+    repositoryId: sourceIssue.repositoryId,
+    repositoryFullName: sourceIssue.repositoryFullName,
+    issueNumber: sourceIssue.issueNumber,
+    issueNodeId: sourceIssue.issueNodeId,
+    updatedAt,
+  };
+  input.planningFields = structuredClone(planningFields);
+  return input;
+}
+
 async function runIssueWebhook(scenario, { action, issue, deliveryId, replayStore, dispatches }) {
   const sourceIssue = scenario.sourceIssue;
   const registry = fixtureRegistry(sourceIssue);
@@ -320,21 +358,37 @@ test('synthetic product planning remains bound to its source Issue and does not 
   assert.deepEqual(trace.protectedEffects, []);
 });
 
-test('Project priority and status do not change the source-Issue route', async () => {
+test('Project priority and status remain planning context and do not change source-Issue routing', async () => {
   const scenario = fixtures.scenarios.productFeature;
-  const baseline = await runIssueRoute(scenario);
-  const alteredPlanningContext = structuredClone(scenario);
-  alteredPlanningContext.planningContext.planningFields = [
+  const originalPlanningFields = structuredClone(scenario.planningContext.planningFields);
+  const alteredPlanningFields = [
     { key: 'portfolio-group', value: 'changed by synthetic Project event' },
     { key: 'portfolio-sequence', value: 1 },
-    { key: 'project-priority', value: 'highest' },
-    { key: 'project-status', value: 'done' },
   ];
-  const altered = await runIssueRoute(alteredPlanningContext);
+  const baseline = await runIssueRoute(scenario, {
+    projectPlanningInput: await planningInputForScenario(scenario, originalPlanningFields),
+    eventIssue: { project: structuredClone(scenario.planningContext) },
+  });
+  const alteredProjectContext = structuredClone(scenario.planningContext);
+  alteredProjectContext.project.priority = 'highest';
+  alteredProjectContext.project.status = 'done';
+  alteredProjectContext.planningFields = alteredPlanningFields;
+  const altered = await runIssueRoute(scenario, {
+    projectPlanningInput: await planningInputForScenario(scenario, alteredPlanningFields),
+    eventIssue: { project: alteredProjectContext },
+  });
+
+  assert.equal(baseline.trace.projectPlanningResult.valid, true);
+  assert.equal(altered.trace.projectPlanningResult.valid, true);
+  assert.notDeepEqual(
+    altered.trace.projectPlanningResult.value.planningFields,
+    baseline.trace.projectPlanningResult.value.planningFields,
+  );
   assert.equal(altered.result.route, baseline.result.route);
   assert.equal(altered.result.metadata.orchestrationPattern, baseline.result.metadata.orchestrationPattern);
   assert.equal(altered.trace.modelIssue.id, scenario.sourceIssue.issueNodeId);
   assert.equal(altered.trace.modelIssue.project, undefined);
+  assert.equal(altered.trace.modelIssue.projectPlanningContext, undefined);
   assert.deepEqual(altered.trace.protectedEffects, []);
 });
 
