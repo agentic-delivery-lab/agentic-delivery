@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "project-planning-selection.v1.schema.json",
+  "title": "Selected Project planning context v1",
+  "description": "Offline planning-only result for a pinned Project selection policy and one exact source Issue. It contains no execution authorization.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "authority", "trust", "selectionPolicy", "candidateCount", "selectedProjectNodeId", "selectedItemNodeId", "selectedContext"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "authority": { "const": "planning-only" },
+    "trust": { "const": "untrusted-planning-data" },
+    "selectionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policyId", "policyVersion", "topologyId", "sha256"],
+      "properties": {
+        "policyId": { "type": "string", "minLength": 1 },
+        "policyVersion": { "type": "integer", "minimum": 1 },
+        "topologyId": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "candidateCount": { "type": "integer", "minimum": 1 },
+    "selectedProjectNodeId": { "type": "string", "minLength": 1 },
+    "selectedItemNodeId": { "type": "string", "minLength": 1 },
+    "selectedContext": { "$ref": "project-planning-context.v1.schema.json" }
+  }
+}
