@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 
 const DELIVERY_ID = /^[0-9a-f-]{20,}$/i;
 const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+const REPOSITORY_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const COMMIT_SHA = /^[0-9a-f]{40}$/i;
 
 function replayFileKey(key) {
   return Buffer.from(String(key), 'utf8').toString('base64url');
@@ -45,12 +47,94 @@ export function replayKey({ installationId, deliveryId } = {}) {
 }
 
 export function controllerRunLeaseToken(env = process.env) {
-  const runId = String(env.GITHUB_RUN_ID || 'local');
+  const { workflowRunId, workflowRunAttempt } = controllerRunIdentity(env);
+  return `${workflowRunId}:${workflowRunAttempt}`;
+}
+
+export function controllerRunIdentity(env = process.env) {
+  const workflowRunId = String(env.GITHUB_RUN_ID || 'local');
   const attempt = String(env.GITHUB_RUN_ATTEMPT || '1');
-  if (!/^(?:local|[1-9][0-9]*)$/.test(runId) || !/^[1-9][0-9]*$/.test(attempt)) {
+  if (!/^(?:local|[1-9][0-9]*)$/.test(workflowRunId) || !/^[1-9][0-9]*$/.test(attempt)) {
     throw new ReplayProtectionError('The controller run identity is invalid.');
   }
-  return `${runId}:${attempt}`;
+  const workflowRunAttempt = Number(attempt);
+  if (!Number.isSafeInteger(workflowRunAttempt) || workflowRunAttempt > 2_147_483_647) throw new ReplayProtectionError('The controller run identity is invalid.');
+  return Object.freeze({ workflowRunId, workflowRunAttempt });
+}
+
+export function normalizeControllerReceiptIdentity(identity) {
+  const originRepository = String(identity?.originRepository ?? '');
+  const originRepositoryId = String(identity?.originRepositoryId ?? '');
+  const sourceIssueText = String(identity?.sourceIssueNumber ?? '');
+  const sourceIssueNumber = typeof identity?.sourceIssueNumber === 'number'
+    ? identity.sourceIssueNumber
+    : /^[1-9][0-9]*$/.test(sourceIssueText) ? Number(sourceIssueText) : Number.NaN;
+  const controllerCommit = String(identity?.controllerCommit ?? '').toLowerCase();
+  const workflowRunId = String(identity?.workflowRunId ?? '');
+  const runAttemptText = String(identity?.workflowRunAttempt ?? '');
+  const workflowRunAttempt = typeof identity?.workflowRunAttempt === 'number'
+    ? identity.workflowRunAttempt
+    : /^[1-9][0-9]*$/.test(runAttemptText) ? Number(runAttemptText) : Number.NaN;
+  if (!REPOSITORY_NAME.test(originRepository)
+    || !/^[1-9][0-9]*$/.test(originRepositoryId)
+    || !Number.isSafeInteger(sourceIssueNumber) || sourceIssueNumber < 1 || sourceIssueNumber > 2_147_483_647
+    || !COMMIT_SHA.test(controllerCommit)
+    || !/^(?:local|[1-9][0-9]*)$/.test(workflowRunId)
+    || !Number.isSafeInteger(workflowRunAttempt) || workflowRunAttempt < 1 || workflowRunAttempt > 2_147_483_647) {
+    throw new ReplayProtectionError('The controller receipt identity is invalid.');
+  }
+  return Object.freeze({
+    originRepository,
+    originRepositoryId,
+    sourceIssueNumber,
+    controllerCommit,
+    workflowRunId,
+    workflowRunAttempt,
+  });
+}
+
+export function controllerReceiptIdentityFromEnv(env = process.env) {
+  const runIdentity = controllerRunIdentity(env);
+  return normalizeControllerReceiptIdentity({
+    originRepository: env.ORIGIN_REPOSITORY,
+    originRepositoryId: env.ORIGIN_REPOSITORY_ID,
+    sourceIssueNumber: env.SOURCE_ISSUE,
+    controllerCommit: env.CONTROLLER_COMMIT,
+    ...runIdentity,
+  });
+}
+
+export function assertControllerReceiptEnvelopeIdentity(envelope, identity) {
+  const normalized = normalizeControllerReceiptIdentity(identity);
+  if (!envelope || String(envelope.repository_id ?? '') !== normalized.originRepositoryId
+    || (envelope.repository_full_name !== undefined && envelope.repository_full_name !== normalized.originRepository)
+    || (envelope.controller?.commit !== undefined && String(envelope.controller.commit).toLowerCase() !== normalized.controllerCommit)) {
+    throw new ReplayProtectionError('The controller receipt identity does not match the signed event.');
+  }
+  const source = envelope.source;
+  const directIssueSource = source?.kind === 'issue' || source?.kind === 'issue_comment';
+  const pullRequestSource = ['pull_request', 'pull_request_comment', 'pull_request_review', 'pull_request_review_comment'].includes(source?.kind);
+  const issueNumber = Number(source?.issue_number);
+  const pullRequestNumber = Number(source?.pull_request_number);
+  if ((!directIssueSource && !pullRequestSource)
+    || (directIssueSource && (!Number.isSafeInteger(issueNumber) || issueNumber < 1 || issueNumber !== normalized.sourceIssueNumber))
+    || (pullRequestSource && (!Number.isSafeInteger(pullRequestNumber) || pullRequestNumber < 1))) {
+    throw new ReplayProtectionError('The controller receipt source Issue does not match the signed event.');
+  }
+  return normalized;
+}
+
+function sameReceiptSource(left, right) {
+  return left.originRepository === right.originRepository
+    && left.originRepositoryId === right.originRepositoryId
+    && left.sourceIssueNumber === right.sourceIssueNumber
+    && left.controllerCommit === right.controllerCommit;
+}
+
+function sameReceiptIdentity(left, right) {
+  return sameReceiptSource(left, right)
+    && left.workflowRunId === right.workflowRunId
+    && left.workflowRunAttempt === right.workflowRunAttempt;
 }
 
 export class InMemoryReplayStore {
@@ -130,6 +214,20 @@ export class InMemoryReplayStore {
     return this.#receipts.get(key) ?? null;
   }
 
+  async recordControllerIdentity(key, { leaseToken, identity } = {}) {
+    const receipt = this.#receipts.get(key);
+    const normalized = normalizeControllerReceiptIdentity(identity);
+    if (!receipt || receipt.status !== 'running'
+      || (leaseToken && receipt.leaseToken !== leaseToken)
+      || leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`) {
+      throw new ReplayProtectionError('The controller receipt identity could not be recorded.');
+    }
+    if (receipt.identity && !sameReceiptSource(receipt.identity, normalized)) {
+      throw new ReplayProtectionError('The controller receipt identity does not match its existing source.');
+    }
+    receipt.identity = normalized;
+  }
+
   async claimController(key, { leaseMs = 6 * 60 * 60 * 1000, leaseToken = randomUUID() } = {}) {
     await this.ensureControllerReceipt(key);
     const receipt = this.#receipts.get(key);
@@ -149,17 +247,27 @@ export class InMemoryReplayStore {
     return { status: 'claimed' };
   }
 
-  async completeController(key, { leaseToken } = {}) {
+  async completeController(key, { leaseToken, identity } = {}) {
     const receipt = this.#receipts.get(key);
-    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)) throw new ReplayProtectionError('The controller receipt could not be completed.');
+    const normalized = identity ? normalizeControllerReceiptIdentity(identity) : null;
+    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)
+      || (normalized && (!receipt.identity || !sameReceiptIdentity(receipt.identity, normalized)
+        || leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`))) {
+      throw new ReplayProtectionError('The controller receipt could not be completed.');
+    }
     receipt.status = 'completed';
     receipt.leaseExpiresAt = null;
     receipt.leaseToken = null;
   }
 
-  async retryController(key, { maxAttempts = DEFAULT_CONTROLLER_MAX_ATTEMPTS, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken } = {}) {
+  async retryController(key, { maxAttempts = DEFAULT_CONTROLLER_MAX_ATTEMPTS, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken, identity } = {}) {
     const receipt = this.#receipts.get(key);
-    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)) throw new ReplayProtectionError('The controller receipt could not be released.');
+    const normalized = identity ? normalizeControllerReceiptIdentity(identity) : null;
+    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)
+      || (normalized && (!receipt.identity || !sameReceiptIdentity(receipt.identity, normalized)
+        || leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`))) {
+      throw new ReplayProtectionError('The controller receipt could not be released.');
+    }
     if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) throw new ReplayProtectionError('The controller attempt limit must be a positive integer.');
     receipt.status = receipt.attempts >= maxAttempts ? 'exhausted' : 'retryable';
     receipt.leaseExpiresAt = null;
@@ -259,6 +367,21 @@ export class FileReplayStore {
     return this.#readReceipt(key);
   }
 
+  async recordControllerIdentity(key, { leaseToken, identity } = {}) {
+    const receipt = await this.#readReceipt(key);
+    const normalized = normalizeControllerReceiptIdentity(identity);
+    if (!receipt || receipt.status !== 'running'
+      || (leaseToken && receipt.leaseToken !== leaseToken)
+      || leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`) {
+      throw new ReplayProtectionError('The controller receipt identity could not be recorded.');
+    }
+    if (receipt.identity && !sameReceiptSource(receipt.identity, normalized)) {
+      throw new ReplayProtectionError('The controller receipt identity does not match its existing source.');
+    }
+    receipt.identity = normalized;
+    await this.#writeReceipt(key, receipt);
+  }
+
   async claimController(key, { leaseMs = 6 * 60 * 60 * 1000, leaseToken = randomUUID() } = {}) {
     await this.ensureControllerReceipt(key);
     const receipt = await this.#readReceipt(key);
@@ -280,18 +403,28 @@ export class FileReplayStore {
     return { status: 'claimed' };
   }
 
-  async completeController(key, { leaseToken } = {}) {
+  async completeController(key, { leaseToken, identity } = {}) {
     const receipt = await this.#readReceipt(key);
-    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)) throw new ReplayProtectionError('The controller receipt could not be completed.');
+    const normalized = identity ? normalizeControllerReceiptIdentity(identity) : null;
+    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)
+      || (normalized && (!receipt.identity || !sameReceiptIdentity(receipt.identity, normalized)
+        || leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`))) {
+      throw new ReplayProtectionError('The controller receipt could not be completed.');
+    }
     receipt.status = 'completed';
     receipt.leaseExpiresAt = null;
     receipt.leaseToken = null;
     await this.#writeReceipt(key, receipt);
   }
 
-  async retryController(key, { maxAttempts = DEFAULT_CONTROLLER_MAX_ATTEMPTS, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken } = {}) {
+  async retryController(key, { maxAttempts = DEFAULT_CONTROLLER_MAX_ATTEMPTS, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken, identity } = {}) {
     const receipt = await this.#readReceipt(key);
-    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)) throw new ReplayProtectionError('The controller receipt could not be released.');
+    const normalized = identity ? normalizeControllerReceiptIdentity(identity) : null;
+    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)
+      || (normalized && (!receipt.identity || !sameReceiptIdentity(receipt.identity, normalized)
+        || leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`))) {
+      throw new ReplayProtectionError('The controller receipt could not be released.');
+    }
     if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) throw new ReplayProtectionError('The controller attempt limit must be a positive integer.');
     receipt.status = Number(receipt.attempts) >= maxAttempts ? 'exhausted' : 'retryable';
     receipt.leaseExpiresAt = null;

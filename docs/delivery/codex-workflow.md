@@ -184,11 +184,13 @@ request to its issue-linked source, and invokes the existing issue intake.
 The invocation finalizer runs in a separate job and normalizes the original
 GitHub event from the trusted workflow revision. It installs dependencies and
 executes the receipt finalizer from that same immutable `github.sha` checkout
-under `dispatch-boundary`. The participant controller pin selects the delivery
-implementation; it does not select or replace dispatcher-owned receipt
-settlement code. The finalizer uses the same installation and delivery IDs to
-complete or retry the controller receipt, including when an older participant
-pin has no finalizer file.
+under `dispatch-boundary`. Before delivery starts, that trusted revision also
+persists the validated origin repository, source Issue, participant controller
+commit, and Actions run ID and attempt under the active receipt lease. The
+finalizer verifies this identity before completing or retrying the receipt.
+The participant controller pin selects the delivery implementation; it does
+not select or replace dispatcher-owned receipt settlement code. This works
+even when an older participant pin has no finalizer file.
 The observation workflow normalizes the event with its trusted `github.sha`
 checkout, verifies the signature and registry pin, and only then checks out
 the selected immutable observation reader. That reader verifies the envelope

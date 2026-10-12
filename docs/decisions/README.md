@@ -94,12 +94,12 @@ PR #67. Issue #68 and PR #69 track the later controller-local schema amendment;
 it remains provisional until PR #69 is merged into `main`. Issue #60 and PR #89
 track the correction to the signed event-envelope transport description; it
 remains provisional until PR #89 is merged into `main`. Issue #111 and PR #112
-track the invocation-finalizer source and compatibility amendment; it remains
-provisional until PR #112 is merged into `main`. ADR-0019 continues to reference
-Issue #52. Issue #52 is not implementation authorization and must
-not be closed by an ADR or migration change. ADR-0019's official review and
-acceptance still require a separately authorized successor issue and pull
-request.
+track trusted workflow-revision finalization and durable invocation identity;
+the amendment remains provisional until PR #112 is merged into `main`.
+ADR-0019 continues to reference Issue #52. Issue #52 is not implementation
+authorization and must not be closed by an ADR or migration change. ADR-0019's
+official review and acceptance still require a separately authorized
+successor issue and pull request.
 
 | Number | Decision | Source | Review/implementation |
 | --- | --- | --- | --- |

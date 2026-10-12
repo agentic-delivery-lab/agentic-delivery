@@ -41,6 +41,14 @@ the attempt limit. Expired final-attempt receipts are marked exhausted before
 redelivery selection and are not claimed again automatically. Actions
 concurrency keyed by the delivery GUID serializes repeated dispatches.
 
+For accepted invocations, the trusted workflow revision records the validated
+origin repository name and ID, source Issue, participant controller commit,
+and Actions run ID and attempt on the claimed receipt before delivery starts.
+The finalizer rechecks those values against the signed event and current run
+before it records completion or retry. The attribution remains on the receipt
+through retries; the run ID and attempt identify the latest claim. Legacy rows
+remain valid with all attribution columns empty.
+
 Rollback follows the ordinary reviewed workflow-revision path. A rollback
 target must retain the workflow-revision finalizer and its contract tests; do
 not change a participant pin to restore receipt-settlement code.
@@ -94,6 +102,15 @@ it to source control. All migrations are safe to run more than once. Migration
 the queue claim status allowlist before applying any archival disposition.
 The Issue #60 operator operation applies migration 0006 in its guarded
 transaction; ordinary reconciliation never applies a migration.
+Migration 0008 adds attributable identity columns to controller receipts.
+Apply it through a protected operator session before enabling a workflow
+revision that records or verifies those fields. This pull request includes the
+migration but does not apply it to a live database.
+
+```sh
+psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
+  -f api/github/migrations/0008-controller-receipt-attribution.sql
+```
 
 Configure these protected values before production activation:
 

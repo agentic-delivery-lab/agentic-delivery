@@ -337,12 +337,33 @@ test('issue events invoke intake and only an authorized route invokes reusable d
 test('accepted invocations finalize from their pinned workflow revision when the participant pin lacks the finalizer', async () => {
   const legacyPin = JSON.parse(await text('tests/fixtures/invocation-finalizer/legacy-participant-pin.json'));
   assert.equal(legacyPin.sourceRepository, 'agentic-delivery-lab/agentic-delivery');
+  assert.equal(legacyPin.originRepository, 'agentic-delivery-lab/agentic-delivery-architecture');
+  assert.equal(legacyPin.sourceIssueNumber, 11);
+  assert.equal(legacyPin.originRepositoryId, '1380894616');
   assert.equal(legacyPin.controllerVersion, '0.2.0-draft.37');
   assert.equal(legacyPin.controllerCommit, '7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b');
+  assert.equal(legacyPin.workflowRun, '38206400933');
+  assert.equal(legacyPin.workflowRunAttempt, 1);
   assert.deepEqual(legacyPin.pathsPresent, ['scripts/prepare-agent-invocation.mjs']);
   assert.deepEqual(legacyPin.pathsAbsent, ['scripts/finalize-agent-invocation.mjs']);
 
   const intakeWorkflow = parseRepositoryYaml(await text('.github/workflows/issue-intake.yml'), 'issue intake workflow');
+  const classifySteps = intakeWorkflow.jobs.classify.steps;
+  const invocation = classifySteps.find((step) => step.name === 'Validate and normalize explicit agent invocation');
+  const persistIdentity = classifySteps.find((step) => step.name === 'Persist invocation identity from the trusted workflow revision');
+  const identityDependencies = classifySteps.find((step) => step.name === 'Install trusted workflow-revision receipt dependencies');
+  assert.equal(identityDependencies['working-directory'], 'dispatch-boundary');
+  assert.equal(persistIdentity['working-directory'], 'dispatch-boundary');
+  assert.equal(persistIdentity.run, 'GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node scripts/record-agent-invocation-identity.mjs');
+  assert.equal(persistIdentity.env.CONTROLLER_EVENT_PATH, '${{ steps.normalized-event.outputs.event_path }}');
+  assert.equal(persistIdentity.env.ORIGIN_REPOSITORY, '${{ steps.invocation.outputs.origin_repository }}');
+  assert.equal(persistIdentity.env.ORIGIN_REPOSITORY_ID, '${{ steps.invocation.outputs.origin_repository_id }}');
+  assert.equal(persistIdentity.env.SOURCE_ISSUE, '${{ steps.invocation.outputs.source_issue }}');
+  assert.equal(persistIdentity.env.CONTROLLER_COMMIT, '${{ steps.invocation.outputs.controller_commit }}');
+  assert.ok(classifySteps.indexOf(invocation) < classifySteps.indexOf(identityDependencies));
+  assert.ok(classifySteps.indexOf(identityDependencies) < classifySteps.indexOf(persistIdentity));
+  assert.ok(classifySteps.indexOf(persistIdentity) < classifySteps.findIndex((step) => step.name === 'Check out the validated controller release'));
+
   const finalizer = intakeWorkflow.jobs['finalize-invocation'];
   const steps = finalizer.steps;
   const checkouts = steps.filter((step) => step.uses?.startsWith('actions/checkout@'));
@@ -354,5 +375,9 @@ test('accepted invocations finalize from their pinned workflow revision when the
   assert.equal(persistReceipt['working-directory'], 'dispatch-boundary');
   assert.equal(persistReceipt.run, 'GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node scripts/finalize-agent-invocation.mjs');
   assert.equal(persistReceipt.env.CONTROLLER_EVENT_PATH, '${{ steps.normalized-finalizer-event.outputs.event_path }}');
+  assert.equal(persistReceipt.env.ORIGIN_REPOSITORY, '${{ needs.classify.outputs.origin_repository }}');
+  assert.equal(persistReceipt.env.ORIGIN_REPOSITORY_ID, '${{ needs.classify.outputs.origin_repository_id }}');
+  assert.equal(persistReceipt.env.SOURCE_ISSUE, '${{ needs.classify.outputs.source_issue }}');
+  assert.equal(persistReceipt.env.CONTROLLER_COMMIT, '${{ needs.classify.outputs.controller_commit }}');
   assert.ok(steps.indexOf(install) < steps.indexOf(persistReceipt));
 });

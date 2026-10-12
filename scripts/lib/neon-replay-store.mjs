@@ -5,6 +5,7 @@ import {
   DEFAULT_CONTROLLER_MAX_ATTEMPTS,
   DEFAULT_REPLAY_WINDOW_MS,
   ReplayProtectionError,
+  normalizeControllerReceiptIdentity,
 } from './replay-protection.mjs';
 
 export const REPLAY_CLEANUP_BATCH_SIZE = 100;
@@ -103,6 +104,30 @@ SET status = CASE
       WHEN webhook_controller_receipts.expires_at <= clock_timestamp() THEN 0
       ELSE webhook_controller_receipts.attempt_count
     END,
+    origin_repository = CASE
+      WHEN webhook_controller_receipts.expires_at <= clock_timestamp() THEN NULL
+      ELSE webhook_controller_receipts.origin_repository
+    END,
+    origin_repository_id = CASE
+      WHEN webhook_controller_receipts.expires_at <= clock_timestamp() THEN NULL
+      ELSE webhook_controller_receipts.origin_repository_id
+    END,
+    source_issue_number = CASE
+      WHEN webhook_controller_receipts.expires_at <= clock_timestamp() THEN NULL
+      ELSE webhook_controller_receipts.source_issue_number
+    END,
+    controller_commit = CASE
+      WHEN webhook_controller_receipts.expires_at <= clock_timestamp() THEN NULL
+      ELSE webhook_controller_receipts.controller_commit
+    END,
+    workflow_run_id = CASE
+      WHEN webhook_controller_receipts.expires_at <= clock_timestamp() THEN NULL
+      ELSE webhook_controller_receipts.workflow_run_id
+    END,
+    workflow_run_attempt = CASE
+      WHEN webhook_controller_receipts.expires_at <= clock_timestamp() THEN NULL
+      ELSE webhook_controller_receipts.workflow_run_attempt
+    END,
     created_at = CASE
       WHEN webhook_controller_receipts.expires_at <= clock_timestamp() THEN clock_timestamp()
       ELSE webhook_controller_receipts.created_at
@@ -141,6 +166,46 @@ WHERE stored.status <> 'completed'
   AND stored.next_attempt_at <= clock_timestamp()
   AND (stored.status <> 'running' OR stored.lease_expires_at <= clock_timestamp())
 RETURNING stored.status`;
+
+const RECORD_CONTROLLER_IDENTITY_SQL = `
+UPDATE public.webhook_controller_receipts
+SET origin_repository = COALESCE(origin_repository, $3),
+    origin_repository_id = COALESCE(origin_repository_id, $4::bigint),
+    source_issue_number = COALESCE(source_issue_number, $5::integer),
+    controller_commit = COALESCE(controller_commit, $6),
+    workflow_run_id = $7,
+    workflow_run_attempt = $8::integer
+WHERE replay_key = $1
+  AND status = 'running'
+  AND lease_token = $2
+  AND (origin_repository IS NULL OR origin_repository = $3)
+  AND (origin_repository_id IS NULL OR origin_repository_id = $4::bigint)
+  AND (source_issue_number IS NULL OR source_issue_number = $5::integer)
+  AND (controller_commit IS NULL OR controller_commit = $6)
+RETURNING replay_key`;
+
+function identityValues(identity) {
+  return [
+    identity.originRepository,
+    identity.originRepositoryId,
+    identity.sourceIssueNumber,
+    identity.controllerCommit,
+    identity.workflowRunId,
+    identity.workflowRunAttempt,
+  ];
+}
+
+function identityCondition(identity, firstParameter = 3) {
+  if (!identity) return '';
+  const parameter = (offset) => `$${firstParameter + offset}`;
+  return `
+         AND origin_repository = ${parameter(0)}
+         AND origin_repository_id = ${parameter(1)}::bigint
+         AND source_issue_number = ${parameter(2)}::integer
+         AND controller_commit = ${parameter(3)}
+         AND workflow_run_id = ${parameter(4)}
+         AND workflow_run_attempt = ${parameter(5)}::integer`;
+}
 
 const EXHAUST_EXPIRED_CONTROLLER_RECEIPTS_SQL = `
 WITH expired_receipts AS (
@@ -276,10 +341,32 @@ export class NeonReplayStore {
   async controllerReceipt(key) {
     validKey(key);
     const rows = await this.#query(
-      'SELECT status, lease_expires_at, lease_token, next_attempt_at, github_delivery_id, attempt_count FROM public.webhook_controller_receipts WHERE replay_key = $1',
+      `SELECT status, lease_expires_at, lease_token, next_attempt_at, github_delivery_id, attempt_count,
+              origin_repository, origin_repository_id::text AS origin_repository_id,
+              source_issue_number, controller_commit, workflow_run_id, workflow_run_attempt
+       FROM public.webhook_controller_receipts WHERE replay_key = $1`,
       [key],
     );
-    return rows[0] ?? null;
+    const row = rows[0];
+    if (!row) return null;
+    const identity = row.origin_repository === null || row.origin_repository === undefined ? null : {
+      originRepository: row.origin_repository,
+      originRepositoryId: String(row.origin_repository_id),
+      sourceIssueNumber: Number(row.source_issue_number),
+      controllerCommit: row.controller_commit,
+      workflowRunId: row.workflow_run_id,
+      workflowRunAttempt: Number(row.workflow_run_attempt),
+    };
+    return { ...row, identity };
+  }
+
+  async recordControllerIdentity(key, { leaseToken, identity } = {}) {
+    validKey(key);
+    if (typeof leaseToken !== 'string' || !/^[A-Za-z0-9:._-]{1,128}$/.test(leaseToken)) throw new ReplayProtectionError('The controller lease owner is invalid.');
+    const normalized = normalizeControllerReceiptIdentity(identity);
+    if (leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`) throw new ReplayProtectionError('The controller receipt identity does not match its lease.');
+    const rows = await this.#query(RECORD_CONTROLLER_IDENTITY_SQL, [key, leaseToken, ...identityValues(normalized)]);
+    if (rows.length !== 1) throw storageError();
   }
 
   async claimController(key, { leaseMs = DEFAULT_CONTROLLER_LEASE_MS, retentionMs = CONTROLLER_RECEIPT_RETENTION_MS, leaseToken } = {}) {
@@ -295,23 +382,31 @@ export class NeonReplayStore {
     return { status: 'busy' };
   }
 
-  async completeController(key, { leaseToken } = {}) {
+  async completeController(key, { leaseToken, identity } = {}) {
     validKey(key);
     if (typeof leaseToken !== 'string' || !/^[A-Za-z0-9:._-]{1,128}$/.test(leaseToken)) throw new ReplayProtectionError('The controller lease owner is invalid.');
+    const normalized = identity ? normalizeControllerReceiptIdentity(identity) : null;
+    if (normalized && leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`) throw new ReplayProtectionError('The controller receipt identity does not match its lease.');
+    const identitySql = identityCondition(normalized);
+    const values = [key, leaseToken, ...(normalized ? identityValues(normalized) : [])];
     const rows = await this.#query(
       `UPDATE public.webhook_controller_receipts
        SET status = 'completed', lease_expires_at = NULL, lease_token = NULL, next_attempt_at = clock_timestamp()
-       WHERE replay_key = $1 AND status = 'running' AND lease_token = $2
+       WHERE replay_key = $1 AND status = 'running' AND lease_token = $2${identitySql}
        RETURNING replay_key`,
-      [key, leaseToken],
+      values,
     );
     if (rows.length !== 1) throw storageError();
   }
 
-  async retryController(key, { maxAttempts = CONTROLLER_MAX_ATTEMPTS, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken } = {}) {
+  async retryController(key, { maxAttempts = CONTROLLER_MAX_ATTEMPTS, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken, identity } = {}) {
     validKey(key);
     if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) throw new ReplayProtectionError('The controller attempt limit must be a positive integer.');
     if (typeof leaseToken !== 'string' || !/^[A-Za-z0-9:._-]{1,128}$/.test(leaseToken)) throw new ReplayProtectionError('The controller lease owner is invalid.');
+    const normalized = identity ? normalizeControllerReceiptIdentity(identity) : null;
+    if (normalized && leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`) throw new ReplayProtectionError('The controller receipt identity does not match its lease.');
+    const identitySql = identityCondition(normalized, 6);
+    const values = [key, maxAttempts, baseDelayMs, maxDelayMs, leaseToken, ...(normalized ? identityValues(normalized) : [])];
     const rows = await this.#query(
       `UPDATE public.webhook_controller_receipts
        SET status = CASE WHEN attempt_count >= $2 THEN 'exhausted' ELSE 'retryable' END,
@@ -321,9 +416,9 @@ export class NeonReplayStore {
              LEAST($4::double precision, $3::double precision * POWER(2, GREATEST(attempt_count - 1, 0)))
              * INTERVAL '1 millisecond'
            )
-       WHERE replay_key = $1 AND status = 'running' AND lease_token = $5
+       WHERE replay_key = $1 AND status = 'running' AND lease_token = $5${identitySql}
        RETURNING replay_key`,
-      [key, maxAttempts, baseDelayMs, maxDelayMs, leaseToken],
+      values,
     );
     if (rows.length !== 1) throw storageError();
   }
