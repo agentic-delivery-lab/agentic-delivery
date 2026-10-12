@@ -9,10 +9,6 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-
-- [Control Plane Bug #111](https://github.com/agentic-delivery-lab/agentic-delivery/issues/111) runs invocation receipt finalization from the immutable workflow revision, so an older participant controller pin without the finalizer cannot replace the dispatcher code or strand a shadow invocation without completion/retry processing.
-
 ### Added
 
 - [Issue #103](https://github.com/agentic-delivery-lab/agentic-delivery/issues/103) adds an offline evaluation-finding router that validates the pinned report schema, preserves full report evidence, holds owner-Issue assertions as `awaiting-owner-verification` dispositions until an authoritative owner map exists, and marks comparator-dependent claims for human review. It grants no Issue, Project, or execution authority, depends on Architecture PR #14, and does not enable a live consumer.
@@ -541,6 +537,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) aligns the invocation identity with the registered `Agentic Delivery Lab Invoker 7F3A` GitHub App name, slug, mention, and bot login across the actor catalog, code, tests, and agentic documentation.
 
 ### Fixed
+
+- [Control Plane Bug #111](https://github.com/agentic-delivery-lab/agentic-delivery/issues/111) runs invocation receipt finalization from the immutable workflow revision, so an older participant controller pin without the finalizer cannot replace the dispatcher code or strand an accepted invocation without completion/retry processing.
 
 - Issue routing now supplies a strict Structured Outputs schema with every property required, avoiding rejection of the optional legacy `state` alias. Legacy proposals remain readable, and the router may read its isolated evidence file.
 
