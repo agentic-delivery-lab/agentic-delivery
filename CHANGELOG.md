@@ -9,6 +9,10 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- [Control Plane Bug #111](https://github.com/agentic-delivery-lab/agentic-delivery/issues/111) runs invocation receipt finalization from the immutable workflow revision, so an older participant controller pin without the finalizer cannot replace the dispatcher code or strand a shadow invocation without completion/retry processing.
+
 ### Added
 
 - [Issue #103](https://github.com/agentic-delivery-lab/agentic-delivery/issues/103) adds an offline evaluation-finding router that validates the pinned report schema, preserves full report evidence, holds owner-Issue assertions as `awaiting-owner-verification` dispositions until an authoritative owner map exists, and marks comparator-dependent claims for human review. It grants no Issue, Project, or execution authority, depends on Architecture PR #14, and does not enable a live consumer.

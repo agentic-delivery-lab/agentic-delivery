@@ -30,13 +30,20 @@ Neon stores the five-minute gateway replay window and dispatch lease in
 lease for controller runs: pending, running, retryable, completed, or
 exhausted. The controller claims the receipt before intake, and a final Actions
 job records completion only after classification and any selected delivery
-workflow finish. The finalizer checks out the same validated controller pin
-used for intake before it records completion or retryability. Failed runs become
-retryable with backoff. An interrupted run can be reclaimed after its lease
-expires while it remains below the attempt limit. Expired final-attempt
-receipts are marked exhausted before redelivery selection and are not claimed
-again automatically. Actions concurrency keyed by the delivery GUID serializes
-repeated dispatches.
+workflow finish. The finalizer runs from the exact workflow revision checked
+out under `dispatch-boundary`; it does not depend on the participant controller
+pin containing a copy of the finalizer. Dependencies are installed from that
+same checkout. This keeps an older participant pin from replacing the trusted
+dispatcher code or making receipt settlement depend on an unrelated
+implementation revision. Failed runs become retryable with backoff. An
+interrupted run can be reclaimed after its lease expires while it remains below
+the attempt limit. Expired final-attempt receipts are marked exhausted before
+redelivery selection and are not claimed again automatically. Actions
+concurrency keyed by the delivery GUID serializes repeated dispatches.
+
+Rollback follows the ordinary reviewed workflow-revision path. A rollback
+target must retain the workflow-revision finalizer and its contract tests; do
+not change a participant pin to restore receipt-settlement code.
 
 `webhook_reconciler_state` holds the completed history checkpoint and any
 pending GitHub cursor. A `webhook delivery observation` in

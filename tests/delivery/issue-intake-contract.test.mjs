@@ -159,9 +159,8 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   const finalizerSteps = finalizer.steps;
   const finalizerBoundaryCheckout = finalizerSteps.find((step) => step.name === 'Check out the workflow revision for finalizer event normalization');
   const finalizerNodeSetup = finalizerSteps.find((step) => step.name === 'Set up Node.js and pnpm for finalizer normalization');
-  const finalizerNormalize = finalizerSteps.find((step) => step.name === 'Normalize the wrapped event for the pinned receipt finalizer');
-  const finalizerPinValidation = finalizerSteps.find((step) => step.name === 'Validate the participant controller pin');
-  const finalizerCheckout = finalizerSteps.find((step) => step.name === 'Check out the controller');
+  const finalizerNormalize = finalizerSteps.find((step) => step.name === 'Normalize the wrapped event for the workflow-revision receipt finalizer');
+  const finalizerDependencies = finalizerSteps.find((step) => step.name === 'Install workflow-revision finalizer dependencies');
   const finalizeReceipt = finalizerSteps.find((step) => step.name === 'Persist invocation completion or retryability');
   assert.equal(finalizerBoundaryCheckout.with.ref, '${{ github.sha }}');
   assert.equal(finalizerBoundaryCheckout.with.path, 'dispatch-boundary');
@@ -170,13 +169,14 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.equal(finalizerNormalize.env.SOURCE_EVENT_PATH, '${{ github.event_path }}');
   assert.match(finalizerNormalize.run, /node dispatch-boundary\/scripts\/normalize-repository-dispatch-event\.mjs/);
   assert.equal(finalizeReceipt.env.CONTROLLER_EVENT_PATH, '${{ steps.normalized-finalizer-event.outputs.event_path }}');
-  assert.equal(finalizerPinValidation.env.CONTROLLER_COMMIT, '${{ needs.classify.outputs.controller_commit }}');
-  assert.match(finalizerPinValidation.run, /\^\[0-9a-f\]\{40\}\$/);
-  assert.equal(finalizerCheckout.with.ref, '${{ needs.classify.outputs.controller_commit }}');
-  assert.ok(finalizerSteps.indexOf(finalizerPinValidation) < finalizerSteps.indexOf(finalizerCheckout));
+  assert.equal(finalizerDependencies['working-directory'], 'dispatch-boundary');
+  assert.match(finalizerDependencies.run, /pnpm install --frozen-lockfile --ignore-scripts/);
+  assert.equal(finalizeReceipt['working-directory'], 'dispatch-boundary');
+  assert.equal(finalizeReceipt.run, 'GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node scripts/finalize-agent-invocation.mjs');
+  assert.deepEqual(finalizerSteps.filter((step) => step.uses?.startsWith('actions/checkout@')).map((step) => step.with.path), ['dispatch-boundary']);
   assert.ok(finalizerSteps.indexOf(finalizerBoundaryCheckout) < finalizerSteps.indexOf(finalizerNormalize));
-  assert.ok(finalizerSteps.indexOf(finalizerNormalize) < finalizerSteps.indexOf(finalizerPinValidation));
-  assert.ok(finalizerSteps.indexOf(finalizerCheckout) < finalizerSteps.indexOf(finalizeReceipt));
+  assert.ok(finalizerSteps.indexOf(finalizerNormalize) < finalizerSteps.indexOf(finalizerDependencies));
+  assert.ok(finalizerSteps.indexOf(finalizerDependencies) < finalizerSteps.indexOf(finalizeReceipt));
   const intakeSource = await text('.github/workflows/issue-intake.yml');
   assert.match(intakeSource, /steps\.invocation\.outputs\.controller_commit \|\| steps\.participant\.outputs\.controller_commit/);
   assert.doesNotMatch(intakeSource, /inputs\.controller_commit|github\.event\.client_payload\.controller/);
@@ -332,4 +332,27 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.ok(deliveryWorkflow.jobs.deliver.steps.indexOf(installDelivery) < deliveryWorkflow.jobs.deliver.steps.indexOf(runDelivery));
   assert.ok(!deliveryWorkflow.on.issues);
   assert.ok(!deliveryWorkflow.on.issue_comment);
+});
+
+test('accepted invocations finalize from their pinned workflow revision when the participant pin lacks the finalizer', async () => {
+  const legacyPin = JSON.parse(await text('tests/fixtures/invocation-finalizer/legacy-participant-pin.json'));
+  assert.equal(legacyPin.sourceRepository, 'agentic-delivery-lab/agentic-delivery');
+  assert.equal(legacyPin.controllerVersion, '0.2.0-draft.37');
+  assert.equal(legacyPin.controllerCommit, '7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b');
+  assert.deepEqual(legacyPin.pathsPresent, ['scripts/prepare-agent-invocation.mjs']);
+  assert.deepEqual(legacyPin.pathsAbsent, ['scripts/finalize-agent-invocation.mjs']);
+
+  const intakeWorkflow = parseRepositoryYaml(await text('.github/workflows/issue-intake.yml'), 'issue intake workflow');
+  const finalizer = intakeWorkflow.jobs['finalize-invocation'];
+  const steps = finalizer.steps;
+  const checkouts = steps.filter((step) => step.uses?.startsWith('actions/checkout@'));
+  const install = steps.find((step) => step.name === 'Install workflow-revision finalizer dependencies');
+  const persistReceipt = steps.find((step) => step.name === 'Persist invocation completion or retryability');
+
+  assert.deepEqual(checkouts.map((step) => step.with.path), ['dispatch-boundary']);
+  assert.equal(install['working-directory'], 'dispatch-boundary');
+  assert.equal(persistReceipt['working-directory'], 'dispatch-boundary');
+  assert.equal(persistReceipt.run, 'GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node scripts/finalize-agent-invocation.mjs');
+  assert.equal(persistReceipt.env.CONTROLLER_EVENT_PATH, '${{ steps.normalized-finalizer-event.outputs.event_path }}');
+  assert.ok(steps.indexOf(install) < steps.indexOf(persistReceipt));
 });

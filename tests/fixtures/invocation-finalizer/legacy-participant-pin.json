@@ -1,0 +1,12 @@
+{
+  "sourceRepository": "agentic-delivery-lab/agentic-delivery",
+  "controllerVersion": "0.2.0-draft.37",
+  "controllerCommit": "7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b",
+  "workflowRun": "38206400933",
+  "pathsPresent": [
+    "scripts/prepare-agent-invocation.mjs"
+  ],
+  "pathsAbsent": [
+    "scripts/finalize-agent-invocation.mjs"
+  ]
+}
