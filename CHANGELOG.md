@@ -538,7 +538,7 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
-- [Control Plane Bug #111](https://github.com/agentic-delivery-lab/agentic-delivery/issues/111) records the originating repository, source Issue, controller commit, and Actions run identity on the durable receipt before delivery. A trusted workflow-revision finalizer verifies that attribution before completion or retry, including when an older participant pin lacks the finalizer. Migration 0008 must be applied before enabling this workflow revision.
+- [Control Plane Bug #111](https://github.com/agentic-delivery-lab/agentic-delivery/issues/111) records the originating repository, source Issue, controller commit, and Actions run identity on the durable receipt before delivery. A trusted workflow-revision finalizer verifies that attribution before completion or retry, including when an older participant pin lacks the finalizer. An empty or unresolved `hold` route remains retryable when its delivery job is skipped. Migration 0008 must be applied before enabling this workflow revision.
 
 - Issue routing now supplies a strict Structured Outputs schema with every property required, avoiding rejection of the optional legacy `state` alias. Legacy proposals remain readable, and the router may read its isolated evidence file.
 

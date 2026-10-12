@@ -35,7 +35,10 @@ out under `dispatch-boundary`; it does not depend on the participant controller
 pin containing a copy of the finalizer. Dependencies are installed from that
 same checkout. This keeps an older participant pin from replacing the trusted
 dispatcher code or making receipt settlement depend on an unrelated
-implementation revision. Failed runs become retryable with backoff. An
+implementation revision. Failed runs become retryable with backoff. An empty
+or `hold` route remains retryable even if it skips the delivery job. A skipped
+delivery for a successfully classified non-hold route in shadow or read-only
+mode remains an intentional completion. An
 interrupted run can be reclaimed after its lease expires while it remains below
 the attempt limit. Expired final-attempt receipts are marked exhausted before
 redelivery selection and are not claimed again automatically. Actions

@@ -17,6 +17,17 @@ async function text(relativePath) {
   return readFile(path.join(repositoryRoot, relativePath), 'utf8');
 }
 
+test('unresolved routing holds stay retryable when the delivery job is skipped', async () => {
+  const workflow = parseRepositoryYaml(await text('.github/workflows/issue-intake.yml'), 'issue intake workflow');
+  const finalizer = workflow.jobs['finalize-invocation'];
+  const resultExpression = finalizer.steps.find((step) => step.name === 'Persist invocation completion or retryability').env.INVOCATION_RESULT;
+
+  assert.match(resultExpression, /needs\.classify\.result == 'success'/);
+  assert.match(resultExpression, /needs\.classify\.outputs\.route != ''/);
+  assert.match(resultExpression, /needs\.classify\.outputs\.route != 'hold'/);
+  assert.match(resultExpression, /needs\.deliver\.result == 'success' \|\| needs\.deliver\.result == 'skipped'/);
+});
+
 test('issue intake configuration keeps issue type, lifecycle stage, readiness, and governance separate', async () => {
   const config = parseRepositoryYaml(await text('config/issue-metadata.yml'), 'issue metadata configuration');
   assert.deepEqual(config.issue_types.map((type) => type.name), [

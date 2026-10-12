@@ -188,6 +188,10 @@ under `dispatch-boundary`. Before delivery starts, that trusted revision also
 persists the validated origin repository, source Issue, participant controller
 commit, and Actions run ID and attempt under the active receipt lease. The
 finalizer verifies this identity before completing or retrying the receipt.
+The workflow computes the finalizer result from classification, the selected
+route, and delivery status. An empty or `hold` route remains retryable when
+delivery is skipped; shadow and read-only skips on a successful non-hold route
+remain intentional.
 The participant controller pin selects the delivery implementation; it does
 not select or replace dispatcher-owned receipt settlement code. This works
 even when an older participant pin has no finalizer file.

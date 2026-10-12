@@ -384,6 +384,6 @@ jobs:
           ORIGIN_REPOSITORY_ID: ${{ needs.classify.outputs.origin_repository_id }}
           SOURCE_ISSUE: ${{ needs.classify.outputs.source_issue }}
           CONTROLLER_COMMIT: ${{ needs.classify.outputs.controller_commit }}
-          INVOCATION_RESULT: ${{ needs.classify.result == 'success' && (needs.deliver.result == 'success' || needs.deliver.result == 'skipped') && 'success' || 'failure' }}
+          INVOCATION_RESULT: ${{ needs.classify.result == 'success' && needs.classify.outputs.route != '' && needs.classify.outputs.route != 'hold' && (needs.deliver.result == 'success' || needs.deliver.result == 'skipped') && 'success' || 'failure' }}
         run: GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node scripts/finalize-agent-invocation.mjs
         working-directory: dispatch-boundary
