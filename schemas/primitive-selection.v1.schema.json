@@ -7,7 +7,7 @@
   "required": ["schemaVersion", "contractVersion", "source", "profiles"],
   "properties": {
     "schemaVersion": { "const": 1 },
-    "contractVersion": { "type": "string", "pattern": "^1\\.0\\.0$" },
+    "contractVersion": { "enum": ["1.0.0", "1.1.0"] },
     "source": { "$ref": "#/$defs/source" },
     "profiles": {
       "type": "object",
@@ -15,13 +15,25 @@
       "additionalProperties": { "$ref": "#/$defs/profile" }
     }
   },
+  "allOf": [{
+    "if": { "properties": { "contractVersion": { "const": "1.1.0" } } },
+    "then": { "properties": { "source": {
+      "required": ["repositoryId"],
+      "properties": { "repository": { "const": "agentic-delivery-lab/agentic-delivery-agent-customizations" } }
+    } } },
+    "else": { "properties": { "source": {
+      "not": { "required": ["repositoryId"] },
+      "properties": { "repository": { "const": "agentic-delivery-lab/agentic-delivery-primitives" } }
+    } } }
+  }],
   "$defs": {
     "source": {
       "type": "object",
       "additionalProperties": false,
       "required": ["repository", "releaseId", "version", "commit", "contentSha256", "capabilityPolicyVersion"],
       "properties": {
-        "repository": { "const": "agentic-delivery-lab/agentic-delivery-primitives" },
+        "repository": { "enum": ["agentic-delivery-lab/agentic-delivery-primitives", "agentic-delivery-lab/agentic-delivery-agent-customizations"] },
+        "repositoryId": { "const": "1380894656" },
         "releaseId": { "pattern": "^urn:agentic-delivery:primitive-release:" },
         "version": { "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$" },
         "commit": { "pattern": "^[0-9a-f]{40}$" },

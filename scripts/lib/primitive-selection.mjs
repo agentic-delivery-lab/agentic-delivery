@@ -4,6 +4,9 @@ const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const SHA1 = /^[0-9a-f]{40}$/i;
 const SHA256 = /^[0-9a-f]{64}$/i;
+export const CUSTOMIZATIONS_REPOSITORY = 'agentic-delivery-lab/agentic-delivery-agent-customizations';
+export const CUSTOMIZATIONS_REPOSITORY_ID = '1380894656';
+const HISTORICAL_PRIMITIVES_REPOSITORY = 'agentic-delivery-lab/agentic-delivery-primitives';
 
 function list(value) {
   return Array.isArray(value) ? value : [];
@@ -31,6 +34,28 @@ function addError(errors, message) {
   errors.push(message);
 }
 
+/** Compare release metadata across the approved name migration, not hosting
+ * access. The old immutable dependency is preserved; all tree pins must match.
+ */
+export function primitiveSelectionMatchesDependency(selection, dependency) {
+  const source = selection?.source;
+  if (!source || !dependency || !SEMVER.test(source.version ?? '')
+    || !SHA1.test(source.commit ?? '') || !SHA256.test(source.contentSha256 ?? '')) return false;
+  const current = selection.contractVersion === '1.1.0'
+    && source.repository === CUSTOMIZATIONS_REPOSITORY
+    && source.repositoryId === CUSTOMIZATIONS_REPOSITORY_ID;
+  const historical = selection.contractVersion === '1.0.0'
+    && source.repository === HISTORICAL_PRIMITIVES_REPOSITORY
+    && !Object.hasOwn(source, 'repositoryId');
+  if (!current && !historical) return false;
+  const historicalDependency = dependency.repository === HISTORICAL_PRIMITIVES_REPOSITORY
+    && (!Object.hasOwn(dependency, 'repositoryId') || dependency.repositoryId === CUSTOMIZATIONS_REPOSITORY_ID);
+  const currentDependency = current && dependency.repository === CUSTOMIZATIONS_REPOSITORY
+    && dependency.repositoryId === CUSTOMIZATIONS_REPOSITORY_ID;
+  return (historicalDependency || currentDependency)
+    && ['version', 'commit', 'contentSha256'].every((key) => source[key] === dependency[key]);
+}
+
 /**
  * Validate the immutable mapping from orchestration profiles to released
  * Agentic Primitives. This is a selection contract, not a second catalog:
@@ -42,13 +67,24 @@ export function validatePrimitiveSelection(selection, { policy, primitiveCatalog
     return { valid: false, errors: ['selection must be an object'] };
   }
   if (selection.schemaVersion !== 1) addError(errors, 'schemaVersion must be 1');
-  if (selection.contractVersion !== '1.0.0') addError(errors, 'contractVersion must be 1.0.0');
+  if (!['1.0.0', '1.1.0'].includes(selection.contractVersion)) addError(errors, 'contractVersion must be 1.0.0 or 1.1.0');
 
   const source = selection.source;
   if (!source || typeof source !== 'object' || Array.isArray(source)) {
     addError(errors, 'source must be an object');
   } else {
-    if (source.repository !== 'agentic-delivery-lab/agentic-delivery-primitives') addError(errors, 'source.repository must be the Agentic Primitives repository');
+    // Historical 1.0 artifacts retain their original locator. New 1.1
+    // selections bind the current locator to the unchanged hosting identity.
+    // This validates metadata; participant/access admission remains separate.
+    const expectedRepository = selection.contractVersion === '1.1.0'
+      ? CUSTOMIZATIONS_REPOSITORY : HISTORICAL_PRIMITIVES_REPOSITORY;
+    if (source.repository !== expectedRepository) addError(errors, `source.repository must be ${expectedRepository}`);
+    if (selection.contractVersion === '1.1.0' && source.repositoryId !== CUSTOMIZATIONS_REPOSITORY_ID) {
+      addError(errors, `source.repositoryId must be ${CUSTOMIZATIONS_REPOSITORY_ID}`);
+    }
+    if (selection.contractVersion === '1.0.0' && Object.hasOwn(source, 'repositoryId')) {
+      addError(errors, 'source.repositoryId requires selection contract 1.1.0');
+    }
     if (typeof source.releaseId !== 'string' || !source.releaseId.startsWith('urn:agentic-delivery:primitive-release:')) addError(errors, 'source.releaseId must identify a Primitive release');
     if (typeof source.version !== 'string' || !SEMVER.test(source.version)) addError(errors, 'source.version must be a semantic version');
     if (typeof source.commit !== 'string' || !SHA1.test(source.commit)) addError(errors, 'source.commit must be a 40-character commit SHA');
