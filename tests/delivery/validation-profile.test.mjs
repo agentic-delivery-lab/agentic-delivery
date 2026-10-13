@@ -51,3 +51,11 @@ test('validation command paths come only from trusted controller inputs', async 
   assert.throws(() => materializeValidationCommand({argv:['node','@issue/script']}, {workspace,controllerRoot}), /trusted absolute/);
   assert.deepEqual(materializeValidationCommand({argv:['node','@controller/scripts/check.mjs','@workspace']}, {workspace,controllerRoot}), ['node',path.join(controllerRoot,'scripts/check.mjs'),workspace]);
 });
+
+test('validation command paths cannot traverse outside a declared input', async () => {
+  const { materializeValidationCommand } = await import('../../scripts/lib/validation-profile.mjs');
+  const roots = {workspace:path.resolve('fixture-workspace'),controllerRoot:path.resolve('fixture-controller')};
+  for (const argument of ['@controller/../../outside','@workspace/../outside','@controller/..\\outside']) {
+    assert.throws(() => materializeValidationCommand({argv:['node',argument]}, roots), /within its declared input/);
+  }
+});

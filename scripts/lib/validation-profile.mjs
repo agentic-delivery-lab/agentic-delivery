@@ -64,6 +64,15 @@ export function materializeValidationCommand(command, { workspace, controllerRoo
     const match = /^@(workspace|controller|primitiveSource)(\/.*)?$/.exec(argument);
     const root = match && roots[match[1]];
     if (typeof root !== 'string' || !path.isAbsolute(root)) throw new Error('The validation profile requires a trusted absolute read-only input path.');
-    return path.join(root, match[2]?.slice(1) ?? '');
+    const suffix = match[2]?.slice(1) ?? '';
+    if (suffix.includes('\\') || suffix.split('/').includes('..') || path.isAbsolute(suffix)) {
+      throw new Error('The validation command must stay within its declared input.');
+    }
+    const resolved = path.resolve(root, suffix);
+    const relative = path.relative(root, resolved);
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      throw new Error('The validation command must stay within its declared input.');
+    }
+    return resolved;
   });
 }
