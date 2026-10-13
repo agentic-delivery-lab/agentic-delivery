@@ -11,7 +11,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Issue #111 prepares a source-pinned migration 0008 transaction plan with an inspected-target fingerprint, short lock/statement limits and rejection of schema changes since inspection. The preparation helper does not connect to or mutate a database.
+- Issue #111 prepares a source-pinned migration 0008 transaction plan with an inspected-target fingerprint, short lock/statement limits and rejection of schema changes since inspection. An explicit owner-only hosted workflow mode executes that fixed transaction and independently reads back column and constraint metadata; uncertain outcomes require reconciliation before retry.
 
 - Issue #111 adds an explicitly selected, owner-only, read-only controller receipt schema inspection. It uses the existing sealed workflow database connection and emits hashes/metadata; it does not apply migrations, expose credentials, run models or establish deployment acceptance.
 

@@ -405,16 +405,33 @@ Successful observation does not accept the migration. Constraint semantics and
 equivalence with the Vercel production target still require verification. This
 mode cannot apply migrations, deploy, enroll participants or activate a runner.
 
-### Prepared migration transaction
+### Operator migration transaction
 
-`scripts/migrate-controller-receipt-schema.mjs` prepares migration 0008 from its
-reviewed source digest. It does not connect to a database or expose an executable
-CLI. The transaction plan sets a two-second lock timeout and ten-second statement
-timeout, locks the receipt table, and rejects any attribution columns or identity
-constraint added since the reviewed observation before applying the fixed DDL.
-The operator caller must authorize the explicit action, bind the fingerprint
-from inspection run 38461262019, execute every statement in one transaction and
-independently inspect the committed result. A failed or uncertain transaction
-requires observation before retry; it must not infer that nothing committed.
-The production deployment target and a supported writer rollout remain separate
-gates. No workflow migration mode is enabled by this preparation helper.
+The delegated operator may select `migrate_receipt_schema: true` in
+`delivery-quality.yml` on the exact reviewed candidate branch. Inspect and
+migration modes are mutually exclusive; normal quality jobs skip either mode.
+The migration job runs on a hosted runner with contents-read permission and
+passes the existing sealed connection only to the fixed command after the
+frozen dependency installation. No model, App key, publication credential or
+self-hosted runner is involved.
+
+`scripts/migrate-controller-receipt-schema.mjs` authorizes the native operator,
+repository and manual event with explicit `apply-0008` opt-in and attributable
+source/run/attempt. Before connecting, it binds the target fingerprint from
+inspection run 38461262019 and verifies the migration source digest. One
+serializable transaction sets two-second lock and ten-second statement limits,
+locks the receipt table, rejects attribution schema changed since inspection,
+and applies fixed migration 0008. The request deadline is 30 seconds.
+
+A separate read-only query then verifies column types/nullability, validated
+constraint and the exact constraint-definition hash derived from isolated
+PostgreSQL 18.6. An unexpected response or hash holds acceptance; it does not
+undo or retry a possibly committed migration. Reconcile through the read-only
+inspection mode before deciding the next action. A repeated migration request
+fails its schema precondition and requires fresh review.
+
+Output contains only target/source/migration/constraint hashes and native
+operator/run/attempt identity. It never prints a connection value or raw SQL
+error. Successful migration/readback establishes this workflow-connected target
+only; production target equivalence and a supported writer rollout remain
+separate gates. This mode cannot deploy, enroll or activate a runner.
