@@ -380,3 +380,11 @@ The optional isolated integration test uses
 database where all five migrations have been applied. The live Vercel deployment,
 GitHub App credentials, Neon production schema, and scheduled execution remain
 unverified until an operator configures and activates them.
+
+## Controlled release
+
+Automatic Vercel Git deployments are disabled in `vercel.json`. Publishing or
+merging a safety correction must not implicitly deploy the webhook writer.
+Apply and independently verify migration 0008 before a deployed revision writes
+receipt attribution; retain the earlier supported composition until that gate
+passes. GitHub workflow changes require the same migration-before-writer check.
