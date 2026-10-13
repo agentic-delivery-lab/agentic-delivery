@@ -44,6 +44,7 @@ function finalizerEnv(eventPath, result, identity = receiptIdentity) {
     SOURCE_ISSUE: String(identity.sourceIssueNumber),
     CONTROLLER_COMMIT: identity.controllerCommit,
     INVOCATION_RESULT: result,
+    INVOCATION_ROUTE: 'refine',
   };
 }
 
@@ -192,6 +193,7 @@ test('controller receipt retains the validated source and workflow run identity 
       SOURCE_ISSUE: String(receiptIdentity.sourceIssueNumber),
       CONTROLLER_COMMIT: receiptIdentity.controllerCommit,
       INVOCATION_RESULT: 'success',
+      INVOCATION_ROUTE: 'refine',
     },
     store,
   });
@@ -200,6 +202,20 @@ test('controller receipt retains the validated source and workflow run identity 
   const receipt = await store.controllerReceipt(receiptKey);
   assert.equal(receipt.status, 'completed');
   assert.deepEqual(receipt.identity, receiptIdentity);
+});
+
+test('a successful transport flag cannot complete a held or unknown route', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-held-finalize-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const eventPath = path.join(root, 'event.json');
+  await writeFile(eventPath, JSON.stringify({ client_payload: packRepositoryDispatchClientPayload(invocationEvent()) }));
+  for (const route of ['hold', '', undefined, 'unknown']) {
+    const store = new InMemoryReplayStore();
+    await store.ensureControllerReceipt(receiptKey);
+    await store.claimController(receiptKey, { leaseToken: `${receiptIdentity.workflowRunId}:${receiptIdentity.workflowRunAttempt}` });
+    assert.deepEqual(await finalizeAgentInvocation({ env: { ...finalizerEnv(eventPath, 'success'), INVOCATION_ROUTE: route }, store }), { status: 'retryable' });
+    assert.equal((await store.controllerReceipt(receiptKey)).status, 'retryable');
+  }
 });
 
 test('controller finalizer makes failed work retryable with backoff', async (t) => {
@@ -229,6 +245,56 @@ test('controller finalizer makes failed work retryable with backoff', async (t) 
     store,
   }), { status: 'completed' });
   assert.deepEqual((await store.controllerReceipt(receiptKey)).identity, retryIdentity);
+});
+
+test('all supported routes complete their invocation receipt without permitting duplicate settlement', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-route-finalize-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const eventPath = path.join(root, 'event.json');
+  await writeFile(eventPath, JSON.stringify({ client_payload: packRepositoryDispatchClientPayload(invocationEvent()) }));
+  for (const route of ['refine', 'research', 'requirements', 'architecture', 'plan', 'implement', 'resume', 'validate', 'coordinate']) {
+    const store = new InMemoryReplayStore();
+    await store.ensureControllerReceipt(receiptKey);
+    await store.claimController(receiptKey, { leaseToken: `${receiptIdentity.workflowRunId}:${receiptIdentity.workflowRunAttempt}` });
+    const env = { ...finalizerEnv(eventPath, 'success'), INVOCATION_ROUTE: route };
+    assert.deepEqual(await finalizeAgentInvocation({ env, store }), { status: 'completed' });
+    const settled = structuredClone(await store.controllerReceipt(receiptKey));
+    await assert.rejects(finalizeAgentInvocation({ env, store }), /identity could not be recorded/);
+    assert.deepEqual(await store.controllerReceipt(receiptKey), settled);
+  }
+});
+
+test('a different workflow attempt cannot settle the active invocation receipt', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-attempt-finalize-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const eventPath = path.join(root, 'event.json');
+  await writeFile(eventPath, JSON.stringify({ client_payload: packRepositoryDispatchClientPayload(invocationEvent()) }));
+  const store = new InMemoryReplayStore();
+  const leaseToken = `${receiptIdentity.workflowRunId}:${receiptIdentity.workflowRunAttempt}`;
+  await store.ensureControllerReceipt(receiptKey);
+  await store.claimController(receiptKey, { leaseToken });
+  await store.recordControllerIdentity(receiptKey, { leaseToken, identity: receiptIdentity });
+  const before = structuredClone(await store.controllerReceipt(receiptKey));
+  await assert.rejects(finalizeAgentInvocation({
+    env: finalizerEnv(eventPath, 'success', { ...receiptIdentity, workflowRunAttempt: receiptIdentity.workflowRunAttempt + 1 }), store,
+  }), /identity could not be recorded/);
+  assert.deepEqual(await store.controllerReceipt(receiptKey), before);
+});
+
+test('finalizer reports exhaustion when failed work has used the final controller attempt', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-exhausted-finalize-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const eventPath = path.join(root, 'event.json');
+  await writeFile(eventPath, JSON.stringify({ client_payload: packRepositoryDispatchClientPayload(invocationEvent()) }));
+  let now = 10_000;
+  const store = new InMemoryReplayStore({ now: () => now });
+  const leaseToken = `${receiptIdentity.workflowRunId}:${receiptIdentity.workflowRunAttempt}`;
+  for (let attempt = 1; attempt <= DEFAULT_CONTROLLER_MAX_ATTEMPTS; attempt += 1) {
+    assert.deepEqual(await store.claimController(receiptKey, { leaseToken, leaseMs: 100 }), { status: 'claimed' });
+    if (attempt < DEFAULT_CONTROLLER_MAX_ATTEMPTS) now += 101;
+  }
+  assert.deepEqual(await finalizeAgentInvocation({ env: finalizerEnv(eventPath, 'failure'), store }), { status: 'exhausted' });
+  assert.equal((await store.controllerReceipt(receiptKey)).status, 'exhausted');
 });
 
 test('controller finalizer refuses source identity that differs from the signed event', async (t) => {

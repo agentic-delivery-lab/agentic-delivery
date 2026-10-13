@@ -208,7 +208,7 @@ test('Neon receipt settlement matches all persisted invocation identity fields',
     client: {
       async query(statement, values) {
         calls.push({ statement, values });
-        return [{ replay_key: values[0] }];
+        return [{ replay_key: values[0], status: 'retryable' }];
       },
     },
   });
@@ -231,6 +231,26 @@ test('Neon receipt settlement matches all persisted invocation identity fields',
   assert.match(calls[1].statement, /origin_repository = \$6/);
   assert.match(calls[1].statement, /workflow_run_attempt = \$11::integer/);
   assert.equal(calls[1].values.length, 11);
+});
+
+test('Neon retry settlement returns the status from the atomic update', async () => {
+  for (const status of ['retryable', 'exhausted']) {
+    const calls = [];
+    const store = new NeonReplayStore({ client: { async query(statement, values) {
+      calls.push({ statement, values });
+      return [{ replay_key: values[0], status }];
+    } } });
+    assert.deepEqual(await store.retryController('163255060:12345678-1234-4234-8234-123456789012', { leaseToken: '123:1' }), { status });
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].statement, /RETURNING replay_key, status/);
+  }
+});
+
+test('Neon retry settlement refuses missing or unknown status evidence', async () => {
+  for (const status of [undefined, 'completed', 'running']) {
+    const store = new NeonReplayStore({ client: { async query() { return [{ replay_key: 'key', status }]; } } });
+    await assert.rejects(store.retryController('163255060:12345678-1234-4234-8234-123456789012', { leaseToken: '123:1' }));
+  }
 });
 
 test('Neon controller receipt reads expose the durable attribution as one identity', async () => {

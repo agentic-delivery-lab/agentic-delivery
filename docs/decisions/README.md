@@ -93,13 +93,11 @@ Issue #66 is the authorized successor tracking the ADR-0018 amendment in
 PR #67. Issue #68 and PR #69 track the later controller-local schema amendment;
 it remains provisional until PR #69 is merged into `main`. Issue #60 and PR #89
 track the correction to the signed event-envelope transport description; it
-remains provisional until PR #89 is merged into `main`. Issue #111 and PR #112
-track trusted workflow-revision finalization and durable invocation identity;
-the amendment remains provisional until PR #112 is merged into `main`.
-ADR-0019 continues to reference Issue #52. Issue #52 is not implementation
-authorization and must not be closed by an ADR or migration change. ADR-0019's
-official review and acceptance still require a separately authorized
-successor issue and pull request.
+remains provisional until PR #89 is merged into `main`. ADR-0019 continues to
+reference Issue #52. Issue #52 is not implementation authorization and must
+not be closed by an ADR or migration change. ADR-0019's official review and
+acceptance still require a separately authorized successor issue and pull
+request.
 
 | Number | Decision | Source | Review/implementation |
 | --- | --- | --- | --- |
@@ -118,5 +116,5 @@ successor issue and pull request.
 | [0015](0015-isolate-resumable-runner-execution.md) | Isolate resumable runner execution by source issue | [Issue #29](https://github.com/agentic-delivery-lab/agentic-delivery/issues/29) | This review pull request |
 | [0016](0016-require-structured-pull-request-descriptions.md) | Require structured pull request descriptions | [Issue #44](https://github.com/agentic-delivery-lab/agentic-delivery/issues/44) | This review pull request |
 | [0017](0017-use-an-explicit-agent-invocation-boundary.md) | Use an explicit agent-invocation boundary for conversation-driven delivery | [Issue #46](https://github.com/agentic-delivery-lab/agentic-delivery/issues/46) | This review pull request |
-| [0018](0018-organization-wide-agentic-delivery-control-plane-distribution-and-versioning.md) | Organization-wide Agentic Delivery control-plane distribution and versioning | [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52); amendments [#66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66), [#68](https://github.com/agentic-delivery-lab/agentic-delivery/issues/68), [#60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60), and [#111](https://github.com/agentic-delivery-lab/agentic-delivery/issues/111) | [PR #67](https://github.com/agentic-delivery-lab/agentic-delivery/pull/67), [PR #69](https://github.com/agentic-delivery-lab/agentic-delivery/pull/69), [PR #89](https://github.com/agentic-delivery-lab/agentic-delivery/pull/89), and [PR #112](https://github.com/agentic-delivery-lab/agentic-delivery/pull/112) |
+| [0018](0018-organization-wide-agentic-delivery-control-plane-distribution-and-versioning.md) | Organization-wide Agentic Delivery control-plane distribution and versioning | [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52); amendments [#66](https://github.com/agentic-delivery-lab/agentic-delivery/issues/66), [#68](https://github.com/agentic-delivery-lab/agentic-delivery/issues/68), and [#60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) | [PR #67](https://github.com/agentic-delivery-lab/agentic-delivery/pull/67), [PR #69](https://github.com/agentic-delivery-lab/agentic-delivery/pull/69), and [PR #89](https://github.com/agentic-delivery-lab/agentic-delivery/pull/89) |
 | [0019](0019-canonicalize-delivery-state-field.md) | Canonicalize the orthogonal delivery-state field | [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) | This review pull request |

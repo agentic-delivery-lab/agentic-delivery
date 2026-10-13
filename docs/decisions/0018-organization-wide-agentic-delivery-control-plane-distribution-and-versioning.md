@@ -89,14 +89,6 @@ and [webhook events and payloads](https://docs.github.com/en/webhooks/webhook-ev
 - Register a separate GitHub App for every repository.
 - Use App installation access alone as implicit enrollment.
 - Use `.github` or `.github-private` as the runtime repository.
-- For invocation receipt settlement, use the exact trusted workflow revision;
-  or require every participant controller pin to provide a compatible
-  finalizer and reject pins that do not.
-- For accepted invocation attribution, persist origin repository, source Issue,
-  controller commit, and workflow run identity on the durable receipt; or keep
-  those values only in workflow outputs and infer them from logs during
-  recovery. The latter cannot be checked against the active receipt lease when
-  a completion or retry is recorded.
 
 The amendment also considered choices for organization metadata access,
 read-only token selection, and compatibility tracking:
@@ -257,29 +249,11 @@ bootstrap before checking out the participant pin. Its preflight then fetches
 the current GitHub object, resolves the participant's controller and contract
 versions, asks the semantic router for a proposal, and applies only
 deterministically authorized mutations to the originating repository.
-For receipt settlement, use the trusted workflow revision rather than a
-participant-provided finalizer. This keeps dispatcher-owned receipt recovery
-available when an older participant pin lacks the finalizer, while the
-participant pin continues to select delivery code. Requiring each participant
-pin to provide a compatible finalizer would keep receipt settlement dependent
-on delivery implementation age and add a separate capability gate.
 The invocation finalizer runs in a separate job. It normalizes the original
-dispatch and settles the controller receipt from the trusted workflow revision
-checked out under `dispatch-boundary`. The participant controller pin selects
-the delivery implementation and does not replace dispatcher-owned receipt
-finalization code. The workflow-revision finalizer uses the same installation
-and delivery IDs to complete or retry the controller receipt, even when an
-older participant pin lacks the finalizer.
-Before delivery starts, the trusted workflow revision records the validated
-origin repository name and ID, source Issue, participant controller commit,
-and current Actions run ID and attempt under the active receipt lease. The
-finalizer verifies that same identity before recording completion or retry.
-Migration 0008 adds these fields while leaving older receipts unattributed;
-it must be applied before a workflow revision that writes the fields is
-enabled. The identity stays with the receipt across retry, while its run ID
-and attempt advance to the latest claimed run.
-Rollback must retain this workflow-revision finalizer and its contract tests;
-changing a participant pin alone cannot restore receipt settlement.
+dispatch again with the trusted workflow revision, then passes the direct
+version-1 envelope to the participant-pinned receipt finalizer. That finalizer
+uses the same installation and delivery IDs to complete or retry the
+controller receipt.
 The webhook secret and dispatch secret are separate credentials: the former
 authenticates GitHub ingress, while the latter authenticates the gateway-to-
 controller handoff. Neither is available to an origin repository or model
@@ -380,15 +354,10 @@ until its intentional upgrade window or the support policy's end date.
   independently reversible.
 - Good, because repository-local workflows can continue without central
   ownership of their files.
-- Good, because participant pins remain focused on delivery behavior while the
-  trusted workflow revision owns invocation receipt settlement.
 - Bad, because the organization needs a central registry, release manifests,
   shadow execution, App operations and cross-repository contract tests.
 - Bad, because App permissions and central credential storage become shared
   infrastructure that requires careful operational ownership.
-- Bad, because workflow-revision finalization must remain compatible with the
-  durable receipt and event-envelope contracts used by supported participant
-  pins.
 - Bad, because read-only intake stops when its scoped App credentials are
   unavailable instead of continuing with a token whose permissions may allow
   issue writes.
@@ -413,10 +382,6 @@ Deterministic tests and an operator smoke run must prove:
 - delivery resolution rejects untrusted callers, caller-supplied policy,
   mismatched event identity and unregistered repositories before a delivery
   token or model session is started;
-- an older participant pin without a finalizer can still settle its accepted
-  invocation from the exact workflow revision; the trusted workflow stores and
-  rechecks origin repository, source Issue, controller commit, Actions run ID,
-  and attempt on the durable receipt before completion or retry;
 - the hosted intake caller guard derives controller identity from the trusted
   App contract and participant registry, accepts only the issue-intake and
   agent-invocation event/workflow pairs on the controller's main branch, and
@@ -499,7 +464,6 @@ Deterministic tests and an operator smoke run must prove:
 - Refines [ADR-0015: Isolate resumable runner execution](0015-isolate-resumable-runner-execution.md): runner namespaces and continuation records must include repository ID, issue and pinned controller/state-machine versions.
 - Refines [ADR-0017: Use an explicit agent-invocation boundary for conversation-driven delivery](0017-use-an-explicit-agent-invocation-boundary.md): invocation envelopes retain the originating repository and are authorized centrally.
 - Amendment tracked by [Issue #68](https://github.com/agentic-delivery-lab/agentic-delivery/issues/68) and reviewed in [PR #69](https://github.com/agentic-delivery-lab/agentic-delivery/pull/69): controller-local Harness schemas remain outside participant contract manifests until participants consume or exchange them.
-- Amendment tracked by [Issue #111](https://github.com/agentic-delivery-lab/agentic-delivery/issues/111) and proposed in [PR #112](https://github.com/agentic-delivery-lab/agentic-delivery/pull/112): the trusted workflow revision records and verifies attributable invocation identity on the durable receipt, then settles it while participant pins continue to select delivery behavior. It remains provisional until PR #112 is merged into `main`.
 - The selected architecture is an intermediate implementation boundary as the Architecture Authority, Agentic Primitives and Distribution repositories are extracted. The Control Plane remains in `agentic-delivery` to preserve existing issue and pull-request URLs.
 - `Delivery Readiness` remains the current live field. Renaming it to `Delivery State` is a separate architecture decision and migration; this ADR does not silently change that vocabulary.
 - This record is provisional until its review pull request is merged into `main`.

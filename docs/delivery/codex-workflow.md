@@ -189,9 +189,12 @@ persists the validated origin repository, source Issue, participant controller
 commit, and Actions run ID and attempt under the active receipt lease. The
 finalizer verifies this identity before completing or retrying the receipt.
 The workflow computes the finalizer result from classification, the selected
-route, and delivery status. An empty or `hold` route remains retryable when
-delivery is skipped; shadow and read-only skips on a successful non-hold route
-remain intentional.
+route, and delivery status, and passes the route explicitly to the finalizer.
+Empty, missing, unknown and `hold` routes cannot complete when delivery is
+skipped or transport succeeds. Retry settlement returns either retryable or
+exhausted from the same store write. Shadow and read-only skips on a successful
+supported route remain intentional invocation completion; they do not prove
+software delivery or acceptance.
 The participant controller pin selects the delivery implementation; it does
 not select or replace dispatcher-owned receipt settlement code. This works
 even when an older participant pin has no finalizer file.

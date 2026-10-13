@@ -35,10 +35,15 @@ out under `dispatch-boundary`; it does not depend on the participant controller
 pin containing a copy of the finalizer. Dependencies are installed from that
 same checkout. This keeps an older participant pin from replacing the trusted
 dispatcher code or making receipt settlement depend on an unrelated
-implementation revision. Failed runs become retryable with backoff. An empty
-or `hold` route remains retryable even if it skips the delivery job. A skipped
-delivery for a successfully classified non-hold route in shadow or read-only
-mode remains an intentional completion. An
+implementation revision. Failed runs become retryable with backoff while
+controller attempts remain, then exhausted. Empty, missing, unknown and `hold`
+routes cannot complete, even with a successful workflow result or skipped
+delivery. They follow the same bounded retry/exhaustion path. The finalizer
+reports the status returned by the settlement write; it does not infer retry
+eligibility from transport success or a later read. A skipped delivery for a
+successfully classified supported route in shadow or read-only mode remains
+an intentional invocation completion. This records processing or observation,
+not delivered software, a published PR or owner acceptance. An
 interrupted run can be reclaimed after its lease expires while it remains below
 the attempt limit. Expired final-attempt receipts are marked exhausted before
 redelivery selection and are not claimed again automatically. Actions
@@ -48,7 +53,9 @@ For accepted invocations, the trusted workflow revision records the validated
 origin repository name and ID, source Issue, participant controller commit,
 and Actions run ID and attempt on the claimed receipt before delivery starts.
 The finalizer rechecks those values against the signed event and current run
-before it records completion or retry. The attribution remains on the receipt
+before it records completion or retry. A duplicate finalizer cannot rewrite a
+settled receipt, and a different workflow attempt cannot settle its active
+lease. The attribution remains on the receipt
 through retries; the run ID and attempt identify the latest claim. Legacy rows
 remain valid with all attribution columns empty.
 

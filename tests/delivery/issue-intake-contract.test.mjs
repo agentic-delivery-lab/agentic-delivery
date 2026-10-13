@@ -21,6 +21,7 @@ test('unresolved routing holds stay retryable when the delivery job is skipped',
   const workflow = parseRepositoryYaml(await text('.github/workflows/issue-intake.yml'), 'issue intake workflow');
   const finalizer = workflow.jobs['finalize-invocation'];
   const resultExpression = finalizer.steps.find((step) => step.name === 'Persist invocation completion or retryability').env.INVOCATION_RESULT;
+  assert.equal(finalizer.steps.find((step) => step.name === 'Persist invocation completion or retryability').env.INVOCATION_ROUTE, '${{ needs.classify.outputs.route }}');
 
   assert.match(resultExpression, /needs\.classify\.result == 'success'/);
   assert.match(resultExpression, /needs\.classify\.outputs\.route != ''/);

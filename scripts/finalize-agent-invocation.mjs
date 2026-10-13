@@ -12,6 +12,8 @@ import {
 } from './lib/replay-protection.mjs';
 import { NeonReplayStore } from './lib/neon-replay-store.mjs';
 
+const completableRoutes = new Set(['refine', 'research', 'requirements', 'architecture', 'plan', 'implement', 'resume', 'validate', 'coordinate']);
+
 export async function finalizeAgentInvocation({ env = process.env, store } = {}) {
   if (!env.GITHUB_EVENT_PATH) throw new Error('Agent invocation finalization requires the GitHub event payload.');
   const envelope = unwrapRepositoryDispatchClientPayload(JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'))?.client_payload);
@@ -24,12 +26,11 @@ export async function finalizeAgentInvocation({ env = process.env, store } = {})
     : null);
   if (!activeStore) throw new Error('Agent invocation finalization requires the shared Neon replay database.');
   await activeStore.recordControllerIdentity(key, { leaseToken, identity });
-  if (env.INVOCATION_RESULT === 'success') {
+  if (env.INVOCATION_RESULT === 'success' && completableRoutes.has(env.INVOCATION_ROUTE)) {
     await activeStore.completeController(key, { leaseToken, identity });
     return { status: 'completed' };
   }
-  await activeStore.retryController(key, { leaseToken, identity });
-  return { status: 'retryable' };
+  return activeStore.retryController(key, { leaseToken, identity });
 }
 
 const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

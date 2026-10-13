@@ -417,10 +417,11 @@ export class NeonReplayStore {
              * INTERVAL '1 millisecond'
            )
        WHERE replay_key = $1 AND status = 'running' AND lease_token = $5${identitySql}
-       RETURNING replay_key`,
+       RETURNING replay_key, status`,
       values,
     );
-    if (rows.length !== 1) throw storageError();
+    if (rows.length !== 1 || !['retryable', 'exhausted'].includes(rows[0].status)) throw storageError();
+    return { status: rows[0].status };
   }
 
   async dueControllerReceipts({ limit = 100, pendingGraceMs = CONTROLLER_PENDING_GRACE_MS } = {}) {

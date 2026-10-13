@@ -273,6 +273,7 @@ export class InMemoryReplayStore {
     receipt.leaseExpiresAt = null;
     receipt.leaseToken = null;
     receipt.nextAttemptAt = this.now() + Math.min(maxDelayMs, baseDelayMs * (2 ** Math.max(0, receipt.attempts - 1)));
+    return { status: receipt.status };
   }
 }
 
@@ -431,6 +432,7 @@ export class FileReplayStore {
     receipt.leaseToken = null;
     receipt.nextAttemptAt = this.now() + Math.min(maxDelayMs, baseDelayMs * (2 ** Math.max(0, Number(receipt.attempts) - 1)));
     await this.#writeReceipt(key, receipt);
+    return { status: receipt.status };
   }
 }
 
