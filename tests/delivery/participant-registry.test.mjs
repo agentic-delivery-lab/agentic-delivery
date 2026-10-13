@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   authorizeParticipation,
@@ -11,7 +12,7 @@ import {
 const repositoryId = '1358455028';
 
 test('the renamed participant preserves its ID, shadow mode and exact event-name admission', async () => {
-  const registry = await loadParticipantRegistry(new URL('../..', import.meta.url).pathname);
+  const registry = await loadParticipantRegistry(fileURLToPath(new URL('../..', import.meta.url)));
   assert.equal(registry.valid, true, registry.errors.join('\n'));
   const id = '1380894656';
   const name = 'agentic-delivery-lab/agentic-delivery-agent-customizations';
