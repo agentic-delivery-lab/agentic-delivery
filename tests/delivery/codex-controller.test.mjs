@@ -1,3 +1,4 @@
+import { resolveValidationProfile, validationProfileReference } from '../../scripts/lib/validation-profile.mjs';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
@@ -83,6 +84,7 @@ async function fixture(t) {
     ],
   });
   const dependencies = {
+    resolveValidationProfile:({ controllerCommit }) => resolveValidationProfile({ repositoryId:'1358455028', repository:'agentic-delivery-lab/agentic-delivery', controllerCommit }),
     now: () => faults.nowMs ?? Date.now(),
     fetch:async (url, options) => {
       if (url.endsWith('/access_tokens')) {
@@ -197,6 +199,7 @@ async function fixture(t) {
     },
   };
   return {root, stateRoot, issueRoot, workspace, env, calls, faults, dependencies,
+    validationProfileReference:async () => validationProfileReference(dependencies.resolveValidationProfile({controllerCommit:(await exec('git',['-C',path.resolve(import.meta.dirname,'../..'),'rev-parse','HEAD'])).stdout.trim()})),
     state:async () => JSON.parse(await readFile(path.join(issueRoot,'state.json'),'utf8')),
     run:async () => deliver(env,dependencies),
     resume:async () => { env.GITHUB_RUN_ID = String(Number(env.GITHUB_RUN_ID)+1); return deliver(env,dependencies); },
@@ -218,7 +221,7 @@ test('publishes one recorded branch and PR with a complete issue audit trail', a
   const f = await fixture(t); await f.run();
   const state = await f.state();
   assert.equal(state.status,'ready'); assert.equal(state.phase,'publish');
-  assert.equal(state.version,4); assert.equal(state.sessionId,SESSION_ID);
+  assert.equal(state.version,5); assert.equal(state.sessionId,SESSION_ID);
   assert.equal(state.evidence.schemaVersion, 1);
   assert.equal(state.evidence.sourceIssue.number, 7);
   assert.equal(state.evidence.codexSession.id, SESSION_ID);
@@ -902,7 +905,7 @@ test('a missing UUID in versioned waiting state fails without starting a replace
   await writeFile(path.join(f.issueRoot,'state.json'),JSON.stringify({
     version:2,repository:'fixture/repo',issue:'7',phase:'plan',status:'awaiting-human',
     waitingCommentId:'100',events:[],consumedCommentIds:[],tasks:[],plan,
-    operationId:'12345678-1234-4234-8234-123456789012',budgetPolicyReference:currentOperationPolicyReference(),
+    operationId:'12345678-1234-4234-8234-123456789012',budgetPolicyReference:currentOperationPolicyReference(),validationProfileReference:await f.validationProfileReference(),
   }));
   await f.comment({id:206,body:'Use result.txt.'});
   assert.equal((await f.run())?.status,'paused');
@@ -919,7 +922,7 @@ test('a resumed UUID mismatch fails without falling back to a new thread', async
     modelTurnCount:0,validationAttemptCount:0,
     controllerAttemptCount:0,
     activeTime:createActiveTimeAllowance(),
-    operationId:'12345678-1234-4234-8234-123456789012',budgetPolicyReference:currentOperationPolicyReference(),
+    operationId:'12345678-1234-4234-8234-123456789012',budgetPolicyReference:currentOperationPolicyReference(),validationProfileReference:await f.validationProfileReference(),
   }));
   f.faults.resumeSessionId = REPLACEMENT_SESSION_ID;
   await f.comment({id:207,body:'Use result.txt.'});
@@ -939,7 +942,7 @@ test('legacy waiting state with unknown consumption is held without a replacemen
   await f.comment({id:208,body:'Use result.txt.'});
   await f.run();
   const state = await f.state();
-  assert.equal(state.version,4);
+  assert.equal(state.version,5);
   assert.equal(state.status, 'paused');
   assert.equal(state.sessionId, undefined);
   assert.equal(state.modelTurnCount, null);
@@ -986,4 +989,74 @@ test('bot comments do not change the saved source digest', async (t) => {
   await f.resume();
   assert.equal((await f.state()).status,'ready');
   assert.deepEqual(f.calls.turns,['plan','implement']);
+});
+
+test('unsupported validation identity holds before model execution', async (t) => {
+  const f = await fixture(t);
+  delete f.dependencies.resolveValidationProfile;
+  await assert.rejects(f.run(), /validation profile/i);
+  assert.equal(f.calls.clients, 0);
+  assert.equal(f.calls.prs.length, 0);
+});
+
+test('public validation profile omits dependency installation and factory layout checks', async (t) => {
+  const f = await fixture(t);
+  f.dependencies.resolveValidationProfile = ({ controllerCommit }) => resolveValidationProfile({ repositoryId:'1368850419', repository:'agentic-delivery-lab/.github', controllerCommit });
+  await f.run();
+  assert.ok(f.calls.commands.some(({command}) => command.includes('--surface-root')));
+  assert.ok(!f.calls.commands.some(({command}) => command[0] === 'pnpm'));
+  const state = await f.state();
+  assert.equal(state.validationProfileReference.id, 'public-adapter');
+  assert.equal(state.validationEvidence.tree, state.validatedTree);
+  assert.equal(state.validationEvidence.commands.length, 2);
+});
+
+test('changed validation profile cannot resume or publish the saved operation', async (t) => {
+  const f = await fixture(t);
+  f.faults.pauseImplementation = true;
+  await f.run();
+  const state = await f.state();
+  state.validationProfileReference.contentSha256 = '0'.repeat(64);
+  await writeFile(path.join(f.issueRoot,'state.json'), JSON.stringify(state));
+  const clients = f.calls.clients;
+  await f.resume();
+  assert.equal(f.calls.clients, clients);
+  assert.equal(f.calls.prs.length, 0);
+  assert.match((await f.state()).reason, /validation profile/i);
+});
+
+test('missing saved validation profile holds without provisioning a replacement pin', async (t) => {
+  const f = await fixture(t);
+  f.faults.pauseImplementation = true;
+  await f.run();
+  const state = await f.state();
+  delete state.validationProfileReference;
+  await writeFile(path.join(f.issueRoot,'state.json'), JSON.stringify(state));
+  const clients = f.calls.clients;
+  await f.resume();
+  const held = await f.state();
+  assert.equal(f.calls.clients, clients);
+  assert.equal(held.validationProfileReference, null);
+  assert.equal(held.modelTurnCount, state.modelTurnCount);
+  assert.match(held.reason, /validation profile/i);
+});
+
+test('private validation holds while its canonical source input is unavailable', async (t) => {
+  const f = await fixture(t);
+  f.dependencies.resolveValidationProfile = ({controllerCommit}) => resolveValidationProfile({repositoryId:'1380894756',repository:'agentic-delivery-lab/.github-private',controllerCommit});
+  await assert.rejects(f.run(), /trusted absolute read-only input/);
+  assert.equal(f.calls.clients,0);
+  assert.equal(f.calls.prs.length,0);
+});
+
+test('failed validation records its candidate tree and command failure digest', async (t) => {
+  const f = await fixture(t);
+  f.faults.validation = true;
+  await f.run();
+  const state = await f.state();
+  assert.match(state.validationEvidence.tree, /^[a-f0-9]{40}$/);
+  assert.equal(state.validationEvidence.commands[0].status,'failed');
+  assert.match(state.validationEvidence.commands[0].errorSha256,/^[a-f0-9]{64}$/);
+  assert.equal(state.validationAttemptCount,3);
+  assert.equal(f.calls.prs.length,0);
 });

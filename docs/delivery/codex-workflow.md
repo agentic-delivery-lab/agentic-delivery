@@ -233,8 +233,8 @@ protocol JSON, and hidden runner details are not issue instructions.
 
 ## Continuation state and session correlation
 
-Persisted state version 4 stores the repository, source issue, stable operation
-UUID, proposed budget-policy fingerprint, resource reservations, delivery
+Persisted state version 5 stores the repository, source issue, stable operation
+UUID, proposed budget-policy fingerprint, validation-profile reference, resource reservations, delivery
 phase, exact Codex session UUID, a waiting comment boundary, consumed comment
 IDs, and a separate execution record. The execution record contains the
 operation, Actions run ID/attempt/URL, recoverability, and redacted failure
@@ -250,7 +250,7 @@ Its policy fingerprint binds the declared initial bounds and the relevant
 controller, client, loop and active-time implementation. A changed fingerprint
 requires owner readmission while preserving spent allowance; a missing
 fingerprint or operation identity is held, never initialized on resume. Version
-3 readers reject the new state version. Rollback still requires a supported
+3 and 4 readers reject the new state version. Rollback still requires a supported
 composition with equivalent resource enforcement. The fingerprint identifies a
 proposal and does not approve its bounds or prove all limits are enforced.
 

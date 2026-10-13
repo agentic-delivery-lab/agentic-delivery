@@ -11,7 +11,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- W11 proposes identity-bound validation command profiles for all seven factory surfaces, with version/digest evidence and no pnpm installation for either GitHub adapter. This is a tested catalog; runtime selection, profile admission and cross-repository exact-tree delivery remain pending.
+- W11 proposes identity-bound validation command profiles for all seven factory surfaces, with version/digest evidence and no pnpm installation for either GitHub adapter. The controller binds the selected profile to state version 5, holds missing/changed pins, and records command-result hashes with the candidate tree. Private execution holds until its trusted canonical-source input is admitted. Profile admission and actual cross-repository delivery remain pending.
 
 - [Issue #105](https://github.com/agentic-delivery-lab/agentic-delivery/issues/105) saves controller-attempt, validation-attempt, model-turn and active-time reservations before execution, retains one operation UUID and proposal fingerprint across continuation and resume, and holds changed policy, missing history or exhausted allowances for owner action. Publication retries share the proposed eight-controller-attempt ceiling. State version 4 prevents version-3 readers from ignoring the new fields. Active time excludes settled clarification waiting and is settled only after confirmed owned shutdown. Controlled command timeouts use the remaining allowance. This is partial W08 implementation: complete policy admission, live deadline, tool, child, transport, concurrency and interruption proof remain outstanding; no participant or proposed budget policy is activated.
 

@@ -1,3 +1,4 @@
+import { resolveValidationProfile, validationProfileReference, matchesValidationProfile, materializeValidationCommand } from './lib/validation-profile.mjs';
 // agentic-primitive: {"id":"codex-delivery-controller","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0009","ADR-0012","ADR-0015","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import { execFile } from 'node:child_process';
 import { appendFile, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises';
@@ -24,7 +25,7 @@ import { currentOperationPolicyReference, INITIAL_OPERATION_LIMITS, matchesCurre
 
 const executeFile = promisify(execFile);
 const controllerRoot = path.resolve(import.meta.dirname, '..');
-const STATE_VERSION = 4;
+const STATE_VERSION = 5;
 const MAX_VALIDATION_ATTEMPTS = INITIAL_OPERATION_LIMITS.validationAttempts;
 const MAX_MODEL_TURNS = INITIAL_OPERATION_LIMITS.modelTurns;
 const PROGRESS_COMMENT_INTERVAL_MS = 5 * 60_000;
@@ -279,7 +280,7 @@ export function deliveryExitCode(status) {
 
 function failureRecoverability(error, operation) {
   const message = String(error?.message ?? '');
-  if (error?.code === 'OPERATION_BUDGET_HOLD') return 'owner-action';
+  if (['OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code)) return 'owner-action';
   if (/operation identity is unknown|budget policy pin is unknown|budget policy has changed/i.test(message)) return 'owner-action';
   if (/operation (?:model turn|validation|active time) allowance is exhausted|(?:Model turn|Validation|Active time) consumption is unknown|Active time reservation is unsettled/i.test(message)) {
     return 'owner-action';
@@ -309,7 +310,7 @@ async function readSavedState(file, issue, repository) {
     const status = value?.status === 'needs_input' ? 'awaiting-human' : value?.status;
     if (value?.activeTime !== undefined && value.activeTime !== null) validateActiveTimeAllowance(value.activeTime);
     if (value?.repository !== repository || String(value?.issue) !== issue
-      || (!legacy && ![2, 3, STATE_VERSION].includes(value.version))
+      || (!legacy && ![2, 3, 4, STATE_VERSION].includes(value.version))
       || (value.operationId !== undefined && value.operationId !== null
         && (typeof value.operationId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value.operationId)))
       || !deliveryPhases().includes(value.phase)
@@ -373,6 +374,7 @@ async function readSavedState(file, issue, repository) {
       activeTime: value.activeTime ?? null,
       operationId: value.operationId ?? null,
       budgetPolicyReference: value.budgetPolicyReference ?? null,
+      validationProfileReference: value.validationProfileReference ?? null,
       legacySessionReconstruction: value.legacySessionReconstruction === true || (legacy && value.sessionId === undefined),
     };
     if (migrated.status === 'awaiting-human' && migrated.waitingCommentId === undefined) {
@@ -535,6 +537,8 @@ export async function deliver(env = process.env, dependencies = {}) {
   let runTools;
   const runHome = path.join(issueRoot, 'run-home');
   let state;
+  let validationProfile;
+  const validationInputs = { workspace, controllerRoot };
   let ownedExecutionStopped = false;
   let activeTimeSettled = false;
   const activeOwner = `${env.GITHUB_RUN_ID ?? ''}:${env.GITHUB_RUN_ATTEMPT ?? '1'}`;
@@ -678,18 +682,28 @@ export async function deliver(env = process.env, dependencies = {}) {
   };
   try {
     await lock.writeFile(JSON.stringify({ runUrl, issue, pid: process.pid }));
+    const controllerCommit = (await execute('git', ['-C', controllerRoot, 'rev-parse', 'HEAD'], { timeout: 30_000 })).stdout.trim();
+    validationProfile = (dependencies.resolveValidationProfile ?? resolveValidationProfile)({ repositoryId: originRepositoryId, repository, controllerCommit });
+    // Additional authority mounts require W12 admission; no Issue/env path can
+    // provision them. Private publication holds until that resolver is installed.
+    for (const command of [...validationProfile.install, ...validationProfile.commands]) {
+      materializeValidationCommand(command, validationInputs);
+    }
     const initialPhase = {
       refine: 'refine', research: 'research', requirements: 'requirements', architecture: 'architecture',
       plan: 'plan', implement: 'implement', validate: 'validate', coordinate: 'coordinate',
     }[deliveryRoute] ?? 'plan';
     state = stateWasSaved ? await readSavedState(stateFile, issue, repository) : {
-      version: STATE_VERSION, issue, repository, phase: initialPhase, status: 'new', execution: { status: 'idle', operation: null, run: null, lastFailure: null }, tasks: [], events: [], consumedCommentIds: [], sessionStarted: false, planDigest: null, validationAttemptCount: 0, modelTurnCount: 0, controllerAttemptCount: 0, activeTime: createActiveTimeAllowance(), operationId: randomUUID(), budgetPolicyReference: currentOperationPolicyReference(),
+      version: STATE_VERSION, issue, repository, phase: initialPhase, status: 'new', execution: { status: 'idle', operation: null, run: null, lastFailure: null }, tasks: [], events: [], consumedCommentIds: [], sessionStarted: false, planDigest: null, validationAttemptCount: 0, modelTurnCount: 0, controllerAttemptCount: 0, activeTime: createActiveTimeAllowance(), operationId: randomUUID(), budgetPolicyReference: currentOperationPolicyReference(), validationProfileReference: validationProfileReference(validationProfile),
     };
     const priorStatus = state.status;
     const identityHold = (message) => Object.assign(new Error(message), { code: 'OPERATION_BUDGET_HOLD' });
     if (state.budgetPolicyReference === null) throw identityHold('The operation budget policy pin is unknown; preserve the operation for owner inspection.');
     if (!matchesCurrentOperationPolicy(state.budgetPolicyReference)) throw identityHold('The operation budget policy has changed; owner readmission is required without resetting spent allowance.');
     if (state.operationId === null) throw identityHold('The operation identity is unknown; preserve its source and consumption evidence.');
+    if (!matchesValidationProfile(state.validationProfileReference, validationProfile)) {
+      throw Object.assign(new Error('The operation validation profile is missing or changed; owner readmission is required without resetting consumption.'), { code: 'VALIDATION_PROFILE_HOLD' });
+    }
     const canStartInitialSession = !stateWasSaved
       || (priorStatus === 'paused' && state.phase === 'plan' && !state.plan && state.sessionStarted === false && !state.sessionId);
     await flush();
@@ -1258,8 +1272,8 @@ legacy owner-only rule in the base instruction file.`;
       }
       if (await git(['branch', '--show-current']) !== state.branch) throw new Error('Working branch differs from saved state; operator inspection is required.');
       // Installation and verification execute under restricted filesystem permissions.
-      const install = ['pnpm', 'install', '--frozen-lockfile', '--ignore-scripts', '--ignore-pnpmfile'];
-      await client.exec(install, workspace, 600_000, 'delivery-deps');
+      const runProfileCommand = async (command) => client.exec(materializeValidationCommand(command, validationInputs), workspace, command.timeoutMs, command.sandbox);
+      for (const command of validationProfile.install) await runProfileCommand(command);
       while (['implement', 'verify'].includes(state.phase)) {
         while (state.phase === 'implement') {
           requireActiveTime();
@@ -1308,19 +1322,29 @@ legacy owner-only rule in the base instruction file.`;
         // charged, so restarting the controller cannot replenish the allowance.
         await save();
         try {
-          await client.exec(install, workspace, 600_000, 'delivery-deps');
+          for (const command of validationProfile.install) await runProfileCommand(command);
           await git(['add', '--all']);
           const candidateTree = await git(['write-tree']);
-          for (const command of [
-            ['node', path.join(controllerRoot, 'scripts/run-delivery-tests.mjs')],
-            ...['validate-toolchain.mjs', 'validate-adrs.mjs', 'validate-domain-language.mjs', 'validate-changelog.mjs', 'validate-config-files.mjs']
-              .map((script) => ['node', path.join(controllerRoot, 'scripts', script), workspace]),
-          ]) await client.exec(command, workspace);
-          await client.exec(['pnpm', 'audit', '--audit-level=high', '--ignore-pnpmfile'], workspace, 600_000, 'delivery-deps');
+          state.validationEvidence = { profile: validationProfileReference(validationProfile), tree: candidateTree, commands: [] };
+          await save();
+          for (const command of validationProfile.commands) {
+            const result = { argv: command.argv, sandbox: command.sandbox, timeoutMs: command.timeoutMs, status: 'running' };
+            state.validationEvidence.commands.push(result);
+            await save();
+            try {
+              const output = await runProfileCommand(command);
+              Object.assign(result, { status: 'passed', outputSha256: digest(String(output ?? '')) });
+            } catch (error) {
+              Object.assign(result, { status: 'failed', errorSha256: digest(redact(error.message, env)) });
+              await save();
+              throw error;
+            }
+            await save();
+          }
           await git(['diff', '--exit-code']);
           if (candidateTree !== await git(['write-tree'])) throw new Error('The staged tree changed during verification.');
           await git(['diff', '--check']);
-          state.validation = 'Repository tests, ADRs, domain language, changelog, configuration, dependency audit, and whitespace checks passed. Markdown and platform checks also run in review PR CI.';
+          state.validation = `Validation profile ${validationProfile.id}@${validationProfile.version} (${validationProfile.contentSha256}), exact candidate tree ${candidateTree}, required commands and whitespace checks passed. Review PR CI remains required.`;
           state.validatedTree = candidateTree;
           state.phase = 'commit';
           await save();
@@ -1458,7 +1482,7 @@ legacy owner-only rule in the base instruction file.`;
   } catch (error) {
     if (!state) throw error;
     await client?.close().catch((failure) => { state.shutdownError = redact(failure.message, env); });
-    const awaitingHuman = state.status === 'awaiting-human' && error?.code !== 'OPERATION_BUDGET_HOLD';
+    const awaitingHuman = state.status === 'awaiting-human' && !['OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code);
     const failedOperation = state.phase;
     state.status = awaitingHuman ? 'awaiting-human' : 'paused';
     state.reason = redact(error.message, env);

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import path from 'node:path';
 import { resolveValidationProfile } from '../../scripts/lib/validation-profile.mjs';
 const origin = { repositoryId: '1368850419', repository: 'agentic-delivery-lab/.github', controllerCommit: 'a'.repeat(40) };
 test('public adapter profile has no pnpm installation or factory metadata checks', () => {
@@ -39,4 +40,14 @@ test('Issue-provided command data cannot alter the selected profile', () => {
   assert.deepEqual(resolveValidationProfile({ ...origin, commands: [['sh','-c','untrusted']] }), resolveValidationProfile(origin));
   const profile = resolveValidationProfile(origin);
   assert.throws(() => profile.commands.push({ argv: ['sh'] }));
+});
+
+test('validation command paths come only from trusted controller inputs', async () => {
+  const { materializeValidationCommand } = await import('../../scripts/lib/validation-profile.mjs');
+  const privateProfile = resolveValidationProfile({ ...origin, repositoryId:'1380894756', repository:'agentic-delivery-lab/.github-private' });
+  const workspace = path.resolve('fixture-workspace');
+  const controllerRoot = path.resolve('fixture-controller');
+  assert.throws(() => materializeValidationCommand(privateProfile.commands[0], {workspace,controllerRoot}), /trusted absolute/);
+  assert.throws(() => materializeValidationCommand({argv:['node','@issue/script']}, {workspace,controllerRoot}), /trusted absolute/);
+  assert.deepEqual(materializeValidationCommand({argv:['node','@controller/scripts/check.mjs','@workspace']}, {workspace,controllerRoot}), ['node',path.join(controllerRoot,'scripts/check.mjs'),workspace]);
 });

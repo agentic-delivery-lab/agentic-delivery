@@ -1,5 +1,6 @@
 // agentic-primitive: {"id":"repository-validation-profile","kind":"validator","enforcement":"deterministic","adrs":["ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import { createHash } from 'node:crypto';
+import path from 'node:path';
 
 // Compiled controller-owned proposal. Repository enrollment and profile
 // admission remain separate; resolving a profile does not activate delivery.
@@ -46,4 +47,23 @@ export function resolveValidationProfile({ repositoryId, repository, controllerC
   const definition = { version: '1.0.0-proposed.1', ...selected };
   return freeze({ ...structuredClone(definition), controllerCommit,
     contentSha256: createHash('sha256').update(JSON.stringify(definition)).digest('hex') });
+}
+
+export function validationProfileReference(profile) {
+  return { id: profile.id, version: profile.version, contentSha256: profile.contentSha256, controllerCommit: profile.controllerCommit };
+}
+export function matchesValidationProfile(reference, profile) {
+  const expected = validationProfileReference(profile);
+  return reference !== null && typeof reference === 'object' && Object.keys(reference).length === 4
+    && Object.entries(expected).every(([key, value]) => reference[key] === value);
+}
+export function materializeValidationCommand(command, { workspace, controllerRoot, primitiveSource }) {
+  const roots = { workspace, controller: controllerRoot, primitiveSource };
+  return command.argv.map((argument) => {
+    if (!argument.startsWith('@')) return argument;
+    const match = /^@(workspace|controller|primitiveSource)(\/.*)?$/.exec(argument);
+    const root = match && roots[match[1]];
+    if (typeof root !== 'string' || !path.isAbsolute(root)) throw new Error('The validation profile requires a trusted absolute read-only input path.');
+    return path.join(root, match[2]?.slice(1) ?? '');
+  });
 }
