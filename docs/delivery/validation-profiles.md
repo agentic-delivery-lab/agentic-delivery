@@ -31,3 +31,6 @@ Before admission, real target layouts and selected validators must be exercised.
 Trusted validator/source reproduction,
 resource limits, required checks and compatible runtime/authority pins must be
 verified for each target. Architecture parsing is extended separately by W19.
+
+Automatic Vercel Git deployments are disabled while safety changes are reviewed.
+A code merge is separate from deployment and participant activation.
