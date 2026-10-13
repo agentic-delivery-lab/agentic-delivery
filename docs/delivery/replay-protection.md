@@ -388,3 +388,19 @@ merging a safety correction must not implicitly deploy the webhook writer.
 Apply and independently verify migration 0008 before a deployed revision writes
 receipt attribution; retain the earlier supported composition until that gate
 passes. GitHub workflow changes require the same migration-before-writer check.
+
+### Read-only installed-schema observation
+
+The operator may dispatch `delivery-quality.yml` with `pull_request_number: 112`
+and `inspect_receipt_schema: true` at its reviewed immutable source. Only
+`sjefsharp` (native actor ID `14937399`) in the Control Plane repository
+(`1358455028`) can execute the inspection job. Other quality jobs skip this
+mode. The sealed existing receipt database secret is supplied only to the
+inspection step on an ephemeral hosted runner; no model runs. The query uses
+a read-only transaction and a 30-second deadline. It emits a target fingerprint,
+column/type/nullability observations and a constraint-definition hash, never
+connection values, row data, raw definitions or credential-bearing errors.
+
+Successful observation does not accept the migration. Constraint semantics and
+equivalence with the Vercel production target still require verification. This
+mode cannot apply migrations, deploy, enroll participants or activate a runner.

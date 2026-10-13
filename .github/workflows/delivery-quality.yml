@@ -12,6 +12,12 @@ on:
         required: true
         type: number
 
+      inspect_receipt_schema:
+        description: Read-only receipt schema inspection by the delegated operator
+        required: false
+        default: false
+        type: boolean
+
 permissions:
   contents: read
   issues: read
@@ -20,8 +26,9 @@ permissions:
 jobs:
   recovery-sql:
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      !inputs.inspect_receipt_schema &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     services:
@@ -59,8 +66,9 @@ jobs:
     # Fork PRs do not execute repository code until their trust boundary is
     # explicitly supported.
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      !inputs.inspect_receipt_schema &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -195,8 +203,9 @@ jobs:
     # Fork pull requests stay outside the trust boundary until they have a safe
     # workflow that does not execute checked-in code with repository secrets.
     if: >-
-      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
-      github.event_name == 'workflow_dispatch'
+      !inputs.inspect_receipt_schema &&
+      ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
+      github.event_name == 'workflow_dispatch')
     strategy:
       fail-fast: false
       matrix:
@@ -235,3 +244,30 @@ jobs:
         env:
           EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-report-contract
         run: pnpm test
+
+  inspect-receipt-schema:
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.inspect_receipt_schema &&
+      github.actor_id == '14937399' && github.repository_id == '1358455028'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the exact operator-dispatched source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up the pinned pnpm and Node runtime
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+      - name: Install existing frozen dependencies without scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      - name: Inspect receipt schema without data or credential output
+        env:
+          AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}
+          AGENTIC_RECEIPT_SCHEMA_INSPECTION: 'true'
+        run: node scripts/inspect-controller-receipt-schema.mjs

@@ -294,6 +294,7 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
+        "controller-receipt-schema-inspection",
         "curated-changelog",
         "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
@@ -360,6 +361,7 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
+        "controller-receipt-schema-inspection",
         "curated-changelog",
         "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
@@ -424,6 +426,7 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "commit-format-validator",
+        "controller-receipt-schema-inspection",
         "curated-changelog",
         "delivery-state-domain-language",
         "domain-language-validator",
@@ -670,6 +673,20 @@
       ],
       "domains": [
         "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "controller-receipt-schema-inspection",
+      "path": "scripts/inspect-controller-receipt-schema.mjs",
+      "location": "scripts/inspect-controller-receipt-schema.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
       ]
     },
     {
