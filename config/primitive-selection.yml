@@ -1,12 +1,13 @@
 # agentic-primitive: {"id":"primitive-selection-contract","kind":"validator","enforcement":"deterministic","adrs":["ADR-0018"],"domains":["agentic-delivery-control-plane"]}
 schemaVersion: 1
-contractVersion: 1.0.0
+contractVersion: 1.1.0
 
 # This is a release-bound selection contract, not a second Primitive catalog.
 # The immutable source pin is resolved against the Primitive release graph by
 # the release-chain validator.
 source:
-  repository: agentic-delivery-lab/agentic-delivery-primitives
+  repository: agentic-delivery-lab/agentic-delivery-agent-customizations
+  repositoryId: "1380894656"
   releaseId: urn:agentic-delivery:primitive-release:0.1.0-draft.4
   version: 0.1.0-draft.4
   commit: 01dc8df9eae5ee8394d05246dbf9ccdcddaa7c9e

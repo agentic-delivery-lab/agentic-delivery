@@ -1,13 +1,28 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   authorizeParticipation,
   parseParticipantRegistry,
   participantForRepository,
+  loadParticipantRegistry,
 } from '../../scripts/lib/participant-registry.mjs';
 
 const repositoryId = '1358455028';
+
+test('the renamed participant preserves its ID, shadow mode and exact event-name admission', async () => {
+  const registry = await loadParticipantRegistry(fileURLToPath(new URL('../..', import.meta.url)));
+  assert.equal(registry.valid, true, registry.errors.join('\n'));
+  const id = '1380894656';
+  const name = 'agentic-delivery-lab/agentic-delivery-agent-customizations';
+  assert.equal(participantForRepository(registry, id).expectedFullName, name);
+  assert.equal(participantForRepository(registry, id).mode, 'shadow');
+  assert.equal(authorizeParticipation({ registry, repositoryId: id, repositoryFullName: name, appRepositoryIds: [id] }).allowed, true);
+  assert.equal(authorizeParticipation({ registry, repositoryId: id, repositoryFullName: 'agentic-delivery-lab/agentic-delivery-primitives', appRepositoryIds: [id] }).allowed, false);
+  assert.equal(authorizeParticipation({ registry, repositoryId: '999999', repositoryFullName: name, appRepositoryIds: ['999999'] }).allowed, false);
+  assert.equal(authorizeParticipation({ registry, repositoryId: id, repositoryFullName: name, appRepositoryIds: [] }).allowed, false);
+});
 const validEntry = {
   expectedFullName: 'agentic-delivery-lab/agentic-delivery',
   mode: 'shadow',

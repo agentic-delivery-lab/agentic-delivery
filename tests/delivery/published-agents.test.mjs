@@ -4,6 +4,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 
 import { validatePublishedAgents } from '../../scripts/validate-published-agents.mjs';
 
@@ -51,6 +53,31 @@ async function fixture(t, { secret = false, badTool = false, surface = false } =
 test('validates a promoted agent projection against its lock and explicit tool policy', async (t) => {
   const root = await fixture(t);
   assert.deepEqual((await validatePublishedAgents({ publicationRoot: root })).agents, 1);
+});
+
+test('publication v2 binds lock and records to the current Customizations identity', async (t) => {
+  const root = await fixture(t);
+  const file = path.join(root, 'provenance/agents.lock.json');
+  const lock = JSON.parse(await readFile(file, 'utf8'));
+  lock.schemaVersion = 2;
+  lock.canonicalRepository = 'agentic-delivery-lab/agentic-delivery-agent-customizations';
+  lock.canonicalRepositoryId = 1380894656;
+  lock.agents[0].sourceRepository = lock.canonicalRepository;
+  lock.agents[0].sourceRepositoryId = lock.canonicalRepositoryId;
+  lock.$schema = 'https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/schemas/agent-publication-lock.v2.schema.json';
+  const schema = JSON.parse(await readFile(new URL('../../schemas/agent-publication-lock.v2.schema.json', import.meta.url), 'utf8'));
+  const ajv = new Ajv2020({ strict: false });
+  addFormats(ajv);
+  const validateSchema = ajv.compile(schema);
+  assert.equal(validateSchema(lock), true, JSON.stringify(validateSchema.errors));
+  await writeFile(file, JSON.stringify(lock));
+  assert.equal((await validatePublishedAgents({ publicationRoot: root })).agents, 1);
+  for (const invalid of [ { ...lock, canonicalRepositoryId: 999999 }, { ...lock, schemaVersion: 1 },
+    { ...lock, agents: [{ ...lock.agents[0], sourceRepositoryId: 999999 }] },
+    { ...lock, agents: [{ ...lock.agents[0], sourceRepository: 'agentic-delivery-lab/agentic-delivery-primitives' }] } ]) {
+    await writeFile(file, JSON.stringify(invalid));
+    await assert.rejects(validatePublishedAgents({ publicationRoot: root }), /identity|repository|Repository/);
+  }
 });
 
 test('rejects wildcard tools and secret-like publication content', async (t) => {

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
-import { validatePrimitiveSelection } from './lib/primitive-selection.mjs';
+import { validatePrimitiveSelection, primitiveSelectionMatchesDependency } from './lib/primitive-selection.mjs';
 import { validateEventCatalog } from './lib/event-catalog.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -165,6 +165,12 @@ function sourceById(sources, id) {
   return (sources ?? []).find((source) => source.id === id);
 }
 
+export function primitiveLocatorForVersion(version, repository, repositoryId) {
+  if (version === 1) return repository === 'agentic-delivery-lab/agentic-delivery-primitives' && repositoryId === undefined;
+  return version === 2 && repository === 'agentic-delivery-lab/agentic-delivery-agent-customizations'
+    && repositoryId === 1380894656;
+}
+
 async function primitiveAgentAtCommit(repository, commit, agentId) {
   const files = (await git(repository, ['ls-tree', '-r', '--name-only', commit, '--', 'agents/copilot']))
     .split(/\r?\n/).filter((file) => file.endsWith('.agent.md'));
@@ -285,7 +291,9 @@ export async function validateReleaseChain({
     primitiveCatalog,
   });
   if (!primitiveSelectionResult.valid) errors.push(...primitiveSelectionResult.errors.map((error) => `Primitive selection: ${error}`));
-  equal(errors, 'Primitive selection repository', primitiveSelection.source?.repository, primitiveDependency.repository);
+  if (!primitiveSelectionMatchesDependency(primitiveSelection, primitiveDependency)) {
+    errors.push('Primitive selection must match the exact dependency pin under the identity-bound repository-name migration');
+  }
   equal(errors, 'Primitive selection release id', primitiveSelection.source?.releaseId, primitiveRelease.releaseId);
   equal(errors, 'Primitive selection version', primitiveSelection.source?.version, primitiveDependency.version);
   equal(errors, 'Primitive selection commit', primitiveSelection.source?.commit, primitiveDependency.commit);
@@ -371,7 +379,9 @@ export async function validateReleaseChain({
   equal(errors, 'Source lock Architecture commit', lockedArchitecture?.commit, bundle.architecture?.commit);
   equal(errors, 'Source lock Primitive commit', lockedPrimitives?.commit, primitiveDependency.commit);
   equal(errors, 'Source lock workflow commit', lockedWorkflow?.commit, bundle.workflowSource?.commit);
-  equal(errors, 'Capabilities Primitive repository', capabilities.primitiveRepository, primitiveDependency.repository);
+  if (!primitiveLocatorForVersion(capabilities.schemaVersion, capabilities.primitiveRepository, capabilities.primitiveRepositoryId)) errors.push('Capabilities Primitive repository identity is invalid');
+  equal(errors, 'Source lock Primitive repository', lockedPrimitives?.repository, capabilities.primitiveRepository);
+  if (capabilities.schemaVersion === 2) equal(errors, 'Source lock Primitive repository ID', lockedPrimitives?.repositoryId, capabilities.primitiveRepositoryId);
   equal(errors, 'Capabilities Primitive release', capabilities.primitiveRelease, primitiveRelease.releaseId);
   equal(errors, 'Capabilities Primitive commit', capabilities.sourceCommit, primitiveDependency.commit);
   equal(errors, 'Capabilities Primitive digest', capabilities.contentSha256, primitiveDependency.contentSha256);
@@ -433,18 +443,19 @@ export async function validateReleaseChain({
   if (pullRequestRule?.parameters?.require_code_owner_review !== true) errors.push('private publication ruleset must require a code-owner review');
   if (!(Number.isInteger(pullRequestRule?.parameters?.required_approving_review_count) && pullRequestRule.parameters.required_approving_review_count >= 1)) errors.push('private publication ruleset must require at least one approval');
   if (!rules.some((rule) => rule?.type === 'non_fast_forward')) errors.push('private publication ruleset must reject non-fast-forward updates');
-  equal(errors, 'Private publication canonical repository', privateLock.canonicalRepository, primitiveDependency.repository);
+  if (!primitiveLocatorForVersion(privateLock.schemaVersion, privateLock.canonicalRepository, privateLock.canonicalRepositoryId)) errors.push('Private publication canonical repository identity is invalid');
   if (!Array.isArray(privateLock.agents)) errors.push('private publication lock agents must be an array');
   if (!privateWorkflow.includes(`repository: ${bundle.workflowSource?.repository}`)) errors.push('private validator must check out the declared workflow source repository');
   if (!privateWorkflow.includes(`ref: ${bundle.workflowSource?.commit}`)) errors.push('private validator must pin the declared workflow source commit');
-  if (!privateWorkflow.includes(`repository: ${primitiveDependency.repository}`)) errors.push('private validator must check out the canonical Primitive repository');
+  if (!privateWorkflow.includes(`repository: ${privateLock.canonicalRepository}`)) errors.push('private validator must check out the canonical Primitive repository');
   if (!privateWorkflow.includes('steps.provenance.outputs.source_commit')) errors.push('private validator must derive the Primitive source from publication provenance');
   if (!privateWorkflow.includes('--primitive-root primitives')) errors.push('private validator must reproduce projections from the checked-out Primitive source');
   if (!/^\s*persist-credentials:\s*false\s*$/m.test(privateWorkflow)) errors.push('private validator checkouts must disable persisted credentials');
   if (/^\s*secrets\s*:/m.test(privateWorkflow)) errors.push('private publication workflow must not receive central secrets');
   for (const [index, agent] of (Array.isArray(privateLock.agents) ? privateLock.agents : []).entries()) {
     const prefix = `private publication agent ${index}`;
-    equal(errors, `${prefix} source repository`, agent.sourceRepository, primitiveDependency.repository);
+    equal(errors, `${prefix} source repository`, agent.sourceRepository, privateLock.canonicalRepository);
+    if (privateLock.schemaVersion === 2) equal(errors, `${prefix} source repository ID`, agent.sourceRepositoryId, privateLock.canonicalRepositoryId);
     equal(errors, `${prefix} source commit`, agent.sourceCommit, primitiveDependency.commit);
     equal(errors, `${prefix} source ref`, agent.sourceRef, primitiveDependency.commit);
     equal(errors, `${prefix} promotion release`, agent.promotionRelease, primitiveRelease.releaseId);

@@ -109,7 +109,7 @@ repositories:
       managedByApp: false
 
   "1380894656":
-    expectedFullName: agentic-delivery-lab/agentic-delivery-primitives
+    expectedFullName: agentic-delivery-lab/agentic-delivery-agent-customizations
     mode: shadow
     controller:
       version: 0.2.0-draft.37
