@@ -323,6 +323,7 @@
         "repository-dispatch-event-normalizer",
         "repository-dispatch-transport",
         "repository-governance-instructions",
+        "repository-validation-profile",
         "semantic-architecture-review",
         "webhook-delivery-reconciler"
       ]
@@ -390,6 +391,7 @@
         "repository-dispatch-event-normalizer",
         "repository-dispatch-transport",
         "repository-governance-instructions",
+        "repository-validation-profile",
         "semantic-architecture-review",
         "webhook-delivery-reconciler"
       ]
@@ -458,6 +460,7 @@
         "pull-request-dispatch-context-resolver",
         "quota-diagnostics-contract",
         "repository-governance-instructions",
+        "repository-validation-profile",
         "semantic-architecture-review",
         "semantic-issue-router",
         "toolchain-policy-validator"
@@ -1315,6 +1318,20 @@
         "ADR-0015",
         "ADR-0016",
         "ADR-0017",
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "repository-validation-profile",
+      "path": "scripts/lib/validation-profile.mjs",
+      "location": "scripts/lib/validation-profile.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
         "ADR-0018"
       ],
       "domains": [
