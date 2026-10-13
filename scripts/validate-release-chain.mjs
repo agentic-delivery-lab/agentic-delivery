@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
-import { validatePrimitiveSelection } from './lib/primitive-selection.mjs';
+import { validatePrimitiveSelection, primitiveSelectionMatchesDependency } from './lib/primitive-selection.mjs';
 import { validateEventCatalog } from './lib/event-catalog.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -285,7 +285,9 @@ export async function validateReleaseChain({
     primitiveCatalog,
   });
   if (!primitiveSelectionResult.valid) errors.push(...primitiveSelectionResult.errors.map((error) => `Primitive selection: ${error}`));
-  equal(errors, 'Primitive selection repository', primitiveSelection.source?.repository, primitiveDependency.repository);
+  if (!primitiveSelectionMatchesDependency(primitiveSelection, primitiveDependency)) {
+    errors.push('Primitive selection must match the exact dependency pin under the identity-bound repository-name migration');
+  }
   equal(errors, 'Primitive selection release id', primitiveSelection.source?.releaseId, primitiveRelease.releaseId);
   equal(errors, 'Primitive selection version', primitiveSelection.source?.version, primitiveDependency.version);
   equal(errors, 'Primitive selection commit', primitiveSelection.source?.commit, primitiveDependency.commit);
