@@ -8,6 +8,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { deliver, invocationSourceRoute } from '../../scripts/codex-delivery.mjs';
 import { validatePullRequestBody } from '../../scripts/validate-pull-request-body.mjs';
+import { ACTIVE_TIME_LIMIT_MS, createActiveTimeAllowance, reserveActiveTime } from '../../scripts/lib/operation-active-time.mjs';
+import { currentOperationPolicyReference } from '../../scripts/lib/operation-budget-policy.mjs';
 
 const exec = promisify(execFile);
 const plan = {status:'ready', kind:'requirements', summary:'Add the requested file.', plan:'Add result.txt and verify it.', tasks:['Add result.txt.'], questions:[], changeType:'feat', title:'feat: ✨ add requested file'};
@@ -81,6 +83,7 @@ async function fixture(t) {
     ],
   });
   const dependencies = {
+    now: () => faults.nowMs ?? Date.now(),
     fetch:async (url, options) => {
       if (url.endsWith('/access_tokens')) {
         calls.accessTokenRequests.push(JSON.parse(options.body));
@@ -152,7 +155,8 @@ async function fixture(t) {
           return {thread:{id:faults.resumeSessionId}};
         },
         exec:async (command, cwd, timeout, profile) => {
-          calls.commands.push({command,cwd,profile});
+          if (faults.beforeCommand) await faults.beforeCommand(command);
+          calls.commands.push({command,cwd,profile,timeout});
           if (faults.validation && command[1] === 'install') return '';
           if (faults.validation) throw new Error('Fixture validation failed');
           return '';
@@ -161,6 +165,7 @@ async function fixture(t) {
       };
     },
     runTurn:async ({phase,threadId,prompt,onProgress}) => {
+      if (faults.beforeTurn) await faults.beforeTurn();
       calls.turns.push(phase);
       calls.prompts.push({phase,threadId,prompt});
       if (faults.turnPause || (phase === 'implement' && faults.pauseImplementation)) {
@@ -213,7 +218,7 @@ test('publishes one recorded branch and PR with a complete issue audit trail', a
   const f = await fixture(t); await f.run();
   const state = await f.state();
   assert.equal(state.status,'ready'); assert.equal(state.phase,'publish');
-  assert.equal(state.version,3); assert.equal(state.sessionId,SESSION_ID);
+  assert.equal(state.version,4); assert.equal(state.sessionId,SESSION_ID);
   assert.equal(state.evidence.schemaVersion, 1);
   assert.equal(state.evidence.sourceIssue.number, 7);
   assert.equal(state.evidence.codexSession.id, SESSION_ID);
@@ -534,15 +539,19 @@ test('keeps the account lock when process termination cannot be confirmed', asyn
   const f = await fixture(t); f.faults.turnPause = true; f.faults.shutdown = true;
   await assert.rejects(f.run(),/process group/);
   await access(path.join(f.stateRoot,'account.lock'));
+  assert.equal((await f.state()).activeTime.reservation.owner, '1:1');
+  assert.equal((await f.state()).activeTime.spentMs, 0);
   assert.match(await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8'),/Delivery paused/);
 });
 
-test('verification retry does not repeat implementation after a manual repair', async (t) => {
+test('manual repair cannot replenish exhausted validation or repeat implementation', async (t) => {
   const f = await fixture(t); f.faults.validation = true;
   await f.run(); assert.equal((await f.state()).phase,'verify');
   const turns = f.calls.turns.length;
   f.faults.validation = false; await f.resume();
-  assert.equal((await f.state()).status,'ready'); assert.equal(f.calls.turns.length,turns);
+  assert.equal((await f.state()).status,'paused'); assert.equal(f.calls.turns.length,turns);
+  assert.equal((await f.state()).validationAttemptCount, 3);
+  assert.equal(f.calls.prs.length, 0);
 });
 
 test('saved verification cannot continue after a lifecycle state change', async (t) => {
@@ -556,6 +565,210 @@ test('saved verification cannot continue after a lifecycle state change', async 
   assert.match(result.reason, /not authorized for verification/);
   assert.equal(f.calls.clients, clients);
   assert.deepEqual(f.calls.turns, turns);
+});
+
+test('resuming exhausted validation cannot reset the operation allowance or invoke model tools', async (t) => {
+  const f = await fixture(t);
+  f.faults.validation = true;
+  assert.equal((await f.run()).status, 'paused');
+  const clients = f.calls.clients;
+  const commands = f.calls.commands.length;
+  const turns = [...f.calls.turns];
+  const result = await f.resume();
+  assert.equal(result.status, 'paused');
+  assert.equal(f.calls.clients, clients, 'exhausted operations must hold before opening another model client');
+  assert.equal(f.calls.commands.length, commands, 'resumption cannot start another validation allowance');
+  assert.deepEqual(f.calls.turns, turns);
+  assert.equal(f.calls.prs.length, 0);
+  assert.equal(f.calls.pushHeaders.length, 0);
+});
+
+test('missing validation consumption holds a saved operation instead of resetting its allowance', async (t) => {
+  const f = await fixture(t);
+  f.faults.validation = true;
+  await f.run();
+  const state = await f.state();
+  delete state.validationAttemptCount;
+  await writeFile(path.join(f.issueRoot, 'state.json'), JSON.stringify(state));
+  const clients = f.calls.clients;
+  const result = await f.resume();
+  assert.equal(result.status, 'paused');
+  assert.match(result.reason, /Validation consumption is unknown/);
+  assert.equal(f.calls.clients, clients);
+  assert.equal((await f.state()).validationAttemptCount, null);
+  assert.equal((await f.state()).execution.lastFailure.recoverability, 'owner-action');
+});
+
+test('model turns share one eight-turn allowance across automatic continuation and resume', async (t) => {
+  const f = await fixture(t);
+  f.faults.incompleteTurns = 10;
+  const result = await f.run();
+  assert.equal(result?.status, 'paused');
+  assert.match(result.reason, /model turn allowance is exhausted/);
+  assert.equal(f.calls.turns.length, 8);
+  assert.equal((await f.state()).modelTurnCount, 8);
+  assert.equal((await f.state()).execution.lastFailure.recoverability, 'owner-action');
+  const clients = f.calls.clients;
+  const resumed = await f.resume();
+  assert.equal(resumed.status, 'paused');
+  assert.equal(f.calls.clients, clients);
+  assert.equal(f.calls.turns.length, 8);
+  assert.equal(f.calls.prs.length, 0);
+  assert.equal(f.calls.pushHeaders.length, 0);
+});
+
+test('the eighth model turn can complete within the same saved allowance', async (t) => {
+  const f = await fixture(t);
+  f.faults.incompleteTurns = 6;
+  await f.run();
+  const state = await f.state();
+  assert.equal(state.status, 'ready');
+  assert.equal(state.modelTurnCount, 8);
+  assert.equal(state.validationAttemptCount, 1);
+  assert.equal(f.calls.turns.length, 8);
+  assert.equal(f.calls.prs.length, 1);
+});
+
+test('resource reservations are saved before model turns and validation commands execute', async (t) => {
+  const f = await fixture(t);
+  let validations = 0;
+  f.faults.beforeTurn = async () => {
+    assert.equal((await f.state()).modelTurnCount, f.calls.turns.length + 1);
+  };
+  f.faults.beforeCommand = async (command) => {
+    if (command[0] === 'node' && path.basename(command[1]) === 'run-delivery-tests.mjs') {
+      validations++;
+      assert.equal((await f.state()).validationAttemptCount, validations);
+    }
+  };
+  await f.run();
+  assert.equal(validations, 1);
+  assert.equal((await f.state()).status, 'ready');
+});
+
+test('active time settles across attempts and excludes time awaiting clarification', async (t) => {
+  const f = await fixture(t);
+  f.faults.nowMs = 100;
+  f.faults.questions = true;
+  f.faults.beforeTurn = async () => { f.faults.nowMs += 1000; };
+  await f.run();
+  const paused = await f.state();
+  assert.ok(paused.activeTime, 'the controller must persist an active-time receipt');
+  assert.equal(paused.activeTime.spentMs, 1000);
+  assert.equal(paused.activeTime.reservation, null);
+  f.faults.nowMs += ACTIVE_TIME_LIMIT_MS * 10;
+  f.faults.questions = false;
+  await f.comment({ id: 209, body: 'Use result.txt.' });
+  await f.run();
+  const completed = await f.state();
+  assert.equal(completed.status, 'ready');
+  assert.equal(completed.activeTime.spentMs, 3000);
+  assert.equal(completed.activeTime.reservation, null);
+});
+
+test('active time exhaustion stops implementation and publication after the planning turn', async (t) => {
+  const f = await fixture(t);
+  f.faults.nowMs = 100;
+  f.faults.beforeTurn = async () => { f.faults.nowMs += ACTIVE_TIME_LIMIT_MS; };
+  const result = await f.run();
+  assert.equal(result?.status, 'paused');
+  assert.match(result.reason, /active time allowance is exhausted/);
+  assert.deepEqual(f.calls.turns, ['plan']);
+  assert.equal(f.calls.prs.length, 0);
+  assert.equal(f.calls.pushHeaders.length, 0);
+  assert.equal((await f.state()).activeTime.spentMs, ACTIVE_TIME_LIMIT_MS);
+});
+
+test('an unsettled active-time reservation cannot be replaced on resume', async (t) => {
+  const f = await fixture(t);
+  f.faults.turnPause = true;
+  await f.run();
+  const saved = await f.state();
+  saved.activeTime = reserveActiveTime(createActiveTimeAllowance(), { owner: '1:1', nowMs: 100 });
+  await writeFile(path.join(f.issueRoot, 'state.json'), JSON.stringify(saved));
+  const clients = f.calls.clients;
+  const result = await f.resume();
+  assert.equal(result.status, 'paused');
+  assert.match(result.reason, /unsettled/);
+  assert.equal(f.calls.clients, clients);
+  assert.deepEqual((await f.state()).activeTime.reservation, saved.activeTime.reservation);
+});
+
+test('controlled tools receive at most the remaining active-time allowance', async (t) => {
+  const f = await fixture(t);
+  f.faults.nowMs = 100;
+  f.faults.beforeTurn = async () => { f.faults.nowMs += 850_000; };
+  await f.run();
+  assert.equal((await f.state()).status, 'ready');
+  const verification = f.calls.commands.filter(({ command }) => command[0] === 'node');
+  assert.ok(verification.length > 0);
+  assert.ok(verification.every(({ timeout }) => timeout === ACTIVE_TIME_LIMIT_MS - 1_700_000));
+  assert.equal((await f.state()).activeTime.spentMs, 1_700_000);
+});
+
+test('one operation identity and policy reference survive an answered clarification', async (t) => {
+  const f = await fixture(t);
+  f.faults.questions = true;
+  await f.run();
+  const paused = await f.state();
+  assert.match(paused.operationId ?? '', /^[a-f0-9-]{36}$/);
+  assert.deepEqual(paused.budgetPolicyReference, currentOperationPolicyReference());
+  f.faults.questions = false;
+  await f.comment({ id: 210, body: 'Use result.txt.' });
+  await f.run();
+  const completed = await f.state();
+  assert.equal(completed.operationId, paused.operationId);
+  assert.deepEqual(completed.budgetPolicyReference, paused.budgetPolicyReference);
+});
+
+test('changed policy identity holds before another model client or protected publication', async (t) => {
+  const f = await fixture(t);
+  f.faults.turnPause = true;
+  await f.run();
+  const saved = await f.state();
+  saved.budgetPolicyReference = { ...currentOperationPolicyReference(), sha256: '0'.repeat(64) };
+  await writeFile(path.join(f.issueRoot, 'state.json'), JSON.stringify(saved));
+  const clients = f.calls.clients;
+  const result = await f.resume();
+  assert.equal(result.status, 'paused');
+  assert.match(result.reason, /budget policy has changed/);
+  assert.equal(f.calls.clients, clients);
+  assert.equal(f.calls.prs.length, 0);
+  assert.equal(f.calls.pushHeaders.length, 0);
+});
+
+test('publication retries retain one bounded controller-attempt allowance', async (t) => {
+  const f = await fixture(t);
+  f.faults.failPublish = true;
+  await f.run();
+  for (let attempt = 2; attempt <= 8; attempt++) await f.resume();
+  const saved = await f.state();
+  assert.equal(saved.controllerAttemptCount, 8);
+  const turns = [...f.calls.turns];
+  const publishRequests = f.calls.publishHeaders.length;
+  f.faults.failPublish = false;
+  const result = await f.resume();
+  assert.equal(result.status, 'paused');
+  assert.match(result.reason, /controller attempt allowance is exhausted/);
+  assert.equal(f.calls.publishHeaders.length, publishRequests);
+  assert.deepEqual(f.calls.turns, turns);
+  assert.equal(f.calls.prs.length, 0);
+});
+
+test('missing controller-attempt history cannot become a fresh allowance on resume', async (t) => {
+  const f = await fixture(t);
+  f.faults.turnPause = true;
+  await f.run();
+  const saved = await f.state();
+  delete saved.controllerAttemptCount;
+  await writeFile(path.join(f.issueRoot, 'state.json'), JSON.stringify(saved));
+  const clients = f.calls.clients;
+  const result = await f.resume();
+  assert.equal(result.status, 'paused');
+  assert.match(result.reason, /Controller attempt consumption is unknown/);
+  assert.equal(f.calls.clients, clients);
+  assert.equal((await f.state()).controllerAttemptCount, null);
+  assert.equal((await f.state()).execution.lastFailure.recoverability, 'owner-action');
 });
 
 test('implementation questions preserve the implementation phase and existing branch', async (t) => {
@@ -689,6 +902,7 @@ test('a missing UUID in versioned waiting state fails without starting a replace
   await writeFile(path.join(f.issueRoot,'state.json'),JSON.stringify({
     version:2,repository:'fixture/repo',issue:'7',phase:'plan',status:'awaiting-human',
     waitingCommentId:'100',events:[],consumedCommentIds:[],tasks:[],plan,
+    operationId:'12345678-1234-4234-8234-123456789012',budgetPolicyReference:currentOperationPolicyReference(),
   }));
   await f.comment({id:206,body:'Use result.txt.'});
   assert.equal((await f.run())?.status,'paused');
@@ -702,6 +916,10 @@ test('a resumed UUID mismatch fails without falling back to a new thread', async
   await writeFile(path.join(f.issueRoot,'state.json'),JSON.stringify({
     version:2,repository:'fixture/repo',issue:'7',phase:'plan',status:'awaiting-human',
     sessionId:SESSION_ID,waitingCommentId:'100',events:[],consumedCommentIds:[],tasks:[],plan,
+    modelTurnCount:0,validationAttemptCount:0,
+    controllerAttemptCount:0,
+    activeTime:createActiveTimeAllowance(),
+    operationId:'12345678-1234-4234-8234-123456789012',budgetPolicyReference:currentOperationPolicyReference(),
   }));
   f.faults.resumeSessionId = REPLACEMENT_SESSION_ID;
   await f.comment({id:207,body:'Use result.txt.'});
@@ -711,7 +929,7 @@ test('a resumed UUID mismatch fails without falling back to a new thread', async
   assert.match((await f.state()).reason,/session ID mismatch/i);
 });
 
-test('legacy waiting state is migrated once into a persistent replacement session', async (t) => {
+test('legacy waiting state with unknown consumption is held without a replacement session', async (t) => {
   const f = await fixture(t);
   await mkdir(f.issueRoot,{recursive:true});
   await writeFile(path.join(f.issueRoot,'state.json'),JSON.stringify({
@@ -721,11 +939,13 @@ test('legacy waiting state is migrated once into a persistent replacement sessio
   await f.comment({id:208,body:'Use result.txt.'});
   await f.run();
   const state = await f.state();
-  assert.equal(state.version,3);
-  assert.equal(state.sessionId,SESSION_ID);
-  assert.equal(state.legacySessionReconstructed,true);
-  assert.deepEqual(f.calls.threads,[{method:'start'}]);
-  assert.ok(f.calls.comments.some((body) => body.includes('Legacy continuation state reconstructed')));
+  assert.equal(state.version,4);
+  assert.equal(state.status, 'paused');
+  assert.equal(state.sessionId, undefined);
+  assert.equal(state.modelTurnCount, null);
+  assert.match(state.reason, /budget policy pin is unknown/);
+  assert.equal(f.calls.clients, 0);
+  assert.deepEqual(f.calls.threads, []);
 });
 
 test('comments at or before the waiting boundary are ignored without consuming the continuation', async (t) => {

@@ -4,7 +4,7 @@ import { appendFile, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, unl
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { CodexClient, MODELS } from './lib/codex-client.mjs';
 import { continuation, formatPlanComment, formatProgressComment, formatRefinementComment, orchestrationOutcomeSchema, runTurn, validateOrchestrationOutcome, validateOutcome, validateRefinementOutcome } from './lib/codex-loop.mjs';
 import { classifyIssue } from './lib/issue-routing.mjs';
@@ -19,10 +19,14 @@ import { bodyDigest, unwrapRepositoryDispatchClientPayload } from './lib/agent-i
 import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIssueFields, setIssueType, validateOrganizationIssueFields } from './lib/issue-field-api.mjs';
 import { issueMetadata, issueFieldMutation, validateFieldMutation } from './lib/issue-metadata.mjs';
 import { patternById, selectOrchestration } from './lib/orchestration-policy.mjs';
+import { createActiveTimeAllowance, remainingActiveTime, reserveActiveTime, settleActiveTime, validateActiveTimeAllowance } from './lib/operation-active-time.mjs';
+import { currentOperationPolicyReference, INITIAL_OPERATION_LIMITS, matchesCurrentOperationPolicy } from './lib/operation-budget-policy.mjs';
 
 const executeFile = promisify(execFile);
 const controllerRoot = path.resolve(import.meta.dirname, '..');
-const STATE_VERSION = 3;
+const STATE_VERSION = 4;
+const MAX_VALIDATION_ATTEMPTS = INITIAL_OPERATION_LIMITS.validationAttempts;
+const MAX_MODEL_TURNS = INITIAL_OPERATION_LIMITS.modelTurns;
 const PROGRESS_COMMENT_INTERVAL_MS = 5 * 60_000;
 const OVERALL_TIMEOUT_MS = 5.5 * 60 * 60_000;
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -275,6 +279,11 @@ export function deliveryExitCode(status) {
 
 function failureRecoverability(error, operation) {
   const message = String(error?.message ?? '');
+  if (error?.code === 'OPERATION_BUDGET_HOLD') return 'owner-action';
+  if (/operation identity is unknown|budget policy pin is unknown|budget policy has changed/i.test(message)) return 'owner-action';
+  if (/operation (?:model turn|validation|active time) allowance is exhausted|(?:Model turn|Validation|Active time) consumption is unknown|Active time reservation is unsettled/i.test(message)) {
+    return 'owner-action';
+  }
   if (/invalid saved state|operator inspection|unexpected changes|verified tree changed|session id mismatch|unrelated replacement/i.test(message)) {
     return 'operator-inspection';
   }
@@ -298,8 +307,11 @@ async function readSavedState(file, issue, repository) {
     const hash = (item) => typeof item === 'string' && /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(item);
     const legacy = value?.version === undefined;
     const status = value?.status === 'needs_input' ? 'awaiting-human' : value?.status;
+    if (value?.activeTime !== undefined && value.activeTime !== null) validateActiveTimeAllowance(value.activeTime);
     if (value?.repository !== repository || String(value?.issue) !== issue
-      || (!legacy && ![2, STATE_VERSION].includes(value.version))
+      || (!legacy && ![2, 3, STATE_VERSION].includes(value.version))
+      || (value.operationId !== undefined && value.operationId !== null
+        && (typeof value.operationId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value.operationId)))
       || !deliveryPhases().includes(value.phase)
       || !['new','running','paused','awaiting-human','ready'].includes(status)
       || !strings(value.events) || !strings(value.tasks)
@@ -310,6 +322,15 @@ async function readSavedState(file, issue, repository) {
       || (value.consumedCommentIds !== undefined && (!Array.isArray(value.consumedCommentIds)
         || !value.consumedCommentIds.every((id) => /^[1-9][0-9]*$/.test(String(id)))))
       || (value.sessionStarted !== undefined && typeof value.sessionStarted !== 'boolean')
+      || (value.validationAttemptCount !== undefined && value.validationAttemptCount !== null
+        && (!Number.isSafeInteger(value.validationAttemptCount) || value.validationAttemptCount < 0
+          || value.validationAttemptCount > MAX_VALIDATION_ATTEMPTS))
+      || (value.modelTurnCount !== undefined && value.modelTurnCount !== null
+        && (!Number.isSafeInteger(value.modelTurnCount) || value.modelTurnCount < 0
+          || value.modelTurnCount > MAX_MODEL_TURNS))
+      || (value.controllerAttemptCount !== undefined && value.controllerAttemptCount !== null
+        && (!Number.isSafeInteger(value.controllerAttemptCount) || value.controllerAttemptCount < 0
+          || value.controllerAttemptCount > INITIAL_OPERATION_LIMITS.controllerAttempts))
       || (value.sessionStarted === false && value.sessionId !== undefined)
       || (value.legacySessionReconstruction !== undefined && typeof value.legacySessionReconstruction !== 'boolean')
       || (value.progressCommentAt !== undefined && (!Number.isFinite(value.progressCommentAt) || value.progressCommentAt < 0))
@@ -346,6 +367,12 @@ async function readSavedState(file, issue, repository) {
       },
       consumedCommentIds: value.consumedCommentIds?.map(String) ?? [],
       sessionStarted: value.sessionStarted ?? value.sessionId !== undefined,
+      validationAttemptCount: value.validationAttemptCount ?? null,
+      modelTurnCount: value.modelTurnCount ?? null,
+      controllerAttemptCount: value.controllerAttemptCount ?? null,
+      activeTime: value.activeTime ?? null,
+      operationId: value.operationId ?? null,
+      budgetPolicyReference: value.budgetPolicyReference ?? null,
       legacySessionReconstruction: value.legacySessionReconstruction === true || (legacy && value.sessionId === undefined),
     };
     if (migrated.status === 'awaiting-human' && migrated.waitingCommentId === undefined) {
@@ -358,10 +385,12 @@ async function readSavedState(file, issue, repository) {
 }
 
 export async function deliver(env = process.env, dependencies = {}) {
+  let activeSegmentStarted = false;
+  const now = dependencies.now ?? Date.now;
   const execute = dependencies.execute ?? executeFile;
   const fetchApi = dependencies.fetch ?? fetch;
   const createClient = dependencies.createClient ?? ((options) => new CodexClient(options));
-  const performTurn = dependencies.runTurn ?? runTurn;
+  const performTurnImpl = dependencies.runTurn ?? runTurn;
   const validateCommits = dependencies.validateCommits ?? validateCommitRange;
   if (!env.GH_TOKEN || !env.GITHUB_EVENT_PATH || !env.RUNNER_WORKSPACE) throw new Error('Run this controller through GitHub Actions.');
   if (env.PARTICIPANT_MODE === 'shadow') throw new Error('Shadow participants are read-only and cannot start delivery execution.');
@@ -398,9 +427,12 @@ export async function deliver(env = process.env, dependencies = {}) {
     ? await appProvider.token({ repositoryIds: [originRepositoryId] })
     : env.PUBLISH_TOKEN || env.GH_TOKEN;
   const api = async (route, method = 'GET', body, token = originToken) => {
+    // Controller-owned audit comments remain available to record a hard stop.
+    const protectedWrite = method !== 'GET' && route !== `/issues/${issue}/comments`;
+    const timeoutMs = activeSegmentStarted && protectedWrite ? Math.min(30_000, requireActiveTime()) : 30_000;
     const response = await fetchApi(`${endpoint}${route}`, {
       method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10', 'Content-Type': 'application/json' },
-      ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(30_000),
+      ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) throw new Error(`GitHub ${method} ${route} failed (${response.status}).`);
     return response.status === 204 ? null : response.json();
@@ -503,12 +535,46 @@ export async function deliver(env = process.env, dependencies = {}) {
   let runTools;
   const runHome = path.join(issueRoot, 'run-home');
   let state;
+  let ownedExecutionStopped = false;
+  let activeTimeSettled = false;
+  const activeOwner = `${env.GITHUB_RUN_ID ?? ''}:${env.GITHUB_RUN_ATTEMPT ?? '1'}`;
   const runUrl = `https://github.com/${repository}/actions/runs/${env.GITHUB_RUN_ID}`;
   let writes = Promise.resolve();
   const save = () => {
     const snapshot = structuredClone(state);
     writes = writes.catch(() => {}).then(() => atomic(stateFile, snapshot));
     return writes;
+  };
+  const requireActiveTime = () => {
+    const remainingMs = remainingActiveTime(state.activeTime, { owner: activeOwner, nowMs: now() });
+    if (remainingMs === 0) throw new Error('The operation active time allowance is exhausted.');
+    return remainingMs;
+  };
+  const beginActiveTime = async () => {
+    if (activeSegmentStarted) return requireActiveTime();
+    const attemptHold = (message) => Object.assign(new Error(message), { code: 'OPERATION_BUDGET_HOLD' });
+    if (state.controllerAttemptCount === null) throw attemptHold('Controller attempt consumption is unknown; preserve the operation for owner inspection.');
+    if (state.controllerAttemptCount >= INITIAL_OPERATION_LIMITS.controllerAttempts) throw attemptHold('The operation controller attempt allowance is exhausted; resumption cannot reset it.');
+    const reservation = reserveActiveTime(state.activeTime, { owner: activeOwner, nowMs: now() });
+    state.controllerAttemptCount++;
+    state.activeTime = reservation;
+    await save();
+    activeSegmentStarted = true;
+    clearTimeout(overall);
+    overall = setTimeout(cancel, requireActiveTime());
+  };
+  const requireModelTurnAllowance = () => {
+    if (state.modelTurnCount === null) throw new Error('Model turn consumption is unknown; preserve the operation for owner inspection.');
+    if (state.modelTurnCount >= MAX_MODEL_TURNS) throw new Error('The operation model turn allowance is exhausted; resumption cannot reset it.');
+  };
+  const performTurn = async (options) => {
+    requireActiveTime();
+    requireModelTurnAllowance();
+    state.modelTurnCount++;
+    await save();
+    const result = await performTurnImpl(options);
+    requireActiveTime();
+    return result;
   };
   const flush = async () => {
     const postedIds = [];
@@ -593,7 +659,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   const cancel = () => { abort.abort(); client?.close().catch(() => {}); };
   process.once('SIGTERM', cancel);
   process.once('SIGINT', cancel);
-  const overall = setTimeout(cancel, OVERALL_TIMEOUT_MS);
+  let overall = setTimeout(cancel, OVERALL_TIMEOUT_MS);
   const gitEnv = (token) => {
     const { GH_TOKEN: _ghToken, GITHUB_TOKEN: _githubToken, PUBLISH_TOKEN: _publishToken,
       OPENAI_API_KEY: _openAiKey, CODEX_DELIVERY_APP_PRIVATE_KEY: _privateKey, ...safeEnv } = env;
@@ -606,8 +672,9 @@ export async function deliver(env = process.env, dependencies = {}) {
     };
   };
   const git = async (args, options = {}) => {
+    await beginActiveTime();
     const token = options.publish ? await publicationToken() : originToken;
-    return (await execute('git', ['-C', workspace, ...args], { env: gitEnv(token), timeout: 120_000, maxBuffer: 8_000_000 })).stdout.trim();
+    return (await execute('git', ['-C', workspace, ...args], { env: gitEnv(token), timeout: Math.min(120_000, requireActiveTime()), maxBuffer: 8_000_000 })).stdout.trim();
   };
   try {
     await lock.writeFile(JSON.stringify({ runUrl, issue, pid: process.pid }));
@@ -616,9 +683,13 @@ export async function deliver(env = process.env, dependencies = {}) {
       plan: 'plan', implement: 'implement', validate: 'validate', coordinate: 'coordinate',
     }[deliveryRoute] ?? 'plan';
     state = stateWasSaved ? await readSavedState(stateFile, issue, repository) : {
-      version: STATE_VERSION, issue, repository, phase: initialPhase, status: 'new', execution: { status: 'idle', operation: null, run: null, lastFailure: null }, tasks: [], events: [], consumedCommentIds: [], sessionStarted: false, planDigest: null,
+      version: STATE_VERSION, issue, repository, phase: initialPhase, status: 'new', execution: { status: 'idle', operation: null, run: null, lastFailure: null }, tasks: [], events: [], consumedCommentIds: [], sessionStarted: false, planDigest: null, validationAttemptCount: 0, modelTurnCount: 0, controllerAttemptCount: 0, activeTime: createActiveTimeAllowance(), operationId: randomUUID(), budgetPolicyReference: currentOperationPolicyReference(),
     };
     const priorStatus = state.status;
+    const identityHold = (message) => Object.assign(new Error(message), { code: 'OPERATION_BUDGET_HOLD' });
+    if (state.budgetPolicyReference === null) throw identityHold('The operation budget policy pin is unknown; preserve the operation for owner inspection.');
+    if (!matchesCurrentOperationPolicy(state.budgetPolicyReference)) throw identityHold('The operation budget policy has changed; owner readmission is required without resetting spent allowance.');
+    if (state.operationId === null) throw identityHold('The operation identity is unknown; preserve its source and consumption evidence.');
     const canStartInitialSession = !stateWasSaved
       || (priorStatus === 'paused' && state.phase === 'plan' && !state.plan && state.sessionStarted === false && !state.sessionId);
     await flush();
@@ -680,6 +751,8 @@ export async function deliver(env = process.env, dependencies = {}) {
         if (!mutation.allowed) throw new Error(`Issue field transition rejected: ${mutation.reasons.join(' ')}`);
       }
       if (graphql && current.id && Object.keys(values).length) {
+        await beginActiveTime();
+        requireActiveTime();
         await setIssueFields({ graphql, issueId: current.id, config: lifecycleConfig, values, actor: 'controller' });
       }
       if (graphql) {
@@ -801,6 +874,10 @@ export async function deliver(env = process.env, dependencies = {}) {
     if (state.phase === 'verify' && (metadata.lifecycleStage !== 'execution' || !deliveryMetadataSafe(metadata))) {
       throw new Error('The source issue is not authorized for verification.');
     }
+    if (['branch', 'implement', 'verify'].includes(state.phase)) {
+      if (state.validationAttemptCount === null) throw new Error('Validation consumption is unknown; preserve the operation for owner inspection.');
+      if (state.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS) throw new Error('The operation validation allowance is exhausted; resumption cannot reset it.');
+    }
     if (state.phase === 'commit' && (metadata.lifecycleStage !== 'execution' || !deliveryMetadataSafe(metadata))) {
       throw new Error('The source issue is not authorized for commit.');
     }
@@ -812,6 +889,7 @@ export async function deliver(env = process.env, dependencies = {}) {
       throw new Error(`The requested delivery route is not authorized by the orchestration policy; ${orchestration.reason}`);
     }
     if (state.phase === 'coordinate') {
+      await beginActiveTime();
       if (metadata.lifecycleStage === 'acceptance') {
         state.execution = { ...(state.execution ?? {}), status: 'completed', operation: 'coordinate', run: { id: String(env.GITHUB_RUN_ID ?? ''), attempt: String(env.GITHUB_RUN_ATTEMPT ?? '1'), url: runUrl }, lastFailure: null };
         state.status = 'ready';
@@ -858,16 +936,25 @@ export async function deliver(env = process.env, dependencies = {}) {
         && ['plan','branch','implement'].includes(state.phase)) {
         throw new Error('Saved Codex session ID is missing; refusing to start an unrelated replacement thread.');
       }
+      if (state.phase !== 'verify') requireModelTurnAllowance();
+      await beginActiveTime();
       await mkdir(codexHome, { recursive: true, mode: 0o700 });
       await mkdir(runHome, { recursive: true, mode: 0o700 });
       if (!(await exists(authBridge)) && await exists(serviceAuth)) await symlink(serviceAuth, authBridge);
       const codexEnvironment = { ...env, HOME: runHome, CODEX_HOME: codexHome, CODEX_AUTH_HOME: undefined };
       client = createClient({ cwd: controllerRoot, env: codexEnvironment, readableFiles:[controllerRoot], runtime:runTools, approvedMcpServers });
+      const executeTool = client.exec.bind(client);
+      client.exec = async (command, cwd, timeout = 600_000, profile) => {
+        const remainingMs = requireActiveTime();
+        const result = await executeTool(command, cwd, Math.min(timeout, remainingMs), profile);
+        requireActiveTime();
+        return result;
+      };
       await client.initialize();
       state.budget = await client.capabilities();
       if (state.budget.stop && state.phase !== 'verify') throw new Error(state.budget.reason);
       if (!(await exists(workspace))) {
-        await execute('git', ['clone', '--branch', 'main', `https://github.com/${repository}.git`, workspace], { env: gitEnv(originToken), timeout: 120_000 });
+        await execute('git', ['clone', '--branch', 'main', `https://github.com/${repository}.git`, workspace], { env: gitEnv(originToken), timeout: Math.min(120_000, requireActiveTime()) });
         state.base = await git(['rev-parse', 'HEAD']);
         await save();
       }
@@ -891,6 +978,7 @@ question. Continue the exact saved session and issue conversation; do not requir
 legacy owner-only rule in the base instruction file.`;
       let thread;
       const ensureThread = async () => {
+        requireActiveTime();
         if (thread) return thread;
         let response;
         if (state.sessionId) {
@@ -988,7 +1076,10 @@ legacy owner-only rule in the base instruction file.`;
             const type = lifecycleConfig.types.find((candidate) => candidate.id === refinement.workType);
             if (!type) throw new Error(`Refinement selected an unknown work type: ${refinement.workType}.`);
             const nativeType = (currentIssue.organizationIssueTypes ?? []).find((candidate) => candidate.name === type.native_name && candidate.isEnabled !== false);
-            if (graphql && currentIssue.id && nativeType?.id) await setIssueType({ graphql, issueId: currentIssue.id, issueTypeId: nativeType.id });
+            if (graphql && currentIssue.id && nativeType?.id) {
+              requireActiveTime();
+              await setIssueType({ graphql, issueId: currentIssue.id, issueTypeId: nativeType.id });
+            }
             else if (graphql) throw new Error(`The organization native issue type ${type.native_name} is not available; migration must be completed before refinement can authorize delivery.`);
           }
         }
@@ -1038,7 +1129,10 @@ legacy owner-only rule in the base instruction file.`;
               if (childControl.issueType && childControl.issueType.name !== childType.native_name) {
                 throw new Error(`Existing child issue #${child.number} has native issue type ${childControl.issueType.name}; expected ${childType.native_name}.`);
               }
-              if (!childControl.issueType) await setIssueType({ graphql, issueId: childControl.id ?? child.node_id ?? child.id, issueTypeId: nativeType.id });
+              if (!childControl.issueType) {
+                requireActiveTime();
+                await setIssueType({ graphql, issueId: childControl.id ?? child.node_id ?? child.id, issueTypeId: nativeType.id });
+              }
             }
             if (!match) {
               try { await publishApi(`/issues/${issue}/sub_issues`, 'POST', { sub_issue_id: child.id }); } catch (error) {
@@ -1151,7 +1245,7 @@ legacy owner-only rule in the base instruction file.`;
         if (currentBranch !== state.branch) {
           await startIssueBranch({branchType:state.plan.changeType, issueNumber:issue, summary:'codex-delivery', repositoryRoot:workspace,
             env: { ...env, GH_TOKEN: originToken },
-            execFileImpl:(command, args, options) => execute(command, args, {...options, env:gitEnv(originToken), timeout:60_000}),
+            execFileImpl:(command, args, options) => execute(command, args, {...options, env:gitEnv(originToken), timeout:Math.min(60_000, requireActiveTime())}),
             sourceIssueValidator:async () => {
               if ((await api(`/issues/${issue}`)).state !== 'open') throw new Error('Source issue is no longer open.');
             },
@@ -1166,9 +1260,10 @@ legacy owner-only rule in the base instruction file.`;
       // Installation and verification execute under restricted filesystem permissions.
       const install = ['pnpm', 'install', '--frozen-lockfile', '--ignore-scripts', '--ignore-pnpmfile'];
       await client.exec(install, workspace, 600_000, 'delivery-deps');
-      let validationAttempts = 0;
       while (['implement', 'verify'].includes(state.phase)) {
         while (state.phase === 'implement') {
+          requireActiveTime();
+          requireModelTurnAllowance();
           await transitionState('in-progress', ['ready-for-agent', 'in-progress', 'needs-info']);
           const implementThread = await ensureThread();
           const resumeContext = takeContinuationContext('implement');
@@ -1205,6 +1300,13 @@ legacy owner-only rule in the base instruction file.`;
           await save();
         }
         await requireDeliveryMetadata(['in-progress']);
+        requireActiveTime();
+        if (state.validationAttemptCount === null) throw new Error('Validation consumption is unknown; preserve the operation for owner inspection.');
+        if (state.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS) throw new Error('The operation validation allowance is exhausted; resumption cannot reset it.');
+        state.validationAttemptCount++;
+        // Reserve durably before execution. Interrupted or failed attempts are
+        // charged, so restarting the controller cannot replenish the allowance.
+        await save();
         try {
           await client.exec(install, workspace, 600_000, 'delivery-deps');
           await git(['add', '--all']);
@@ -1224,11 +1326,10 @@ legacy owner-only rule in the base instruction file.`;
           await save();
           break;
         } catch (error) {
-          validationAttempts++;
           state.validation = redact(error.message, env).slice(-24_000);
-          await audit(`### Validation attempt ${validationAttempts} failed\n\n${state.validation}`);
-          if (validationAttempts === 3) {
-            throw new Error('Repository validation failed three times. Fix the latest error shown below before resuming.');
+          await audit(`### Validation attempt ${state.validationAttemptCount} failed\n\n${state.validation}`);
+          if (state.validationAttemptCount === MAX_VALIDATION_ATTEMPTS) {
+            throw new Error('The operation validation allowance is exhausted; resumption cannot reset it.');
           }
           state.phase = 'implement';
           await save();
@@ -1236,6 +1337,7 @@ legacy owner-only rule in the base instruction file.`;
       }
     }
     // Stop every owned model/tool process before committing the verified tree.
+    await beginActiveTime();
     await client?.close();
     if (state.phase === 'commit') {
       if (abort.signal.aborted) throw new Error('Workflow cancelled before publishing.');
@@ -1251,7 +1353,7 @@ legacy owner-only rule in the base instruction file.`;
       if (changes) {
         const { GH_TOKEN: _ghToken, GITHUB_TOKEN: _githubToken, PUBLISH_TOKEN: _publishToken,
           OPENAI_API_KEY: _openAiKey, CODEX_DELIVERY_APP_PRIVATE_KEY: _privateKey, ...safeControllerEnv } = env;
-        await execute('node', [path.join(controllerRoot, 'scripts/validate-pull-request-title.mjs')], { cwd: controllerRoot, env: { ...safeControllerEnv, PR_TITLE: state.plan.title }, timeout: 30_000 });
+        await execute('node', [path.join(controllerRoot, 'scripts/validate-pull-request-title.mjs')], { cwd: controllerRoot, env: { ...safeControllerEnv, PR_TITLE: state.plan.title }, timeout: Math.min(30_000, requireActiveTime()) });
         await git(['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', '-c', 'commit.gpgsign=false', 'commit', '-m', state.plan.title]);
       }
       state.phase = 'publish';
@@ -1356,7 +1458,7 @@ legacy owner-only rule in the base instruction file.`;
   } catch (error) {
     if (!state) throw error;
     await client?.close().catch((failure) => { state.shutdownError = redact(failure.message, env); });
-    const awaitingHuman = state.status === 'awaiting-human';
+    const awaitingHuman = state.status === 'awaiting-human' && error?.code !== 'OPERATION_BUDGET_HOLD';
     const failedOperation = state.phase;
     state.status = awaitingHuman ? 'awaiting-human' : 'paused';
     state.reason = redact(error.message, env);
@@ -1397,13 +1499,24 @@ legacy owner-only rule in the base instruction file.`;
     process.off('SIGTERM', cancel);
     process.off('SIGINT', cancel);
     // If shutdown cannot be confirmed, deliberately retain the account lock.
-    try { await client?.close(); await writes; }
+    try {
+      await client?.close();
+      ownedExecutionStopped = true;
+      if (activeSegmentStarted) {
+        state.activeTime = settleActiveTime(state.activeTime, { owner: activeOwner, nowMs: now() });
+        await save();
+        activeTimeSettled = true;
+      }
+      await writes;
+    }
     finally {
       await appProvider?.revoke();
       await unlink(authBridge).catch(() => {});
-      if (runTools) await rm(runTools, { recursive: true, force: true }).catch(() => {});
-      await rm(runHome, { recursive: true, force: true }).catch(() => {});
-      if (state?.status === 'ready') {
+      if (ownedExecutionStopped) {
+        if (runTools) await rm(runTools, { recursive: true, force: true }).catch(() => {});
+        await rm(runHome, { recursive: true, force: true }).catch(() => {});
+      }
+      if (state?.status === 'ready' && ownedExecutionStopped && (!activeSegmentStarted || activeTimeSettled)) {
         await rm(workspace, { recursive: true, force: true }).catch(() => {});
         await rm(codexHome, { recursive: true, force: true }).catch(() => {});
       }
