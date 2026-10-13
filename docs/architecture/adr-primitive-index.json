@@ -295,6 +295,7 @@
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
         "controller-receipt-schema-inspection",
+        "controller-receipt-schema-migration",
         "curated-changelog",
         "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
@@ -362,6 +363,7 @@
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
         "controller-receipt-schema-inspection",
+        "controller-receipt-schema-migration",
         "curated-changelog",
         "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
@@ -427,6 +429,7 @@
         "codex-delivery-workflow-guide",
         "commit-format-validator",
         "controller-receipt-schema-inspection",
+        "controller-receipt-schema-migration",
         "curated-changelog",
         "delivery-state-domain-language",
         "domain-language-validator",
@@ -680,6 +683,20 @@
       "path": "scripts/inspect-controller-receipt-schema.mjs",
       "location": "scripts/inspect-controller-receipt-schema.mjs",
       "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "controller-receipt-schema-migration",
+      "path": "scripts/migrate-controller-receipt-schema.mjs",
+      "location": "scripts/migrate-controller-receipt-schema.mjs",
+      "kind": "script",
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0018"

@@ -11,6 +11,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Issue #111 prepares a source-pinned migration 0008 transaction plan with an inspected-target fingerprint, short lock/statement limits and rejection of schema changes since inspection. The preparation helper does not connect to or mutate a database.
+
 - Issue #111 adds an explicitly selected, owner-only, read-only controller receipt schema inspection. It uses the existing sealed workflow database connection and emits hashes/metadata; it does not apply migrations, expose credentials, run models or establish deployment acceptance.
 
 - [Issue #59](https://github.com/agentic-delivery-lab/agentic-delivery/issues/59) prepares selection contract `1.1.0` for the Agent Customizations repository rename. Its current locator binds to repository ID `1380894656`; exact historical release pins remain unchanged. The publication validator also admits schema version 2 with exact lock/record repository IDs and closed-schema validation, while preserving historical version 1 input. This does not activate participants or prove hosting access.

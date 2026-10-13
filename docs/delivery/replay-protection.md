@@ -404,3 +404,17 @@ connection values, row data, raw definitions or credential-bearing errors.
 Successful observation does not accept the migration. Constraint semantics and
 equivalence with the Vercel production target still require verification. This
 mode cannot apply migrations, deploy, enroll participants or activate a runner.
+
+### Prepared migration transaction
+
+`scripts/migrate-controller-receipt-schema.mjs` prepares migration 0008 from its
+reviewed source digest. It does not connect to a database or expose an executable
+CLI. The transaction plan sets a two-second lock timeout and ten-second statement
+timeout, locks the receipt table, and rejects any attribution columns or identity
+constraint added since the reviewed observation before applying the fixed DDL.
+The operator caller must authorize the explicit action, bind the fingerprint
+from inspection run 38461262019, execute every statement in one transaction and
+independently inspect the committed result. A failed or uncertain transaction
+requires observation before retry; it must not infer that nothing committed.
+The production deployment target and a supported writer rollout remain separate
+gates. No workflow migration mode is enabled by this preparation helper.
