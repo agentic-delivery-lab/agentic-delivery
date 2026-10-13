@@ -156,6 +156,25 @@ test('an expired controller run cannot finalize a receipt claimed by a later run
   assert.deepEqual((await store.controllerReceipt(receiptKey)).identity, newIdentity);
 });
 
+test('an expired lease cannot attribute or settle even before another run reclaims it', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-expired-owner-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const kind of ['memory', 'file']) {
+    let now = 10_000;
+    const store = kind === 'memory' ? new InMemoryReplayStore({ now: () => now }) : new FileReplayStore({ directory: root, now: () => now });
+    const leaseToken = `${receiptIdentity.workflowRunId}:${receiptIdentity.workflowRunAttempt}`;
+    await store.ensureControllerReceipt(receiptKey);
+    await store.claimController(receiptKey, { leaseToken, leaseMs: 100 });
+    await store.recordControllerIdentity(receiptKey, { leaseToken, identity: receiptIdentity });
+    now += 100;
+    const expired = structuredClone(await store.controllerReceipt(receiptKey));
+    await assert.rejects(store.recordControllerIdentity(receiptKey, { leaseToken, identity: receiptIdentity }));
+    await assert.rejects(store.completeController(receiptKey, { leaseToken, identity: receiptIdentity }));
+    await assert.rejects(store.retryController(receiptKey, { leaseToken, identity: receiptIdentity }));
+    assert.deepEqual(await store.controllerReceipt(receiptKey), expired);
+  }
+});
+
 test('controller finalizer records success only after the workflow has completed', async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-finalize-'));
   t.after(() => rm(root, { recursive: true, force: true }));

@@ -55,7 +55,9 @@ and Actions run ID and attempt on the claimed receipt before delivery starts.
 The finalizer rechecks those values against the signed event and current run
 before it records completion or retry. A duplicate finalizer cannot rewrite a
 settled receipt, and a different workflow attempt cannot settle its active
-lease. The attribution remains on the receipt
+lease. A matching token is insufficient after lease expiry, even before another
+run reclaims the receipt; attribution, completion and retry require an
+unexpired lease. The attribution remains on the receipt
 through retries; the run ID and attempt identify the latest claim. Legacy rows
 remain valid with all attribution columns empty.
 

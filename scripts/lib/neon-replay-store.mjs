@@ -178,6 +178,7 @@ SET origin_repository = COALESCE(origin_repository, $3),
 WHERE replay_key = $1
   AND status = 'running'
   AND lease_token = $2
+  AND lease_expires_at > clock_timestamp()
   AND (origin_repository IS NULL OR origin_repository = $3)
   AND (origin_repository_id IS NULL OR origin_repository_id = $4::bigint)
   AND (source_issue_number IS NULL OR source_issue_number = $5::integer)
@@ -392,7 +393,7 @@ export class NeonReplayStore {
     const rows = await this.#query(
       `UPDATE public.webhook_controller_receipts
        SET status = 'completed', lease_expires_at = NULL, lease_token = NULL, next_attempt_at = clock_timestamp()
-       WHERE replay_key = $1 AND status = 'running' AND lease_token = $2${identitySql}
+       WHERE replay_key = $1 AND status = 'running' AND lease_token = $2 AND lease_expires_at > clock_timestamp()${identitySql}
        RETURNING replay_key`,
       values,
     );
@@ -416,7 +417,7 @@ export class NeonReplayStore {
              LEAST($4::double precision, $3::double precision * POWER(2, GREATEST(attempt_count - 1, 0)))
              * INTERVAL '1 millisecond'
            )
-       WHERE replay_key = $1 AND status = 'running' AND lease_token = $5${identitySql}
+       WHERE replay_key = $1 AND status = 'running' AND lease_token = $5 AND lease_expires_at > clock_timestamp()${identitySql}
        RETURNING replay_key, status`,
       values,
     );

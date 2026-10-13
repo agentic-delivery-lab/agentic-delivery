@@ -188,6 +188,7 @@ test('Neon controller receipt attribution is bound to the active lease and immut
   assert.equal(calls.length, 1);
   assert.match(calls[0].statement, /status = 'running'/);
   assert.match(calls[0].statement, /lease_token = \$2/);
+  assert.match(calls[0].statement, /lease_expires_at > clock_timestamp\(\)/);
   assert.match(calls[0].statement, /origin_repository IS NULL OR origin_repository = \$3/);
   assert.match(calls[0].statement, /source_issue_number IS NULL OR source_issue_number = \$5::integer/);
   assert.deepEqual(calls[0].values, [
@@ -231,6 +232,8 @@ test('Neon receipt settlement matches all persisted invocation identity fields',
   assert.match(calls[1].statement, /origin_repository = \$6/);
   assert.match(calls[1].statement, /workflow_run_attempt = \$11::integer/);
   assert.equal(calls[1].values.length, 11);
+  assert.match(calls[0].statement, /WHERE[\s\S]*lease_expires_at > clock_timestamp\(\)/);
+  assert.match(calls[1].statement, /WHERE[\s\S]*lease_expires_at > clock_timestamp\(\)/);
 });
 
 test('Neon retry settlement returns the status from the atomic update', async () => {

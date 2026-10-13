@@ -217,7 +217,7 @@ export class InMemoryReplayStore {
   async recordControllerIdentity(key, { leaseToken, identity } = {}) {
     const receipt = this.#receipts.get(key);
     const normalized = normalizeControllerReceiptIdentity(identity);
-    if (!receipt || receipt.status !== 'running'
+    if (!receipt || receipt.status !== 'running' || !(receipt.leaseExpiresAt > this.now())
       || (leaseToken && receipt.leaseToken !== leaseToken)
       || leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`) {
       throw new ReplayProtectionError('The controller receipt identity could not be recorded.');
@@ -250,7 +250,7 @@ export class InMemoryReplayStore {
   async completeController(key, { leaseToken, identity } = {}) {
     const receipt = this.#receipts.get(key);
     const normalized = identity ? normalizeControllerReceiptIdentity(identity) : null;
-    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)
+    if (!receipt || receipt.status !== 'running' || !(receipt.leaseExpiresAt > this.now()) || (leaseToken && receipt.leaseToken !== leaseToken)
       || (normalized && (!receipt.identity || !sameReceiptIdentity(receipt.identity, normalized)
         || leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`))) {
       throw new ReplayProtectionError('The controller receipt could not be completed.');
@@ -263,7 +263,7 @@ export class InMemoryReplayStore {
   async retryController(key, { maxAttempts = DEFAULT_CONTROLLER_MAX_ATTEMPTS, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken, identity } = {}) {
     const receipt = this.#receipts.get(key);
     const normalized = identity ? normalizeControllerReceiptIdentity(identity) : null;
-    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)
+    if (!receipt || receipt.status !== 'running' || !(receipt.leaseExpiresAt > this.now()) || (leaseToken && receipt.leaseToken !== leaseToken)
       || (normalized && (!receipt.identity || !sameReceiptIdentity(receipt.identity, normalized)
         || leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`))) {
       throw new ReplayProtectionError('The controller receipt could not be released.');
@@ -371,7 +371,7 @@ export class FileReplayStore {
   async recordControllerIdentity(key, { leaseToken, identity } = {}) {
     const receipt = await this.#readReceipt(key);
     const normalized = normalizeControllerReceiptIdentity(identity);
-    if (!receipt || receipt.status !== 'running'
+    if (!receipt || receipt.status !== 'running' || !(receipt.leaseExpiresAt > this.now())
       || (leaseToken && receipt.leaseToken !== leaseToken)
       || leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`) {
       throw new ReplayProtectionError('The controller receipt identity could not be recorded.');
@@ -407,7 +407,7 @@ export class FileReplayStore {
   async completeController(key, { leaseToken, identity } = {}) {
     const receipt = await this.#readReceipt(key);
     const normalized = identity ? normalizeControllerReceiptIdentity(identity) : null;
-    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)
+    if (!receipt || receipt.status !== 'running' || !(receipt.leaseExpiresAt > this.now()) || (leaseToken && receipt.leaseToken !== leaseToken)
       || (normalized && (!receipt.identity || !sameReceiptIdentity(receipt.identity, normalized)
         || leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`))) {
       throw new ReplayProtectionError('The controller receipt could not be completed.');
@@ -421,7 +421,7 @@ export class FileReplayStore {
   async retryController(key, { maxAttempts = DEFAULT_CONTROLLER_MAX_ATTEMPTS, baseDelayMs = 60_000, maxDelayMs = 6 * 60 * 60 * 1000, leaseToken, identity } = {}) {
     const receipt = await this.#readReceipt(key);
     const normalized = identity ? normalizeControllerReceiptIdentity(identity) : null;
-    if (!receipt || receipt.status !== 'running' || (leaseToken && receipt.leaseToken !== leaseToken)
+    if (!receipt || receipt.status !== 'running' || !(receipt.leaseExpiresAt > this.now()) || (leaseToken && receipt.leaseToken !== leaseToken)
       || (normalized && (!receipt.identity || !sameReceiptIdentity(receipt.identity, normalized)
         || leaseToken !== `${normalized.workflowRunId}:${normalized.workflowRunAttempt}`))) {
       throw new ReplayProtectionError('The controller receipt could not be released.');
