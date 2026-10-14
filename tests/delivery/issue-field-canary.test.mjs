@@ -114,3 +114,13 @@ test('partial test writes restore only changed fields and preserve an intervenin
   assert.deepEqual((await io.read()).fieldValues,concurrent?[{fieldId:writes[1].fieldId,optionId:'human-option'}]:[]);
  }
 });
+
+test('falsy write rejections cannot become successful canary receipts',async()=>{
+ for(const rejection of [undefined,null,false,0,'']) {
+  const io=fixture();let first=true;
+  const write=async inputs=>{await io.write(inputs);if(first){first=false;throw rejection;}};
+  await assert.rejects(runIssueFieldCanary({...io,write,target,actorId:'14937399',apply:true}),/independently restored/);
+  assert.equal(io.calls.length,2);assert.deepEqual((await io.read()).fieldValues,[]);
+  assert.equal(io.events.find(e=>e.phase==='restored').testSucceeded,false);
+ }
+});

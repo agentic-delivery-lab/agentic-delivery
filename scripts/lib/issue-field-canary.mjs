@@ -44,13 +44,13 @@ export async function runIssueFieldCanary({target,read,write,saveEvidence,actorI
   if(fields.some(f=>original.some(v=>v.fieldId===f.fieldId && v.optionId===f.singleSelectOptionId)))throw new Error('Each canary field must start with a different value to prove the test write.');
   if(!equal(snapshot(await read(),target,fields),original))throw new Error('Canary changed before mutation; no write requested.');
   const testValues=fields.map(f=>({fieldId:f.fieldId,optionId:f.singleSelectOptionId})).sort((a,b)=>a.fieldId.localeCompare(b.fieldId,'en'));
-  let testError;
+  let testFailed=false;
   try {
     await write(fields.map(f=>({fieldId:f.fieldId,singleSelectOptionId:f.singleSelectOptionId})));
     const written=snapshot(await read(),target,fields);
     if(!equal(selected(written,fields),testValues))throw new Error('Canary write readback differs.');
     await saveEvidence({phase:'write-verified',target,writtenHash:hash(written)});
-  } catch(error) {testError=error;}
+  } catch {testFailed=true;}
   // A rejected/lost response does not prove that the write was absent.
   // Re-read even after a failed write, and never overwrite a third-party value.
   let restored;
@@ -80,11 +80,11 @@ export async function runIssueFieldCanary({target,read,write,saveEvidence,actorI
     }
     restored=snapshot(await read(),target,fields);
     if(!equal(restored,original))throw new Error('Original complete field state differs.');
-    try {await saveEvidence({phase:'restored',target,restoredHash:hash(restored),testSucceeded:!testError});} catch {auditError=true;}
+    try {await saveEvidence({phase:'restored',target,restoredHash:hash(restored),testSucceeded:!testFailed});} catch {auditError=true;}
   } catch {
     try {await saveEvidence({phase:'restoration-held',target});} catch { /* Preserve the already-saved original snapshot. */ }
     throw new Error('Canary restoration held; preserve the snapshot and inspect current state without retry.');
   }
-  if(testError || auditError)throw new Error('Canary test failed; original values independently restored.');
+  if(testFailed || auditError)throw new Error('Canary test failed; original values independently restored.');
   return {mutationsRequested:true,restored:true,originalHash:hash(original),restoredHash:hash(restored)};
 }
