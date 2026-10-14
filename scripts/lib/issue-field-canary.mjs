@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"operator-issue-field-canary","kind":"script","enforcement":"deterministic","adrs":["ADR-0018","ADR-0019"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
+// agentic-primitive: {"id":"operator-issue-field-canary","kind":"script","enforcement":"deterministic","adrs":["ADR-0012","ADR-0018","ADR-0019"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 const manifest=JSON.parse(readFileSync(new URL('../../config/operator-field-canaries.json',import.meta.url),'utf8'));
@@ -7,7 +7,7 @@ export const FIELD_CANARY_TARGETS=Object.freeze(manifest.targets.map(Object.free
 export const FIELD_CANARY_FIELDS=Object.freeze(manifest.fields.map(Object.freeze));
 export function compileCanaryFields(bindings) {
   return FIELD_CANARY_FIELDS.map(definition=>{
-    const binding=bindings?.[definition.key];const optionId=binding?.options?.[definition.option];
+    const binding=bindings?.fields?.[definition.key];const optionId=binding?.options?.[definition.option];
     if(typeof binding?.id!=='string'||!binding.id||typeof optionId!=='string'||!optionId)throw new Error('Missing private canary bindings.');
     return Object.freeze({fieldId:binding.id,name:definition.name,singleSelectOptionId:optionId,optionName:definition.optionName});
   });

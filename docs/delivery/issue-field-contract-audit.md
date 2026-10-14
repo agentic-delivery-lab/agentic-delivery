@@ -250,7 +250,8 @@ node scripts/run-issue-field-canary.mjs --evidence-dir <private-directory> --bin
 
 The public manifest contains logical field keys and option names only. Native
 organization-only field and option IDs remain in a private owned JSON file using
-the existing ISSUE_FIELD_BINDINGS_JSON format. Preview reports its digest; apply
+the existing ISSUE_FIELD_BINDINGS_JSON format, with logical bindings nested
+under the top-level `fields` property. Flat bindings are rejected. Preview reports its digest; apply
 requires the reviewed digest and fails if the file changes.
 
 Apply requires a reviewed clean source commit, explicit `--apply`, and native

@@ -175,6 +175,7 @@
       "primitives": [
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
+        "interactive-issue-field-canary-command",
         "issue-classifier",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
@@ -183,6 +184,7 @@
         "issue-metadata-migration-command",
         "issue-metadata-resolver",
         "lifecycle-transition-validator",
+        "operator-issue-field-canary",
         "orchestration-policy-catalog",
         "orchestration-policy-validator",
         "organization-metadata-runbook",
@@ -915,6 +917,7 @@
       "kind": "script",
       "enforcement": "deterministic",
       "adrs": [
+        "ADR-0012",
         "ADR-0018",
         "ADR-0019"
       ],
@@ -1111,6 +1114,7 @@
       "kind": "script",
       "enforcement": "deterministic",
       "adrs": [
+        "ADR-0012",
         "ADR-0018",
         "ADR-0019"
       ],

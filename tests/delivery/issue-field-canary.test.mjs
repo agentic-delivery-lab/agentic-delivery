@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {parseCanaryArguments} from '../../scripts/run-issue-field-canary.mjs';
 import {runIssueFieldCanary, FIELD_CANARY_TARGETS, compileCanaryFields} from '../../scripts/lib/issue-field-canary.mjs';
 const target=FIELD_CANARY_TARGETS[0];
-const bindings={lifecycle_stage:{id:'fixture-stage',options:{intake:'fixture-intake'}},readiness:{id:'fixture-readiness',options:{'not-ready':'fixture-not-ready'}}};
+const bindings={fields:{lifecycle_stage:{id:'fixture-stage',options:{intake:'fixture-intake'}},readiness:{id:'fixture-readiness',options:{'not-ready':'fixture-not-ready'}}}};
 const writes=compileCanaryFields(bindings);
 function fixture(original=[],identity=target) {
  let fields=structuredClone(original);const calls=[],events=[];
@@ -93,4 +93,9 @@ test('apply rejects a canary when either field already holds its test option',as
   await assert.rejects(runIssueFieldCanary({...io,target,actorId:'14937399',apply:true}),/different/);
   assert.equal(io.calls.length,0);assert.deepEqual((await io.read()).fieldValues,original);
  }
+});
+
+test('canary uses the existing nested private binding contract and rejects flat input',()=>{
+ assert.equal(compileCanaryFields(bindings).length,2);
+ assert.throws(()=>compileCanaryFields(bindings.fields),/private canary bindings/);
 });

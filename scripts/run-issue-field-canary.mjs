@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"interactive-issue-field-canary-command","kind":"script","enforcement":"deterministic","adrs":["ADR-0018","ADR-0019"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
+// agentic-primitive: {"id":"interactive-issue-field-canary-command","kind":"script","enforcement":"deterministic","adrs":["ADR-0012","ADR-0018","ADR-0019"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import {execFileSync} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
 import {lstatSync,readFileSync,writeFileSync} from 'node:fs';
