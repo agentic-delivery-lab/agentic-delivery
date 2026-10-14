@@ -288,3 +288,22 @@ absence-restoration evidence for that exact commit. Existing-option restoration
 has fixture coverage; App-scoped writes and active runner admission remain
 unverified. The later no-change rejection is separately regression-tested; this
 record does not claim a live operation on a later source revision.
+
+### W07 operator authorization record
+
+The operator supplied the corrected implementation plan dated 2026-10-12;
+§7 W07 authorizes the two fixed canaries, and §9 T03 requires restoration.
+The continuing development instruction explicitly authorizes implementation,
+checks, task branches, PR review and merge under interactive operator delegation,
+and says the boundary warning does not withdraw that authorization. The operator
+also gave advance approval of the recommendations. This later instruction
+supersedes the earlier source-Issue development restriction for this bounded
+work. Runner activation, new privileged access, deployments and future autonomous
+merge activation retain their specific gates.
+
+This record attests to instructions received in the operator conversation; it
+is not a separate independent approval or native GitHub authorization event.
+The canary separately verified authenticated GitHub account `14937399`. The
+Harness review bundle does not include the private conversation or native field
+snapshots, so its independent assessment of that authorization and runtime
+evidence is limited. No runner receives the interactive delegation.
