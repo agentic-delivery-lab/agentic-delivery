@@ -230,3 +230,89 @@ pending an authorized Architecture release.
 - [REST API: issue field values](https://docs.github.com/en/rest/issues/issue-field-values) documents value reads and writes, including replacement behavior.
 - [Managing issue fields in an organization](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/managing-issue-fields-in-your-organization) documents pinning and visibility settings.
 - [GitHub App permission reference](https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps) lists the Issue Fields organization permission.
+
+## W07 interactive field canary
+
+The operator command `scripts/run-issue-field-canary.mjs` is restricted to
+Control Plane canary #62 and public adapter canary #11, including their exact
+repository and Issue identities declared in `config/operator-field-canaries.json`. It checks the existing native field and
+option IDs supplied in private operator bindings, writes only Intake and Not ready, and restores each original
+option or original absence. Absence uses GitHub's explicit `delete: true`
+input. Field definitions, options, visibility, Issue Type and labels remain
+outside this operation.
+
+Preview is the default and requests no mutation. Supply an existing private
+evidence directory owned by the current account:
+
+```text
+node scripts/run-issue-field-canary.mjs --evidence-dir <private-directory> --bindings-file <private-bindings-file>
+```
+
+The public manifest contains logical field keys and option names only. Native
+organization-only field and option IDs remain in a private owned JSON file using
+the existing ISSUE_FIELD_BINDINGS_JSON format, with logical bindings nested
+under the top-level `fields` property. Flat bindings are rejected. Preview reports its digest; apply
+requires the reviewed digest and fails if the file changes.
+
+Apply requires a reviewed clean source commit, explicit `--apply`, and native
+GitHub account 14937399. It refuses apply in GitHub Actions; this interactive
+operator delegation is not a factory runner capability. The command uses the
+existing gh authentication without exporting its credential.
+
+```text
+node scripts/run-issue-field-canary.mjs --evidence-dir <private-directory> --bindings-file <private-bindings-file> --bindings-sha256 <reviewed-binding-file-digest> --apply --approved-commit <reviewed-40-character-commit>
+```
+
+Apply requires each selected field to differ from its test option; an unchanged
+field cannot prove a successful write. The original snapshot is saved before the first write. Separate reads verify
+the test write and restoration. A lost write response triggers reconciliation,
+not repetition; a lost restore response is checked independently. Restoration
+writes only selected fields that differ from their original values, so a partial
+test write does not rewrite an untouched field. Changed
+selected-field values or missing original options hold restoration rather than
+overwriting another actor's work. Preserve the snapshot and inspect current
+values before any retry. Once the original snapshot is saved, an audit-output
+failure does not prevent restoration when identity and value checks still pass;
+the test fails acceptance without a complete audit.
+
+Use the dedicated canaries while they are not being edited. The native mutation
+input has no compare-and-swap field; checked reads do not establish an atomic
+concurrency guarantee. This administrative proof does not activate a participant
+or count as factory-delivered milestone A evidence. On 2026-10-14, interactive operator operation
+`d1fd02d5-f024-4b48-b5ed-294f02498d02` ran reviewed commit
+`02aa83718e7fdfea096b24538c03795d8700336d` on both fixed canaries.
+Both complete original vectors were empty. Each test write was read back; explicit
+deletion restored absence, verified by the command and a separate post-operation
+query. Original and final vector SHA-256 were
+`4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945`.
+Private owner-only records retain the before, write, restore and independent-read
+evidence without publishing organization-only bindings. This is operator-scoped
+absence-restoration evidence for that exact commit. Existing-option restoration
+has fixture coverage; App-scoped writes and active runner admission remain
+unverified. The later no-change rejection is separately regression-tested; this
+record does not claim a live operation on a later source revision.
+
+### W07 operator authorization record
+
+The operator supplied the corrected implementation plan dated 2026-10-12;
+§7 W07 authorizes the two fixed canaries, and §9 T03 requires restoration.
+The continuing development instruction explicitly authorizes implementation,
+checks, task branches, PR review and merge under interactive operator delegation,
+and says the boundary warning does not withdraw that authorization. The operator
+also gave advance approval of the recommendations. This later instruction
+supersedes the earlier source-Issue development restriction for this bounded
+work. Runner activation, new privileged access, deployments and future autonomous
+merge activation retain their specific gates.
+
+This record attests to instructions received in the operator conversation; it
+is not a separate independent approval or native GitHub authorization event.
+The canary separately verified authenticated GitHub account `14937399`. The
+Harness review bundle does not include the private conversation or native field
+snapshots, so its independent assessment of that authorization and runtime
+evidence is limited. No runner receives the interactive delegation.
+
+Canonical disposition: [ADR-0012](https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/7b493df7240324b163359f69cc713f5cb3b1e067/decisions/0012-use-github-as-the-lifecycle-control-plane.md)
+and [ADR-0018](https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/7b493df7240324b163359f69cc713f5cb3b1e067/decisions/0018-organization-wide-agentic-delivery-control-plane-distribution-and-versioning.md),
+accepted through [Architecture PR #24](https://github.com/agentic-delivery-lab/agentic-delivery-architecture/pull/24).
+Architecture owns that bounded policy; this audit records implementation evidence.
+No controller release, participant or runner is activated by the reference.
