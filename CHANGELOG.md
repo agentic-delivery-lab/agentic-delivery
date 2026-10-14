@@ -11,6 +11,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Issue #60 adds an interactive, owner-only field canary for two fixed repository/Issue identities. It snapshots values, verifies writes, restores original options or absence, and holds on concurrent changes or uncertain restoration. Preview is non-mutating; live evidence remains a separate acceptance step.
+
 - Issue #111 prepares a source-pinned migration 0008 transaction plan with an inspected-target fingerprint, short lock/statement limits and rejection of schema changes since inspection. An explicit owner-only hosted workflow mode executes that fixed transaction and independently reads back column and constraint metadata; uncertain outcomes require reconciliation before retry.
 
 - Issue #111 adds an explicitly selected, owner-only, read-only controller receipt schema inspection. It uses the existing sealed workflow database connection and emits hashes/metadata; it does not apply migrations, expose credentials, run models or establish deployment acceptance.

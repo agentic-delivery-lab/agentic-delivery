@@ -230,3 +230,49 @@ pending an authorized Architecture release.
 - [REST API: issue field values](https://docs.github.com/en/rest/issues/issue-field-values) documents value reads and writes, including replacement behavior.
 - [Managing issue fields in an organization](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/managing-issue-fields-in-your-organization) documents pinning and visibility settings.
 - [GitHub App permission reference](https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps) lists the Issue Fields organization permission.
+
+## W07 interactive field canary
+
+The operator command `scripts/run-issue-field-canary.mjs` is restricted to
+Control Plane canary #62 and public adapter canary #11, including their exact
+repository and Issue identities declared in `config/operator-field-canaries.json`. It checks the existing native field and
+option IDs supplied in private operator bindings, writes only Intake and Not ready, and restores each original
+option or original absence. Absence uses GitHub's explicit `delete: true`
+input. Field definitions, options, visibility, Issue Type and labels remain
+outside this operation.
+
+Preview is the default and requests no mutation. Supply an existing private
+evidence directory owned by the current account:
+
+```text
+node scripts/run-issue-field-canary.mjs --evidence-dir <private-directory> --bindings-file <private-bindings-file>
+```
+
+The public manifest contains logical field keys and option names only. Native
+organization-only field and option IDs remain in a private owned JSON file using
+the existing ISSUE_FIELD_BINDINGS_JSON format. Preview reports its digest; apply
+requires the reviewed digest and fails if the file changes.
+
+Apply requires a reviewed clean source commit, explicit `--apply`, and native
+GitHub account 14937399. It refuses apply in GitHub Actions; this interactive
+operator delegation is not a factory runner capability. The command uses the
+existing gh authentication without exporting its credential.
+
+```text
+node scripts/run-issue-field-canary.mjs --evidence-dir <private-directory> --bindings-file <private-bindings-file> --bindings-sha256 <reviewed-binding-file-digest> --apply --approved-commit <reviewed-40-character-commit>
+```
+
+The original snapshot is saved before the first write. Separate reads verify
+the test write and restoration. A lost write response triggers reconciliation,
+not repetition; a lost restore response is checked independently. Changed
+selected-field values or missing original options hold restoration rather than
+overwriting another actor's work. Preserve the snapshot and inspect current
+values before any retry. Once the original snapshot is saved, an audit-output
+failure does not prevent restoration when identity and value checks still pass;
+the test fails acceptance without a complete audit.
+
+Use the dedicated canaries while they are not being edited. The native mutation
+input has no compare-and-swap field; checked reads do not establish an atomic
+concurrency guarantee. This administrative proof does not activate a participant
+or count as factory-delivered milestone A evidence. Actual write/restoration
+results remain unverified until the reviewed command is executed.
