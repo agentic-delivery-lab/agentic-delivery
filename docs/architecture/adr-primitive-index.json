@@ -134,6 +134,8 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "github-native-issue-type",
+        "operation-active-time-allowance",
+        "operation-budget-policy-identity",
         "pull-request-check-readiness",
         "pull-request-dispatch-context-resolver",
         "quota-diagnostics-contract"
@@ -314,6 +316,8 @@
         "issue-60-webhook-delivery-archive",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
+        "operation-active-time-allowance",
+        "operation-budget-policy-identity",
         "operator-issue-field-canary",
         "organization-metadata-runbook",
         "organization-webhook-ingress",
@@ -326,6 +330,7 @@
         "repository-dispatch-event-normalizer",
         "repository-dispatch-transport",
         "repository-governance-instructions",
+        "repository-validation-profile",
         "semantic-architecture-review",
         "webhook-delivery-reconciler"
       ]
@@ -386,6 +391,8 @@
         "issue-60-webhook-delivery-archive",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
+        "operation-active-time-allowance",
+        "operation-budget-policy-identity",
         "operator-issue-field-canary",
         "organization-metadata-runbook",
         "organization-webhook-ingress",
@@ -398,6 +405,7 @@
         "repository-dispatch-event-normalizer",
         "repository-dispatch-transport",
         "repository-governance-instructions",
+        "repository-validation-profile",
         "semantic-architecture-review",
         "webhook-delivery-reconciler"
       ]
@@ -457,6 +465,8 @@
         "issue-metadata-resolver",
         "lifecycle-transition-validator",
         "main-history-validator",
+        "operation-active-time-allowance",
+        "operation-budget-policy-identity",
         "operator-issue-field-canary",
         "orchestration-policy-catalog",
         "orchestration-policy-validator",
@@ -468,6 +478,7 @@
         "pull-request-dispatch-context-resolver",
         "quota-diagnostics-contract",
         "repository-governance-instructions",
+        "repository-validation-profile",
         "semantic-architecture-review",
         "semantic-issue-router",
         "toolchain-policy-validator"
@@ -1108,6 +1119,36 @@
       ]
     },
     {
+      "id": "operation-active-time-allowance",
+      "path": "scripts/lib/operation-active-time.mjs",
+      "location": "scripts/lib/operation-active-time.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "operation-budget-policy-identity",
+      "path": "scripts/lib/operation-budget-policy.mjs",
+      "location": "scripts/lib/operation-budget-policy.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ]
+    },
+    {
       "id": "operator-issue-field-canary",
       "path": "scripts/lib/issue-field-canary.mjs",
       "location": "scripts/lib/issue-field-canary.mjs",
@@ -1368,6 +1409,20 @@
         "ADR-0015",
         "ADR-0016",
         "ADR-0017",
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "repository-validation-profile",
+      "path": "scripts/lib/validation-profile.mjs",
+      "location": "scripts/lib/validation-profile.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
         "ADR-0018"
       ],
       "domains": [

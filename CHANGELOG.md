@@ -11,6 +11,9 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- W11 proposes identity-bound validation command profiles for all seven factory surfaces, with version/digest evidence and no pnpm installation for either GitHub adapter. The controller binds the selected profile to state version 5, holds missing/changed pins, and records command-result hashes with the candidate tree. Private execution holds until its trusted canonical-source input is admitted. Profile admission and actual cross-repository delivery remain pending.
+
+- [Issue #105](https://github.com/agentic-delivery-lab/agentic-delivery/issues/105) saves controller-attempt, validation-attempt, model-turn and active-time reservations before execution, retains one operation UUID and proposal fingerprint across continuation and resume, and holds changed policy, missing history or exhausted allowances for owner action. Publication retries share the proposed eight-controller-attempt ceiling. Exhausted resumptions hold before token minting and queued comments; deadline stops retain local evidence without another GitHub write. State version 5 prevents older readers from ignoring mandatory allowance and profile fields. Active time excludes settled clarification waiting and is settled only after confirmed owned shutdown. Controlled command timeouts use the remaining allowance. This is partial W08 implementation: complete policy admission, live deadline, tool, child, transport, concurrency and interruption proof remain outstanding; no participant or proposed budget policy is activated.
 - Issue #60 adds an interactive, owner-only field canary for two fixed repository/Issue identities. It snapshots values, verifies writes, restores original options or absence, and holds on concurrent changes or uncertain restoration. Preview is non-mutating; apply rejects fields already at the test option. A bounded operator test verified absence restoration in two repositories; App-scoped writes and runner admission remain separate acceptance steps.
 
 - Issue #111 prepares a source-pinned migration 0008 transaction plan with an inspected-target fingerprint, short lock/statement limits and rejection of schema changes since inspection. An explicit owner-only hosted workflow mode executes that fixed transaction and independently reads back column and constraint metadata; uncertain outcomes require reconciliation before retry.
@@ -158,6 +161,8 @@ Entries that reference issue #52 use it only as the persisted-plan context;
 they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
+
+- Delivery evidence version 2 carries the saved operation identity, native repository, proposed policy and consumed allowance at publication. Historical version-1 records remain readable; state-version-5 records cannot omit operation evidence. Unknown tool consumption stays explicit rather than being reported as zero. Active native Issue Field requests now use the remaining operation time instead of a fixed 30-second timeout.
 
 - Central intake and delivery select the reviewed draft66 participant registry through bootstrap `0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80`. The controller includes the strict routing-schema repair; all participants remain in shadow mode. The previous bootstrap remains available for rollback.
 
@@ -545,6 +550,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) aligns the invocation identity with the registered `Agentic Delivery Lab Invoker 7F3A` GitHub App name, slug, mention, and bot login across the actor catalog, code, tests, and agentic documentation.
 
 ### Fixed
+
+- Dependency preparation now reserves a validation attempt before installation. Failed installs retain their charge across resumes; successful preparation and final verification share the same reserved attempt.
 
 - [Control Plane Bug #111](https://github.com/agentic-delivery-lab/agentic-delivery/issues/111) records the originating repository, source Issue, controller commit, and Actions run identity on the durable receipt before delivery. A trusted workflow-revision finalizer verifies that attribution before completion or retry, including when an older participant pin lacks the finalizer. An empty or unresolved `hold` route remains retryable when its delivery job is skipped. Migration 0008 must be applied before enabling this workflow revision.
 

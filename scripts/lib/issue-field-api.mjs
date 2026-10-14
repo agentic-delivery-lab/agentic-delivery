@@ -111,8 +111,10 @@ function apiError(message, errors = []) {
   return error;
 }
 
-export function githubGraphqlApi({ token, fetchImpl = fetch } = {}) {
+export function githubGraphqlApi({ token, fetchImpl = fetch, requestTimeoutMs = () => 30_000 } = {}) {
   return async (query, variables) => {
+    const timeoutMs = requestTimeoutMs();
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new Error('GitHub GraphQL request timeout is exhausted or invalid.');
     const response = await fetchImpl(GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -122,7 +124,7 @@ export function githubGraphqlApi({ token, fetchImpl = fetch } = {}) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ query, variables }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(Math.min(30_000, timeoutMs)),
     });
     let payload;
     try { payload = await response.json(); } catch { payload = null; }

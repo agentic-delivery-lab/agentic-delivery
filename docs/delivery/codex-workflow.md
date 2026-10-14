@@ -246,7 +246,8 @@ protocol JSON, and hidden runner details are not issue instructions.
 
 ## Continuation state and session correlation
 
-Persisted state is versioned and stores the repository, source issue, delivery
+Persisted state version 5 stores the repository, source issue, stable operation
+UUID, proposed budget-policy fingerprint, validation-profile reference, resource reservations, delivery
 phase, exact Codex session UUID, a waiting comment boundary, consumed comment
 IDs, and a separate execution record. The execution record contains the
 operation, Actions run ID/attempt/URL, recoverability, and redacted failure
@@ -256,6 +257,15 @@ controller saves the returned UUID before the first model turn and resumes
 later runs with `thread/resume` for that exact UUID. It does not use
 `codex resume --last`, a global newest-session lookup, or a new-thread fallback
 when a versioned state is missing or has an unresumable UUID.
+
+The operation UUID is distinct from delivery replay IDs and Codex session IDs.
+Its policy fingerprint binds the declared initial bounds and the relevant
+controller, client, loop and active-time implementation. A changed fingerprint
+requires owner readmission while preserving spent allowance; a missing
+fingerprint or operation identity is held, never initialized on resume. Version
+3 and 4 readers reject the new state version. Rollback still requires a supported
+composition with equivalent resource enforcement. The fingerprint identifies a
+proposal and does not approve its bounds or prove all limits are enforced.
 
 The `awaiting-human` execution status is an intentional boundary, not a failed
 Actions job. The handoff and its `CONTINUE.md` copy expose the same persisted identity:
@@ -448,14 +458,54 @@ if telemetry cannot be read. Five hours describes the subscription window and
 is the normal model-execution boundary, but a secondary window may stop work
 first. Preflight evidence records each returned window separately in the
 Actions job summary and runner log so the limiting window can be identified.
-A turn has no independent absolute duration limit: its 20-minute inactivity
-watchdog starts after `turn/start` acknowledges the active turn. It resets
-whenever the turn produces activity. The 5.5-hour controller timeout and
-350-minute Actions timeout are recovery failsafes. Their gap gives the
-controller time to save a handoff before Actions stops the job. Validation
-repairs are capped at three.
+A turn's 20-minute inactivity watchdog starts after `turn/start` acknowledges
+the active turn and resets whenever the turn produces activity. The candidate
+controller additionally reserves active time and uses the remaining part of
+its 30-minute cumulative allowance as its execution deadline. It limits
+controlled tool, Git, REST-write and active GraphQL request timeouts to that
+remainder. A client timeout does not prove that GitHub rejected a mutation;
+uncertain server outcomes still require readback and reconciliation.
+Settlement waits for confirmed owned execution shutdown; an unsettled prior
+reservation or backward clock evidence causes an inspection hold. Waiting
+between settled attempts does not consume active time. Live interruption and
+deadline enforcement evidence is still required for admission. The 5.5-hour
+pre-admission controller timeout and 350-minute Actions timeout remain recovery
+failsafes. Validation
+Dependency preparation reserves a validation attempt before its first install.
+A successful preparation checkpoint and its final candidate verification share
+that charged attempt. The checkpoint is cleared before verification so an
+interruption cannot start the same verification repeatedly. Failed preparation
+remains charged across resumes; clarification can continue a prepared third
+attempt but cannot allocate a fourth. Validation attempts are capped at three
+for the saved operation, including failed or
+interrupted attempts. The controller saves the reservation before validation
+commands run. Resuming after exhaustion cannot start another allowance, even
+after a manual repair.
 
-Implementation can span multiple model turns in one run. A `continue` outcome
+The saved operation also has a proposed eight-controller-attempt ceiling.
+The attempt reservation is saved with active-time admission before execution,
+including commit or publication retries that require no model turn. A ninth
+attempt holds before publication lookup, push or PR creation. Duplicate and
+ignored events do not start an active segment. This counter is distinct from
+the gateway's per-delivery replay receipts; linking trusted queued redelivery
+to the same operation still requires W10 evidence. The ceiling remains part
+of the proposed budget composition, not activated policy.
+
+The candidate operation limit is eight model turns across attempts and
+resumes. The controller saves each turn reservation before execution; a
+failed or interrupted turn stays charged. A continuation cannot reset either
+counter. Missing consumption history causes a hold for owner inspection
+instead of a new session or a fresh allowance. These stops require owner
+action; a subscription reset does not replenish the operation budget.
+
+These two counters are part of W08 implementation, not admission of a complete
+budget policy. Immutable policy pins, live cumulative active-time proof, tool and child
+operation enforcement, transport allowances, concurrency and interruption
+proof remain required before active admission. In particular, model tool calls
+must be counted before execution; activity notifications alone are not proof
+of a hard tool limit. The proposed bounds are not activated by this change.
+
+Implementation can span multiple model turns within its allowance. A `continue` outcome
 records exact remaining implementation tasks and starts the next turn without
 human intervention. A `complete` outcome must have no remaining tasks or
 questions. Installation, repository verification, audit, commit, push, and
@@ -493,8 +543,19 @@ verified tree again.
 
 Publication retries must still match that verified tree, even if somebody has
 made another clean commit locally. Invalid saved state is left untouched for
-operator inspection. Older state without a source snapshot returns to planning
-before dependent work can continue.
+operator inspection. Older state without policy identity or consumption evidence
+is held for owner inspection. A source snapshot cannot substitute for those
+records or replenish an allowance.
+
+State version 5 publishes delivery evidence version 2. The record includes the
+operation UUID, native repository ID, proposal-policy fingerprint, controller,
+model-turn and validation consumption, and the active-time reservation at the
+publication checkpoint. Tool consumption is explicitly `null` while hard tool
+counting remains unproved; it must not be presented as zero. The policy status
+remains proposed. The checkpoint does not claim final shutdown, settled total
+time, merge acceptance or milestone completion. Historical version-1 evidence
+remains readable for older state, but version-5 evidence cannot downgrade to
+omit its operation record. Marker and payload versions must agree.
 
 Codex startup and protocol failures publish only allowlisted error codes, HTTP
 status codes, and fixed diagnostic hints. For example, a recognized workspace

@@ -18,7 +18,7 @@
     "auditCheckpoint"
   ],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "enum": [1, 2] },
     "producer": { "const": "codex-delivery" },
     "repository": { "type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$" },
     "sourceIssue": {
@@ -92,6 +92,138 @@
         "summary": { "type": "string", "minLength": 1 }
       }
     },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "repositoryId",
+        "budgetPolicy",
+        "consumption",
+        "activeTime",
+        "phase",
+        "capturedAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "repositoryId": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "budgetPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version",
+            "sha256",
+            "status"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "status": {
+              "const": "proposed"
+            }
+          }
+        },
+        "consumption": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "controllerAttempts",
+            "modelTurns",
+            "validationAttempts",
+            "toolInvocations"
+          ],
+          "properties": {
+            "controllerAttempts": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "modelTurns": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "validationAttempts": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "toolInvocations": {
+              "type": "null"
+            }
+          }
+        },
+        "activeTime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "limitMs",
+            "spentMs",
+            "reservation"
+          ],
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "limitMs": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "spentMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reservation": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "owner",
+                    "startedAtMs"
+                  ],
+                  "properties": {
+                    "owner": {
+                      "type": "string",
+                      "pattern": "^[1-9][0-9]*:[1-9][0-9]*$"
+                    },
+                    "startedAtMs": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "phase": {
+          "const": "publication-checkpoint"
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
     "telemetry": {
       "type": "object",
       "additionalProperties": false,
@@ -111,5 +243,48 @@
         "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schemaVersion": {
+            "const": 2
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "operation"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "operation"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "auditCheckpoint": {
+            "properties": {
+              "stateVersion": {
+                "minimum": 5
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "schemaVersion": {
+            "const": 2
+          }
+        }
+      }
+    }
+  ]
 }
