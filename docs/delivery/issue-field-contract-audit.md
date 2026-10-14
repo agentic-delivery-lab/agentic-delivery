@@ -266,7 +266,9 @@ node scripts/run-issue-field-canary.mjs --evidence-dir <private-directory> --bin
 Apply requires each selected field to differ from its test option; an unchanged
 field cannot prove a successful write. The original snapshot is saved before the first write. Separate reads verify
 the test write and restoration. A lost write response triggers reconciliation,
-not repetition; a lost restore response is checked independently. Changed
+not repetition; a lost restore response is checked independently. Restoration
+writes only selected fields that differ from their original values, so a partial
+test write does not rewrite an untouched field. Changed
 selected-field values or missing original options hold restoration rather than
 overwriting another actor's work. Preserve the snapshot and inspect current
 values before any retry. Once the original snapshot is saved, an audit-output
@@ -308,3 +310,9 @@ The canary separately verified authenticated GitHub account `14937399`. The
 Harness review bundle does not include the private conversation or native field
 snapshots, so its independent assessment of that authorization and runtime
 evidence is limited. No runner receives the interactive delegation.
+
+Canonical disposition: [ADR-0012](https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/7b493df7240324b163359f69cc713f5cb3b1e067/decisions/0012-use-github-as-the-lifecycle-control-plane.md)
+and [ADR-0018](https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/7b493df7240324b163359f69cc713f5cb3b1e067/decisions/0018-organization-wide-agentic-delivery-control-plane-distribution-and-versioning.md),
+accepted through [Architecture PR #24](https://github.com/agentic-delivery-lab/agentic-delivery-architecture/pull/24).
+Architecture owns that bounded policy; this audit records implementation evidence.
+No controller release, participant or runner is activated by the reference.

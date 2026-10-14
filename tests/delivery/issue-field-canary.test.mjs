@@ -18,7 +18,7 @@ test('operator canary restores absent fields using explicit deletion and indepen
  assert.ok(io.calls[1].every(f=>f.delete===true && !Object.hasOwn(f,'singleSelectOptionId')));
  assert.deepEqual((await io.read()).fieldValues,[]);assert.equal(io.events[0].phase,'prepared');
 });
-test('shadow canary never writes',async()=>{
+test('operator preview never writes',async()=>{
  const io=fixture();const result=await runIssueFieldCanary({...io,target,actorId:'14937399'});
  assert.equal(result.mutationsRequested,false);assert.equal(io.calls.length,0);
 });
@@ -98,4 +98,19 @@ test('apply rejects a canary when either field already holds its test option',as
 test('canary uses the existing nested private binding contract and rejects flat input',()=>{
  assert.equal(compileCanaryFields(bindings).length,2);
  assert.throws(()=>compileCanaryFields(bindings.fields),/private canary bindings/);
+});
+
+test('partial test writes restore only changed fields and preserve an intervening untouched-field change',async()=>{
+ for(const concurrent of [false,true]) {
+  const io=fixture();const requests=[];let ordinal=0;
+  const write=async inputs=>{
+   requests.push(structuredClone(inputs));
+   if(++ordinal===1){await io.write(inputs.slice(0,1));throw new Error('partial uncertain write');}
+   if(concurrent)io.setFields([...(await io.read()).fieldValues,{fieldId:writes[1].fieldId,optionId:'human-option'}]);
+   await io.write(inputs);
+  };
+  await assert.rejects(runIssueFieldCanary({...io,write,target,actorId:'14937399',apply:true}),concurrent?/restoration held/:/independently restored/);
+  assert.equal(requests.length,2);assert.deepEqual(requests[1],[{fieldId:writes[0].fieldId,delete:true}]);
+  assert.deepEqual((await io.read()).fieldValues,concurrent?[{fieldId:writes[1].fieldId,optionId:'human-option'}]:[]);
+ }
 });

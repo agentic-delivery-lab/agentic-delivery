@@ -67,7 +67,7 @@ export async function runIssueFieldCanary({target,read,write,saveEvidence,actorI
       if(value!==prior && value!==field.singleSelectOptionId)throw new Error('Concurrent selected-field change.');
     }
     if(!equal(selected(current,fields),selected(original,fields))) {
-      const restore=fields.map(f=>{
+      const restore=fields.filter(f=>(current.find(v=>v.fieldId===f.fieldId)?.optionId ?? null)!==(original.find(v=>v.fieldId===f.fieldId)?.optionId ?? null)).map(f=>{
         const prior=original.find(v=>v.fieldId===f.fieldId);
         return prior ? {fieldId:f.fieldId,singleSelectOptionId:prior.optionId} : {fieldId:f.fieldId,delete:true};
       });

@@ -71,7 +71,7 @@ export async function runInteractiveCanaries(options) {
   const result=await runIssueFieldCanary({target,read,write,saveEvidence,actorId:String(actor.id),bindings,apply:options.apply});
   results.push({repositoryId:target.repositoryId,issueNumber:target.issueNumber,...result});
  }
- return {schemaVersion:1,operationId,sourceCommit,bindingSha256,mode:options.apply?'operator-apply':'shadow',results};
+ return {schemaVersion:1,operationId,sourceCommit,bindingSha256,mode:options.apply?'operator-apply':'operator-preview',results};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
  try {console.log(JSON.stringify(await runInteractiveCanaries(parseCanaryArguments(process.argv.slice(2)))));}
