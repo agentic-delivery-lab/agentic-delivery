@@ -24,7 +24,7 @@ terms:
     definition: "A resource limit shared by the saved source-Issue operation across attempts and resumes; subscription resets and continuation do not replenish its recorded consumption."
   - context: "agentic-delivery-control-plane"
     term: "resource reservation"
-    definition: "Consumption recorded before a controlled action starts; a failed or interrupted action remains charged, and missing consumption evidence requires a hold rather than a fresh allowance."
+    definition: "Capacity or consumption reserved before a controlled action starts; duration records an owned start and is settled only after confirmed shutdown. Failed actions remain charged, and uncertain or missing consumption requires a hold rather than a fresh allowance."
   - context: "agentic-delivery-governance"
     term: "continuation prompt"
     definition: "Saved instructions identifying a paused delivery run's source issue, phase, progress, remaining tasks, and conditions for resuming."

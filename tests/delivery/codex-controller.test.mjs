@@ -4,7 +4,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, readFile, writeFile, mkdir, rm, access } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, mkdir, rm, access, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { deliver, invocationSourceRoute } from '../../scripts/codex-delivery.mjs';
@@ -557,7 +557,7 @@ test('manual repair cannot replenish exhausted validation or repeat implementati
   assert.equal(f.calls.prs.length, 0);
 });
 
-test('saved verification cannot continue after a lifecycle state change', async (t) => {
+test('exhausted saved verification holds before reading changed lifecycle state', async (t) => {
   const f = await fixture(t); f.faults.validation = true;
   await f.run(); assert.equal((await f.state()).phase,'verify');
   const clients = f.calls.clients;
@@ -565,7 +565,7 @@ test('saved verification cannot continue after a lifecycle state change', async 
   f.faults.sourceFields = {lifecycle_stage:'intake', readiness:'needs-info'};
   const result = await f.resume();
   assert.equal(result.status, 'paused');
-  assert.match(result.reason, /not authorized for verification/);
+  assert.match(result.reason, /validation allowance is exhausted/);
   assert.equal(f.calls.clients, clients);
   assert.deepEqual(f.calls.turns, turns);
 });
@@ -598,8 +598,13 @@ test('missing validation consumption holds a saved operation instead of resettin
   assert.equal(result.status, 'paused');
   assert.match(result.reason, /Validation consumption is unknown/);
   assert.equal(f.calls.clients, clients);
-  assert.equal((await f.state()).validationAttemptCount, null);
-  assert.equal((await f.state()).execution.lastFailure.recoverability, 'owner-action');
+  assert.equal((await f.state()).validationAttemptCount, undefined, 'held input remains unchanged');
+  const receiptRoot = path.join(f.issueRoot, 'budget-holds');
+  const receipts = await Promise.all((await readdir(receiptRoot)).map(async (file) =>
+    JSON.parse(await readFile(path.join(receiptRoot, file), 'utf8'))));
+  const receipt = receipts.find((entry) => entry.outcome === 'admission-held');
+  assert.ok(receipt, 'the resumed invocation records its own admission hold');
+  assert.equal(receipt.consumption.validationAttempts,null);assert.equal(receipt.privilegedActionsPerformed,false);
 });
 
 test('model turns share one eight-turn allowance across automatic continuation and resume', async (t) => {
@@ -672,11 +677,13 @@ test('active time settles across attempts and excludes time awaiting clarificati
 test('active time exhaustion stops implementation and publication after the planning turn', async (t) => {
   const f = await fixture(t);
   f.faults.nowMs = 100;
-  f.faults.beforeTurn = async () => { f.faults.nowMs += ACTIVE_TIME_LIMIT_MS; };
+  let commentsAtStop;
+  f.faults.beforeTurn = async () => { f.faults.nowMs += ACTIVE_TIME_LIMIT_MS;commentsAtStop=f.calls.comments.length; };
   const result = await f.run();
   assert.equal(result?.status, 'paused');
   assert.match(result.reason, /active time allowance is exhausted/);
   assert.deepEqual(f.calls.turns, ['plan']);
+  assert.equal(f.calls.comments.length,commentsAtStop,'deadline stops must not post an exempt audit comment');
   assert.equal(f.calls.prs.length, 0);
   assert.equal(f.calls.pushHeaders.length, 0);
   assert.equal((await f.state()).activeTime.spentMs, ACTIVE_TIME_LIMIT_MS);
@@ -734,7 +741,7 @@ test('changed policy identity holds before another model client or protected pub
   const clients = f.calls.clients;
   const result = await f.resume();
   assert.equal(result.status, 'paused');
-  assert.match(result.reason, /budget policy has changed/);
+  assert.match(result.reason, /budget policy is missing or changed/);
   assert.equal(f.calls.clients, clients);
   assert.equal(f.calls.prs.length, 0);
   assert.equal(f.calls.pushHeaders.length, 0);
@@ -770,8 +777,13 @@ test('missing controller-attempt history cannot become a fresh allowance on resu
   assert.equal(result.status, 'paused');
   assert.match(result.reason, /Controller attempt consumption is unknown/);
   assert.equal(f.calls.clients, clients);
-  assert.equal((await f.state()).controllerAttemptCount, null);
-  assert.equal((await f.state()).execution.lastFailure.recoverability, 'owner-action');
+  assert.equal((await f.state()).controllerAttemptCount, undefined, 'unknown history is preserved');
+  const receiptRoot = path.join(f.issueRoot, 'budget-holds');
+  const receipts = await Promise.all((await readdir(receiptRoot)).map(async (file) =>
+    JSON.parse(await readFile(path.join(receiptRoot, file), 'utf8'))));
+  const receipt = receipts.find((entry) => entry.outcome === 'admission-held');
+  assert.ok(receipt, 'the resumed invocation records its own admission hold');
+  assert.equal(receipt.consumption.controllerAttempts,null);assert.equal(receipt.authorityRevalidated,false);
 });
 
 test('implementation questions preserve the implementation phase and existing branch', async (t) => {
@@ -903,8 +915,9 @@ test('a missing UUID in versioned waiting state fails without starting a replace
   const f = await fixture(t);
   await mkdir(f.issueRoot,{recursive:true});
   await writeFile(path.join(f.issueRoot,'state.json'),JSON.stringify({
-    version:2,repository:'fixture/repo',issue:'7',phase:'plan',status:'awaiting-human',
+    version:5,repository:'fixture/repo',issue:'7',phase:'plan',status:'awaiting-human',
     waitingCommentId:'100',events:[],consumedCommentIds:[],tasks:[],plan,
+    modelTurnCount:0,validationAttemptCount:0,controllerAttemptCount:0,activeTime:createActiveTimeAllowance(),
     operationId:'12345678-1234-4234-8234-123456789012',budgetPolicyReference:currentOperationPolicyReference(),validationProfileReference:await f.validationProfileReference(),
   }));
   await f.comment({id:206,body:'Use result.txt.'});
@@ -940,13 +953,16 @@ test('legacy waiting state with unknown consumption is held without a replacemen
     auditCommentIds:[100],events:[],tasks:[],lastProgress:'The old thread asked a question.',
   }));
   await f.comment({id:208,body:'Use result.txt.'});
-  await f.run();
+  const before=await readFile(path.join(f.issueRoot,'state.json'),'utf8');
+  const result=await f.run();
   const state = await f.state();
-  assert.equal(state.version,5);
-  assert.equal(state.status, 'paused');
+  assert.equal(await readFile(path.join(f.issueRoot,'state.json'),'utf8'),before);
+  assert.equal(state.version,undefined);
+  assert.equal(result.status, 'paused');
+  assert.equal(state.status, 'needs_input');
   assert.equal(state.sessionId, undefined);
-  assert.equal(state.modelTurnCount, null);
-  assert.match(state.reason, /budget policy pin is unknown/);
+  assert.equal(state.modelTurnCount, undefined);
+  assert.match(result.reason, /operation identity is unknown/);
   assert.equal(f.calls.clients, 0);
   assert.deepEqual(f.calls.threads, []);
 });
@@ -1059,4 +1075,17 @@ test('failed validation records its candidate tree and command failure digest', 
   assert.match(state.validationEvidence.commands[0].errorSha256,/^[a-f0-9]{64}$/);
   assert.equal(state.validationAttemptCount,3);
   assert.equal(f.calls.prs.length,0);
+});
+
+test('exhausted resumption holds before token minting and preserves queued comments',async(t)=>{
+ const f=await fixture(t);f.faults.validation=true;await f.run();
+ const saved=await f.state();saved.outbox=['Queued evidence that must remain local after exhaustion.'];
+ await writeFile(path.join(f.issueRoot,'state.json'),JSON.stringify(saved));
+ const {privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
+ f.env.CODEX_DELIVERY_APP_ID='5011055';f.env.CODEX_DELIVERY_APP_PRIVATE_KEY=privateKey.export({type:'pkcs8',format:'pem'});
+ f.env.CODEX_DELIVERY_APP_INSTALLATION_ID='163255060';delete f.env.PUBLISH_TOKEN;
+ const comments=f.calls.comments.length;const result=await f.resume();
+ assert.equal(result.status,'paused');assert.match(result.reason,/validation allowance is exhausted/);
+ assert.equal(f.calls.accessTokenRequests.length,0);assert.equal(f.calls.comments.length,comments);
+ assert.deepEqual((await f.state()).outbox,saved.outbox);assert.equal((await f.state()).validationAttemptCount,3);
 });

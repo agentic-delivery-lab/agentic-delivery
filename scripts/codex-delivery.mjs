@@ -413,6 +413,41 @@ export async function deliver(env = process.env, dependencies = {}) {
     && String(event.repository.id) !== originRepositoryId) {
     throw new Error('Origin repository ID does not match the authenticated event repository.');
   }
+  const stateRoot = path.resolve(env.CODEX_DELIVERY_STATE_DIR || path.join(env.RUNNER_WORKSPACE, '..', '.codex-delivery'));
+  const issueRoot = path.join(stateRoot, originRepositoryId, issue);
+  const stateFile = path.join(issueRoot, 'state.json');
+  const stateWasSaved = await exists(stateFile);
+  if (stateWasSaved) {
+    const saved = await readSavedState(stateFile, issue, repository);
+    let reason;
+    if (!saved.operationId) reason = 'The operation identity is unknown; preserve its source and consumption evidence.';
+    else if (!matchesCurrentOperationPolicy(saved.budgetPolicyReference)) reason = 'The operation budget policy is missing or changed; owner readmission is required without resetting consumption.';
+    else if (saved.controllerAttemptCount === null) reason = 'Controller attempt consumption is unknown; preserve the operation for owner inspection.';
+    else if (saved.controllerAttemptCount >= INITIAL_OPERATION_LIMITS.controllerAttempts) reason = 'The operation controller attempt allowance is exhausted; resumption cannot reset it.';
+    else if (saved.validationAttemptCount === null) reason = 'Validation consumption is unknown; preserve the operation for owner inspection.';
+    else if (['branch','implement','verify'].includes(saved.phase) && saved.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS) reason = 'The operation validation allowance is exhausted; resumption cannot reset it.';
+    else if (saved.modelTurnCount === null) reason = 'Model turn consumption is unknown; preserve the operation for owner inspection.';
+    else if (!['publish','commit','coordinate','verify'].includes(saved.phase) && saved.modelTurnCount >= MAX_MODEL_TURNS) reason = 'The operation model turn allowance is exhausted; resumption cannot reset it.';
+    if (!reason) {
+      try { reserveActiveTime(saved.activeTime, {owner:`${env.GITHUB_RUN_ID ?? ''}:${env.GITHUB_RUN_ATTEMPT ?? '1'}`,nowMs:now()}); }
+      catch (error) { reason = error.message; }
+    }
+    if (reason) {
+      // This is a local admission hold, not authority revalidation or evidence
+      // that another process stopped. Preserve the operation and its outbox.
+      const receiptRoot = path.join(issueRoot, 'budget-holds');
+      await mkdir(receiptRoot, {recursive:true,mode:0o700});
+      await atomic(path.join(receiptRoot, `${randomUUID()}.json`), {
+        schemaVersion:1, outcome:'admission-held', repository, repositoryId:originRepositoryId,
+        sourceIssue:Number(issue), operationId:saved.operationId, budgetPolicyReference:saved.budgetPolicyReference,
+        workflowRunId:String(env.GITHUB_RUN_ID ?? ''), workflowRunAttempt:String(env.GITHUB_RUN_ATTEMPT ?? '1'),
+        authorityRevalidated:false, privilegedActionsPerformed:false, reason,
+        consumption:{controllerAttempts:saved.controllerAttemptCount,modelTurns:saved.modelTurnCount,validationAttempts:saved.validationAttemptCount,activeTime:saved.activeTime},
+        recordedAt:new Date(now()).toISOString(),
+      });
+      return {status:'paused',reason};
+    }
+  }
   const endpoint = `https://api.github.com/repos/${repository}`;
   const appProvider = appCredentialsConfigured
     ? new GithubAppTokenProvider({
@@ -429,9 +464,9 @@ export async function deliver(env = process.env, dependencies = {}) {
     ? await appProvider.token({ repositoryIds: [originRepositoryId] })
     : env.PUBLISH_TOKEN || env.GH_TOKEN;
   const api = async (route, method = 'GET', body, token = originToken) => {
-    // Controller-owned audit comments remain available to record a hard stop.
-    const protectedWrite = method !== 'GET' && route !== `/issues/${issue}/comments`;
-    const timeoutMs = activeSegmentStarted && protectedWrite ? Math.min(30_000, requireActiveTime()) : 30_000;
+    const protectedWrite = method !== 'GET';
+    if (protectedWrite) await beginActiveTime();
+    const timeoutMs = protectedWrite ? Math.min(30_000, requireActiveTime()) : 30_000;
     const response = await fetchApi(`${endpoint}${route}`, {
       method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10', 'Content-Type': 'application/json' },
       ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(timeoutMs),
@@ -519,13 +554,6 @@ export async function deliver(env = process.env, dependencies = {}) {
       && ['ready', 'working', 'awaiting-human'].includes(metadata.readiness)
       && blockedGovernance.length === 0;
   };
-  const stateRoot = path.resolve(env.CODEX_DELIVERY_STATE_DIR || path.join(env.RUNNER_WORKSPACE, '..', '.codex-delivery'));
-  const repositoryKey = event.repository?.id !== undefined && /^\d+$/.test(String(event.repository.id))
-    ? String(event.repository.id)
-    : repository.replace('/', '_');
-  const issueRoot = path.join(stateRoot, repositoryKey, issue);
-  const stateFile = path.join(issueRoot, 'state.json');
-  const stateWasSaved = await exists(stateFile);
   if (comment && !stateWasSaved) {
     return {status:'ignored', reason:'No saved continuation state exists for this issue.'};
   }
@@ -551,7 +579,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   };
   const requireActiveTime = () => {
     const remainingMs = remainingActiveTime(state.activeTime, { owner: activeOwner, nowMs: now() });
-    if (remainingMs === 0) throw new Error('The operation active time allowance is exhausted.');
+    if (remainingMs === 0) throw Object.assign(new Error('The operation active time allowance is exhausted.'), {code:'OPERATION_BUDGET_HOLD'});
     return remainingMs;
   };
   const beginActiveTime = async () => {
@@ -568,8 +596,8 @@ export async function deliver(env = process.env, dependencies = {}) {
     overall = setTimeout(cancel, requireActiveTime());
   };
   const requireModelTurnAllowance = () => {
-    if (state.modelTurnCount === null) throw new Error('Model turn consumption is unknown; preserve the operation for owner inspection.');
-    if (state.modelTurnCount >= MAX_MODEL_TURNS) throw new Error('The operation model turn allowance is exhausted; resumption cannot reset it.');
+    if (state.modelTurnCount === null) throw Object.assign(new Error('Model turn consumption is unknown; preserve the operation for owner inspection.'), {code:'OPERATION_BUDGET_HOLD'});
+    if (state.modelTurnCount >= MAX_MODEL_TURNS) throw Object.assign(new Error('The operation model turn allowance is exhausted; resumption cannot reset it.'), {code:'OPERATION_BUDGET_HOLD'});
   };
   const performTurn = async (options) => {
     requireActiveTime();
@@ -647,8 +675,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   try { lock = await import('node:fs/promises').then(({ open }) => open(lockFile, 'wx', 0o600)); }
   catch (error) {
     if (error.code !== 'EEXIST') throw error;
-    await api(`/issues/${issue}/comments`, 'POST', { body: 'Delivery is already running. No action is needed. If the linked run is no longer active, an operator must clear the stale runner lock and rerun the workflow. Do not change lifecycle fields or post another continuation comment.' });
-    return;
+    return {status:'paused',reason:'An account execution lock is present. Preserve it and verify its owner and run before any recovery; no new execution or comment write was admitted.'};
   }
   runTools = await mkdtemp(path.join(issueRoot, 'run-tools-'));
   for (const entry of await readdir(issueRoot, { withFileTypes: true })) {
@@ -889,8 +916,8 @@ export async function deliver(env = process.env, dependencies = {}) {
       throw new Error('The source issue is not authorized for verification.');
     }
     if (['branch', 'implement', 'verify'].includes(state.phase)) {
-      if (state.validationAttemptCount === null) throw new Error('Validation consumption is unknown; preserve the operation for owner inspection.');
-      if (state.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS) throw new Error('The operation validation allowance is exhausted; resumption cannot reset it.');
+      if (state.validationAttemptCount === null) throw Object.assign(new Error('Validation consumption is unknown; preserve the operation for owner inspection.'), {code:'OPERATION_BUDGET_HOLD'});
+      if (state.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS) throw Object.assign(new Error('The operation validation allowance is exhausted; resumption cannot reset it.'), {code:'OPERATION_BUDGET_HOLD'});
     }
     if (state.phase === 'commit' && (metadata.lifecycleStage !== 'execution' || !deliveryMetadataSafe(metadata))) {
       throw new Error('The source issue is not authorized for commit.');
@@ -1315,8 +1342,8 @@ legacy owner-only rule in the base instruction file.`;
         }
         await requireDeliveryMetadata(['in-progress']);
         requireActiveTime();
-        if (state.validationAttemptCount === null) throw new Error('Validation consumption is unknown; preserve the operation for owner inspection.');
-        if (state.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS) throw new Error('The operation validation allowance is exhausted; resumption cannot reset it.');
+        if (state.validationAttemptCount === null) throw Object.assign(new Error('Validation consumption is unknown; preserve the operation for owner inspection.'), {code:'OPERATION_BUDGET_HOLD'});
+        if (state.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS) throw Object.assign(new Error('The operation validation allowance is exhausted; resumption cannot reset it.'), {code:'OPERATION_BUDGET_HOLD'});
         state.validationAttemptCount++;
         // Reserve durably before execution. Interrupted or failed attempts are
         // charged, so restarting the controller cannot replenish the allowance.
@@ -1351,10 +1378,10 @@ legacy owner-only rule in the base instruction file.`;
           break;
         } catch (error) {
           state.validation = redact(error.message, env).slice(-24_000);
-          await audit(`### Validation attempt ${state.validationAttemptCount} failed\n\n${state.validation}`);
           if (state.validationAttemptCount === MAX_VALIDATION_ATTEMPTS) {
-            throw new Error('The operation validation allowance is exhausted; resumption cannot reset it.');
+            throw Object.assign(new Error('The operation validation allowance is exhausted; resumption cannot reset it.'), {code:'OPERATION_BUDGET_HOLD'});
           }
+          await audit(`### Validation attempt ${state.validationAttemptCount} failed\n\n${state.validation}`);
           state.phase = 'implement';
           await save();
         }
@@ -1502,6 +1529,20 @@ legacy owner-only rule in the base instruction file.`;
     await save();
     const handoff = continuation(state);
     await writeFile(path.join(issueRoot, 'CONTINUE.md'), handoff, { mode: 0o600 });
+    if (error?.code === 'OPERATION_BUDGET_HOLD') {
+      const receiptRoot = path.join(issueRoot, 'budget-holds');
+      await mkdir(receiptRoot, {recursive:true,mode:0o700});
+      await atomic(path.join(receiptRoot, `${randomUUID()}.json`), {
+        schemaVersion:1, outcome:'execution-held', repository, repositoryId:originRepositoryId,
+        sourceIssue:Number(issue), operationId:state.operationId, budgetPolicyReference:state.budgetPolicyReference,
+        validationProfileReference:state.validationProfileReference,
+        workflowRunId:String(env.GITHUB_RUN_ID ?? ''), workflowRunAttempt:String(env.GITHUB_RUN_ATTEMPT ?? '1'),
+        newWorkActionsAfterStop:false, reason:state.reason,
+        consumption:{controllerAttempts:state.controllerAttemptCount,modelTurns:state.modelTurnCount,validationAttempts:state.validationAttemptCount,activeTime:state.activeTime},
+        recordedAt:new Date(now()).toISOString(),
+      });
+      return {status:state.status,reason:state.reason};
+    }
     try {
       const postedIds = await audit(handoff);
       if (awaitingHuman) {
