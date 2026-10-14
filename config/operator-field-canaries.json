@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "repository": "agentic-delivery-lab/agentic-delivery",
+      "repositoryId": "1358455028",
+      "issueNumber": 62,
+      "issueId": "I_kwDOUPhg9M8AAAABTvzWhA"
+    },
+    {
+      "repository": "agentic-delivery-lab/.github",
+      "repositoryId": "1368850419",
+      "issueNumber": 11,
+      "issueId": "I_kwDOUZb_888AAAABTvzXDw"
+    }
+  ],
+  "fields": [
+    {
+      "key": "lifecycle_stage",
+      "name": "Lifecycle Stage",
+      "option": "intake",
+      "optionName": "Intake"
+    },
+    {
+      "key": "readiness",
+      "name": "Delivery Readiness",
+      "option": "not-ready",
+      "optionName": "Not ready"
+    }
+  ]
+}

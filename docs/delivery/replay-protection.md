@@ -30,13 +30,40 @@ Neon stores the five-minute gateway replay window and dispatch lease in
 lease for controller runs: pending, running, retryable, completed, or
 exhausted. The controller claims the receipt before intake, and a final Actions
 job records completion only after classification and any selected delivery
-workflow finish. The finalizer checks out the same validated controller pin
-used for intake before it records completion or retryability. Failed runs become
-retryable with backoff. An interrupted run can be reclaimed after its lease
-expires while it remains below the attempt limit. Expired final-attempt
-receipts are marked exhausted before redelivery selection and are not claimed
-again automatically. Actions concurrency keyed by the delivery GUID serializes
-repeated dispatches.
+workflow finish. The finalizer runs from the exact workflow revision checked
+out under `dispatch-boundary`; it does not depend on the participant controller
+pin containing a copy of the finalizer. Dependencies are installed from that
+same checkout. This keeps an older participant pin from replacing the trusted
+dispatcher code or making receipt settlement depend on an unrelated
+implementation revision. Failed runs become retryable with backoff while
+controller attempts remain, then exhausted. Empty, missing, unknown and `hold`
+routes cannot complete, even with a successful workflow result or skipped
+delivery. They follow the same bounded retry/exhaustion path. The finalizer
+reports the status returned by the settlement write; it does not infer retry
+eligibility from transport success or a later read. A skipped delivery for a
+successfully classified supported route in shadow or read-only mode remains
+an intentional invocation completion. This records processing or observation,
+not delivered software, a published PR or owner acceptance. An
+interrupted run can be reclaimed after its lease expires while it remains below
+the attempt limit. Expired final-attempt receipts are marked exhausted before
+redelivery selection and are not claimed again automatically. Actions
+concurrency keyed by the delivery GUID serializes repeated dispatches.
+
+For accepted invocations, the trusted workflow revision records the validated
+origin repository name and ID, source Issue, participant controller commit,
+and Actions run ID and attempt on the claimed receipt before delivery starts.
+The finalizer rechecks those values against the signed event and current run
+before it records completion or retry. A duplicate finalizer cannot rewrite a
+settled receipt, and a different workflow attempt cannot settle its active
+lease. A matching token is insufficient after lease expiry, even before another
+run reclaims the receipt; attribution, completion and retry require an
+unexpired lease. The attribution remains on the receipt
+through retries; the run ID and attempt identify the latest claim. Legacy rows
+remain valid with all attribution columns empty.
+
+Rollback follows the ordinary reviewed workflow-revision path. A rollback
+target must retain the workflow-revision finalizer and its contract tests; do
+not change a participant pin to restore receipt-settlement code.
 
 `webhook_reconciler_state` holds the completed history checkpoint and any
 pending GitHub cursor. A `webhook delivery observation` in
@@ -87,6 +114,15 @@ it to source control. All migrations are safe to run more than once. Migration
 the queue claim status allowlist before applying any archival disposition.
 The Issue #60 operator operation applies migration 0006 in its guarded
 transaction; ordinary reconciliation never applies a migration.
+Migration 0008 adds attributable identity columns to controller receipts.
+Apply it through a protected operator session before enabling a workflow
+revision that records or verifies those fields. This pull request includes the
+migration but does not apply it to a live database.
+
+```sh
+psql "$NEON_DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 \
+  -f api/github/migrations/0008-controller-receipt-attribution.sql
+```
 
 Configure these protected values before production activation:
 
@@ -344,3 +380,58 @@ The optional isolated integration test uses
 database where all five migrations have been applied. The live Vercel deployment,
 GitHub App credentials, Neon production schema, and scheduled execution remain
 unverified until an operator configures and activates them.
+
+## Controlled release
+
+Automatic Vercel Git deployments are disabled in `vercel.json`. Publishing or
+merging a safety correction must not implicitly deploy the webhook writer.
+Apply and independently verify migration 0008 before a deployed revision writes
+receipt attribution; retain the earlier supported composition until that gate
+passes. GitHub workflow changes require the same migration-before-writer check.
+
+### Read-only installed-schema observation
+
+The operator may dispatch `delivery-quality.yml` with `pull_request_number: 112`
+and `inspect_receipt_schema: true` at its reviewed immutable source. Only
+`sjefsharp` (native actor ID `14937399`) in the Control Plane repository
+(`1358455028`) can execute the inspection job. Other quality jobs skip this
+mode. The sealed existing receipt database secret is supplied only to the
+inspection step on an ephemeral hosted runner; no model runs. The query uses
+a read-only transaction and a 30-second deadline. It emits a target fingerprint,
+column/type/nullability observations and a constraint-definition hash, never
+connection values, row data, raw definitions or credential-bearing errors.
+
+Successful observation does not accept the migration. Constraint semantics and
+equivalence with the Vercel production target still require verification. This
+mode cannot apply migrations, deploy, enroll participants or activate a runner.
+
+### Operator migration transaction
+
+The delegated operator may select `migrate_receipt_schema: true` in
+`delivery-quality.yml` on the exact reviewed candidate branch. Inspect and
+migration modes are mutually exclusive; normal quality jobs skip either mode.
+The migration job runs on a hosted runner with contents-read permission and
+passes the existing sealed connection only to the fixed command after the
+frozen dependency installation. No model, App key, publication credential or
+self-hosted runner is involved.
+
+`scripts/migrate-controller-receipt-schema.mjs` authorizes the native operator,
+repository and manual event with explicit `apply-0008` opt-in and attributable
+source/run/attempt. Before connecting, it binds the target fingerprint from
+inspection run 38461262019 and verifies the migration source digest. One
+serializable transaction sets two-second lock and ten-second statement limits,
+locks the receipt table, rejects attribution schema changed since inspection,
+and applies fixed migration 0008. The request deadline is 30 seconds.
+
+A separate read-only query then verifies column types/nullability, validated
+constraint and the exact constraint-definition hash derived from isolated
+PostgreSQL 18.6. An unexpected response or hash holds acceptance; it does not
+undo or retry a possibly committed migration. Reconcile through the read-only
+inspection mode before deciding the next action. A repeated migration request
+fails its schema precondition and requires fresh review.
+
+Output contains only target/source/migration/constraint hashes and native
+operator/run/attempt identity. It never prints a connection value or raw SQL
+error. Successful migration/readback establishes this workflow-connected target
+only; production target equivalence and a supported writer rollout remain
+separate gates. This mode cannot deploy, enroll or activate a runner.

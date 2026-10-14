@@ -181,10 +181,23 @@ The invocation preflight checks the signature and
 participant pin with the fixed bootstrap before checking out the selected
 controller. It then re-fetches the current comment or review, maps a pull
 request to its issue-linked source, and invokes the existing issue intake.
-The invocation finalizer runs in a separate job, so it normalizes the original
-GitHub event again from the trusted workflow revision. It gives the direct
-version-1 envelope to the pinned receipt finalizer, which uses the same
-installation and delivery IDs to complete or retry the controller receipt.
+The invocation finalizer runs in a separate job and normalizes the original
+GitHub event from the trusted workflow revision. It installs dependencies and
+executes the receipt finalizer from that same immutable `github.sha` checkout
+under `dispatch-boundary`. Before delivery starts, that trusted revision also
+persists the validated origin repository, source Issue, participant controller
+commit, and Actions run ID and attempt under the active receipt lease. The
+finalizer verifies this identity before completing or retrying the receipt.
+The workflow computes the finalizer result from classification, the selected
+route, and delivery status, and passes the route explicitly to the finalizer.
+Empty, missing, unknown and `hold` routes cannot complete when delivery is
+skipped or transport succeeds. Retry settlement returns either retryable or
+exhausted from the same store write. Shadow and read-only skips on a successful
+supported route remain intentional invocation completion; they do not prove
+software delivery or acceptance.
+The participant controller pin selects the delivery implementation; it does
+not select or replace dispatcher-owned receipt settlement code. This works
+even when an older participant pin has no finalizer file.
 The observation workflow normalizes the event with its trusted `github.sha`
 checkout, verifies the signature and registry pin, and only then checks out
 the selected immutable observation reader. That reader verifies the envelope

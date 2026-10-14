@@ -177,6 +177,7 @@
       "primitives": [
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
+        "interactive-issue-field-canary-command",
         "issue-classifier",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
@@ -185,6 +186,7 @@
         "issue-metadata-migration-command",
         "issue-metadata-resolver",
         "lifecycle-transition-validator",
+        "operator-issue-field-canary",
         "orchestration-policy-catalog",
         "orchestration-policy-validator",
         "organization-metadata-runbook",
@@ -291,10 +293,13 @@
         "agent-invocation-boundary",
         "agent-invocation-finalizer",
         "agent-invocation-preflight",
+        "agent-invocation-receipt-attribution",
         "agent-invocation-workflow",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
+        "controller-receipt-schema-inspection",
+        "controller-receipt-schema-migration",
         "curated-changelog",
         "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
@@ -306,12 +311,14 @@
         "github-app-token-provider",
         "intake-caller-provenance-guard",
         "intake-participation-policy",
+        "interactive-issue-field-canary-command",
         "issue-60-bounded-reconciliation-recovery",
         "issue-60-webhook-delivery-archive",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "operation-active-time-allowance",
         "operation-budget-policy-identity",
+        "operator-issue-field-canary",
         "organization-metadata-runbook",
         "organization-webhook-ingress",
         "participant-registry",
@@ -341,9 +348,11 @@
       ],
       "primitives": [
         "delivery-state-domain-language",
+        "interactive-issue-field-canary-command",
         "issue-field-controller-boundary",
         "issue-metadata-contract",
         "issue-metadata-resolver",
+        "operator-issue-field-canary",
         "organization-metadata-runbook"
       ]
     }
@@ -359,10 +368,13 @@
         "agent-invocation-boundary",
         "agent-invocation-finalizer",
         "agent-invocation-preflight",
+        "agent-invocation-receipt-attribution",
         "agent-invocation-workflow",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "control-plane-contract-validator",
+        "controller-receipt-schema-inspection",
+        "controller-receipt-schema-migration",
         "curated-changelog",
         "delivery-participant-policy-resolver",
         "delivery-state-domain-language",
@@ -374,12 +386,14 @@
         "github-app-token-provider",
         "intake-caller-provenance-guard",
         "intake-participation-policy",
+        "interactive-issue-field-canary-command",
         "issue-60-bounded-reconciliation-recovery",
         "issue-60-webhook-delivery-archive",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "operation-active-time-allowance",
         "operation-budget-policy-identity",
+        "operator-issue-field-canary",
         "organization-metadata-runbook",
         "organization-webhook-ingress",
         "participant-registry",
@@ -430,6 +444,8 @@
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
         "commit-format-validator",
+        "controller-receipt-schema-inspection",
+        "controller-receipt-schema-migration",
         "curated-changelog",
         "delivery-state-domain-language",
         "domain-language-validator",
@@ -437,6 +453,7 @@
         "event-catalog-validator",
         "github-native-issue-type",
         "harness-architecture-review",
+        "interactive-issue-field-canary-command",
         "issue-branch-name-validator",
         "issue-classifier",
         "issue-event-authorization",
@@ -450,6 +467,7 @@
         "main-history-validator",
         "operation-active-time-allowance",
         "operation-budget-policy-identity",
+        "operator-issue-field-canary",
         "orchestration-policy-catalog",
         "orchestration-policy-validator",
         "organization-metadata-runbook",
@@ -535,6 +553,19 @@
       "domains": [
         "agentic-delivery-control-plane",
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "agent-invocation-receipt-attribution",
+      "path": "scripts/record-agent-invocation-identity.mjs",
+      "location": "scripts/record-agent-invocation-identity.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {
@@ -666,6 +697,34 @@
       ],
       "domains": [
         "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "controller-receipt-schema-inspection",
+      "path": "scripts/inspect-controller-receipt-schema.mjs",
+      "location": "scripts/inspect-controller-receipt-schema.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "controller-receipt-schema-migration",
+      "path": "scripts/migrate-controller-receipt-schema.mjs",
+      "location": "scripts/migrate-controller-receipt-schema.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
       ]
     },
     {
@@ -860,6 +919,22 @@
       ],
       "domains": [
         "agentic-delivery-control-plane"
+      ]
+    },
+    {
+      "id": "interactive-issue-field-canary-command",
+      "path": "scripts/run-issue-field-canary.mjs",
+      "location": "scripts/run-issue-field-canary.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0012",
+        "ADR-0018",
+        "ADR-0019"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
       ]
     },
     {
@@ -1067,6 +1142,22 @@
       "adrs": [
         "ADR-0009",
         "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "operator-issue-field-canary",
+      "path": "scripts/lib/issue-field-canary.mjs",
+      "location": "scripts/lib/issue-field-canary.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0012",
+        "ADR-0018",
+        "ADR-0019"
       ],
       "domains": [
         "agentic-delivery-control-plane",
