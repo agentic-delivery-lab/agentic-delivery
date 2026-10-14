@@ -210,6 +210,23 @@ jobs:
         run: GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node scripts/prepare-agent-invocation.mjs
         working-directory: trusted-intake
 
+      - name: Install trusted workflow-revision receipt dependencies
+        if: ${{ inputs.agent_invocation && steps.invocation.outputs.accepted == 'true' }}
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: dispatch-boundary
+
+      - name: Persist invocation identity from the trusted workflow revision
+        if: ${{ inputs.agent_invocation && steps.invocation.outputs.accepted == 'true' }}
+        env:
+          AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}
+          CONTROLLER_EVENT_PATH: ${{ steps.normalized-event.outputs.event_path }}
+          ORIGIN_REPOSITORY: ${{ steps.invocation.outputs.origin_repository }}
+          ORIGIN_REPOSITORY_ID: ${{ steps.invocation.outputs.origin_repository_id }}
+          SOURCE_ISSUE: ${{ steps.invocation.outputs.source_issue }}
+          CONTROLLER_COMMIT: ${{ steps.invocation.outputs.controller_commit }}
+        run: GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node scripts/record-agent-invocation-identity.mjs
+        working-directory: dispatch-boundary
+
       - name: Resolve participant and read-only run policy
         id: intake-policy
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
@@ -346,7 +363,7 @@ jobs:
           install: false
           package-json-file: dispatch-boundary/package.json
 
-      - name: Normalize the wrapped event for the pinned receipt finalizer
+      - name: Normalize the wrapped event for the workflow-revision receipt finalizer
         id: normalized-finalizer-event
         env:
           SOURCE_EVENT_PATH: ${{ github.event_path }}
@@ -355,32 +372,19 @@ jobs:
           node dispatch-boundary/scripts/normalize-repository-dispatch-event.mjs "$SOURCE_EVENT_PATH" "$NORMALIZED_EVENT_PATH"
           echo "event_path=$NORMALIZED_EVENT_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: Validate the participant controller pin
-        env:
-          CONTROLLER_COMMIT: ${{ needs.classify.outputs.controller_commit }}
-        run: |
-          set -euo pipefail
-          [[ "$CONTROLLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-
-      - name: Check out the controller
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          ref: ${{ needs.classify.outputs.controller_commit }}
-          persist-credentials: false
-
-      - name: Set up Node.js and pnpm
-        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
-        with:
-          runtime: node@24
-          install: false
-          package-json-file: package.json
-
-      - name: Install controller dependencies
+      - name: Install workflow-revision finalizer dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: dispatch-boundary
 
       - name: Persist invocation completion or retryability
         env:
           AGENTIC_DELIVERY_REPLAY_DATABASE_URL: ${{ secrets.AGENTIC_DELIVERY_REPLAY_DATABASE_URL }}
           CONTROLLER_EVENT_PATH: ${{ steps.normalized-finalizer-event.outputs.event_path }}
-          INVOCATION_RESULT: ${{ needs.classify.result == 'success' && (needs.deliver.result == 'success' || needs.deliver.result == 'skipped') && 'success' || 'failure' }}
+          ORIGIN_REPOSITORY: ${{ needs.classify.outputs.origin_repository }}
+          ORIGIN_REPOSITORY_ID: ${{ needs.classify.outputs.origin_repository_id }}
+          SOURCE_ISSUE: ${{ needs.classify.outputs.source_issue }}
+          CONTROLLER_COMMIT: ${{ needs.classify.outputs.controller_commit }}
+          INVOCATION_ROUTE: ${{ needs.classify.outputs.route }}
+          INVOCATION_RESULT: ${{ needs.classify.result == 'success' && needs.classify.outputs.route != '' && needs.classify.outputs.route != 'hold' && (needs.deliver.result == 'success' || needs.deliver.result == 'skipped') && 'success' || 'failure' }}
         run: GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" node scripts/finalize-agent-invocation.mjs
+        working-directory: dispatch-boundary

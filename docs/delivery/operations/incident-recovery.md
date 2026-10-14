@@ -19,3 +19,24 @@ remain the durable audit record; runner state and Projects are projections.
 Do not use `.github-private` as an incident database or copy runtime/session
 state into it. After recovery, add a source issue, evidence links, and an ADR
 only when the incident changes a durable architectural choice.
+
+For invocation receipt incidents, inspect the exact workflow revision as well
+as the participant controller pin. The workflow owns finalization; an older
+participant may have no finalizer file. Compare origin repository name and ID,
+source Issue, controller commit, workflow run and attempt with the active
+receipt lease before allowing settlement. Preserve completed receipts when a
+duplicate finalizer is rejected. Do not relabel an exhausted receipt as
+retryable or reset its spent attempt allowance to make recovery run.
+
+A completed invocation in shadow or read-only mode can be an observation or
+refinement. Check separate exact-tree validation, publication and acceptance
+evidence before reporting software delivery. Held or unknown routes do not
+become completed because their delivery job was skipped.
+
+Migration 0008 must be verified in an isolated database and applied through the
+protected operator boundary before deploying attribution writers. A rollback
+must retain compatible workflow-revision finalization and the additive
+attribution columns; preserve rows and incident evidence. These instructions
+do not authorize a live migration or participant activation. Canonical policy
+changes belong to Architecture ADR-0018 under ADR-0020; this runbook describes
+the Control Plane implementation and its required evidence.

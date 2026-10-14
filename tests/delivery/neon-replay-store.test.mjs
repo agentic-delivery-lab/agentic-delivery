@@ -163,6 +163,152 @@ test('Neon controller receipt claims exhaust expired final attempts instead of r
   assert.deepEqual(calls[0].values, [key, 6 * 60 * 60 * 1_000, 30 * 24 * 60 * 60 * 1_000, leaseToken, CONTROLLER_MAX_ATTEMPTS]);
 });
 
+test('Neon controller receipt attribution is bound to the active lease and immutable source identity', async () => {
+  const calls = [];
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        calls.push({ statement, values });
+        return [{ replay_key: values[0] }];
+      },
+    },
+  });
+  const identity = {
+    originRepository: 'agentic-delivery-lab/agentic-delivery-architecture',
+    originRepositoryId: '1380894616',
+    sourceIssueNumber: 11,
+    controllerCommit: 'a'.repeat(40),
+    workflowRunId: '38206400933',
+    workflowRunAttempt: 2,
+  };
+  const leaseToken = `${identity.workflowRunId}:${identity.workflowRunAttempt}`;
+
+  await store.recordControllerIdentity('163255060:12345678-1234-4234-8234-123456789012', { leaseToken, identity });
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].statement, /status = 'running'/);
+  assert.match(calls[0].statement, /lease_token = \$2/);
+  assert.match(calls[0].statement, /lease_expires_at > clock_timestamp\(\)/);
+  assert.match(calls[0].statement, /origin_repository IS NULL OR origin_repository = \$3/);
+  assert.match(calls[0].statement, /source_issue_number IS NULL OR source_issue_number = \$5::integer/);
+  assert.deepEqual(calls[0].values, [
+    '163255060:12345678-1234-4234-8234-123456789012',
+    leaseToken,
+    identity.originRepository,
+    identity.originRepositoryId,
+    identity.sourceIssueNumber,
+    identity.controllerCommit,
+    identity.workflowRunId,
+    identity.workflowRunAttempt,
+  ]);
+});
+
+test('Neon receipt settlement matches all persisted invocation identity fields', async () => {
+  const calls = [];
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        calls.push({ statement, values });
+        return [{ replay_key: values[0], status: 'retryable' }];
+      },
+    },
+  });
+  const identity = {
+    originRepository: 'agentic-delivery-lab/agentic-delivery-architecture',
+    originRepositoryId: '1380894616',
+    sourceIssueNumber: 11,
+    controllerCommit: 'a'.repeat(40),
+    workflowRunId: '38206400933',
+    workflowRunAttempt: 2,
+  };
+  const leaseToken = `${identity.workflowRunId}:${identity.workflowRunAttempt}`;
+
+  await store.completeController('163255060:12345678-1234-4234-8234-123456789012', { leaseToken, identity });
+  await store.retryController('163255060:12345678-1234-4234-8234-123456789013', { leaseToken, identity });
+
+  assert.match(calls[0].statement, /origin_repository = \$3/);
+  assert.match(calls[0].statement, /workflow_run_attempt = \$8::integer/);
+  assert.equal(calls[0].values.length, 8);
+  assert.match(calls[1].statement, /origin_repository = \$6/);
+  assert.match(calls[1].statement, /workflow_run_attempt = \$11::integer/);
+  assert.equal(calls[1].values.length, 11);
+  assert.match(calls[0].statement, /WHERE[\s\S]*lease_expires_at > clock_timestamp\(\)/);
+  assert.match(calls[1].statement, /WHERE[\s\S]*lease_expires_at > clock_timestamp\(\)/);
+});
+
+test('Neon retry settlement returns the status from the atomic update', async () => {
+  for (const status of ['retryable', 'exhausted']) {
+    const calls = [];
+    const store = new NeonReplayStore({ client: { async query(statement, values) {
+      calls.push({ statement, values });
+      return [{ replay_key: values[0], status }];
+    } } });
+    assert.deepEqual(await store.retryController('163255060:12345678-1234-4234-8234-123456789012', { leaseToken: '123:1' }), { status });
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].statement, /RETURNING replay_key, status/);
+  }
+});
+
+test('Neon retry settlement refuses missing or unknown status evidence', async () => {
+  for (const status of [undefined, 'completed', 'running']) {
+    const store = new NeonReplayStore({ client: { async query() { return [{ replay_key: 'key', status }]; } } });
+    await assert.rejects(store.retryController('163255060:12345678-1234-4234-8234-123456789012', { leaseToken: '123:1' }));
+  }
+});
+
+test('Neon controller receipt reads expose the durable attribution as one identity', async () => {
+  const identity = {
+    originRepository: 'agentic-delivery-lab/agentic-delivery-architecture',
+    originRepositoryId: '1380894616',
+    sourceIssueNumber: 11,
+    controllerCommit: 'a'.repeat(40),
+    workflowRunId: '38206400933',
+    workflowRunAttempt: 2,
+  };
+  const store = new NeonReplayStore({
+    client: {
+      async query() {
+        return [{
+          status: 'running',
+          origin_repository: identity.originRepository,
+          origin_repository_id: identity.originRepositoryId,
+          source_issue_number: identity.sourceIssueNumber,
+          controller_commit: identity.controllerCommit,
+          workflow_run_id: identity.workflowRunId,
+          workflow_run_attempt: identity.workflowRunAttempt,
+        }];
+      },
+    },
+  });
+
+  assert.deepEqual((await store.controllerReceipt('163255060:12345678-1234-4234-8234-123456789012')).identity, identity);
+});
+
+test('expired controller receipts clear prior attribution before a reused key is claimed', async () => {
+  let call;
+  const store = new NeonReplayStore({
+    client: {
+      async query(statement, values) {
+        call = { statement, values };
+        return [{ replay_key: values[0] }];
+      },
+    },
+  });
+
+  await store.ensureControllerReceipt('163255060:12345678-1234-4234-8234-123456789012');
+
+  for (const column of [
+    'origin_repository',
+    'origin_repository_id',
+    'source_issue_number',
+    'controller_commit',
+    'workflow_run_id',
+    'workflow_run_attempt',
+  ]) {
+    assert.match(call.statement, new RegExp(`${column} = CASE[\\s\\S]*?THEN NULL[\\s\\S]*?ELSE webhook_controller_receipts\\.${column}`));
+  }
+});
+
 test('due controller receipt selection first exhausts expired leases at the attempt limit', async () => {
   const calls = [];
   const store = new NeonReplayStore({
@@ -486,6 +632,7 @@ test('replay migrations store only minimal lease, receipt, and checkpoint metada
   const scanMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0003-resumable-webhook-scan.sql'), 'utf8');
   const observationsMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0004-aggregate-webhook-scan-observations.sql'), 'utf8');
   const queueMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0005-queue-webhook-redeliveries.sql'), 'utf8');
+  const identityMigration = await readFile(path.join(repositoryRoot, 'api/github/migrations/0008-controller-receipt-attribution.sql'), 'utf8');
 
   assert.match(initialMigration, /CREATE TABLE IF NOT EXISTS public\.webhook_replay_claims\s*\(\s*replay_key text PRIMARY KEY,\s*expires_at timestamptz NOT NULL\s*\)/);
   assert.match(initialMigration, /ON public\.webhook_replay_claims \(expires_at\)/);
@@ -503,17 +650,25 @@ test('replay migrations store only minimal lease, receipt, and checkpoint metada
   assert.match(observationsMigration, /installation_id bigint/);
   assert.match(queueMigration, /request_status IN \('queued', 'requesting', 'accepted', 'exhausted'\)/);
   assert.match(queueMigration, /next_attempt_at timestamptz/);
-  const migrationSql = (initialMigration + recoveryMigration + scanMigration + observationsMigration + queueMigration).replace(/^\s*--.*$/gm, '');
+  assert.match(identityMigration, /ADD COLUMN IF NOT EXISTS origin_repository text/);
+  assert.match(identityMigration, /ADD COLUMN IF NOT EXISTS origin_repository_id bigint/);
+  assert.match(identityMigration, /ADD COLUMN IF NOT EXISTS source_issue_number integer/);
+  assert.match(identityMigration, /ADD COLUMN IF NOT EXISTS controller_commit text/);
+  assert.match(identityMigration, /ADD COLUMN IF NOT EXISTS workflow_run_id text/);
+  assert.match(identityMigration, /ADD COLUMN IF NOT EXISTS workflow_run_attempt integer/);
+  assert.match(identityMigration, /webhook_controller_receipts_identity_check/);
+  const migrationSql = (initialMigration + recoveryMigration + scanMigration + observationsMigration + queueMigration + identityMigration).replace(/^\s*--.*$/gm, '');
   assert.doesNotMatch(migrationSql, /\b(?:body|payload|api_token|private_key|model_output)\b/i);
 });
 
 test('Neon replay integration proves claim, lost-response recovery, expiry, release and stored columns', {
-  skip: testDatabaseUrl ? false : 'Set AGENTIC_DELIVERY_REPLAY_TEST_DATABASE_URL to an isolated Neon database with all replay migrations applied.',
+  skip: testDatabaseUrl ? false : 'Set AGENTIC_DELIVERY_REPLAY_TEST_DATABASE_URL to an isolated Neon database with migrations 0001 through 0008 applied.',
 }, async () => {
   const store = new NeonReplayStore({ connectionString: testDatabaseUrl });
   const sql = neon(testDatabaseUrl);
   const key = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const lostResponseKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
+  const attributedReceiptKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const linkedReceiptKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const exhaustedReceiptKey = replayKey({ installationId: '163255060', deliveryId: randomUUID() });
   const queuedGuid = randomUUID();
@@ -572,6 +727,28 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     assert.deepEqual(await store.claimController(key, { leaseToken }), { status: 'claimed' });
     await store.completeController(key, { leaseToken });
     assert.equal((await store.controllerReceipt(key)).status, 'completed');
+
+    const attributedIdentity = {
+      originRepository: 'agentic-delivery-lab/agentic-delivery-architecture',
+      originRepositoryId: '1380894616',
+      sourceIssueNumber: 11,
+      controllerCommit: '7d38227f7f8d8377ed7cd1b883d90b71b69bfc9b',
+      workflowRunId: '38206400933',
+      workflowRunAttempt: 1,
+    };
+    const attributedLeaseToken = `${attributedIdentity.workflowRunId}:${attributedIdentity.workflowRunAttempt}`;
+    await store.ensureControllerReceipt(attributedReceiptKey);
+    assert.deepEqual(await store.claimController(attributedReceiptKey, { leaseToken: attributedLeaseToken }), { status: 'claimed' });
+    await store.recordControllerIdentity(attributedReceiptKey, { leaseToken: attributedLeaseToken, identity: attributedIdentity });
+    assert.deepEqual((await store.controllerReceipt(attributedReceiptKey)).identity, attributedIdentity);
+    await assert.rejects(store.recordControllerIdentity(attributedReceiptKey, {
+      leaseToken: attributedLeaseToken,
+      identity: { ...attributedIdentity, sourceIssueNumber: 12 },
+    }), /durable replay database operation failed/);
+    await store.completeController(attributedReceiptKey, { leaseToken: attributedLeaseToken, identity: attributedIdentity });
+    const completedAttributedReceipt = await store.controllerReceipt(attributedReceiptKey);
+    assert.equal(completedAttributedReceipt.status, 'completed');
+    assert.deepEqual(completedAttributedReceipt.identity, attributedIdentity);
 
     await store.ensureControllerReceipt(linkedReceiptKey);
     assert.equal(await store.linkGithubDeliveries([{ replayKey: linkedReceiptKey, githubDeliveryId: '987654321' }]), 1);
@@ -728,14 +905,20 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     `, []);
     assert.deepEqual(receiptColumns.map((row) => row.column_name), [
       'attempt_count',
+      'controller_commit',
       'created_at',
       'expires_at',
       'github_delivery_id',
       'lease_expires_at',
       'lease_token',
       'next_attempt_at',
+      'origin_repository',
+      'origin_repository_id',
       'replay_key',
+      'source_issue_number',
       'status',
+      'workflow_run_attempt',
+      'workflow_run_id',
     ]);
 
     const previousCheckpoint = await store.reconcilerCheckpoint();
@@ -804,7 +987,7 @@ test('Neon replay integration proves claim, lost-response recovery, expiry, rele
     await store.release(key);
     await store.release(lostResponseKey);
     await sql.query('DELETE FROM public.webhook_redelivery_requests WHERE delivery_guid = ANY($1::text[])', [[queuedGuid, acceptedFinalGuid, agedExhaustedGuid]]);
-    for (const receiptKey of [key, lostResponseKey, linkedReceiptKey, exhaustedReceiptKey]) {
+    for (const receiptKey of [key, lostResponseKey, attributedReceiptKey, linkedReceiptKey, exhaustedReceiptKey]) {
       await sql.query('DELETE FROM public.webhook_controller_receipts WHERE replay_key = $1', [receiptKey]);
     }
     await sql.query('DELETE FROM public.webhook_controller_receipts WHERE replay_key = ANY($1::text[])', [unlinkedReceiptKeys]);
