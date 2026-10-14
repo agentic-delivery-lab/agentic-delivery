@@ -471,7 +471,13 @@ between settled attempts does not consume active time. Live interruption and
 deadline enforcement evidence is still required for admission. The 5.5-hour
 pre-admission controller timeout and 350-minute Actions timeout remain recovery
 failsafes. Validation
-attempts are capped at three for the saved operation, including failed or
+Dependency preparation reserves a validation attempt before its first install.
+A successful preparation checkpoint and its final candidate verification share
+that charged attempt. The checkpoint is cleared before verification so an
+interruption cannot start the same verification repeatedly. Failed preparation
+remains charged across resumes; clarification can continue a prepared third
+attempt but cannot allocate a fourth. Validation attempts are capped at three
+for the saved operation, including failed or
 interrupted attempts. The controller saves the reservation before validation
 commands run. Resuming after exhaustion cannot start another allowance, even
 after a manual repair.

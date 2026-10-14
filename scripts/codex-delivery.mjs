@@ -326,6 +326,8 @@ async function readSavedState(file, issue, repository) {
       || (value.validationAttemptCount !== undefined && value.validationAttemptCount !== null
         && (!Number.isSafeInteger(value.validationAttemptCount) || value.validationAttemptCount < 0
           || value.validationAttemptCount > MAX_VALIDATION_ATTEMPTS))
+      || (value.validationPrepared !== undefined && (typeof value.validationPrepared !== 'boolean'
+        || (value.validationPrepared && (!Number.isSafeInteger(value.validationAttemptCount) || value.validationAttemptCount < 1))))
       || (value.modelTurnCount !== undefined && value.modelTurnCount !== null
         && (!Number.isSafeInteger(value.modelTurnCount) || value.modelTurnCount < 0
           || value.modelTurnCount > MAX_MODEL_TURNS))
@@ -369,6 +371,7 @@ async function readSavedState(file, issue, repository) {
       consumedCommentIds: value.consumedCommentIds?.map(String) ?? [],
       sessionStarted: value.sessionStarted ?? value.sessionId !== undefined,
       validationAttemptCount: value.validationAttemptCount ?? null,
+      validationPrepared: value.validationPrepared ?? false,
       modelTurnCount: value.modelTurnCount ?? null,
       controllerAttemptCount: value.controllerAttemptCount ?? null,
       activeTime: value.activeTime ?? null,
@@ -425,7 +428,7 @@ export async function deliver(env = process.env, dependencies = {}) {
     else if (saved.controllerAttemptCount === null) reason = 'Controller attempt consumption is unknown; preserve the operation for owner inspection.';
     else if (saved.controllerAttemptCount >= INITIAL_OPERATION_LIMITS.controllerAttempts) reason = 'The operation controller attempt allowance is exhausted; resumption cannot reset it.';
     else if (saved.validationAttemptCount === null) reason = 'Validation consumption is unknown; preserve the operation for owner inspection.';
-    else if (['branch','implement','verify'].includes(saved.phase) && saved.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS) reason = 'The operation validation allowance is exhausted; resumption cannot reset it.';
+    else if (['branch','implement','verify'].includes(saved.phase) && saved.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS && !saved.validationPrepared) reason = 'The operation validation allowance is exhausted; resumption cannot reset it.';
     else if (saved.modelTurnCount === null) reason = 'Model turn consumption is unknown; preserve the operation for owner inspection.';
     else if (!['publish','commit','coordinate','verify'].includes(saved.phase) && saved.modelTurnCount >= MAX_MODEL_TURNS) reason = 'The operation model turn allowance is exhausted; resumption cannot reset it.';
     if (!reason) {
@@ -601,6 +604,14 @@ export async function deliver(env = process.env, dependencies = {}) {
   const requireModelTurnAllowance = () => {
     if (state.modelTurnCount === null) throw Object.assign(new Error('Model turn consumption is unknown; preserve the operation for owner inspection.'), {code:'OPERATION_BUDGET_HOLD'});
     if (state.modelTurnCount >= MAX_MODEL_TURNS) throw Object.assign(new Error('The operation model turn allowance is exhausted; resumption cannot reset it.'), {code:'OPERATION_BUDGET_HOLD'});
+  };
+  const reserveValidationAttempt = async () => {
+    requireActiveTime();
+    if (state.validationAttemptCount === null) throw Object.assign(new Error('Validation consumption is unknown; preserve the operation for owner inspection.'), {code:'OPERATION_BUDGET_HOLD'});
+    if (state.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS) throw Object.assign(new Error('The operation validation allowance is exhausted; resumption cannot reset it.'), {code:'OPERATION_BUDGET_HOLD'});
+    state.validationAttemptCount++;
+    state.validationPrepared = false;
+    await save();
   };
   const performTurn = async (options) => {
     requireActiveTime();
@@ -920,7 +931,7 @@ export async function deliver(env = process.env, dependencies = {}) {
     }
     if (['branch', 'implement', 'verify'].includes(state.phase)) {
       if (state.validationAttemptCount === null) throw Object.assign(new Error('Validation consumption is unknown; preserve the operation for owner inspection.'), {code:'OPERATION_BUDGET_HOLD'});
-      if (state.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS) throw Object.assign(new Error('The operation validation allowance is exhausted; resumption cannot reset it.'), {code:'OPERATION_BUDGET_HOLD'});
+      if (state.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS && !state.validationPrepared) throw Object.assign(new Error('The operation validation allowance is exhausted; resumption cannot reset it.'), {code:'OPERATION_BUDGET_HOLD'});
     }
     if (state.phase === 'commit' && (metadata.lifecycleStage !== 'execution' || !deliveryMetadataSafe(metadata))) {
       throw new Error('The source issue is not authorized for commit.');
@@ -1303,7 +1314,17 @@ legacy owner-only rule in the base instruction file.`;
       if (await git(['branch', '--show-current']) !== state.branch) throw new Error('Working branch differs from saved state; operator inspection is required.');
       // Installation and verification execute under restricted filesystem permissions.
       const runProfileCommand = async (command) => client.exec(materializeValidationCommand(command, validationInputs), workspace, command.timeoutMs, command.sandbox);
-      for (const command of validationProfile.install) await runProfileCommand(command);
+      if (state.phase === 'implement' && validationProfile.install.length && !state.validationPrepared) {
+        await reserveValidationAttempt();
+        try {
+          for (const command of validationProfile.install) await runProfileCommand(command);
+          state.validationPrepared = true;
+          await save();
+        } catch (error) {
+          if (state.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS) throw Object.assign(new Error('The operation validation allowance is exhausted; resumption cannot reset it.'), {code:'OPERATION_BUDGET_HOLD'});
+          throw error;
+        }
+      }
       while (['implement', 'verify'].includes(state.phase)) {
         while (state.phase === 'implement') {
           requireActiveTime();
@@ -1345,11 +1366,10 @@ legacy owner-only rule in the base instruction file.`;
         }
         await requireDeliveryMetadata(['in-progress']);
         requireActiveTime();
-        if (state.validationAttemptCount === null) throw Object.assign(new Error('Validation consumption is unknown; preserve the operation for owner inspection.'), {code:'OPERATION_BUDGET_HOLD'});
-        if (state.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS) throw Object.assign(new Error('The operation validation allowance is exhausted; resumption cannot reset it.'), {code:'OPERATION_BUDGET_HOLD'});
-        state.validationAttemptCount++;
-        // Reserve durably before execution. Interrupted or failed attempts are
-        // charged, so restarting the controller cannot replenish the allowance.
+        if (!state.validationPrepared) await reserveValidationAttempt();
+        // Preparation and final verification share one reserved attempt. Clear
+        // the checkpoint before verification so interruption cannot reuse it.
+        state.validationPrepared = false;
         await save();
         try {
           for (const command of validationProfile.install) await runProfileCommand(command);

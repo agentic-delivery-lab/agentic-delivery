@@ -159,6 +159,7 @@ async function fixture(t) {
         exec:async (command, cwd, timeout, profile) => {
           if (faults.beforeCommand) await faults.beforeCommand(command);
           calls.commands.push({command,cwd,profile,timeout});
+          if (faults.installation && command[1] === 'install') throw new Error('Fixture dependency installation failed');
           if (faults.validation && command[1] === 'install') return '';
           if (faults.validation) throw new Error('Fixture validation failed');
           return '';
@@ -1128,4 +1129,49 @@ test('native GraphQL field writes receive the remaining operation deadline', asy
   assert.equal(f.calls.comments.length, commentsAtStop);
   assert.equal(f.calls.prs.length, 0);
   assert.equal(f.calls.pushHeaders.length, 0);
+});
+
+
+test('failed dependency preparation consumes validation allowance across resumed attempts', async (t) => {
+  const f = await fixture(t);
+  f.faults.installation = true;
+  await f.run();
+  const first = await f.state();
+  assert.equal(first.validationAttemptCount, 1);
+  assert.deepEqual(f.calls.turns, ['plan']);
+  await f.resume();
+  assert.equal((await f.state()).validationAttemptCount, 2);
+  const exhausted = await f.resume();
+  assert.match(exhausted.reason, /validation allowance is exhausted/);
+  assert.equal((await f.state()).validationAttemptCount, 3);
+  const attempts = f.calls.commands.length;
+  const clients = f.calls.clients;
+  await f.resume();
+  assert.equal(f.calls.commands.length, attempts);
+  assert.equal(f.calls.clients, clients);
+  assert.equal((await f.state()).operationId, first.operationId);
+  assert.equal(f.calls.prs.length, 0);
+});
+
+test('a prepared third validation attempt survives clarification without minting a fourth', async (t) => {
+  const f = await fixture(t);
+  f.faults.installation = true;
+  await f.run();
+  await f.resume();
+  f.faults.installation = false;
+  f.faults.implementationQuestion = true;
+  await f.resume();
+  const waiting = await f.state();
+  assert.equal(waiting.status, 'awaiting-human');
+  assert.equal(waiting.validationAttemptCount, 3);
+  assert.equal(waiting.validationPrepared, true);
+  f.faults.implementationQuestion = false;
+  await f.comment({ id: 219, body: 'Use the existing wording.' });
+  await f.run();
+  const completed = await f.state();
+  assert.equal(completed.status, 'ready');
+  assert.equal(completed.validationAttemptCount, 3);
+  assert.equal(completed.validationPrepared, false);
+  assert.equal(completed.operationId, waiting.operationId);
+  assert.equal(f.calls.prs.length, 1);
 });
