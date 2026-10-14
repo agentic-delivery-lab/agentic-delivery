@@ -200,7 +200,7 @@ export function checkPublicationText(title, summary = '') {
 }
 
 function evidenceMarker(evidence) {
-  return `<!-- codex-delivery-evidence:v1\n${JSON.stringify(evidence)}\n-->`;
+  return `<!-- codex-delivery-evidence:v${evidence.schemaVersion}\n${JSON.stringify(evidence)}\n-->`;
 }
 
 function singleLine(value) {
@@ -515,7 +515,10 @@ export async function deliver(env = process.env, dependencies = {}) {
   const sourceRest = await api(`/issues/${issue}`);
   let graphql = dependencies.graphql;
   const useGraphql = Boolean(graphql || env.GITHUB_GRAPHQL === 'true' || env.GITHUB_ACTIONS === 'true');
-  if (useGraphql && !graphql) graphql = githubGraphqlApi({ token: originToken, fetchImpl: fetchApi });
+  if (useGraphql && !graphql) graphql = githubGraphqlApi({
+    token: originToken, fetchImpl: fetchApi,
+    requestTimeoutMs: () => activeSegmentStarted ? requireActiveTime() : 30_000,
+  });
   const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
   const readTrustedControlPlane = async ({ issueNumber = issue } = {}) => {
     const value = await readControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
@@ -1446,8 +1449,15 @@ legacy owner-only rule in the base instruction file.`;
     const provisionalAdrs = (await git(['ls-files', 'docs/decisions']))
       .split(/\r?\n/).filter((file) => /^docs\/decisions\/\d{4}-.*\.md$/.test(file)).map((file) => `ADR-${file.slice(15, 19)}`);
     const evidence = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       producer: 'codex-delivery',
+      operation: {
+        id: state.operationId, repositoryId: originRepositoryId,
+        budgetPolicy: { ...state.budgetPolicyReference, status: 'proposed' },
+        consumption: { controllerAttempts: state.controllerAttemptCount, modelTurns: state.modelTurnCount, validationAttempts: state.validationAttemptCount, toolInvocations: null },
+        activeTime: structuredClone(state.activeTime),
+        phase: 'publication-checkpoint', capturedAt: new Date(now()).toISOString(),
+      },
       repository,
       sourceIssue: { number: Number(issue), url: `https://github.com/${repository}/issues/${issue}` },
       deliveryRun: { id: String(env.GITHUB_RUN_ID ?? '0'), attempt: String(env.GITHUB_RUN_ATTEMPT ?? '1'), url: runUrl },
@@ -1473,7 +1483,7 @@ legacy owner-only rule in the base instruction file.`;
       auditCheckpoint: { stateVersion: STATE_VERSION, ...(await evidenceCheckpoint(path.join(issueRoot, 'audit.jsonl'))) },
     };
     const evidenceValidation = validateEvidenceRecord(evidence, {
-      repository,
+      repository, repositoryId: originRepositoryId,
       issueNumber: Number(issue),
       head: revision,
     });

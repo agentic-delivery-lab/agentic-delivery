@@ -178,3 +178,26 @@ test('field writes are controller-only and closed around the approved mutation',
   await assert.rejects(() => setIssueFields({ graphql, issueId: 'I_1', config, values: { lifecycle_stage: 'validation' }, actor: 'model' }), /controller/);
   assert.match(SET_ISSUE_FIELDS_MUTATION, /setIssueFieldValue/);
 });
+
+test('GraphQL uses the remaining request allowance and rejects invalid bounds before fetch', async () => {
+  let remainingMs = 5;
+  let calls = 0;
+  let signal;
+  const graphql = githubGraphqlApi({
+    token: 'test-token', requestTimeoutMs: () => remainingMs,
+    fetchImpl: async (_url, options) => {
+      calls++;
+      signal = options.signal;
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, 1000);
+        options.signal.addEventListener('abort', () => { clearTimeout(timer); reject(options.signal.reason); }, { once: true });
+      });
+      return { ok: true, json: async () => ({ data: {} }) };
+    },
+  });
+  await assert.rejects(() => graphql('mutation Test { update }', {}), /timeout/i);
+  assert.equal(signal.aborted, true);
+  remainingMs = 0;
+  await assert.rejects(() => graphql('mutation Test { update }', {}), /request timeout/);
+  assert.equal(calls, 1, 'an exhausted allowance never starts another request');
+});

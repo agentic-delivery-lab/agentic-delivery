@@ -462,7 +462,9 @@ A turn's 20-minute inactivity watchdog starts after `turn/start` acknowledges
 the active turn and resets whenever the turn produces activity. The candidate
 controller additionally reserves active time and uses the remaining part of
 its 30-minute cumulative allowance as its execution deadline. It limits
-controlled tool, Git and protected REST-write timeouts to that remainder.
+controlled tool, Git, REST-write and active GraphQL request timeouts to that
+remainder. A client timeout does not prove that GitHub rejected a mutation;
+uncertain server outcomes still require readback and reconciliation.
 Settlement waits for confirmed owned execution shutdown; an unsettled prior
 reservation or backward clock evidence causes an inspection hold. Waiting
 between settled attempts does not consume active time. Live interruption and
@@ -538,6 +540,16 @@ made another clean commit locally. Invalid saved state is left untouched for
 operator inspection. Older state without policy identity or consumption evidence
 is held for owner inspection. A source snapshot cannot substitute for those
 records or replenish an allowance.
+
+State version 5 publishes delivery evidence version 2. The record includes the
+operation UUID, native repository ID, proposal-policy fingerprint, controller,
+model-turn and validation consumption, and the active-time reservation at the
+publication checkpoint. Tool consumption is explicitly `null` while hard tool
+counting remains unproved; it must not be presented as zero. The policy status
+remains proposed. The checkpoint does not claim final shutdown, settled total
+time, merge acceptance or milestone completion. Historical version-1 evidence
+remains readable for older state, but version-5 evidence cannot downgrade to
+omit its operation record. Marker and payload versions must agree.
 
 Codex startup and protocol failures publish only allowlisted error codes, HTTP
 status codes, and fixed diagnostic hints. For example, a recognized workspace

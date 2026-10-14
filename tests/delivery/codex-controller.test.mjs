@@ -222,13 +222,18 @@ test('publishes one recorded branch and PR with a complete issue audit trail', a
   const state = await f.state();
   assert.equal(state.status,'ready'); assert.equal(state.phase,'publish');
   assert.equal(state.version,5); assert.equal(state.sessionId,SESSION_ID);
-  assert.equal(state.evidence.schemaVersion, 1);
+  assert.equal(state.evidence.schemaVersion, 2);
   assert.equal(state.evidence.sourceIssue.number, 7);
+  assert.equal(state.evidence.operation.id, state.operationId);
+  assert.equal(state.evidence.operation.repositoryId, '101');
+  assert.equal(state.evidence.operation.consumption.modelTurns, 2);
+  assert.equal(state.evidence.operation.consumption.toolInvocations, null);
+  assert.equal(state.evidence.operation.activeTime.reservation.owner, `${f.env.GITHUB_RUN_ID}:${f.env.GITHUB_RUN_ATTEMPT ?? '1'}`);
   assert.equal(state.evidence.codexSession.id, SESSION_ID);
   assert.deepEqual(f.calls.turns,['plan','implement']); assert.equal(f.calls.prs.length,1);
   assert.deepEqual(f.calls.threads,[{method:'start'}]);
   assert.match(f.calls.prs[0].body,/Closes #7/);
-  assert.match(f.calls.prs[0].body,/codex-delivery-evidence:v1/);
+  assert.match(f.calls.prs[0].body,/codex-delivery-evidence:v2/);
   const pullRequestBody = validatePullRequestBody({body:f.calls.prs[0].body,author:'github-actions[bot]'});
   assert.equal(pullRequestBody.valid,true,pullRequestBody.errors.join('\n'));
   const auditLines = (await readFile(path.join(f.issueRoot, 'audit.jsonl'), 'utf8')).trim().split(/\r?\n/).map((line) => JSON.parse(line));
@@ -1088,4 +1093,39 @@ test('exhausted resumption holds before token minting and preserves queued comme
  assert.equal(result.status,'paused');assert.match(result.reason,/validation allowance is exhausted/);
  assert.equal(f.calls.accessTokenRequests.length,0);assert.equal(f.calls.comments.length,comments);
  assert.deepEqual((await f.state()).outbox,saved.outbox);assert.equal((await f.state()).validationAttemptCount,3);
+});
+
+test('native GraphQL field writes receive the remaining operation deadline', async (t) => {
+  const f = await fixture(t);
+  f.faults.nowMs = 100;
+  f.faults.beforeTurn = async () => { f.faults.nowMs = 100 + ACTIVE_TIME_LIMIT_MS - 5; };
+  const graphql = f.dependencies.graphql;
+  const fetchApi = f.dependencies.fetch;
+  delete f.dependencies.graphql;
+  f.env.GITHUB_GRAPHQL = 'true';
+  let expiredSignal;
+  let commentsAtStop;
+  f.dependencies.fetch = async (url, options) => {
+    if (url !== 'https://api.github.com/graphql') return fetchApi(url, options);
+    const { query, variables } = JSON.parse(options.body);
+    if (f.faults.nowMs > 100) {
+      expiredSignal = options.signal;
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, 1000);
+        options.signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          f.faults.nowMs = 100 + ACTIVE_TIME_LIMIT_MS;
+          commentsAtStop = f.calls.comments.length;
+          reject(options.signal.reason);
+        }, { once: true });
+      });
+      assert.fail('field request should abort within the remaining allowance');
+    }
+    return new Response(JSON.stringify({ data: await graphql(query, variables) }), { status: 200 });
+  };
+  await assert.rejects(() => f.run(), /active time allowance is exhausted/);
+  assert.equal(expiredSignal.aborted, true);
+  assert.equal(f.calls.comments.length, commentsAtStop);
+  assert.equal(f.calls.prs.length, 0);
+  assert.equal(f.calls.pushHeaders.length, 0);
 });
