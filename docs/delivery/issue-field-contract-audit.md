@@ -262,7 +262,8 @@ existing gh authentication without exporting its credential.
 node scripts/run-issue-field-canary.mjs --evidence-dir <private-directory> --bindings-file <private-bindings-file> --bindings-sha256 <reviewed-binding-file-digest> --apply --approved-commit <reviewed-40-character-commit>
 ```
 
-The original snapshot is saved before the first write. Separate reads verify
+Apply requires each selected field to differ from its test option; an unchanged
+field cannot prove a successful write. The original snapshot is saved before the first write. Separate reads verify
 the test write and restoration. A lost write response triggers reconciliation,
 not repetition; a lost restore response is checked independently. Changed
 selected-field values or missing original options hold restoration rather than
@@ -274,5 +275,16 @@ the test fails acceptance without a complete audit.
 Use the dedicated canaries while they are not being edited. The native mutation
 input has no compare-and-swap field; checked reads do not establish an atomic
 concurrency guarantee. This administrative proof does not activate a participant
-or count as factory-delivered milestone A evidence. Actual write/restoration
-results remain unverified until the reviewed command is executed.
+or count as factory-delivered milestone A evidence. On 2026-10-14, interactive operator operation
+`d1fd02d5-f024-4b48-b5ed-294f02498d02` ran reviewed commit
+`02aa83718e7fdfea096b24538c03795d8700336d` on both fixed canaries.
+Both complete original vectors were empty. Each test write was read back; explicit
+deletion restored absence, verified by the command and a separate post-operation
+query. Original and final vector SHA-256 were
+`4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945`.
+Private owner-only records retain the before, write, restore and independent-read
+evidence without publishing organization-only bindings. This is operator-scoped
+absence-restoration evidence for that exact commit. Existing-option restoration
+has fixture coverage; App-scoped writes and active runner admission remain
+unverified. The later no-change rejection is separately regression-tested; this
+record does not claim a live operation on a later source revision.

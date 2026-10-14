@@ -40,7 +40,7 @@ test('concurrent selected-field changes are preserved and restoration holds',asy
  assert.equal(io.calls.length,1);assert.equal((await io.read()).fieldValues[0].optionId,'other-human-option');
 });
 test('existing field options are restored by exact option identity',async()=>{
- const original=writes.map(f=>({fieldId:f.fieldId,optionId:f.singleSelectOptionId}));
+ const original=writes.map((f,i)=>({fieldId:f.fieldId,optionId:`prior-option-${i}`}));
  const io=fixture(original);const result=await runIssueFieldCanary({...io,target,actorId:'14937399',apply:true});
  assert.equal(result.restored,true);assert.deepEqual((await io.read()).fieldValues,original);
 });
@@ -85,4 +85,12 @@ test('second repository identity uses the same safe restoration contract',async(
  const second=FIELD_CANARY_TARGETS[1];const io=fixture([],second);
  const result=await runIssueFieldCanary({...io,target:second,actorId:'14937399',apply:true});
  assert.equal(result.restored,true);assert.equal(io.calls.length,2);assert.deepEqual((await io.read()).fieldValues,[]);
+});
+
+test('apply rejects a canary when either field already holds its test option',async()=>{
+ for(const original of [writes.map(f=>({fieldId:f.fieldId,optionId:f.singleSelectOptionId})),[{fieldId:writes[0].fieldId,optionId:writes[0].singleSelectOptionId}],[{fieldId:writes[1].fieldId,optionId:writes[1].singleSelectOptionId}]]) {
+  const io=fixture(original);
+  await assert.rejects(runIssueFieldCanary({...io,target,actorId:'14937399',apply:true}),/different/);
+  assert.equal(io.calls.length,0);assert.deepEqual((await io.read()).fieldValues,original);
+ }
 });

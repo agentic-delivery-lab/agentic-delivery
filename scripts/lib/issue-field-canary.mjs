@@ -41,6 +41,7 @@ export async function runIssueFieldCanary({target,read,write,saveEvidence,actorI
   }
   await saveEvidence({phase:'prepared',target,actorId,originalValues:original,originalHash:hash(original),apply});
   if(!apply)return {mutationsRequested:false,originalHash:hash(original)};
+  if(fields.some(f=>original.some(v=>v.fieldId===f.fieldId && v.optionId===f.singleSelectOptionId)))throw new Error('Each canary field must start with a different value to prove the test write.');
   if(!equal(snapshot(await read(),target,fields),original))throw new Error('Canary changed before mutation; no write requested.');
   const testValues=fields.map(f=>({fieldId:f.fieldId,optionId:f.singleSelectOptionId})).sort((a,b)=>a.fieldId.localeCompare(b.fieldId,'en'));
   let testError;

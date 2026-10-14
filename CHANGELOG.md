@@ -11,7 +11,7 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Issue #60 adds an interactive, owner-only field canary for two fixed repository/Issue identities. It snapshots values, verifies writes, restores original options or absence, and holds on concurrent changes or uncertain restoration. Preview is non-mutating; live evidence remains a separate acceptance step.
+- Issue #60 adds an interactive, owner-only field canary for two fixed repository/Issue identities. It snapshots values, verifies writes, restores original options or absence, and holds on concurrent changes or uncertain restoration. Preview is non-mutating; apply rejects fields already at the test option. A bounded operator test verified absence restoration in two repositories; App-scoped writes and runner admission remain separate acceptance steps.
 
 - Issue #111 prepares a source-pinned migration 0008 transaction plan with an inspected-target fingerprint, short lock/statement limits and rejection of schema changes since inspection. An explicit owner-only hosted workflow mode executes that fixed transaction and independently reads back column and constraint metadata; uncertain outcomes require reconciliation before retry.
 
