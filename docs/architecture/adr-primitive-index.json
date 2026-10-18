@@ -135,6 +135,7 @@
         "codex-delivery-workflow-guide",
         "github-native-issue-type",
         "operation-active-time-allowance",
+        "operation-attempt-receipts",
         "operation-budget-policy-identity",
         "pull-request-check-readiness",
         "pull-request-dispatch-context-resolver",
@@ -317,6 +318,7 @@
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "operation-active-time-allowance",
+        "operation-attempt-receipts",
         "operation-budget-policy-identity",
         "operator-issue-field-canary",
         "organization-metadata-runbook",
@@ -392,6 +394,7 @@
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "operation-active-time-allowance",
+        "operation-attempt-receipts",
         "operation-budget-policy-identity",
         "operator-issue-field-canary",
         "organization-metadata-runbook",
@@ -466,6 +469,7 @@
         "lifecycle-transition-validator",
         "main-history-validator",
         "operation-active-time-allowance",
+        "operation-attempt-receipts",
         "operation-budget-policy-identity",
         "operator-issue-field-canary",
         "orchestration-policy-catalog",
@@ -1122,6 +1126,21 @@
       "id": "operation-active-time-allowance",
       "path": "scripts/lib/operation-active-time.mjs",
       "location": "scripts/lib/operation-active-time.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "operation-attempt-receipts",
+      "path": "scripts/lib/operation-receipt.mjs",
+      "location": "scripts/lib/operation-receipt.mjs",
       "kind": "validator",
       "enforcement": "deterministic",
       "adrs": [

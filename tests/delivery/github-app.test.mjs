@@ -78,3 +78,37 @@ test('GitHub App provider applies the active intake profile with the origin repo
   assert.equal(await provider.token({ repositoryIds: ['777777777'] }), 'origin-scoped');
   assert.deepEqual(requestBody, { permissions, repository_ids: ['777777777'] });
 });
+
+test('revocation reports partial failure while still attempting every issued token', async () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const attempted = [];
+  const provider = new GithubAppTokenProvider({ repository: 'owner/repo', appId: '123', privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+    fetchImpl: async (_url, options) => {
+      attempted.push(options.headers.Authorization);
+      return new Response(null, { status: attempted.length === 1 ? 503 : 204 });
+    },
+  });
+  provider.cachedTokens.set('first', { value: 'first-token' });
+  provider.cachedTokens.set('second', { value: 'second-token' });
+  assert.equal(await provider.revoke(), false);
+  assert.equal(attempted.length, 2);
+  assert.equal(provider.cachedTokens.size, 0);
+  assert.equal(await provider.revoke(), false, 'a later empty call cannot erase an unconfirmed revocation');
+});
+
+
+test('revocation includes a near-expiry token replaced by refresh', async () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  let now = 100000; let minted = 0; const revoked = [];
+  const provider = new GithubAppTokenProvider({ repository: 'owner/repo', appId: '123', installationId: '456',
+    privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }), now: () => now,
+    fetchImpl: async (url, options) => {
+      if (url.endsWith('/access_tokens')) return new Response(JSON.stringify({ token: `token-${++minted}`, expires_at: new Date(now + 120000).toISOString() }), { status: 201 });
+      revoked.push(options.headers.Authorization); return new Response(null, { status: 204 });
+    },
+  });
+  await provider.token({ repositoryIds: ['101'] }); now += 70000;
+  await provider.token({ repositoryIds: ['101'] });
+  assert.equal(await provider.revoke(), true);
+  assert.deepEqual(revoked, ['Bearer token-1', 'Bearer token-2']);
+});

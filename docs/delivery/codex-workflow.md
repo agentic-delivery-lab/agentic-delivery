@@ -547,6 +547,30 @@ operator inspection. Older state without policy identity or consumption evidence
 is held for owner inspection. A source snapshot cannot substitute for those
 records or replenish an allowance.
 
+Each owned attempt also writes private version-1 records under
+`operation-receipts/`, validated by
+`docs/architecture/operation-attempt-receipt.schema.json`. Execution admission
+records the checked controller gates before model startup. Terminal records
+follow owned shutdown, time settlement and attempt-issued GitHub token revocation; uncertain
+cleanup records a hold and preserves recovery inputs. A published candidate
+is not accepted software. Admission failure prevents model execution and
+publication; terminal journal failure prevents disposal of the recovery tree.
+Pre-credential budget holds preserve the original state and record unknown
+identity or consumption as null, without creating a fresh allowance.
+
+These are attempt observations, not full activation decisions. Approved
+context remains null pending W12 and tool consumption remains unknown.
+Shutdown flags apply only to this attempt's owned execution, not another
+reservation owner. Journals reject public or redirected directories on POSIX,
+use exclusive temporary files, sync each file and atomically rename it. They
+also sync the directory where Node supports that operation; Windows ACL and
+production storage durability require their own admission evidence. Revocation
+confirmation covers attempt-issued App tokens, including tokens replaced by
+refresh; it does not claim revocation of operator-provided credentials. Failed
+revocation holds the attempt and keeps its recovery tree and account lock.
+The hold persists across resumption before another token can be minted; a new
+provider instance cannot erase an earlier cleanup uncertainty.
+
 State version 5 publishes delivery evidence version 2. The record includes the
 operation UUID, native repository ID, proposal-policy fingerprint, controller,
 model-turn and validation consumption, and the active-time reservation at the

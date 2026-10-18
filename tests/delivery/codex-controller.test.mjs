@@ -87,6 +87,7 @@ async function fixture(t) {
     resolveValidationProfile:({ controllerCommit }) => resolveValidationProfile({ repositoryId:'1358455028', repository:'agentic-delivery-lab/agentic-delivery', controllerCommit }),
     now: () => faults.nowMs ?? Date.now(),
     fetch:async (url, options) => {
+      if (url.endsWith('/installation/token') && options.method === 'DELETE') return new Response(null, {status:204});
       if (url.endsWith('/access_tokens')) {
         calls.accessTokenRequests.push(JSON.parse(options.body));
         return new Response(JSON.stringify({token:'fixture-installation-token', expires_at:'2099-01-01T00:00:00Z'}), {status:201});
@@ -1174,4 +1175,72 @@ test('a prepared third validation attempt survives clarification without minting
   assert.equal(completed.validationPrepared, false);
   assert.equal(completed.operationId, waiting.operationId);
   assert.equal(f.calls.prs.length, 1);
+});
+
+async function operationReceipts(f) {
+  const root = path.join(f.issueRoot, 'operation-receipts');
+  return Promise.all((await readdir(root)).filter((file) => file.endsWith('.json')).map(async (file) =>
+    JSON.parse(await readFile(path.join(root, file), 'utf8'))));
+}
+
+test('controller journals execution admission and settled publication as separate attempt receipts', async (t) => {
+  const f = await fixture(t); await f.run();
+  const receipts = await operationReceipts(f);
+  const admission = receipts.find((value) => value.stage === 'admission');
+  const terminal = receipts.find((value) => value.stage === 'terminal');
+  assert.equal(admission.outcome, 'admitted');
+  assert.equal(terminal.outcome, 'candidate-published');
+  assert.equal(terminal.operationId, admission.operationId);
+  assert.equal(terminal.origin.repositoryId, '101');
+  assert.equal(terminal.actor.authorityChecked, true);
+  assert.equal(terminal.activeTime.reservation, null);
+  assert.equal(terminal.consumption.modelTurns, 2);
+  assert.equal(terminal.consumption.toolInvocations, null);
+  assert.deepEqual(terminal.shutdown, { ownedExecutionStopped: true, activeTimeSettled: true, issuedTokenRevocationConfirmed: true });
+});
+
+test('uncertain owned shutdown writes a held receipt without claiming settled execution', async (t) => {
+  const f = await fixture(t); f.faults.shutdown = true;
+  await assert.rejects(() => f.run(), /Owned process group is still active/);
+  const terminal = (await operationReceipts(f)).find((value) => value.stage === 'terminal');
+  assert.equal(terminal.outcome, 'held');
+  assert.equal(terminal.shutdown.ownedExecutionStopped, false);
+  assert.equal(terminal.shutdown.activeTimeSettled, false);
+  assert.notEqual(terminal.activeTime.reservation, null);
+});
+
+test('failed admission journal prevents model execution and publication', async (t) => {
+  const f = await fixture(t);
+  f.dependencies.writeOperationReceipt = async () => { throw new Error('Fixture journal unavailable'); };
+  await assert.rejects(() => f.run(), /Fixture journal unavailable/);
+  assert.equal(f.calls.clients, 0);
+  assert.deepEqual(f.calls.turns, []);
+  assert.equal(f.calls.prs.length, 0);
+  assert.equal(f.calls.pushHeaders.length, 0);
+});
+
+test('unconfirmed issued-token revocation holds the attempt and retains its recovery tree', async (t) => {
+  const f = await fixture(t);
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  f.env.CODEX_DELIVERY_APP_ID = '5011055';
+  f.env.CODEX_DELIVERY_APP_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' });
+  f.env.CODEX_DELIVERY_APP_INSTALLATION_ID = '163255060';
+  const fetchApi = f.dependencies.fetch;
+  f.dependencies.fetch = async (url, options) => url.endsWith('/installation/token')
+    ? new Response(null, { status: 503 }) : fetchApi(url, options);
+  await assert.rejects(() => f.run(), /token revocation could not be confirmed/);
+  const terminal = (await operationReceipts(f)).find((value) => value.stage === 'terminal');
+  assert.equal(terminal.outcome, 'held');
+  assert.equal(terminal.shutdown.ownedExecutionStopped, true);
+  assert.equal(terminal.shutdown.issuedTokenRevocationConfirmed, false);
+  assert.equal((await f.state()).status, 'paused');
+  await access(f.workspace);
+  assert.equal(f.calls.prs.length, 1, 'a published candidate is distinct from accepted cleanup');
+  const tokenRequests = f.calls.accessTokenRequests.length;
+  const resumed = await f.resume();
+  assert.equal(resumed.status, 'paused');
+  assert.match(resumed.reason, /operator reconciliation/);
+  assert.equal(f.calls.accessTokenRequests.length, tokenRequests);
+  assert.equal((await f.state()).issuedTokenCleanupPending, true);
+  assert.ok((await operationReceipts(f)).some((value) => value.stage === 'admission' && value.priorIssuedTokenCleanupPending && value.outcome === 'held'));
 });

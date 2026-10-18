@@ -81,6 +81,8 @@ export class GithubAppTokenProvider {
     this.fetchImpl = fetchImpl;
     this.now = now;
     this.cachedTokens = new Map();
+    this.revocationUnconfirmed = false;
+    this.issuedTokens = new Set();
   }
 
   async request(route, method, token, body) {
@@ -121,16 +123,19 @@ export class GithubAppTokenProvider {
     if (narrowedIds.length > 0) body.repository_ids = narrowedIds;
     const result = await this.request(`/app/installations/${installationId}/access_tokens`, 'POST', appJwt, body);
     if (!result?.token || !result.expires_at) throw new Error('GitHub App did not return an installation token.');
+    this.issuedTokens.add(result.token);
     this.cachedTokens.set(cacheKey, { value: result.token, expiresAt: Date.parse(result.expires_at) });
     return result.token;
   }
 
   async revoke() {
-    const tokens = [...this.cachedTokens.values()];
+    const tokens = new Set([...this.issuedTokens, ...[...this.cachedTokens.values()].map(({ value }) => value)]);
     this.cachedTokens.clear();
-    for (const { value } of tokens) {
-      try { await this.request('/installation/token', 'DELETE', value); } catch { /* best effort; never hide delivery result */ }
+    this.issuedTokens.clear();
+    for (const value of tokens) {
+      try { await this.request('/installation/token', 'DELETE', value); } catch { this.revocationUnconfirmed = true; }
     }
+    return !this.revocationUnconfirmed;
   }
 }
 

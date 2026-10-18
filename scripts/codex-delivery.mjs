@@ -21,6 +21,7 @@ import { bindIssueMetadataConfig, githubGraphqlApi, readIssueControlPlane, setIs
 import { issueMetadata, issueFieldMutation, validateFieldMutation } from './lib/issue-metadata.mjs';
 import { patternById, selectOrchestration } from './lib/orchestration-policy.mjs';
 import { createActiveTimeAllowance, remainingActiveTime, reserveActiveTime, settleActiveTime, validateActiveTimeAllowance } from './lib/operation-active-time.mjs';
+import { createOperationReceipt, writeOperationReceipt } from './lib/operation-receipt.mjs';
 import { currentOperationPolicyReference, INITIAL_OPERATION_LIMITS, matchesCurrentOperationPolicy } from './lib/operation-budget-policy.mjs';
 
 const executeFile = promisify(execFile);
@@ -326,6 +327,7 @@ async function readSavedState(file, issue, repository) {
       || (value.validationAttemptCount !== undefined && value.validationAttemptCount !== null
         && (!Number.isSafeInteger(value.validationAttemptCount) || value.validationAttemptCount < 0
           || value.validationAttemptCount > MAX_VALIDATION_ATTEMPTS))
+      || (value.issuedTokenCleanupPending !== undefined && typeof value.issuedTokenCleanupPending !== 'boolean')
       || (value.validationPrepared !== undefined && (typeof value.validationPrepared !== 'boolean'
         || (value.validationPrepared && (!Number.isSafeInteger(value.validationAttemptCount) || value.validationAttemptCount < 1))))
       || (value.modelTurnCount !== undefined && value.modelTurnCount !== null
@@ -419,11 +421,25 @@ export async function deliver(env = process.env, dependencies = {}) {
   const stateRoot = path.resolve(env.CODEX_DELIVERY_STATE_DIR || path.join(env.RUNNER_WORKSPACE, '..', '.codex-delivery'));
   const issueRoot = path.join(stateRoot, originRepositoryId, issue);
   const stateFile = path.join(issueRoot, 'state.json');
+  let executionAdmitted = false;
+  let admissionRecorded = false;
+  let terminalRecorded = false;
+  let issuedTokenRevocationConfirmed = false;
+  const emitOperationReceipt = async (stage, outcome, snapshot, authorityChecked, shutdown = null, login = env.INVOCATION_ACTOR || env.GITHUB_ACTOR) => {
+    const receipt = createOperationReceipt({ stage, outcome, state: snapshot, repository, repositoryId: originRepositoryId,
+      issue, actor: login, runId: String(env.GITHUB_RUN_ID || ''), runAttempt: String(env.GITHUB_RUN_ATTEMPT || '1'),
+      authorityChecked, shutdown, nowMs: now() });
+    await (dependencies.writeOperationReceipt ?? writeOperationReceipt)(issueRoot, receipt);
+    if (stage === 'admission') admissionRecorded = true;
+    else terminalRecorded = true;
+  };
+
   const stateWasSaved = await exists(stateFile);
   if (stateWasSaved) {
     const saved = await readSavedState(stateFile, issue, repository);
     let reason;
-    if (!saved.operationId) reason = 'The operation identity is unknown; preserve its source and consumption evidence.';
+    if (saved.issuedTokenCleanupPending) reason = 'Prior attempt-issued token revocation is unconfirmed; operator reconciliation is required before resumption.';
+    else if (!saved.operationId) reason = 'The operation identity is unknown; preserve its source and consumption evidence.';
     else if (!matchesCurrentOperationPolicy(saved.budgetPolicyReference)) reason = 'The operation budget policy is missing or changed; owner readmission is required without resetting consumption.';
     else if (saved.controllerAttemptCount === null) reason = 'Controller attempt consumption is unknown; preserve the operation for owner inspection.';
     else if (saved.controllerAttemptCount >= INITIAL_OPERATION_LIMITS.controllerAttempts) reason = 'The operation controller attempt allowance is exhausted; resumption cannot reset it.';
@@ -447,6 +463,10 @@ export async function deliver(env = process.env, dependencies = {}) {
         authorityRevalidated:false, privilegedActionsPerformed:false, reason,
         consumption:{controllerAttempts:saved.controllerAttemptCount,modelTurns:saved.modelTurnCount,validationAttempts:saved.validationAttemptCount,activeTime:saved.activeTime},
         recordedAt:new Date(now()).toISOString(),
+      });
+      await emitOperationReceipt('admission', 'held', saved, false);
+      await emitOperationReceipt('terminal', 'held', saved, false, {
+        ownedExecutionStopped: true, activeTimeSettled: Boolean(saved.activeTime && !saved.activeTime.reservation), issuedTokenRevocationConfirmed: true,
       });
       return {status:'paused',reason};
     }
@@ -943,6 +963,8 @@ export async function deliver(env = process.env, dependencies = {}) {
     if (expectedPattern && (orchestration.status !== 'authorized' || orchestration.pattern !== expectedPattern)) {
       throw new Error(`The requested delivery route is not authorized by the orchestration policy; ${orchestration.reason}`);
     }
+    await emitOperationReceipt('admission', 'admitted', state, true, null, actor);
+    executionAdmitted = true;
     if (state.phase === 'coordinate') {
       await beginActiveTime();
       if (metadata.lifecycleStage === 'acceptance') {
@@ -1605,17 +1627,43 @@ legacy owner-only rule in the base instruction file.`;
       await writes;
     }
     finally {
-      await appProvider?.revoke();
-      await unlink(authBridge).catch(() => {});
-      if (ownedExecutionStopped) {
-        if (runTools) await rm(runTools, { recursive: true, force: true }).catch(() => {});
-        await rm(runHome, { recursive: true, force: true }).catch(() => {});
+      try {
+        issuedTokenRevocationConfirmed = appProvider ? await appProvider.revoke() === true : true;
+        if (!issuedTokenRevocationConfirmed && state) {
+          state.status = 'paused';
+          state.issuedTokenCleanupPending = true;
+          state.execution = { ...state.execution, status: 'paused', operation: 'credential-cleanup' };
+          state.reason = 'Attempt-issued token revocation could not be confirmed; preserve the checkpoint for operator reconciliation.';
+          await save();
+        }
+      } finally {
+        try {
+          if (state) {
+            if (!admissionRecorded) await emitOperationReceipt('admission', 'held', state, false, null, actor);
+            const settled = !activeSegmentStarted || activeTimeSettled;
+            const cleanupConfirmed = ownedExecutionStopped && settled && issuedTokenRevocationConfirmed;
+            const outcome = !executionAdmitted || !cleanupConfirmed ? 'held'
+              : state.status === 'awaiting-human' ? 'awaiting-human'
+                : state.status !== 'ready' ? 'held'
+                  : state.phase === 'publish' ? 'candidate-published' : 'route-completed';
+            await emitOperationReceipt('terminal', outcome, state, executionAdmitted, {
+              ownedExecutionStopped, activeTimeSettled: settled, issuedTokenRevocationConfirmed,
+            }, actor);
+          }
+        } finally {
+          await unlink(authBridge).catch(() => {});
+          if (ownedExecutionStopped) {
+            if (runTools) await rm(runTools, { recursive: true, force: true }).catch(() => {});
+            await rm(runHome, { recursive: true, force: true }).catch(() => {});
+          }
+          if (state?.status === 'ready' && terminalRecorded && issuedTokenRevocationConfirmed && ownedExecutionStopped && (!activeSegmentStarted || activeTimeSettled)) {
+            await rm(workspace, { recursive: true, force: true }).catch(() => {});
+            await rm(codexHome, { recursive: true, force: true }).catch(() => {});
+          }
+          await lock.close();
+        }
       }
-      if (state?.status === 'ready' && ownedExecutionStopped && (!activeSegmentStarted || activeTimeSettled)) {
-        await rm(workspace, { recursive: true, force: true }).catch(() => {});
-        await rm(codexHome, { recursive: true, force: true }).catch(() => {});
-      }
-      await lock.close();
+      if (!issuedTokenRevocationConfirmed) throw new Error('Attempt-issued token revocation could not be confirmed; operator reconciliation is required.');
     }
     await unlink(lockFile);
   }
