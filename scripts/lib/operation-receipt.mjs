@@ -40,7 +40,7 @@ function diagnostic({outcome, state, shutdown, failureCode}) {
     } else { failureClass = 'execution'; stopReason = 'execution-held'; }
   }
   const actions = {
-    'credential-cleanup':'Interactive operator: verify revocation of attempt-issued tokens before resuming; preserve the checkpoint and ownership lock.',
+    'credential-cleanup':'Interactive operator: reconcile token issuance and revocation before resuming; preserve the checkpoint and ownership lock.',
     shutdown:'Interactive operator: verify owned execution has stopped and reconcile its active-time reservation before resuming.',
     clarification:'Interactive operator: answer the pending clarification on the source Issue, then revalidate the same operation.',
     profile:'Interactive operator: readmit the exact trusted validation profile without resetting operation consumption.',

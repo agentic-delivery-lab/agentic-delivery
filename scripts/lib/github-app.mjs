@@ -71,7 +71,7 @@ function appError(route, response) {
 }
 
 export class GithubAppTokenProvider {
-  constructor({ repository, appId, privateKey, installationId, permissions = {}, fetchImpl = fetch, now = () => Date.now() } = {}) {
+  constructor({ repository, appId, privateKey, installationId, permissions = {}, fetchImpl = fetch, now = () => Date.now(), requestTimeoutMs = () => 30_000 } = {}) {
     if (!repository || !/^\d+$/.test(String(appId ?? '')) || !privateKey) throw new Error('GitHub App repository, numeric app ID, and private key are required.');
     this.repository = repository;
     this.appId = appId;
@@ -80,12 +80,20 @@ export class GithubAppTokenProvider {
     this.permissions = permissions;
     this.fetchImpl = fetchImpl;
     this.now = now;
+    this.requestTimeoutMs = requestTimeoutMs;
+    this.pendingIssuance = new Set();
     this.cachedTokens = new Map();
     this.revocationUnconfirmed = false;
     this.issuedTokens = new Set();
   }
 
   async request(route, method, token, body) {
+    // Revocation is cleanup: it remains possible after execution time expires.
+    const remainingMs = method === 'DELETE' ? 30_000 : this.requestTimeoutMs();
+    if (!Number.isSafeInteger(remainingMs) || remainingMs < 1) throw new Error('GitHub App request has no admitted execution time remaining.');
+    const mint = method === 'POST' && /^\/app\/installations\/[1-9][0-9]*\/access_tokens$/.test(route);
+    const pending = mint ? Symbol('installation-token-request') : null;
+    if (pending) this.pendingIssuance.add(pending);
     const response = await this.fetchImpl(`https://api.github.com${route}`, {
       method,
       headers: {
@@ -95,13 +103,21 @@ export class GithubAppTokenProvider {
         'Content-Type': 'application/json',
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(Math.min(30_000, remainingMs)),
     });
     if (!response.ok) throw appError(route, response);
-    return response.status === 204 ? null : response.json();
+    const result = response.status === 204 ? null : await response.json();
+    // Register a returned token before validating its other metadata, so a
+    // malformed success response still permits revocation of the known token.
+    if (pending && typeof result?.token === 'string' && result.token) {
+      this.issuedTokens.add(result.token);
+      this.pendingIssuance.delete(pending);
+    }
+    return result;
   }
 
   async token({ repositoryIds = [], permissions = this.permissions, allowInstallationWide = false } = {}) {
+    if (this.pendingIssuance.size > 0 || this.revocationUnconfirmed) throw new Error('Prior GitHub App issuance or revocation is uncertain; reconcile before minting another token.');
     const narrowedIds = [...new Set((Array.isArray(repositoryIds) ? repositoryIds : [repositoryIds])
       .map((value) => String(value))
       .filter((value) => /^[1-9][0-9]*$/.test(value)))].sort();
@@ -122,7 +138,7 @@ export class GithubAppTokenProvider {
     const body = { permissions: requestedPermissions ?? {} };
     if (narrowedIds.length > 0) body.repository_ids = narrowedIds;
     const result = await this.request(`/app/installations/${installationId}/access_tokens`, 'POST', appJwt, body);
-    if (!result?.token || !result.expires_at) throw new Error('GitHub App did not return an installation token.');
+    if (typeof result?.token !== 'string' || !result.token || !Number.isFinite(Date.parse(result.expires_at))) throw new Error('GitHub App did not return a valid installation token and expiry.');
     this.issuedTokens.add(result.token);
     this.cachedTokens.set(cacheKey, { value: result.token, expiresAt: Date.parse(result.expires_at) });
     return result.token;
@@ -135,7 +151,7 @@ export class GithubAppTokenProvider {
     for (const value of tokens) {
       try { await this.request('/installation/token', 'DELETE', value); } catch { this.revocationUnconfirmed = true; }
     }
-    return !this.revocationUnconfirmed;
+    return !this.revocationUnconfirmed && this.pendingIssuance.size === 0;
   }
 }
 

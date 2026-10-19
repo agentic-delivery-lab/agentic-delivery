@@ -112,3 +112,35 @@ test('revocation includes a near-expiry token replaced by refresh', async () => 
   assert.equal(await provider.revoke(), true);
   assert.deepEqual(revoked, ['Bearer token-1', 'Bearer token-2']);
 });
+
+test('token minting uses the operation deadline while cleanup has its own bounded timeout', async()=>{
+  const {privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});let mintAborted=false,cleanupLive=false;
+  const provider=new GithubAppTokenProvider({repository:'owner/repo',appId:'123',installationId:'456',privateKey:privateKey.export({type:'pkcs8',format:'pem'}),requestTimeoutMs:()=>1,
+    fetchImpl:async(url,options)=>{
+      await new Promise(resolve=>setTimeout(resolve,10));
+      if(url.endsWith('/access_tokens')){mintAborted=options.signal.aborted;return new Response(JSON.stringify({token:'fixture-deadline-token',expires_at:'2099-01-01T00:00:00Z'}),{status:201});}
+      cleanupLive=!options.signal.aborted;return new Response(null,{status:204});
+    }});
+  await provider.token({repositoryIds:['101']});assert.equal(mintAborted,true);
+  assert.equal(await provider.revoke(),true);assert.equal(cleanupLive,true);
+});
+
+test('an uncertain token-mint response cannot be called confirmed cleanup or trigger another mint',async()=>{
+  const {privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});let calls=0;
+  const provider=new GithubAppTokenProvider({repository:'owner/repo',appId:'123',installationId:'456',privateKey:privateKey.export({type:'pkcs8',format:'pem'}),
+    fetchImpl:async()=>{calls++;throw new Error('fixture response lost');}});
+  await assert.rejects(()=>provider.token({repositoryIds:['101']}),/response lost/);
+  assert.equal(await provider.revoke(),false);
+  await assert.rejects(()=>provider.token({repositoryIds:['101']}),/uncertain/);assert.equal(calls,1);
+});
+
+test('a returned token with invalid expiry is still retained for revocation',async()=>{
+  const {privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});const revoked=[];
+  const provider=new GithubAppTokenProvider({repository:'owner/repo',appId:'123',installationId:'456',privateKey:privateKey.export({type:'pkcs8',format:'pem'}),
+    fetchImpl:async(url,options)=>{
+      if(url.endsWith('/access_tokens'))return new Response(JSON.stringify({token:'fixture-malformed-token'}),{status:201});
+      revoked.push(options.headers.Authorization);return new Response(null,{status:204});
+    }});
+  await assert.rejects(()=>provider.token({repositoryIds:['101']}),/valid installation token/);
+  assert.equal(await provider.revoke(),true);assert.deepEqual(revoked,['Bearer fixture-malformed-token']);
+});

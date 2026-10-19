@@ -1246,8 +1246,76 @@ test('unconfirmed issued-token revocation holds the attempt and retains its reco
   const tokenRequests = f.calls.accessTokenRequests.length;
   const resumed = await f.resume();
   assert.equal(resumed.status, 'paused');
-  assert.match(resumed.reason, /operator reconciliation/);
+  assert.match(resumed.reason, /account execution lock/);
   assert.equal(f.calls.accessTokenRequests.length, tokenRequests);
   assert.equal((await f.state()).issuedTokenCleanupPending, true);
+  // Simulated operator releases the fixture lock, but cannot waive cleanup state.
+  await rm(path.join(f.stateRoot, 'account.lock'));
+  const afterLockReview = await f.resume();
+  assert.match(afterLockReview.reason, /operator reconciliation/);
+  assert.equal(f.calls.accessTokenRequests.length, tokenRequests);
   assert.ok((await operationReceipts(f)).some((value) => value.stage === 'admission' && value.priorIssuedTokenCleanupPending && value.outcome === 'held'));
+});
+
+function appCredentials(f) {
+  const {privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
+  f.env.CODEX_DELIVERY_APP_ID='5011055';f.env.CODEX_DELIVERY_APP_INSTALLATION_ID='163255060';
+  f.env.CODEX_DELIVERY_APP_PRIVATE_KEY=privateKey.export({type:'pkcs8',format:'pem'});
+}
+
+test('App account-lock collision and new-task comments cannot mint credentials', async(t)=>{
+  const f=await fixture(t);appCredentials(f);
+  await mkdir(f.stateRoot,{recursive:true});await writeFile(path.join(f.stateRoot,'account.lock'),'other owner');
+  assert.equal((await f.run()).status,'paused');assert.equal(f.calls.accessTokenRequests.length,0);
+  assert.equal(await readFile(path.join(f.stateRoot,'account.lock'),'utf8'),'other owner');
+  await rm(path.join(f.stateRoot,'account.lock'));
+  await f.comment({id:301,body:'Continue.'});
+  assert.equal((await f.run()).status,'ignored');assert.equal(f.calls.accessTokenRequests.length,0);
+});
+
+test('App preflight failure revokes issued tokens without posting or starting models', async(t)=>{
+  const f=await fixture(t);appCredentials(f);f.faults.permission='read';let revoked=0;
+  const fetchApi=f.dependencies.fetch;
+  f.dependencies.fetch=async(url,options)=>{if(url.endsWith('/installation/token')&&options.method==='DELETE')revoked++;return fetchApi(url,options);};
+  await assert.rejects(()=>f.run(),/write permission/);
+  assert.equal(f.calls.accessTokenRequests.length,1);assert.equal(revoked,1);
+  assert.equal(f.calls.clients,0);assert.equal(f.calls.comments.length,0);
+  assert.equal((await f.state()).controllerAttemptCount,1);
+  assert.equal((await f.state()).activeTime.reservation,null);
+  await assert.rejects(()=>access(path.join(f.stateRoot,'account.lock')),/ENOENT/);
+});
+
+test('App minting starts only after a persisted time reservation and uses its remaining deadline', async(t)=>{
+  const f=await fixture(t);appCredentials(f);f.faults.nowMs=1000;
+  const fetchApi=f.dependencies.fetch;let mintSignal;
+  f.dependencies.fetch=async(url,options)=>{
+    if(url.endsWith('/access_tokens')){
+      const state=await f.state();assert.equal(state.controllerAttemptCount,1);assert.ok(state.activeTime.reservation);
+      mintSignal=options.signal;f.faults.nowMs+=ACTIVE_TIME_LIMIT_MS;
+    }
+    return fetchApi(url,options);
+  };
+  const result=await f.run();assert.equal(result.status,'paused');assert.match(result.reason,/active time allowance is exhausted/);assert.ok(mintSignal);assert.equal(f.calls.clients,0);assert.equal(f.calls.comments.length,0);
+  assert.equal((await f.state()).activeTime.spentMs,ACTIVE_TIME_LIMIT_MS);
+});
+
+test('uncertain App issuance preserves the lock and blocks resumption before another token',async(t)=>{
+  const f=await fixture(t);appCredentials(f);let requests=0;
+  const fetchApi=f.dependencies.fetch;
+  f.dependencies.fetch=async(url,options)=>{if(url.endsWith('/access_tokens')){requests++;throw new Error('fixture token response lost');}return fetchApi(url,options);};
+  await assert.rejects(()=>f.run(),/revocation could not be confirmed/);
+  assert.equal((await f.state()).issuedTokenCleanupPending,true);assert.equal(f.calls.clients,0);assert.equal(f.calls.comments.length,0);
+  await access(path.join(f.stateRoot,'account.lock'));
+  assert.equal((await f.resume()).status,'paused');assert.equal(requests,1);
+});
+
+test('inactive saved-comment exits revoke App credentials and preserve unprepared runtime files',async(t)=>{
+  const f=await fixture(t);await f.run();appCredentials(f);f.faults.sourceState='closed';
+  await f.comment({id:302,body:'Continue.'});
+  const home=path.join(f.issueRoot,'run-home');await mkdir(home,{recursive:true});await writeFile(path.join(home,'preserved.txt'),'unprepared input');
+  const comments=f.calls.comments.length,clients=f.calls.clients;let revoked=0;const fetchApi=f.dependencies.fetch;
+  f.dependencies.fetch=async(url,options)=>{if(url.endsWith('/installation/token')&&options.method==='DELETE')revoked++;return fetchApi(url,options);};
+  assert.equal((await f.run()).status,'ignored');assert.equal(revoked,1);
+  assert.equal(f.calls.comments.length,comments);assert.equal(f.calls.clients,clients);
+  assert.equal(await readFile(path.join(home,'preserved.txt'),'utf8'),'unprepared input');
 });

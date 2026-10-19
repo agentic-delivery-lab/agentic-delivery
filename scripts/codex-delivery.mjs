@@ -435,156 +435,6 @@ export async function deliver(env = process.env, dependencies = {}) {
     else terminalRecorded = true;
   };
 
-  const stateWasSaved = await exists(stateFile);
-  if (stateWasSaved) {
-    const saved = await readSavedState(stateFile, issue, repository);
-    let reason;
-    if (saved.issuedTokenCleanupPending) reason = 'Prior attempt-issued token revocation is unconfirmed; operator reconciliation is required before resumption.';
-    else if (!saved.operationId) reason = 'The operation identity is unknown; preserve its source and consumption evidence.';
-    else if (!matchesCurrentOperationPolicy(saved.budgetPolicyReference)) reason = 'The operation budget policy is missing or changed; owner readmission is required without resetting consumption.';
-    else if (saved.controllerAttemptCount === null) reason = 'Controller attempt consumption is unknown; preserve the operation for owner inspection.';
-    else if (saved.controllerAttemptCount >= INITIAL_OPERATION_LIMITS.controllerAttempts) reason = 'The operation controller attempt allowance is exhausted; resumption cannot reset it.';
-    else if (saved.validationAttemptCount === null) reason = 'Validation consumption is unknown; preserve the operation for owner inspection.';
-    else if (['branch','implement','verify'].includes(saved.phase) && saved.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS && !saved.validationPrepared) reason = 'The operation validation allowance is exhausted; resumption cannot reset it.';
-    else if (saved.modelTurnCount === null) reason = 'Model turn consumption is unknown; preserve the operation for owner inspection.';
-    else if (!['publish','commit','coordinate','verify'].includes(saved.phase) && saved.modelTurnCount >= MAX_MODEL_TURNS) reason = 'The operation model turn allowance is exhausted; resumption cannot reset it.';
-    if (!reason) {
-      try { reserveActiveTime(saved.activeTime, {owner:`${env.GITHUB_RUN_ID ?? ''}:${env.GITHUB_RUN_ATTEMPT ?? '1'}`,nowMs:now()}); }
-      catch (error) { reason = error.message; }
-    }
-    if (reason) {
-      // This is a local admission hold, not authority revalidation or evidence
-      // that another process stopped. Preserve the operation and its outbox.
-      const receiptRoot = path.join(issueRoot, 'budget-holds');
-      await mkdir(receiptRoot, {recursive:true,mode:0o700});
-      await atomic(path.join(receiptRoot, `${randomUUID()}.json`), {
-        schemaVersion:1, outcome:'admission-held', repository, repositoryId:originRepositoryId,
-        sourceIssue:Number(issue), operationId:saved.operationId, budgetPolicyReference:saved.budgetPolicyReference,
-        workflowRunId:String(env.GITHUB_RUN_ID ?? ''), workflowRunAttempt:String(env.GITHUB_RUN_ATTEMPT ?? '1'),
-        authorityRevalidated:false, privilegedActionsPerformed:false, reason,
-        consumption:{controllerAttempts:saved.controllerAttemptCount,modelTurns:saved.modelTurnCount,validationAttempts:saved.validationAttemptCount,activeTime:saved.activeTime},
-        recordedAt:new Date(now()).toISOString(),
-      });
-      receiptFailureCode = 'OPERATION_BUDGET_HOLD';
-      await emitOperationReceipt('admission', 'held', saved, false);
-      await emitOperationReceipt('terminal', 'held', saved, false, {
-        ownedExecutionStopped: true, activeTimeSettled: Boolean(saved.activeTime && !saved.activeTime.reservation), issuedTokenRevocationConfirmed: true,
-      });
-      return {status:'paused',reason};
-    }
-  }
-  const endpoint = `https://api.github.com/repos/${repository}`;
-  const appProvider = appCredentialsConfigured
-    ? new GithubAppTokenProvider({
-      repository: env.GITHUB_REPOSITORY,
-      ...appConfiguration(env),
-      // Workflow files are never mutated by the delivery runtime. Keep the
-      // installation token aligned with the explicit delivery profile in the
-      // versioned GitHub App contract.
-      permissions: githubAppTokenPermissions('delivery'),
-      fetchImpl: fetchApi,
-    })
-    : null;
-  const originToken = appProvider
-    ? await appProvider.token({ repositoryIds: [originRepositoryId] })
-    : env.PUBLISH_TOKEN || env.GH_TOKEN;
-  const api = async (route, method = 'GET', body, token = originToken) => {
-    const protectedWrite = method !== 'GET';
-    if (protectedWrite) await beginActiveTime();
-    const timeoutMs = protectedWrite ? Math.min(30_000, requireActiveTime()) : 30_000;
-    const response = await fetchApi(`${endpoint}${route}`, {
-      method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10', 'Content-Type': 'application/json' },
-      ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (!response.ok) throw new Error(`GitHub ${method} ${route} failed (${response.status}).`);
-    return response.status === 204 ? null : response.json();
-  };
-  const publicationToken = async () => originToken;
-  const publishApi = async (route, method = 'GET', body) => api(route, method, body, await publicationToken());
-  if (env.INVOCATION_EVENT === 'true' && env.INVOCATION_EVENT_NAME !== 'issues') {
-    const sourceKind = String(env.INVOCATION_SOURCE_KIND ?? '');
-    const sourceId = commentId(env.INVOCATION_COMMENT_ID || env.INVOCATION_REVIEW_ID);
-    const route = invocationSourceRoute({
-      sourceKind,
-      sourceId,
-      pullRequestNumber: env.INVOCATION_PULL_REQUEST_NUMBER,
-    });
-    const current = await api(route);
-    const body = String(current?.body ?? '');
-    if (env.INVOCATION_BODY_DIGEST && bodyDigest(body) !== env.INVOCATION_BODY_DIGEST) throw new Error('The invocation comment changed after preflight; start a new tagged invocation.');
-    const currentActor = String(current?.user?.login ?? '');
-    if (!currentActor || currentActor !== env.INVOCATION_ACTOR) throw new Error('The invocation actor no longer matches the source comment.');
-    comment = { id: sourceId, body };
-    actor = currentActor;
-  }
-  const deliveryRoute = env.INTAKE_ROUTE
-    || (comment || env.GITHUB_EVENT_NAME === 'workflow_dispatch' ? 'resume' : 'manual');
-  if (!['refine', 'research', 'requirements', 'architecture', 'plan', 'implement', 'resume', 'validate', 'manual', 'coordinate'].includes(deliveryRoute)) throw new Error('Invalid intake route.');
-  const internalCoordination = deliveryRoute === 'coordinate' && actor === 'github-actions[bot]';
-  const allowlistedBotInvocation = env.INVOCATION_EVENT === 'true'
-    && env.INVOCATION_ACTOR_KIND === 'external-bot'
-    && env.INVOCATION_AUTHORIZED === 'true';
-  const permission = internalCoordination || allowlistedBotInvocation
-    ? { permission: 'write' }
-    : await api(`/collaborators/${encodeURIComponent(actor)}/permission`);
-  if (!['admin', 'maintain', 'write'].includes(permission.permission)) {
-    throw new Error('Source issue execution requires repository write permission.');
-  }
-  const lifecycleConfig = bindIssueMetadataConfig(await loadLifecycleConfig(controllerRoot), env.ISSUE_FIELD_BINDINGS_JSON || {});
-  const orchestrationAvailability = {
-    capabilities: ['repository-read', 'repository-write', 'deterministic-validation'],
-    mcp: String(env.CODEX_MCP_SERVERS ?? '').split(',').map((name) => name.trim()).filter(Boolean)
-      .map((name) => ({ name, available: true })),
-    skills: Object.keys(lifecycleConfig.orchestration.skills ?? {}),
-  };
-  const sourceRest = await api(`/issues/${issue}`);
-  let graphql = dependencies.graphql;
-  const useGraphql = Boolean(graphql || env.GITHUB_GRAPHQL === 'true' || env.GITHUB_ACTIONS === 'true');
-  if (useGraphql && !graphql) graphql = githubGraphqlApi({
-    token: originToken, fetchImpl: fetchApi,
-    requestTimeoutMs: () => activeSegmentStarted ? requireActiveTime() : 30_000,
-  });
-  const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
-  const readTrustedControlPlane = async ({ issueNumber = issue } = {}) => {
-    const value = await readControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
-    const fieldContract = validateOrganizationIssueFields({
-      config: lifecycleConfig,
-      organizationIssueFields: value.organizationIssueFields,
-      organizationIssueTypes: value.organizationIssueTypes,
-      organizationPinnedIssueFields: value.organizationPinnedIssueFields,
-    });
-    if (!fieldContract.valid) throw new Error(`Required organization issue fields are not ready: ${fieldContract.errors.join(' ')}`);
-    return value;
-  };
-  let source = sourceRest;
-  if (graphql) {
-    source = { ...sourceRest, ...(await readTrustedControlPlane()), labels: sourceRest.labels ?? [] };
-  }
-  if (source.pull_request) throw new Error('A pull request cannot be a source issue.');
-  if (source.state !== 'open') {
-    if (comment) return {status:'ignored', reason:'The source issue is inactive.'};
-    throw new Error('The source issue must still be open.');
-  }
-  const deliveryMetadataSafe = (metadata) => {
-    const blockedGovernance = metadata.workType === 'architecture' ? [] : metadata.governance
-      .filter((label) => lifecycleConfig.readiness.blocking_governance.includes(label));
-    return Boolean(metadata.workType)
-      && metadata.workTypeSource === 'native'
-      && metadata.fieldAuthority === 'organization-issue-field'
-      && metadata.fieldPresence?.lifecycleStage === true
-      && metadata.fieldPresence?.readiness === true
-      && !(metadata.invalidFields?.length > 0)
-      && !metadata.conflict?.length
-      && !metadata.stateConflict
-      && lifecycleConfig.readiness.delivery_types.includes(metadata.workType)
-      && !(metadata.missingFields?.length > 0)
-      && ['planning', 'execution', 'validation'].includes(metadata.lifecycleStage)
-      && ['ready', 'working', 'awaiting-human'].includes(metadata.readiness)
-      && blockedGovernance.length === 0;
-  };
-  if (comment && !stateWasSaved) {
-    return {status:'ignored', reason:'No saved continuation state exists for this issue.'};
-  }
   await mkdir(issueRoot, { recursive: true, mode: 0o700 });
   const workspace = path.join(issueRoot, 'workspace');
   const codexHome = path.join(issueRoot, 'codex-home');
@@ -644,6 +494,7 @@ export async function deliver(env = process.env, dependencies = {}) {
     requireActiveTime();
     return result;
   };
+  let api;
   const flush = async () => {
     const postedIds = [];
     while (state.outbox?.length) {
@@ -713,38 +564,61 @@ export async function deliver(env = process.env, dependencies = {}) {
     if (error.code !== 'EEXIST') throw error;
     return {status:'paused',reason:'An account execution lock is present. Preserve it and verify its owner and run before any recovery; no new execution or comment write was admitted.'};
   }
-  runTools = await mkdtemp(path.join(issueRoot, 'run-tools-'));
-  for (const entry of await readdir(issueRoot, { withFileTypes: true })) {
-    if (entry.name.startsWith('run-tools-') && path.join(issueRoot, entry.name) !== runTools) {
-      await rm(path.join(issueRoot, entry.name), { recursive: true, force: true });
-    }
-  }
-  await rm(runHome, { recursive: true, force: true }).catch(() => {});
-  await unlink(authBridge).catch(() => {});
   let client;
   const abort = new AbortController();
   const cancel = () => { abort.abort(); client?.close().catch(() => {}); };
   process.once('SIGTERM', cancel);
   process.once('SIGINT', cancel);
   let overall = setTimeout(cancel, OVERALL_TIMEOUT_MS);
-  const gitEnv = (token) => {
-    const { GH_TOKEN: _ghToken, GITHUB_TOKEN: _githubToken, PUBLISH_TOKEN: _publishToken,
-      OPENAI_API_KEY: _openAiKey, CODEX_DELIVERY_APP_PRIVATE_KEY: _privateKey, ...safeEnv } = env;
-    return {
-      ...safeEnv,
-      GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null',
-      GIT_CONFIG_COUNT: '2', GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
-      GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
-      GIT_CONFIG_KEY_1: 'core.hooksPath', GIT_CONFIG_VALUE_1: '/dev/null',
-    };
-  };
-  const git = async (args, options = {}) => {
-    await beginActiveTime();
-    const token = options.publish ? await publicationToken() : originToken;
-    return (await execute('git', ['-C', workspace, ...args], { env: gitEnv(token), timeout: Math.min(120_000, requireActiveTime()), maxBuffer: 8_000_000 })).stdout.trim();
-  };
+  let appProvider = null;
+  let preflightComplete = false;
+  let runtimePrepared = false;
   try {
     await lock.writeFile(JSON.stringify({ runUrl, issue, pid: process.pid }));
+    const stateWasSaved = await exists(stateFile);
+    if (stateWasSaved) {
+      const saved = await readSavedState(stateFile, issue, repository);
+      let reason;
+      if (saved.issuedTokenCleanupPending) reason = 'Prior attempt-issued token revocation is unconfirmed; operator reconciliation is required before resumption.';
+      else if (!saved.operationId) reason = 'The operation identity is unknown; preserve its source and consumption evidence.';
+      else if (!matchesCurrentOperationPolicy(saved.budgetPolicyReference)) reason = 'The operation budget policy is missing or changed; owner readmission is required without resetting consumption.';
+      else if (saved.controllerAttemptCount === null) reason = 'Controller attempt consumption is unknown; preserve the operation for owner inspection.';
+      else if (saved.controllerAttemptCount >= INITIAL_OPERATION_LIMITS.controllerAttempts) reason = 'The operation controller attempt allowance is exhausted; resumption cannot reset it.';
+      else if (saved.validationAttemptCount === null) reason = 'Validation consumption is unknown; preserve the operation for owner inspection.';
+      else if (['branch','implement','verify'].includes(saved.phase) && saved.validationAttemptCount >= MAX_VALIDATION_ATTEMPTS && !saved.validationPrepared) reason = 'The operation validation allowance is exhausted; resumption cannot reset it.';
+      else if (saved.modelTurnCount === null) reason = 'Model turn consumption is unknown; preserve the operation for owner inspection.';
+      else if (!['publish','commit','coordinate','verify'].includes(saved.phase) && saved.modelTurnCount >= MAX_MODEL_TURNS) reason = 'The operation model turn allowance is exhausted; resumption cannot reset it.';
+      if (!reason) {
+        try { reserveActiveTime(saved.activeTime, {owner:`${env.GITHUB_RUN_ID ?? ''}:${env.GITHUB_RUN_ATTEMPT ?? '1'}`,nowMs:now()}); }
+        catch (error) { reason = error.message; }
+      }
+      if (reason) {
+        // This is a local admission hold, not authority revalidation or evidence
+        // that another process stopped. Preserve the operation and its outbox.
+        const receiptRoot = path.join(issueRoot, 'budget-holds');
+        await mkdir(receiptRoot, {recursive:true,mode:0o700});
+        await atomic(path.join(receiptRoot, `${randomUUID()}.json`), {
+          schemaVersion:1, outcome:'admission-held', repository, repositoryId:originRepositoryId,
+          sourceIssue:Number(issue), operationId:saved.operationId, budgetPolicyReference:saved.budgetPolicyReference,
+          workflowRunId:String(env.GITHUB_RUN_ID ?? ''), workflowRunAttempt:String(env.GITHUB_RUN_ATTEMPT ?? '1'),
+          authorityRevalidated:false, privilegedActionsPerformed:false, reason,
+          consumption:{controllerAttempts:saved.controllerAttemptCount,modelTurns:saved.modelTurnCount,validationAttempts:saved.validationAttemptCount,activeTime:saved.activeTime},
+          recordedAt:new Date(now()).toISOString(),
+        });
+        receiptFailureCode = 'OPERATION_BUDGET_HOLD';
+        await emitOperationReceipt('admission', 'held', saved, false);
+        await emitOperationReceipt('terminal', 'held', saved, false, {
+          ownedExecutionStopped: true, activeTimeSettled: Boolean(saved.activeTime && !saved.activeTime.reservation), issuedTokenRevocationConfirmed: true,
+        });
+        return {status:'paused',reason};
+      }
+    }
+    if ((comment || (env.INVOCATION_EVENT === 'true' && env.INVOCATION_EVENT_NAME !== 'issues')) && !stateWasSaved) {
+      return {status:'ignored', reason:'No saved continuation state exists for this issue.'};
+    }
+    const deliveryRoute = env.INTAKE_ROUTE
+      || (comment || (env.INVOCATION_EVENT === 'true' && env.INVOCATION_EVENT_NAME !== 'issues') || env.GITHUB_EVENT_NAME === 'workflow_dispatch' ? 'resume' : 'manual');
+    if (!['refine', 'research', 'requirements', 'architecture', 'plan', 'implement', 'resume', 'validate', 'manual', 'coordinate'].includes(deliveryRoute)) throw new Error('Invalid intake route.');
     const controllerCommit = (await execute('git', ['-C', controllerRoot, 'rev-parse', 'HEAD'], { timeout: 30_000 })).stdout.trim();
     validationProfile = (dependencies.resolveValidationProfile ?? resolveValidationProfile)({ repositoryId: originRepositoryId, repository, controllerCommit });
     // Additional authority mounts require W12 admission; no Issue/env path can
@@ -767,6 +641,141 @@ export async function deliver(env = process.env, dependencies = {}) {
     if (!matchesValidationProfile(state.validationProfileReference, validationProfile)) {
       throw Object.assign(new Error('The operation validation profile is missing or changed; owner readmission is required without resetting consumption.'), { code: 'VALIDATION_PROFILE_HOLD' });
     }
+    await beginActiveTime();
+    const endpoint = `https://api.github.com/repos/${repository}`;
+    appProvider = appCredentialsConfigured
+      ? new GithubAppTokenProvider({
+        repository: env.GITHUB_REPOSITORY,
+        ...appConfiguration(env),
+        // Workflow files are never mutated by the delivery runtime. Keep the
+        // installation token aligned with the explicit delivery profile in the
+        // versioned GitHub App contract.
+        permissions: githubAppTokenPermissions('delivery'),
+        fetchImpl: fetchApi,
+        requestTimeoutMs: () => Math.min(30_000, requireActiveTime()),
+      })
+      : null;
+    const originToken = appProvider
+      ? await appProvider.token({ repositoryIds: [originRepositoryId] })
+      : env.PUBLISH_TOKEN || env.GH_TOKEN;
+    requireActiveTime();
+    api = async (route, method = 'GET', body, token = originToken) => {
+      const protectedWrite = method !== 'GET';
+      if (protectedWrite) await beginActiveTime();
+      const timeoutMs = Math.min(30_000, requireActiveTime());
+      const response = await fetchApi(`${endpoint}${route}`, {
+        method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10', 'Content-Type': 'application/json' },
+        ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) throw new Error(`GitHub ${method} ${route} failed (${response.status}).`);
+      return response.status === 204 ? null : response.json();
+    };
+    const publicationToken = async () => originToken;
+    const publishApi = async (route, method = 'GET', body) => api(route, method, body, await publicationToken());
+    if (env.INVOCATION_EVENT === 'true' && env.INVOCATION_EVENT_NAME !== 'issues') {
+      const sourceKind = String(env.INVOCATION_SOURCE_KIND ?? '');
+      const sourceId = commentId(env.INVOCATION_COMMENT_ID || env.INVOCATION_REVIEW_ID);
+      const route = invocationSourceRoute({
+        sourceKind,
+        sourceId,
+        pullRequestNumber: env.INVOCATION_PULL_REQUEST_NUMBER,
+      });
+      const current = await api(route);
+      const body = String(current?.body ?? '');
+      if (env.INVOCATION_BODY_DIGEST && bodyDigest(body) !== env.INVOCATION_BODY_DIGEST) throw new Error('The invocation comment changed after preflight; start a new tagged invocation.');
+      const currentActor = String(current?.user?.login ?? '');
+      if (!currentActor || currentActor !== env.INVOCATION_ACTOR) throw new Error('The invocation actor no longer matches the source comment.');
+      comment = { id: sourceId, body };
+      actor = currentActor;
+    }
+    const internalCoordination = deliveryRoute === 'coordinate' && actor === 'github-actions[bot]';
+    const allowlistedBotInvocation = env.INVOCATION_EVENT === 'true'
+      && env.INVOCATION_ACTOR_KIND === 'external-bot'
+      && env.INVOCATION_AUTHORIZED === 'true';
+    const permission = internalCoordination || allowlistedBotInvocation
+      ? { permission: 'write' }
+      : await api(`/collaborators/${encodeURIComponent(actor)}/permission`);
+    if (!['admin', 'maintain', 'write'].includes(permission.permission)) {
+      throw new Error('Source issue execution requires repository write permission.');
+    }
+    const lifecycleConfig = bindIssueMetadataConfig(await loadLifecycleConfig(controllerRoot), env.ISSUE_FIELD_BINDINGS_JSON || {});
+    const orchestrationAvailability = {
+      capabilities: ['repository-read', 'repository-write', 'deterministic-validation'],
+      mcp: String(env.CODEX_MCP_SERVERS ?? '').split(',').map((name) => name.trim()).filter(Boolean)
+        .map((name) => ({ name, available: true })),
+      skills: Object.keys(lifecycleConfig.orchestration.skills ?? {}),
+    };
+    const sourceRest = await api(`/issues/${issue}`);
+    let graphql = dependencies.graphql;
+    const useGraphql = Boolean(graphql || env.GITHUB_GRAPHQL === 'true' || env.GITHUB_ACTIONS === 'true');
+    if (useGraphql && !graphql) graphql = githubGraphqlApi({
+      token: originToken, fetchImpl: fetchApi,
+      requestTimeoutMs: () => activeSegmentStarted ? requireActiveTime() : 30_000,
+    });
+    const readControlPlane = dependencies.readControlPlane ?? readIssueControlPlane;
+    const readTrustedControlPlane = async ({ issueNumber = issue } = {}) => {
+      const value = await readControlPlane({ graphql, repository, issueNumber, organization: repository.split('/')[0] });
+      const fieldContract = validateOrganizationIssueFields({
+        config: lifecycleConfig,
+        organizationIssueFields: value.organizationIssueFields,
+        organizationIssueTypes: value.organizationIssueTypes,
+        organizationPinnedIssueFields: value.organizationPinnedIssueFields,
+      });
+      if (!fieldContract.valid) throw new Error(`Required organization issue fields are not ready: ${fieldContract.errors.join(' ')}`);
+      return value;
+    };
+    let source = sourceRest;
+    if (graphql) {
+      source = { ...sourceRest, ...(await readTrustedControlPlane()), labels: sourceRest.labels ?? [] };
+    }
+    if (source.pull_request) throw new Error('A pull request cannot be a source issue.');
+    if (source.state !== 'open') {
+      if (comment) return {status:'ignored', reason:'The source issue is inactive.'};
+      throw new Error('The source issue must still be open.');
+    }
+    const deliveryMetadataSafe = (metadata) => {
+      const blockedGovernance = metadata.workType === 'architecture' ? [] : metadata.governance
+        .filter((label) => lifecycleConfig.readiness.blocking_governance.includes(label));
+      return Boolean(metadata.workType)
+        && metadata.workTypeSource === 'native'
+        && metadata.fieldAuthority === 'organization-issue-field'
+        && metadata.fieldPresence?.lifecycleStage === true
+        && metadata.fieldPresence?.readiness === true
+        && !(metadata.invalidFields?.length > 0)
+        && !metadata.conflict?.length
+        && !metadata.stateConflict
+        && lifecycleConfig.readiness.delivery_types.includes(metadata.workType)
+        && !(metadata.missingFields?.length > 0)
+        && ['planning', 'execution', 'validation'].includes(metadata.lifecycleStage)
+        && ['ready', 'working', 'awaiting-human'].includes(metadata.readiness)
+        && blockedGovernance.length === 0;
+    };
+    preflightComplete = true;
+    runTools = await mkdtemp(path.join(issueRoot, 'run-tools-'));
+    runtimePrepared = true;
+    for (const entry of await readdir(issueRoot, { withFileTypes: true })) {
+      if (entry.name.startsWith('run-tools-') && path.join(issueRoot, entry.name) !== runTools) {
+        await rm(path.join(issueRoot, entry.name), { recursive: true, force: true });
+      }
+    }
+    await rm(runHome, { recursive: true, force: true }).catch(() => {});
+    await unlink(authBridge).catch(() => {});
+    const gitEnv = (token) => {
+      const { GH_TOKEN: _ghToken, GITHUB_TOKEN: _githubToken, PUBLISH_TOKEN: _publishToken,
+        OPENAI_API_KEY: _openAiKey, CODEX_DELIVERY_APP_PRIVATE_KEY: _privateKey, ...safeEnv } = env;
+      return {
+        ...safeEnv,
+        GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null',
+        GIT_CONFIG_COUNT: '2', GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+        GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
+        GIT_CONFIG_KEY_1: 'core.hooksPath', GIT_CONFIG_VALUE_1: '/dev/null',
+      };
+    };
+    const git = async (args, options = {}) => {
+      await beginActiveTime();
+      const token = options.publish ? await publicationToken() : originToken;
+      return (await execute('git', ['-C', workspace, ...args], { env: gitEnv(token), timeout: Math.min(120_000, requireActiveTime()), maxBuffer: 8_000_000 })).stdout.trim();
+    };
     const canStartInitialSession = !stateWasSaved
       || (priorStatus === 'paused' && state.phase === 'plan' && !state.plan && state.sessionStarted === false && !state.sessionId);
     await flush();
@@ -1582,6 +1591,10 @@ legacy owner-only rule in the base instruction file.`;
       },
     };
     await save();
+    if (!preflightComplete) {
+      if (['OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code)) return {status:state.status,reason:state.reason};
+      throw error;
+    }
     const handoff = continuation(state);
     await writeFile(path.join(issueRoot, 'CONTINUE.md'), handoff, { mode: 0o600 });
     if (error?.code === 'OPERATION_BUDGET_HOLD') {
@@ -1654,12 +1667,12 @@ legacy owner-only rule in the base instruction file.`;
             }, actor);
           }
         } finally {
-          await unlink(authBridge).catch(() => {});
-          if (ownedExecutionStopped) {
+          if (ownedExecutionStopped && runtimePrepared) {
+            await unlink(authBridge).catch(() => {});
             if (runTools) await rm(runTools, { recursive: true, force: true }).catch(() => {});
             await rm(runHome, { recursive: true, force: true }).catch(() => {});
           }
-          if (state?.status === 'ready' && terminalRecorded && issuedTokenRevocationConfirmed && ownedExecutionStopped && (!activeSegmentStarted || activeTimeSettled)) {
+          if (runtimePrepared && state?.status === 'ready' && terminalRecorded && issuedTokenRevocationConfirmed && ownedExecutionStopped && (!activeSegmentStarted || activeTimeSettled)) {
             await rm(workspace, { recursive: true, force: true }).catch(() => {});
             await rm(codexHome, { recursive: true, force: true }).catch(() => {});
           }
