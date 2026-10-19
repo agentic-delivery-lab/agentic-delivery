@@ -133,8 +133,6 @@
         "codex-cli-updater-review-classifier",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
-        "codex-operation-tool-gate-bootstrap-probe",
-        "codex-operation-tool-gate-source-preparation",
         "github-native-issue-type",
         "operation-active-time-allowance",
         "operation-attempt-receipts",
@@ -301,8 +299,6 @@
         "agent-invocation-workflow",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
-        "codex-operation-tool-gate-bootstrap-probe",
-        "codex-operation-tool-gate-source-preparation",
         "control-plane-contract-validator",
         "controller-receipt-schema-inspection",
         "controller-receipt-schema-migration",
@@ -380,8 +376,6 @@
         "agent-invocation-workflow",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
-        "codex-operation-tool-gate-bootstrap-probe",
-        "codex-operation-tool-gate-source-preparation",
         "control-plane-contract-validator",
         "controller-receipt-schema-inspection",
         "controller-receipt-schema-migration",
@@ -455,8 +449,6 @@
         "codex-cli-updater-review-classifier",
         "codex-delivery-controller",
         "codex-delivery-workflow-guide",
-        "codex-operation-tool-gate-bootstrap-probe",
-        "codex-operation-tool-gate-source-preparation",
         "commit-format-validator",
         "controller-receipt-schema-inspection",
         "controller-receipt-schema-migration",
@@ -682,36 +674,6 @@
         "ADR-0012",
         "ADR-0015",
         "ADR-0017",
-        "ADR-0018"
-      ],
-      "domains": [
-        "agentic-delivery-control-plane",
-        "agentic-delivery-governance"
-      ]
-    },
-    {
-      "id": "codex-operation-tool-gate-bootstrap-probe",
-      "path": "scripts/probe-codex-tool-gate.mjs",
-      "location": "scripts/probe-codex-tool-gate.mjs",
-      "kind": "validator",
-      "enforcement": "deterministic",
-      "adrs": [
-        "ADR-0009",
-        "ADR-0018"
-      ],
-      "domains": [
-        "agentic-delivery-control-plane",
-        "agentic-delivery-governance"
-      ]
-    },
-    {
-      "id": "codex-operation-tool-gate-source-preparation",
-      "path": "scripts/prepare-codex-tool-gate.mjs",
-      "location": "scripts/prepare-codex-tool-gate.mjs",
-      "kind": "validator",
-      "enforcement": "deterministic",
-      "adrs": [
-        "ADR-0009",
         "ADR-0018"
       ],
       "domains": [
