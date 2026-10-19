@@ -547,6 +547,25 @@ operator inspection. Older state without policy identity or consumption evidence
 is held for owner inspection. A source snapshot cannot substitute for those
 records or replenish an allowance.
 
+Migration `0009-operation-resource-budgets.sql` and
+`OperationBudgetStore` prepare shared database counters for model turns,
+validation, tools, transport and controller attempts. Initialization requires
+explicit known consumption and binds one operation to its native repository,
+source Issue, controller, policy, approved-context and runtime fingerprints.
+Another UUID cannot reset the same Issue. Reservations require the exact live
+controller receipt lease and run attempt. A single statement records a unique
+request and conditionally charges the bounded counter before execution can be
+authorized. Concurrent requests cannot exceed the compiled limits; an uncertain
+response stays charged and replaying its key never authorizes execution twice.
+The ledger has no expiry that can replenish the software allowance.
+
+This adapter and migration are source-only. They are not wired into live
+routing or native tool dispatch, and the migration has not been applied to a
+hosted database. Global implementation ownership, active-time integration,
+all-phase admission and a fail-closed native tool gate still require separate
+implementation and evidence. Disposable PostgreSQL tests prove SQL counter and
+fencing behavior, not Neon transport, runtime interception or activation.
+
 Each owned attempt also writes private version-1 records under
 `operation-receipts/`, validated by
 `docs/architecture/operation-attempt-receipt.schema.json`. Execution admission

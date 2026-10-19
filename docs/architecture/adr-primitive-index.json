@@ -137,6 +137,7 @@
         "operation-active-time-allowance",
         "operation-attempt-receipts",
         "operation-budget-policy-identity",
+        "operation-resource-budget-store",
         "pull-request-check-readiness",
         "pull-request-dispatch-context-resolver",
         "quota-diagnostics-contract"
@@ -320,6 +321,7 @@
         "operation-active-time-allowance",
         "operation-attempt-receipts",
         "operation-budget-policy-identity",
+        "operation-resource-budget-store",
         "operator-issue-field-canary",
         "organization-metadata-runbook",
         "organization-webhook-ingress",
@@ -396,6 +398,7 @@
         "operation-active-time-allowance",
         "operation-attempt-receipts",
         "operation-budget-policy-identity",
+        "operation-resource-budget-store",
         "operator-issue-field-canary",
         "organization-metadata-runbook",
         "organization-webhook-ingress",
@@ -471,6 +474,7 @@
         "operation-active-time-allowance",
         "operation-attempt-receipts",
         "operation-budget-policy-identity",
+        "operation-resource-budget-store",
         "operator-issue-field-canary",
         "orchestration-policy-catalog",
         "orchestration-policy-validator",
@@ -1156,6 +1160,21 @@
       "id": "operation-budget-policy-identity",
       "path": "scripts/lib/operation-budget-policy.mjs",
       "location": "scripts/lib/operation-budget-policy.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0009",
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "operation-resource-budget-store",
+      "path": "scripts/lib/operation-budget-store.mjs",
+      "location": "scripts/lib/operation-budget-store.mjs",
       "kind": "validator",
       "enforcement": "deterministic",
       "adrs": [
