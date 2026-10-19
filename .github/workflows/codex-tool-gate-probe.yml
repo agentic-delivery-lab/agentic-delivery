@@ -68,6 +68,14 @@ jobs:
         run: cargo build --locked --bin codex
       - name: Probe native startup without a model or credentials
         run: node control-plane/scripts/probe-codex-tool-gate.mjs upstream/codex-rs/target/debug/codex > tool-gate-evidence/native-bootstrap.json
+      - name: Diagnose dependency resolution after a failed locked build
+        if: failure()
+        working-directory: upstream/codex-rs
+        run: |
+          # Diagnostic only: the failed locked build remains failed. Preserve
+          # the exact proposed dependency delta before any future admission.
+          cargo metadata --format-version=1 --all-features --filter-platform x86_64-unknown-linux-gnu > ../../tool-gate-evidence/dependency-resolution.json 2> ../../tool-gate-evidence/dependency-resolution.stderr || true
+          git diff -- Cargo.lock > ../../tool-gate-evidence/dependency-lock-delta.patch
       - name: Record source and dependency provenance
         if: always()
         run: |
