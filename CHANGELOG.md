@@ -557,6 +557,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- Unreadable saved delivery state now records held admission and terminal attempt receipts with unknown operation data, while preserving the original checkpoint and blocking execution.
+
 - App tokens are minted only under the account lock and a persisted time reservation. Early preflight exits revoke known tokens; uncertain issuance blocks fresh credentials and preserves recovery inputs.
 
 - Dependency preparation now reserves a validation attempt before installation. Failed installs retain their charge across resumes; successful preparation and final verification share the same reserved attempt.

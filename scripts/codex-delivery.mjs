@@ -423,6 +423,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   const stateFile = path.join(issueRoot, 'state.json');
   let executionAdmitted = false;
   let admissionRecorded = false;
+  let savedStateAdmissionAttempted = false;
   let terminalRecorded = false;
   let issuedTokenRevocationConfirmed = false;
   let receiptFailureCode = null;
@@ -577,6 +578,7 @@ export async function deliver(env = process.env, dependencies = {}) {
     await lock.writeFile(JSON.stringify({ runUrl, issue, pid: process.pid }));
     const stateWasSaved = await exists(stateFile);
     if (stateWasSaved) {
+      savedStateAdmissionAttempted = true;
       const saved = await readSavedState(stateFile, issue, repository);
       let reason;
       if (saved.issuedTokenCleanupPending) reason = 'Prior attempt-issued token revocation is unconfirmed; operator reconciliation is required before resumption.';
@@ -1654,15 +1656,18 @@ legacy owner-only rule in the base instruction file.`;
         }
       } finally {
         try {
-          if (state) {
-            if (!admissionRecorded) await emitOperationReceipt('admission', 'held', state, false, null, actor);
+          if (state || savedStateAdmissionAttempted) {
+            // An unreadable checkpoint supplies no trusted operation data. Keep
+            // its bytes intact and record this attempt with unknown identity.
+            const receiptState = state ?? {};
+            if (!admissionRecorded) await emitOperationReceipt('admission', 'held', receiptState, false, null, actor);
             const settled = !activeSegmentStarted || activeTimeSettled;
             const cleanupConfirmed = ownedExecutionStopped && settled && issuedTokenRevocationConfirmed;
             const outcome = !executionAdmitted || !cleanupConfirmed ? 'held'
               : state.status === 'awaiting-human' ? 'awaiting-human'
                 : state.status !== 'ready' ? 'held'
                   : state.phase === 'publish' ? 'candidate-published' : 'route-completed';
-            await emitOperationReceipt('terminal', outcome, state, executionAdmitted, {
+            await emitOperationReceipt('terminal', outcome, receiptState, executionAdmitted, {
               ownedExecutionStopped, activeTimeSettled: settled, issuedTokenRevocationConfirmed,
             }, actor);
           }

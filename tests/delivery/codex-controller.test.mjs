@@ -1183,6 +1183,34 @@ async function operationReceipts(f) {
     JSON.parse(await readFile(path.join(root, file), 'utf8'))));
 }
 
+test('invalid saved state journals held admission and terminal without trusting or changing its bytes', async (t) => {
+  const f = await fixture(t);
+  await mkdir(f.issueRoot, {recursive:true});
+  const stateFile = path.join(f.issueRoot, 'state.json');
+  const invalid = '{"operationId":"untrusted", "controllerAttemptCount":0';
+  await writeFile(stateFile, invalid);
+  appCredentials(f);
+  await assert.rejects(() => f.run(), /Invalid saved state/);
+  assert.equal(await readFile(stateFile, 'utf8'), invalid);
+  const receipts = await operationReceipts(f);
+  assert.equal(receipts.length, 2);
+  assert.deepEqual(receipts.map(value => value.stage).sort(), ['admission','terminal']);
+  for (const receipt of receipts) {
+    assert.equal(receipt.outcome, 'held');
+    assert.equal(receipt.operationId, null);
+    assert.equal(receipt.policy, null);
+    assert.equal(receipt.configuredLimits, null);
+    assert.equal(receipt.actor.authorityChecked, false);
+    assert.deepEqual(receipt.consumption, {controllerAttempts:null,modelTurns:null,validationAttempts:null,toolInvocations:null});
+    assert.match(receipt.recoveryAction, /operator.*inspect/i);
+  }
+  assert.equal(f.calls.clients, 0);
+  assert.equal(f.calls.accessTokenRequests.length, 0);
+  assert.deepEqual(f.calls.comments, []);
+  assert.deepEqual(f.calls.prs, []);
+  assert.deepEqual(f.calls.pushHeaders, []);
+});
+
 test('controller journals execution admission and settled publication as separate attempt receipts', async (t) => {
   const f = await fixture(t); await f.run();
   const receipts = await operationReceipts(f);
