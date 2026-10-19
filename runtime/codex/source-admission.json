@@ -24,5 +24,10 @@
       "marker": ") -> Result<AnyToolResult, FunctionCallError> {\n        let tool_name = invocation.tool_name.clone();",
       "replacement": ") -> Result<AnyToolResult, FunctionCallError> {\n        crate::operation_tool_gate::authorize(&invocation).await?;\n        let tool_name = invocation.tool_name.clone();"
     }
-  ]
+  ],
+  "lockfile": {
+    "sha256": "4fab6fe99180e2b8f305bd4b33c1b4bd825e3fa4cdef1045be750843bd3d431e",
+    "outputSha256": "d7918248638c0477183a6437f07435c19fecc6ec85b6ea57a97e50301e9e39a9",
+    "packageCount": 159
+  }
 }

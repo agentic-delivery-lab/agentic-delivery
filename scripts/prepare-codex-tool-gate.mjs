@@ -18,6 +18,15 @@ export function rewritePinnedSource(contents, record) {
   return contents.replace(record.marker,()=>record.replacement);
 }
 
+export function rewritePinnedLockfile(contents, record) {
+  if (sha256(contents) !== record.sha256) throw new Error('Pinned lockfile digest does not match.');
+  const marker = 'version = "0.0.0"';
+  if (!Number.isSafeInteger(record.packageCount) || record.packageCount < 1 || contents.split(marker).length - 1 !== record.packageCount) throw new Error('Pinned workspace package count does not match.');
+  const output = contents.replaceAll(marker, 'version = "0.159.3"');
+  if (sha256(output) !== record.outputSha256) throw new Error('Pinned lockfile output digest does not match.');
+  return output;
+}
+
 export async function prepareCodexToolGate(sourceRoot) {
   const root = await realpath(path.resolve(sourceRoot));
   const reference = JSON.parse(await readFile(path.join(sourceDirectory,'source-admission.json'),'utf8'));
@@ -36,6 +45,11 @@ export async function prepareCodexToolGate(sourceRoot) {
     const input = await readFile(file,'utf8');
     updates.push({file,relative:record.path,input,output:rewritePinnedSource(input,record)});
   }
+  const lockPath = path.join(root, 'codex-rs/Cargo.lock');
+  const lockInfo = await lstat(lockPath);
+  if (!lockInfo.isFile() || lockInfo.isSymbolicLink()) throw new Error('Pinned lockfile must be an ordinary file.');
+  const lockInput = await readFile(lockPath, 'utf8');
+  updates.push({file:lockPath,relative:'codex-rs/Cargo.lock',input:lockInput,output:rewritePinnedLockfile(lockInput,reference.lockfile)});
   const modulePath = 'codex-rs/core/src/operation_tool_gate.rs';
   try { await lstat(path.join(root,modulePath)); throw new Error('Native gate target already exists; preserve it.'); }
   catch(error) { if (error.code !== 'ENOENT') throw error; }

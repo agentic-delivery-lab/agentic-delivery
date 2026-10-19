@@ -5,8 +5,10 @@ source-only candidate implementing the already selected operation-budget boundar
 It is **not an admitted runtime** and does not change the selected installer pin.
 
 The source preparer accepts one clean upstream commit and verifies every changed
-file's SHA-256 before inserting the guard. It changes no dependencies or config
-schema. The CLI initializes a private inherited descriptor before threads or
+file's SHA-256 before inserting the guard. The release-tag lockfile still names 159 workspace packages as version
+0.0.0; preparation changes only those versions to 0.159.3 and verifies the
+exact input and output digests. External dependencies and config schema stay
+unchanged. The CLI initializes a private inherited descriptor before threads or
 helper children, marks it close-on-exec and removes its parent-only environment
 marker. A common registry check runs before native, extension and MCP dispatch.
 It requires a correlated positive controller response; denial, disconnect,

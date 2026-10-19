@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
-import { rewritePinnedSource } from '../../scripts/prepare-codex-tool-gate.mjs';
+import { rewritePinnedSource, rewritePinnedLockfile } from '../../scripts/prepare-codex-tool-gate.mjs';
 
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 test('source preparation rejects a different source before inserting a native gate', () => {
@@ -45,4 +45,14 @@ test('bootstrap transport requires readiness and rejects a missing inherited soc
   const binary=path.join(root,'framed-fixture');
   await writeFile(binary,'#!/usr/bin/env node\nconst fs=require("node:fs");if(!fs.fstatSync(3).isSocket())process.exit(1);fs.writeSync(3,JSON.stringify({version:1,type:"ready",sourceCommit:"01fc69f4026735edfdf6789820549727a4867b11"})+"\\n");console.log("codex-cli fixture");\n',{mode:0o700});
   const result=await probeCodexToolGate(binary);assert.equal(result.evidenceClass,'native-bootstrap-only');assert.deepEqual(result.checks.map(value=>[value.channel,value.exitCode,value.ready]),[['inherited',0,true],['absent',1,false]]);
+});
+
+test('pinned release lock correction preserves external versions and refuses unexpected bytes or results', () => {
+  const input = 'version = "0.0.0"\nexternal = "1.2.3"\n';
+  const output = 'version = "0.159.3"\nexternal = "1.2.3"\n';
+  const record = {sha256:hash(input),outputSha256:hash(output),packageCount:1};
+  assert.equal(rewritePinnedLockfile(input,record),output);
+  assert.throws(() => rewritePinnedLockfile(input+'tampered',record),/digest/);
+  assert.throws(() => rewritePinnedLockfile(input,{...record,packageCount:2}),/count/);
+  assert.throws(() => rewritePinnedLockfile(input,{...record,outputSha256:hash(input)}),/output/);
 });
