@@ -11,6 +11,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A source-only native tool-gate candidate and pinned upstream build probe prepare reservation checks before dispatch. They do not replace the selected runtime or establish active budget admission.
+
 - Version-2 attempt receipts identify configured limits, budget stops and operator recovery actions while excluding provider diagnostics and retaining unknown policy limits as unknown.
 
 - A source-only operation budget ledger proposes durable shared counters bound to native origin, immutable context/runtime fingerprints and a live controller lease. Disposable PostgreSQL verifies limits, concurrent reservations, restart and uncertain-response behavior. No hosted migration or runtime wiring is activated.

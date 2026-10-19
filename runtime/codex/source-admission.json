@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "status": "proposed",
+  "sourceRepository": "openai/codex",
+  "sourceCommit": "01fc69f4026735edfdf6789820549727a4867b11",
+  "version": "0.159.3",
+  "rustToolchain": "1.95.0",
+  "files": [
+    {
+      "path": "codex-rs/core/src/lib.rs",
+      "sha256": "77123e59406093fcaa2f10e549458c228e55d53c84fef06728a73933cc9f096b",
+      "marker": "mod tools;",
+      "replacement": "mod operation_tool_gate;\npub use operation_tool_gate::initialize_operation_tool_gate;\n\nmod tools;"
+    },
+    {
+      "path": "codex-rs/cli/src/main.rs",
+      "sha256": "dc0356a131108ace0f63f7e9f5040b1f0fc19a71057eeeb4108e04623267c502",
+      "marker": "fn main() -> anyhow::Result<()> {",
+      "replacement": "fn main() -> anyhow::Result<()> {\n    // SAFETY: this is the first operation, before threads or helper children.\n    unsafe { codex_core::initialize_operation_tool_gate()? };"
+    },
+    {
+      "path": "codex-rs/core/src/tools/registry.rs",
+      "sha256": "d2793cddbdc34ad8d849a991dafd5871a3ce8ded4b33c446b2c1934e1cee526b",
+      "marker": ") -> Result<AnyToolResult, FunctionCallError> {\n        let tool_name = invocation.tool_name.clone();",
+      "replacement": ") -> Result<AnyToolResult, FunctionCallError> {\n        crate::operation_tool_gate::authorize(&invocation).await?;\n        let tool_name = invocation.tool_name.clone();"
+    }
+  ]
+}
