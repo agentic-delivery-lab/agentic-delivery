@@ -566,7 +566,9 @@ all-phase admission and a fail-closed native tool gate still require separate
 implementation and evidence. Disposable PostgreSQL tests prove SQL counter and
 fencing behavior, not Neon transport, runtime interception or activation.
 
-Each owned attempt also writes private version-1 records under
+Version-2 attempt receipts include configured limits only for a matching policy fingerprint. Held outcomes carry a controller-owned failure class, stop reason and an interactive-operator recovery instruction. Provider error text is excluded. Unknown policy limits remain null; receipt diagnostics cannot authorize readmission or replenish consumption. Existing version-1 journal files remain historical observations.
+
+Each owned attempt also writes private version-2 records under
 `operation-receipts/`, validated by
 `docs/architecture/operation-attempt-receipt.schema.json`. Execution admission
 records the checked controller gates before model startup. Terminal records

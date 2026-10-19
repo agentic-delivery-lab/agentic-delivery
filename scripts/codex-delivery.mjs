@@ -425,10 +425,11 @@ export async function deliver(env = process.env, dependencies = {}) {
   let admissionRecorded = false;
   let terminalRecorded = false;
   let issuedTokenRevocationConfirmed = false;
+  let receiptFailureCode = null;
   const emitOperationReceipt = async (stage, outcome, snapshot, authorityChecked, shutdown = null, login = env.INVOCATION_ACTOR || env.GITHUB_ACTOR) => {
     const receipt = createOperationReceipt({ stage, outcome, state: snapshot, repository, repositoryId: originRepositoryId,
       issue, actor: login, runId: String(env.GITHUB_RUN_ID || ''), runAttempt: String(env.GITHUB_RUN_ATTEMPT || '1'),
-      authorityChecked, shutdown, nowMs: now() });
+      authorityChecked, shutdown, failureCode: receiptFailureCode, nowMs: now() });
     await (dependencies.writeOperationReceipt ?? writeOperationReceipt)(issueRoot, receipt);
     if (stage === 'admission') admissionRecorded = true;
     else terminalRecorded = true;
@@ -464,6 +465,7 @@ export async function deliver(env = process.env, dependencies = {}) {
         consumption:{controllerAttempts:saved.controllerAttemptCount,modelTurns:saved.modelTurnCount,validationAttempts:saved.validationAttemptCount,activeTime:saved.activeTime},
         recordedAt:new Date(now()).toISOString(),
       });
+      receiptFailureCode = 'OPERATION_BUDGET_HOLD';
       await emitOperationReceipt('admission', 'held', saved, false);
       await emitOperationReceipt('terminal', 'held', saved, false, {
         ownedExecutionStopped: true, activeTimeSettled: Boolean(saved.activeTime && !saved.activeTime.reservation), issuedTokenRevocationConfirmed: true,
@@ -1559,6 +1561,7 @@ legacy owner-only rule in the base instruction file.`;
     await save();
     await audit(`## Review pull request ready\n\n${state.pr}\n\n${state.validation}\n\nRequired checks have been requested. Review and merge remain human actions.`);
   } catch (error) {
+    receiptFailureCode = ['OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code) ? error.code : null;
     if (!state) throw error;
     await client?.close().catch((failure) => { state.shutdownError = redact(failure.message, env); });
     const awaitingHuman = state.status === 'awaiting-human' && !['OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code);

@@ -11,6 +11,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Version-2 attempt receipts identify configured limits, budget stops and operator recovery actions while excluding provider diagnostics and retaining unknown policy limits as unknown.
+
 - A source-only operation budget ledger proposes durable shared counters bound to native origin, immutable context/runtime fingerprints and a live controller lease. Disposable PostgreSQL verifies limits, concurrent reservations, restart and uncertain-response behavior. No hosted migration or runtime wiring is activated.
 
 - Operation attempts now retain schema-validated admission and terminal records in a private journal. Uncertain shutdown, settlement or attempt-issued token revocation records a hold; unresolved context and tool consumption remain explicit. Journal failure prevents model startup or disposal of recovery inputs.

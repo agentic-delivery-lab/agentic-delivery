@@ -1190,6 +1190,9 @@ test('controller journals execution admission and settled publication as separat
   const terminal = receipts.find((value) => value.stage === 'terminal');
   assert.equal(admission.outcome, 'admitted');
   assert.equal(terminal.outcome, 'candidate-published');
+  assert.equal(terminal.schemaVersion, 2);
+  assert.equal(terminal.configuredLimits.toolInvocations, 100);
+  assert.equal(terminal.failureClass, null);
   assert.equal(terminal.operationId, admission.operationId);
   assert.equal(terminal.origin.repositoryId, '101');
   assert.equal(terminal.actor.authorityChecked, true);
@@ -1206,6 +1209,8 @@ test('uncertain owned shutdown writes a held receipt without claiming settled ex
   assert.equal(terminal.outcome, 'held');
   assert.equal(terminal.shutdown.ownedExecutionStopped, false);
   assert.equal(terminal.shutdown.activeTimeSettled, false);
+  assert.equal(terminal.failureClass, 'shutdown');
+  assert.match(terminal.recoveryAction, /operator.*stopped/i);
   assert.notEqual(terminal.activeTime.reservation, null);
 });
 
@@ -1233,6 +1238,8 @@ test('unconfirmed issued-token revocation holds the attempt and retains its reco
   assert.equal(terminal.outcome, 'held');
   assert.equal(terminal.shutdown.ownedExecutionStopped, true);
   assert.equal(terminal.shutdown.issuedTokenRevocationConfirmed, false);
+  assert.equal(terminal.failureClass, 'credential-cleanup');
+  assert.equal(terminal.stopReason, 'issued-token-revocation-unconfirmed');
   assert.equal((await f.state()).status, 'paused');
   await access(f.workspace);
   assert.equal(f.calls.prs.length, 1, 'a published candidate is distinct from accepted cleanup');

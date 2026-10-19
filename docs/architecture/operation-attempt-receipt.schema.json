@@ -16,10 +16,23 @@
     "outcome",
     "shutdown",
     "recordedAt",
-    "priorIssuedTokenCleanupPending"
+    "priorIssuedTokenCleanupPending",
+    "configuredLimits", "failureClass", "stopReason", "recoveryAction"
   ],
   "properties": {
-    "schemaVersion": {"const": 1},
+    "configuredLimits": {"anyOf": [{"type":"null"}, {"type":"object","additionalProperties":false,
+      "required":["activeTimeMs","modelTurns","validationAttempts","toolInvocations","childImplementations","recursionDepth","transportAttempts","controllerAttempts","concurrentImplementations","automaticBillingOrModelFallback"],
+      "properties": {
+        "activeTimeMs":{"type":"integer","minimum":1},"modelTurns":{"type":"integer","minimum":0},
+        "validationAttempts":{"type":"integer","minimum":0},"toolInvocations":{"type":"integer","minimum":0},
+        "childImplementations":{"type":"integer","minimum":0},"recursionDepth":{"type":"integer","minimum":0},
+        "transportAttempts":{"type":"integer","minimum":0},"controllerAttempts":{"type":"integer","minimum":0},
+        "concurrentImplementations":{"type":"integer","minimum":1},"automaticBillingOrModelFallback":{"type":"boolean"}
+      }}]},
+    "failureClass": {"enum":[null,"budget","policy","profile","credential-cleanup","shutdown","clarification","execution"]},
+    "stopReason": {"enum":[null,"issued-token-revocation-unconfirmed","execution-or-time-settlement-unconfirmed","source-clarification-required","validation-profile-readmission","policy-readmission","unknown-consumption","active-time-limit","controller-attempt-limit","validation-attempt-limit","model-turn-limit","resource-reservation-unconfirmed","execution-held"]},
+    "recoveryAction": {"anyOf":[{"type":"null"},{"type":"string","minLength":1,"maxLength":512}]},
+    "schemaVersion": {"const": 2},
     "stage": {"enum": ["admission", "terminal"]},
     "operationId": {
       "anyOf": [
@@ -147,9 +160,14 @@
     "priorIssuedTokenCleanupPending": {"type": "boolean"}
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Operation attempt receipt v1",
+  "title": "Operation attempt receipt v2",
   "description": "A local attempt observation, not approval of unresolved context, unknown tool consumption, software acceptance or activation.",
   "allOf": [
+    {
+      "if":{"properties":{"outcome":{"enum":["held","awaiting-human"]}}},
+      "then":{"properties":{"failureClass":{"type":"string"},"stopReason":{"type":"string"},"recoveryAction":{"type":"string"}}},
+      "else":{"properties":{"failureClass":{"type":"null"},"stopReason":{"type":"null"},"recoveryAction":{"type":"null"}}}
+    },
     {
       "if": {"properties": {"stage": {"const": "admission"}}},
       "then": {"properties": {"outcome": {"enum": ["admitted", "held"]}, "shutdown": {"type": "null"}}},
