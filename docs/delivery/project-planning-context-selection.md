@@ -37,6 +37,14 @@ observations or multiple distinct items from one Project produce a fixed hold
 result. Fields from non-selected Projects are never combined with the selected
 context.
 
+A successful result records `consideredCandidates` in policy-priority order.
+Each distinct candidate retains its Project node ID, item node ID, and exact
+source repository and Issue identities, including alternatives not selected.
+Repeated observations appear once. `candidateCount` counts these distinct
+items. This evidence does not copy unselected planning fields or grant them
+authority. The provisional version 1 result schema requires this evidence
+before its first adoption; earlier proposal outputs without it are incomplete.
+
 Missing or mismatched policy pins, unapproved or inaccessible Projects,
 incomplete reads, invalid source identities, and ambiguous candidates return a
 stable error code with no selected context. The selected output retains the

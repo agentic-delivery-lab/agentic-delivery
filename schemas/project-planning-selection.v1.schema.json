@@ -5,7 +5,7 @@
   "description": "Offline planning-only result for a pinned Project selection policy and one exact source Issue. It contains no execution authorization.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "authority", "trust", "selectionPolicy", "candidateCount", "selectedProjectNodeId", "selectedItemNodeId", "selectedContext"],
+  "required": ["schemaVersion", "authority", "trust", "selectionPolicy", "candidateCount", "consideredCandidates", "selectedProjectNodeId", "selectedItemNodeId", "selectedContext"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "authority": { "const": "planning-only" },
@@ -22,6 +22,32 @@
       }
     },
     "candidateCount": { "type": "integer", "minimum": 1 },
+    "consideredCandidates": {
+      "description": "Distinct validated Project items in policy-priority order, each bound to its exact source Issue. Repeated views and observations are collapsed.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["projectNodeId", "itemNodeId", "sourceIssueIdentity"],
+        "properties": {
+          "projectNodeId": { "type": "string", "minLength": 1 },
+          "itemNodeId": { "type": "string", "minLength": 1 },
+          "sourceIssueIdentity": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["repositoryId", "repositoryFullName", "issueNumber", "issueNodeId"],
+            "properties": {
+              "repositoryId": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+              "repositoryFullName": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+              "issueNumber": { "type": "integer", "minimum": 1 },
+              "issueNodeId": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
     "selectedProjectNodeId": { "type": "string", "minLength": 1 },
     "selectedItemNodeId": { "type": "string", "minLength": 1 },
     "selectedContext": { "$ref": "project-planning-context.v1.schema.json" }

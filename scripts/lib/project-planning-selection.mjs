@@ -316,6 +316,16 @@ export function selectProjectPlanningContext(input) {
         sha256: policyResult.digest,
       },
       candidateCount: candidates.length,
+      consideredCandidates: candidates.map((candidate) => ({
+        projectNodeId: candidate.projectNodeId,
+        itemNodeId: candidate.itemNodeId,
+        sourceIssueIdentity: {
+          repositoryId: candidate.context.sourceIssue.repository.id,
+          repositoryFullName: candidate.context.sourceIssue.repository.fullName,
+          issueNumber: candidate.context.sourceIssue.number,
+          issueNodeId: candidate.context.sourceIssue.nodeId,
+        },
+      })),
       selectedProjectNodeId: selected.projectNodeId,
       selectedItemNodeId: selected.itemNodeId,
       selectedContext: selected.context,

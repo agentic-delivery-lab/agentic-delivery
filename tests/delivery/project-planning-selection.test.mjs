@@ -132,12 +132,39 @@ test('multiple candidates follow pinned policy priority regardless of API order 
 
   assert.equal(forward.valid, true);
   assert.equal(forward.value.candidateCount, 2);
+  assert.deepEqual(forward.value.consideredCandidates, [
+    {
+      projectNodeId: 'project-fixture-01',
+      itemNodeId: 'item-primary',
+      sourceIssueIdentity: sourceIssueIdentity(primary),
+    },
+    {
+      projectNodeId: 'project-fixture-02',
+      itemNodeId: 'item-secondary',
+      sourceIssueIdentity: sourceIssueIdentity(secondary),
+    },
+  ]);
+  assert.equal(validateSelection(forward.value), true, JSON.stringify(validateSelection.errors));
+  const replayed = selectProjectPlanningContext(selectionInput(primary, [secondary, primary, secondary]));
+  assert.deepEqual(replayed, forward);
   assert.equal(forward.value.selectedProjectNodeId, 'project-fixture-01');
   assert.deepEqual(forward, reverse);
   assert.deepEqual(forward.value.selectedContext.planningFields, [
     { key: 'portfolio-group', value: 'factory evolution' },
     { key: 'portfolio-sequence', value: 1 },
   ]);
+});
+
+test('selection evidence schema requires the considered candidate identities', async () => {
+  const candidate = candidateFor(await validProjectInput());
+  const result = selectProjectPlanningContext(selectionInput(candidate, [candidate]));
+  const incomplete = structuredClone(result.value);
+  delete incomplete.consideredCandidates;
+
+  assert.equal(validateSelection(incomplete), false);
+  assert.ok(validateSelection.errors.some((error) => (
+    error.keyword === 'required' && error.params.missingProperty === 'consideredCandidates'
+  )));
 });
 
 test('a single candidate still requires an explicit pinned selection policy', async () => {
