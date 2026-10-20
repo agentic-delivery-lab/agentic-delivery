@@ -62,8 +62,12 @@ approved organization Project item and its linked source Issue identity. It
 can carry distinct portfolio grouping, sequence, and planned dependencies;
 it cannot invoke delivery, authorize execution, or replace Issue-owned work
 state. The offline contract remains provisional until Architecture Authority
-Issue #11 and ADR-0023 are reviewed and merged. No live Project read or write
-path is enabled by this proposal.
+Issue #11 and ADR-0023 have completed their reviewed Architecture release
+path, and the human topology decision in Architecture #15 is recorded. A
+`Project planning selection policy` is a versioned allowlist whose digest
+checks integrity, not approval; a separately reviewed immutable release must
+supply the policy and expected digest. No live Project read or write path is
+enabled by this proposal.
 
 Participant compatibility with the delivery evidence contract is declared as
 SemVer in release and participant metadata. The integer `schemaVersion` inside

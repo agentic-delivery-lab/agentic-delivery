@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "project-planning-selection-gap.v1.schema.json",
+  "title": "Project planning selection gap v1",
+  "description": "Offline fail-closed result. Candidate evidence projects untrusted supplied identities, not approval, a selected context or execution authority. Missing or malformed identities remain null.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "valid",
+    "errors",
+    "candidateEvidence"
+  ],
+  "properties": {
+    "valid": {
+      "const": false
+    },
+    "errors": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]*$"
+      }
+    },
+    "candidateEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trust",
+        "sourceIssueIdentity",
+        "candidates"
+      ],
+      "properties": {
+        "trust": {
+          "const": "untrusted-planning-data"
+        },
+        "sourceIssueIdentity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sourceIssueIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "candidates": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "projectNodeId",
+              "itemNodeId",
+              "sourceIssueIdentity"
+            ],
+            "properties": {
+              "projectNodeId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "itemNodeId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "sourceIssueIdentity": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/sourceIssueIdentity"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sourceIssueIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositoryId",
+        "repositoryFullName",
+        "issueNumber",
+        "issueNodeId"
+      ],
+      "properties": {
+        "repositoryId": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "repositoryFullName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "issueNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "issueNodeId": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

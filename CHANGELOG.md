@@ -158,9 +158,12 @@ and releases use [Semantic Versioning](https://semver.org/).
 Entries that reference issue #52 use it only as the persisted-plan context;
 they do not authorize migration, alter that issue's scope, or close it.
 
+- [Issue #107](https://github.com/agentic-delivery-lab/agentic-delivery/issues/107) adds an offline Project planning-context selector bound to a source repository and Issue, comparing repository names case-insensitively while retaining stable numeric and node identities. It uses a versioned policy with a separately supplied SHA-256 pin and explicit Project priority, collapses identical repeated items with case-normalized repository names, and resolves candidate errors independently of API order. It holds on unapproved, inaccessible, or ambiguous candidates without granting execution authority or enabling live Project access.
+
 ### Changed
 
 - Central intake and delivery select the reviewed draft66 participant registry through bootstrap `0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80`. The controller includes the strict routing-schema repair; all participants remain in shadow mode. The previous bootstrap remains available for rollback.
+- Future Actions jobs use the official Codex CLI 0.160.0 package with pinned archive and package-tree digests; 0.159.3 remains the rollback version.
 
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.52` at
@@ -546,6 +549,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) aligns the invocation identity with the registered `Agentic Delivery Lab Invoker 7F3A` GitHub App name, slug, mention, and bot login across the actor catalog, code, tests, and agentic documentation.
 
 ### Fixed
+
+- Offline Project selection retains considered identities on success and untrusted supplied identities on failure, and rejects incomplete or undeclared candidate reads so planning gaps remain traceable.
 
 - [Control Plane Bug #111](https://github.com/agentic-delivery-lab/agentic-delivery/issues/111) records the originating repository, source Issue, controller commit, and Actions run identity on the durable receipt before delivery. A trusted workflow-revision finalizer verifies that attribution before completion or retry, including when an older participant pin lacks the finalizer. An empty or unresolved `hold` route remains retryable when its delivery job is skipped. Migration 0008 must be applied before enabling this workflow revision.
 
