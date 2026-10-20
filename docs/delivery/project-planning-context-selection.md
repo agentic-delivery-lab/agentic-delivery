@@ -22,6 +22,13 @@ synthetic IDs and is not an organization configuration.
 
 ## Candidate handling
 
+The caller must declare `candidatesComplete: true` only after completing its
+candidate collection. Explicit partial reads return
+`PROJECT_CANDIDATE_READ_INCOMPLETE`; a missing or invalid declaration returns
+`PROJECT_CANDIDATE_READ_COMPLETENESS_UNKNOWN`. The offline selector cannot
+verify a caller's declaration or perform pagination; a future reader must prove
+that collection is complete before supplying it.
+
 Each candidate must pass the existing Project planning normalizer. The selector
 then binds its Project item to the source repository ID, repository name, Issue
 number, and Issue node ID. Repository names are compared case-insensitively for
@@ -47,9 +54,22 @@ before its first adoption; earlier proposal outputs without it are incomplete.
 
 Missing or mismatched policy pins, unapproved or inaccessible Projects,
 incomplete reads, invalid source identities, and ambiguous candidates return a
-stable error code with no selected context. The selected output retains the
+stable error code with no selected context. The gap schema requires
+`candidateEvidence`, which retains the target source identity and each distinct
+supplied Project/item/source identity in a fixed order. This evidence is
+untrusted, including when access or policy approval is missing. It contains no
+planning fields, Issue body or approval claim; missing or malformed identities
+are null. Reordering or repeating observations does not change the projection.
+This records only identities supplied by the caller and does not establish that
+an inaccessible or incomplete read discovered every candidate. The selected output retains the
 existing planning-only authority and untrusted-data marker. It cannot overwrite
 Issue-owned priority, lifecycle, readiness, or runner state.
+
+The success and gap schemas validate structure. The selector and its tests
+also enforce that `candidateCount` equals the retained list length and that the
+chosen Project item is in that list; those relationships are not expressed by
+the JSON Schema alone. Future consumers must not treat structural schema
+validation of arbitrary supplied results as proof of these relationships.
 
 Candidate-local errors are collected across the supplied observations and
 resolved by a fixed code precedence. The resulting error does not depend on API

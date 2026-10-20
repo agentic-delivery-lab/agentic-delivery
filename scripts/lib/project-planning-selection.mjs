@@ -42,10 +42,6 @@ const CANDIDATE_FAILURE_RANK = new Map(
   CANDIDATE_FAILURE_PRECEDENCE.map((code, index) => [code, index]),
 );
 
-function fail(code) {
-  return { valid: false, errors: [code] };
-}
-
 function normalizeRepositoryId(value) {
   if (typeof value === 'string' && REPOSITORY_ID.test(value)) return value;
   if (Number.isSafeInteger(value) && value > 0) return String(value);
@@ -192,12 +188,44 @@ function projectReadError(state) {
   return null;
 }
 
+function candidateIdentityEvidence(input) {
+  const identities = new Map();
+  const candidates = Array.isArray(input?.candidates) ? input.candidates : [];
+  const nodeId = (value) => (typeof value === 'string' && value.trim() ? value : null);
+  for (const candidate of candidates) {
+    const source = candidate?.sourceIssue;
+    const identity = {
+      projectNodeId: nodeId(candidate?.project?.nodeId),
+      itemNodeId: nodeId(candidate?.item?.nodeId),
+      sourceIssueIdentity: normalizeSourceIssueIdentity({
+        repositoryId: source?.repositoryId,
+        repositoryFullName: source?.repositoryFullName,
+        issueNumber: source?.number,
+        issueNodeId: source?.nodeId,
+      }),
+    };
+    identities.set(JSON.stringify(identity), identity);
+  }
+  return {
+    trust: 'untrusted-planning-data',
+    sourceIssueIdentity: normalizeSourceIssueIdentity(input?.sourceIssueIdentity),
+    candidates: [...identities.entries()]
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([, identity]) => identity),
+  };
+}
+
 /**
  * Select a single offline Project planning context from the linked Project items
  * for one source Issue. The policy pin must come from a separately validated,
  * immutable topology contract; selection never authorizes execution.
  */
 export function selectProjectPlanningContext(input) {
+  const fail = (code) => ({
+    valid: false,
+    errors: [code],
+    candidateEvidence: candidateIdentityEvidence(input),
+  });
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return fail('PROJECT_SELECTION_INPUT_INVALID');
   }
@@ -206,6 +234,8 @@ export function selectProjectPlanningContext(input) {
   if (projectReadFailure === 'PROJECT_READ_SCOPE_MISSING') return fail(projectReadFailure);
   if (projectReadFailure === 'PROJECT_CANDIDATE_ACCESS_UNKNOWN') return fail('PROJECT_READ_ACCESS_UNKNOWN');
   if (projectReadFailure) return fail('PROJECT_INACCESSIBLE');
+  if (input.candidatesComplete === false) return fail('PROJECT_CANDIDATE_READ_INCOMPLETE');
+  if (input.candidatesComplete !== true) return fail('PROJECT_CANDIDATE_READ_COMPLETENESS_UNKNOWN');
 
   const policyResult = validateSelectionPolicy(input.selectionPolicy, input.expectedPolicySha256);
   if (policyResult.error) return fail(policyResult.error);

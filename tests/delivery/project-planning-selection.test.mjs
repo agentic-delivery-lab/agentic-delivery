@@ -5,8 +5,11 @@ import { test } from 'node:test';
 
 import Ajv2020 from 'ajv/dist/2020.js';
 import contextSchema from '../../schemas/project-planning-context.v1.schema.json' with { type: 'json' };
+import selectionGapSchema from '../../schemas/project-planning-selection-gap.v1.schema.json' with { type: 'json' };
 import selectionSchema from '../../schemas/project-planning-selection.v1.schema.json' with { type: 'json' };
 import selectionPolicySchema from '../../schemas/project-planning-selection-policy.v1.schema.json' with { type: 'json' };
+import { loadLifecycleConfig } from '../../scripts/issue-intake.mjs';
+import { classifyIssue } from '../../scripts/lib/issue-routing.mjs';
 import { authorizeIssueEvent } from '../../scripts/authorize-issue-event.mjs';
 import { selectProjectPlanningContext } from '../../scripts/lib/project-planning-selection.mjs';
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
@@ -38,6 +41,7 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 ajv.addSchema(contextSchema);
 const validateSelectionPolicy = ajv.compile(selectionPolicySchema);
 const validateSelection = ajv.compile(selectionSchema);
+const validateSelectionGap = ajv.compile(selectionGapSchema);
 
 async function validProjectInput() {
   const fixture = JSON.parse(await readFile(fixturePath, 'utf8'));
@@ -89,11 +93,16 @@ function selectionInput(source, candidates, {
     selectionPolicy: policy,
     expectedPolicySha256,
     candidates,
+    candidatesComplete: true,
   };
 }
 
 function assertBlocked(result, code) {
-  assert.deepEqual(result, { valid: false, errors: [code] });
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.errors, [code]);
+  assert.equal(result.value, undefined);
+  assert.equal(result.candidateEvidence.trust, 'untrusted-planning-data');
+  assert.equal(validateSelectionGap(result), true, JSON.stringify(validateSelectionGap.errors));
 }
 
 test('selects one approved candidate and returns the exact planning-only identities', async () => {
@@ -393,6 +402,40 @@ test('Project read failure leaves the independent source-Issue authorization rou
   assert.equal(authorization.authorized, true);
 });
 
+test('Project access failure leaves writer authorization and source-Issue routing policy independent', async () => {
+  const candidate = candidateFor(await validProjectInput());
+  const planning = selectProjectPlanningContext(selectionInput(candidate, [candidate], { projectRead: 'missing-scope' }));
+  assertBlocked(planning, 'PROJECT_READ_SCOPE_MISSING');
+  const config = await loadLifecycleConfig(root);
+  const issue = {
+    id: candidate.sourceIssue.nodeId,
+    number: candidate.sourceIssue.number,
+    state: 'open', title: 'Synthetic security recovery', body: 'Resume authorized recovery.', labels: [],
+    issueType: { name: config.issue_types.find(({ id }) => id === 'task').native_name },
+    fields: { [config.fields.lifecycle_stage.name]: 'execution', [config.fields.readiness.name]: 'working' },
+    plan: { exists: true, valid: true, digest: 'a'.repeat(64) },
+    session: { exists: true, resumable: true, id: '019fb023-24b8-7881-9119-509f078b610e' },
+    execution: { status: 'paused', operation: 'implementation' },
+  };
+  const authorization = await authorizeIssueEvent({
+    env: {
+      GITHUB_EVENT_NAME: 'issues', GITHUB_REPOSITORY: candidate.sourceIssue.repositoryFullName,
+      GITHUB_ACTOR: 'fixture-writer', GH_TOKEN: 'offline-fixture-token', GITHUB_OUTPUT: '',
+    },
+    fetchImpl: async (url) => {
+      assert.equal(new URL(url).pathname, `/repos/${candidate.sourceIssue.repositoryFullName}/collaborators/fixture-writer/permission`);
+      return new Response(JSON.stringify({ permission: 'write' }), { status: 200 });
+    },
+  });
+  assert.equal(authorization.authorized, true);
+  assert.equal(authorization.actorKind, 'repository-writer');
+  assert.equal(classifyIssue({ issue, config, eventKind: 'manual' }).route, 'resume');
+  assert.equal(classifyIssue({
+    issue: { ...issue, plan: { exists: false, valid: false, digest: null } },
+    config, eventKind: 'manual',
+  }).route, 'hold');
+});
+
 test('Issue-owned lifecycle fields remain rejected by the existing normalizer', async () => {
   const base = await validProjectInput();
   const candidate = candidateFor(base);
@@ -415,11 +458,65 @@ test('selector and versioned schemas are mapped to the Project-planning review s
   assert.ok(controlPlane.paths.includes('scripts/lib/project-planning-selection.mjs'));
   assert.ok(controlPlane.paths.includes('schemas/project-planning-selection-policy.v1.schema.json'));
   assert.ok(controlPlane.paths.includes('schemas/project-planning-selection.v1.schema.json'));
+  assert.ok(controlPlane.paths.includes('schemas/project-planning-selection-gap.v1.schema.json'));
   assert.ok(projectPlanningSurface.paths.includes('scripts/lib/project-planning-selection.mjs'));
   assert.ok(projectPlanningSurface.paths.includes('schemas/project-planning-selection-policy.v1.schema.json'));
   assert.ok(projectPlanningSurface.paths.includes('schemas/project-planning-selection.v1.schema.json'));
+  assert.ok(projectPlanningSurface.paths.includes('schemas/project-planning-selection-gap.v1.schema.json'));
   assert.ok(projectPlanningSurface.paths.includes('docs/delivery/project-planning-context-selection.md'));
   assert.ok(projectPlanningSurface.paths.includes('tests/delivery/project-planning-selection.test.mjs'));
+});
+
+test('ambiguous and rejected selections retain untrusted candidate identities without selecting a context', async () => {
+  const base = await validProjectInput();
+  const first = candidateFor(base, { itemNodeId: 'item-first' });
+  const second = candidateFor(base, { itemNodeId: 'item-second' });
+  const input = selectionInput(base, [second, first, second]);
+  const ambiguous = selectProjectPlanningContext(input);
+  assertBlocked(ambiguous, 'PROJECT_SELECTION_AMBIGUOUS');
+  assert.deepEqual(ambiguous.candidateEvidence, {
+    trust: 'untrusted-planning-data',
+    sourceIssueIdentity: sourceIssueIdentity(base),
+    candidates: [first, second].map((candidate) => ({
+      projectNodeId: candidate.project.nodeId,
+      itemNodeId: candidate.item.nodeId,
+      sourceIssueIdentity: sourceIssueIdentity(candidate),
+    })),
+  });
+  assert.deepEqual(ambiguous, selectProjectPlanningContext(selectionInput(base, [first, second])));
+  const unapproved = structuredClone(input);
+  unapproved.selectionPolicy = null;
+  const rejected = selectProjectPlanningContext(unapproved);
+  assertBlocked(rejected, 'PROJECT_SELECTION_POLICY_MISSING');
+  assert.deepEqual(rejected.candidateEvidence, ambiguous.candidateEvidence);
+  assert.equal(rejected.value, undefined);
+});
+
+test('malformed and denied candidates retain only untrusted identity evidence', async () => {
+  const candidate = candidateFor(await validProjectInput());
+  candidate.access.projectRead = 'denied';
+  candidate.privateBody = 'must not appear in selection evidence';
+  const denied = selectProjectPlanningContext(selectionInput(candidate, [candidate]));
+  assertBlocked(denied, 'PROJECT_CANDIDATE_INACCESSIBLE');
+  assert.equal(denied.candidateEvidence.candidates[0].sourceIssueIdentity.issueNodeId, candidate.sourceIssue.nodeId);
+  assert.equal(JSON.stringify(denied).includes(candidate.privateBody), false);
+
+  for (const input of [null, undefined, [], 'invalid', { candidates: [null, { project: { nodeId: 'known-project' } }] }]) {
+    const gap = selectProjectPlanningContext(input);
+    assert.equal(validateSelectionGap(gap), true, JSON.stringify(validateSelectionGap.errors));
+    assert.equal(gap.value, undefined);
+  }
+});
+
+test('partial or undeclared candidate reads cannot select even an otherwise approved candidate', async () => {
+  const candidate = candidateFor(await validProjectInput());
+  const complete = selectionInput(candidate, [candidate]);
+  assert.equal(selectProjectPlanningContext(complete).valid, true);
+  const partial = { ...complete, candidatesComplete: false };
+  assertBlocked(selectProjectPlanningContext(partial), 'PROJECT_CANDIDATE_READ_INCOMPLETE');
+  const undeclared = structuredClone(complete);
+  delete undeclared.candidatesComplete;
+  assertBlocked(selectProjectPlanningContext(undeclared), 'PROJECT_CANDIDATE_READ_COMPLETENESS_UNKNOWN');
 });
 
 test('Project planning selection policy has one registered Control Plane meaning', async () => {
