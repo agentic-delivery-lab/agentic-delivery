@@ -88,7 +88,7 @@ function sendJson(response, statusCode, payload) {
   response.end(body);
 }
 
-export async function createMockPackageRegistry(definitions) {
+export async function createMockPackageRegistry(definitions, { port = 0 } = {}) {
   const packages = new Map(Object.entries(definitions));
   const requests = [];
   const server = createServer((request, response) => {
@@ -129,7 +129,7 @@ export async function createMockPackageRegistry(definitions) {
 
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
+    server.listen(port, '127.0.0.1', resolve);
   });
   const address = server.address();
   const url = `http://127.0.0.1:${address.port}`;
