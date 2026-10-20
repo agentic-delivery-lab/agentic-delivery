@@ -2,13 +2,15 @@ import assert from 'node:assert/strict';
 import { copyFile, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { spawn } from 'node:child_process';
 
 import { PNPM_COMMAND, runToolchainPreflight } from '../../scripts/lib/toolchain.mjs';
 import { createMockPackageRegistry } from '../helpers/mock-package-registry.mjs';
 
 const expectedVersion = '12.3.4';
+const preflightRoots = new Set();
+after(() => Promise.all([...preflightRoots].map(root => rm(root, {recursive:true,force:true}))));
 
 async function createProject({
   packageManager = `pnpm@${expectedVersion}`,
@@ -21,6 +23,7 @@ async function createProject({
   packageLock = false,
 } = {}) {
   const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-toolchain-'));
+  preflightRoots.add(repositoryRoot);
   await mkdir(path.join(repositoryRoot, 'node_modules'), { recursive: true });
   await writeFile(
     path.join(repositoryRoot, 'package.json'),
@@ -58,7 +61,7 @@ function releaseAgePolicy(minimumReleaseAge) {
   ].join('\n');
 }
 
-function runPnpm(repositoryRoot, registryUrl, args, { storeDirectory = path.join(repositoryRoot, '.pnpm-store') } = {}) {
+function runPnpm(repositoryRoot, registryUrl, args, { storeDirectory = path.join(repositoryRoot, '.pnpm-store'), env = {} } = {}) {
   return new Promise((resolve) => {
     const child = spawn(PNPM_COMMAND, [
       ...args,
@@ -70,7 +73,9 @@ function runPnpm(repositoryRoot, registryUrl, args, { storeDirectory = path.join
       registryUrl,
     ], {
       cwd: repositoryRoot,
-      env: process.env,
+      // Fixture registries can recycle addresses with different metadata.
+      // The pinned CLI resolves its metadata/verification cache from XDG.
+      env: { ...process.env, ...env, XDG_CACHE_HOME: path.join(repositoryRoot, '.cache') },
       windowsHide: true,
     });
     let stdout = '';
@@ -295,4 +300,35 @@ test('rechecks a frozen lockfile created under a weaker policy', async (t) => {
       /young-frozen|minimumReleaseAge|release age/i,
     );
   });
+});
+
+test('independent registry fixtures cannot reuse cached publication times at a recycled address', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-registry-cache-'));
+  const projects = [];
+  const active = new Set();
+  t.after(async () => {
+    for (const registry of active) await registry.close();
+    await Promise.all([root, ...projects].map(directory => rm(directory, {recursive:true,force:true})));
+  });
+  const mature = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const young = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const definitions = publishedAt => ({
+    'cache-parent': {version:'1.0.0',publishedAt:mature,dependencies:{'cache-child':'1.0.0'}},
+    'cache-child': {version:'1.0.0',publishedAt},
+  });
+  const project = async () => {
+    const value = await createInstallProject({dependencies:{'cache-parent':'1.0.0'},workspace:releaseAgePolicy(2880)});
+    projects.push(value); return value;
+  };
+  const options = {env:{XDG_CACHE_HOME:path.join(root,'shared-default-cache')}};
+  const first = await createMockPackageRegistry(definitions(mature)); active.add(first);
+  const initial = await runPnpm(await project(), first.url, ['install'], options);
+  assert.equal(initial.status, 0, `${initial.stdout}\n${initial.stderr}`);
+  const port = Number(new URL(first.url).port);
+  await first.close(); active.delete(first);
+  const second = await createMockPackageRegistry(definitions(young), {port}); active.add(second);
+  assert.equal(second.url, first.url);
+  const result = await runPnpm(await project(), second.url, ['install'], options);
+  assert.notEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.ok(second.requests.includes('/cache-child'), 'The fresh fixture must fetch its own publication metadata.');
 });
