@@ -1,0 +1,72 @@
+# Cross-stream offline acceptance fixtures
+
+Every repository ID, repository name, Issue number, Issue node ID, Project ID,
+item ID, actor and report pin in `scenarios.json` is synthetic. The fixtures do
+not establish a live Project association, product repository, product steward,
+owner mapping, participant or evaluation result. `liveGitHubVerification` is
+`not-run` because the tests use local adapters only.
+
+The factory and product scenarios pass through the existing Issue intake
+router with mocked REST and GraphQL responses. The tests verify the originating
+repository, exact Issue node, writer permission, native Issue Type, Lifecycle
+Stage, Delivery State, plan state and selected orchestration pattern. Project
+planning fields are normalized separately after that trusted Issue read. The
+harness supplies the origin repository and source Issue identity from the same
+injected read used by actual intake, replacing source claims supplied by Project
+data. Both positive scenarios compare the normalized Project and item identity
+with that source. A negative case swaps every mutually agreeing Project source
+field to the other same-number repository: standalone normalization passes, but
+the trusted-read composition rejects it before reasoning. The independently
+authorized Issue route remains available, without consuming Project context.
+Planning fields stay outside the Issue routing input. The product scenario
+can reach planning in this synthetic harness, but it does not claim that a
+product repository or steward exists.
+
+The Project-only webhook case includes a Project item linked to a synthetic
+Issue, but has no source Issue event or Issue number. The actual webhook handler
+returns 204 from its event catalog before App-token or API access, and the
+direct Issue classifier rejects it when no source Issue number is supplied.
+The route harness checks trusted participant and App access
+before route reasoning, then passes the selected route and triggering
+repository identity through the trusted delivery-participant resolver. A
+repository ID mismatch is rejected before API or model-adapter access.
+Same-number Issues are routed in both synthetic repositories and retain their
+distinct Issue nodes. A delayed event with stale Issue fields still re-fetches
+the current synthetic Issue before reasoning. The Project-read failure case
+first proves a valid Project selection bound to the same recovery Issue. With
+Project scope missing, the merged selector returns a stable failure with no
+usable context; replayed observations retain the same untrusted identity
+evidence. The existing Issue-first manual recovery route then remains available
+under its separate authorization and policy gates, with zero model calls and
+protected effects in the fixture. This is offline composition, not a live
+Project reader or runtime integration.
+
+The evaluation scenario deterministically grades a deliberately failing synthetic
+output: it requests `implement` for a Project-only card whose expected route is
+`ignore`. The failed capability case is separate from the unresolved-owner hold.
+No deployed candidate, model or baseline is evaluated. The test sends the
+complete synthetic Evaluation Report 2.0.0
+through the offline router using the exact Architecture schema commit recorded
+in the fixture. The report includes an owner-Issue assertion, but routing
+returns an `awaiting-owner-verification` disposition with no candidate target,
+actionable target, proposal, or execution authority. The source report,
+evidence, and pins remain preserved. The report is not relabeled as observed.
+
+The pinned schema belongs to Architecture draft `0.1.0-draft.24`. The test
+demonstrates offline contract conformance only; it does not approve a release,
+change the runtime participant or controller pins, or add a live consumer.
+API and route-reasoning adapters are local mocks: the Project-only event is
+rejected before either adapter runs, and a delivery-policy rejection produces
+no protected effect. No fixture performs a live API or model call, Issue-field
+mutation, repository write, pull request, release, participant change, Project
+mutation or evaluation run.
+
+Mutation observers record attempted repository-content, Issue, Issue-field,
+pull-request, release, participant-registry publication and Project writes at
+the injected REST/GraphQL boundaries. A separate canary test sends each kind of
+request to the same observers and verifies detection; no request is forwarded.
+The evaluation test observes global fetch requests during the actual routing
+call, rather than trusting a zero-effects field in the fixture. It also compares
+the in-memory and on-disk participant registry before and after routing. These
+checks cover the tested offline entry points and transports; they do not prove
+live runner isolation or every possible native process or filesystem effect.
