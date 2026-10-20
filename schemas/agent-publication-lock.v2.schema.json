@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/schemas/agent-publication-lock.v2.schema.json",
+  "title": "Organization Copilot agent publication lock v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "canonicalRepository",
+    "agents",
+    "canonicalRepositoryId"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "canonicalRepository": {
+      "const": "agentic-delivery-lab/agentic-delivery-agent-customizations"
+    },
+    "agents": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "primitiveId",
+          "agentId",
+          "targetPath",
+          "sourceRepository",
+          "sourceCommit",
+          "sourceRef",
+          "contentSha256",
+          "governingAdrs",
+          "toolPolicyVersion",
+          "promotionRelease",
+          "promotedAt",
+          "compatibilityTargets",
+          "sourceRepositoryId"
+        ],
+        "properties": {
+          "primitiveId": {
+            "type": "string",
+            "pattern": "^urn:agentic-delivery:primitive:[a-z0-9-]+$"
+          },
+          "agentId": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "targetPath": {
+            "type": "string",
+            "pattern": "^agents/[a-z0-9]+(?:-[a-z0-9]+)*\\.agent\\.md$"
+          },
+          "sourceRepository": {
+            "const": "agentic-delivery-lab/agentic-delivery-agent-customizations"
+          },
+          "sourceCommit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "sourceRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contentSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "governingAdrs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^urn:agentic-delivery:adr:[a-z0-9-]+$"
+            }
+          },
+          "toolPolicyVersion": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+          },
+          "promotionRelease": {
+            "type": "string",
+            "minLength": 1
+          },
+          "promotedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "compatibilityTargets": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "sourceRepositoryId": {
+            "const": 1380894656
+          }
+        }
+      }
+    },
+    "canonicalRepositoryId": {
+      "const": 1380894656
+    },
+    "$schema": {
+      "const": "https://github.com/agentic-delivery-lab/agentic-delivery/blob/main/schemas/agent-publication-lock.v2.schema.json"
+    }
+  }
+}

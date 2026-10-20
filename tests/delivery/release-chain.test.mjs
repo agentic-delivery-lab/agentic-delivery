@@ -5,7 +5,16 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
-import { ReleaseChainValidationError, validateBootstrapWorkflowPins, validateReleaseChain } from '../../scripts/validate-release-chain.mjs';
+import { ReleaseChainValidationError, validateBootstrapWorkflowPins, validateReleaseChain, primitiveLocatorForVersion } from '../../scripts/validate-release-chain.mjs';
+
+test('release-name migration admits only the declared versioned locator and unchanged native ID', () => {
+  assert.equal(primitiveLocatorForVersion(1, 'agentic-delivery-lab/agentic-delivery-primitives'), true);
+  assert.equal(primitiveLocatorForVersion(2, 'agentic-delivery-lab/agentic-delivery-agent-customizations', 1380894656), true);
+  assert.equal(primitiveLocatorForVersion(2, 'agentic-delivery-lab/agentic-delivery-agent-customizations', 999999), false);
+  assert.equal(primitiveLocatorForVersion(1, 'agentic-delivery-lab/agentic-delivery-agent-customizations', 1380894656), false);
+  assert.equal(primitiveLocatorForVersion(2, 'agentic-delivery-lab/agentic-delivery-primitives', 1380894656), false);
+  assert.equal(primitiveLocatorForVersion(3, 'agentic-delivery-lab/agentic-delivery-agent-customizations', 1380894656), false);
+});
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const execFileAsync = promisify(execFile);

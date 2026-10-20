@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
 
@@ -141,13 +143,26 @@ export async function validatePublishedAgents({ publicationRoot, primitiveRoot, 
     errors.push(`provenance/agents.lock.json cannot be read: ${error.message}`);
     lock = null;
   }
-  if (!lock || lock.schemaVersion !== 1) errors.push('publication lock schemaVersion must be 1');
-  if (lock?.canonicalRepository !== 'agentic-delivery-lab/agentic-delivery-primitives') errors.push('publication lock canonicalRepository must be Agentic Primitives');
+  const currentIdentity = lock?.schemaVersion === 2;
+  if (currentIdentity) {
+    const schema = JSON.parse(await readFile(new URL('../schemas/agent-publication-lock.v2.schema.json', import.meta.url), 'utf8'));
+    const ajv = new Ajv2020({ strict: false, allErrors: true });
+    addFormats(ajv);
+    const validate = ajv.compile(schema);
+    if (!validate(lock)) errors.push(`publication v2 schema: ${ajv.errorsText(validate.errors)}`);
+  }
+  const canonicalRepository = currentIdentity
+    ? 'agentic-delivery-lab/agentic-delivery-agent-customizations'
+    : 'agentic-delivery-lab/agentic-delivery-primitives';
+  if (![1, 2].includes(lock?.schemaVersion)) errors.push('publication lock schemaVersion must be supported (1 or 2)');
+  if (lock?.canonicalRepository !== canonicalRepository) errors.push('publication lock canonicalRepository does not match its versioned repository identity');
+  if (currentIdentity && lock.canonicalRepositoryId !== 1380894656) errors.push('publication lock canonicalRepositoryId must be 1380894656');
+  if (lock?.schemaVersion === 1 && Object.hasOwn(lock, 'canonicalRepositoryId')) errors.push('publication lock repository identity fields require version 2');
   if (!Array.isArray(lock?.agents)) errors.push('publication lock agents must be an array');
   const primitive = primitiveRoot ? await loadPrimitiveSource({ primitiveRoot: path.resolve(primitiveRoot), errors }) : null;
   const names = new Set();
   const paths = new Set();
-  for (const [index, record] of (lock?.agents ?? []).entries()) {
+  for (const [index, record] of (Array.isArray(lock?.agents) ? lock.agents : []).entries()) {
     const prefix = `agents[${index}]`;
     if (!record || typeof record !== 'object' || Array.isArray(record)) { errors.push(`${prefix} must be an object`); continue; }
     if (!AGENT_ID.test(record.agentId ?? '')) errors.push(`${prefix}.agentId must use lowercase kebab-case`);
@@ -157,7 +172,9 @@ export async function validatePublishedAgents({ publicationRoot, primitiveRoot, 
     if (!/^agents\/[a-z0-9]+(?:-[a-z0-9-]*[a-z0-9])?\.agent\.md$/.test(record.targetPath ?? '')) errors.push(`${prefix}.targetPath is not a safe published-agent path`);
     if (paths.has(record.targetPath)) errors.push(`${prefix}.targetPath is duplicated`);
     paths.add(record.targetPath);
-    if (record.sourceRepository !== 'agentic-delivery-lab/agentic-delivery-primitives') errors.push(`${prefix}.sourceRepository must be Agentic Primitives`);
+    if (record.sourceRepository !== canonicalRepository) errors.push(`${prefix}.sourceRepository must match its versioned canonical repository`);
+    if (currentIdentity && record.sourceRepositoryId !== 1380894656) errors.push(`${prefix}.sourceRepositoryId must match repository identity 1380894656`);
+    if (lock.schemaVersion === 1 && Object.hasOwn(record, 'sourceRepositoryId')) errors.push(`${prefix} repository identity fields require version 2`);
     if (!SHA1.test(record.sourceCommit ?? '')) errors.push(`${prefix}.sourceCommit must be an immutable commit SHA`);
     if (!SHA1.test(record.sourceRef ?? '') || String(record.sourceRef).toLowerCase() !== String(record.sourceCommit).toLowerCase()) errors.push(`${prefix}.sourceRef must repeat the immutable source commit SHA`);
     if (!SHA256.test(record.contentSha256 ?? '')) errors.push(`${prefix}.contentSha256 must be a SHA-256 digest`);
