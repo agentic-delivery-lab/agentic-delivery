@@ -10,10 +10,15 @@ The factory and product scenarios pass through the existing Issue intake
 router with mocked REST and GraphQL responses. The tests verify the originating
 repository, exact Issue node, writer permission, native Issue Type, Lifecycle
 Stage, Delivery State, plan state and selected orchestration pattern. Project
-planning fields are normalized separately. Both positive scenarios compare
-that normalized Project and item identity with the source repository and Issue
-actually re-fetched for routing. Planning fields stay outside the Issue routing
-input. The product scenario
+planning fields are normalized separately after that trusted Issue read. The
+harness supplies the origin repository and source Issue identity from the same
+injected read used by actual intake, replacing source claims supplied by Project
+data. Both positive scenarios compare the normalized Project and item identity
+with that source. A negative case swaps every mutually agreeing Project source
+field to the other same-number repository: standalone normalization passes, but
+the trusted-read composition rejects it before reasoning. The independently
+authorized Issue route remains available, without consuming Project context.
+Planning fields stay outside the Issue routing input. The product scenario
 can reach planning in this synthetic harness, but it does not claim that a
 product repository or steward exists.
 

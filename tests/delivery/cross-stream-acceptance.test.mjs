@@ -117,9 +117,6 @@ async function runIssueRoute(scenario, options = {}) {
     modelIssue: null,
     projectPlanningResult: null,
   };
-  if (options.projectPlanningInput) {
-    trace.projectPlanningResult = normalizeProjectPlanningInput(options.projectPlanningInput);
-  }
   const registry = fixtureRegistry(sourceIssue, options.registryParticipants ?? []);
   assert.equal(registry.valid, true, registry.errors.join('; '));
   const participantAuthorization = authorizeParticipation({
@@ -179,9 +176,10 @@ async function runIssueRoute(scenario, options = {}) {
     trace.trustedIssueReads.push({ repository, issueNumber: Number(issueNumber) });
     assert.equal(repository, sourceIssue.repositoryFullName);
     assert.equal(Number(issueNumber), sourceIssue.issueNumber);
-    return {
+    const currentIssue = {
       id: sourceIssue.issueNodeId,
       number: sourceIssue.issueNumber,
+      updatedAt: '2026-10-11T10:00:00Z',
       state: 'open',
       title: sourceIssue.title,
       body: sourceIssue.body,
@@ -198,9 +196,24 @@ async function runIssueRoute(scenario, options = {}) {
       execution: sourceIssue.execution ?? { status: 'idle', operation: null },
       labels: [],
     };
+    if (options.projectPlanningInput) {
+      // Bind planning to the separately re-fetched Issue, not mutually agreeing
+      // source fields supplied by the Project input. This composes the existing
+      // offline normalizer; it does not add Project authorization to intake.
+      trace.projectPlanningResult = normalizeProjectPlanningInput({
+        ...options.projectPlanningInput,
+        originRepository: { id: String(eventRepositoryId), fullName: repository },
+        sourceIssue: {
+          repositoryId: String(eventRepositoryId), repositoryFullName: repository,
+          number: currentIssue.number, nodeId: currentIssue.id, updatedAt: currentIssue.updatedAt,
+        },
+      });
+    }
+    return currentIssue;
   };
 
   const reasonRoute = async ({ issue }) => {
+    if (options.projectPlanningInput) trace.planningCheckedBeforeReasoning = trace.projectPlanningResult !== null;
     trace.modelCalls += 1;
     trace.modelIssue = issue;
     assert.equal(issue.id, sourceIssue.issueNodeId);
@@ -507,6 +520,37 @@ test('same-number Issues stay isolated when both source repositories are routed'
   assert.equal(productRoute.trace.modelIssue.id, product.issueNodeId);
   assert.equal(factoryRoute.participantAuthorization.allowed, true);
   assert.equal(productRoute.participantAuthorization.allowed, true);
+});
+
+test('foreign self-consistent Project identity cannot bind to a re-fetched source Issue', async () => {
+  for (const [scenario, other] of [
+    [fixtures.scenarios.factoryCapability, fixtures.scenarios.productFeature],
+    [fixtures.scenarios.productFeature, fixtures.scenarios.factoryCapability],
+  ]) {
+    const projectInput = await planningInputForScenario(scenario, scenario.planningContext.planningFields);
+    const foreign = other.sourceIssue;
+    // Tamper every mutually agreeing untrusted source field, preserving the
+    // same Issue number in the other repository. Standalone shape checks pass.
+    projectInput.originRepository = { id: foreign.repositoryId, fullName: foreign.repositoryFullName };
+    Object.assign(projectInput.sourceIssue, {
+      repositoryId: foreign.repositoryId, repositoryFullName: foreign.repositoryFullName,
+      number: foreign.issueNumber, nodeId: foreign.issueNodeId,
+    });
+    Object.assign(projectInput.item.content, {
+      repositoryId: foreign.repositoryId, repositoryFullName: foreign.repositoryFullName,
+      issueNumber: foreign.issueNumber, issueNodeId: foreign.issueNodeId,
+    });
+    assert.equal(normalizeProjectPlanningInput(projectInput).valid, true);
+    const run = await runIssueRoute(scenario, { projectPlanningInput: projectInput });
+    assert.deepEqual(run.trace.projectPlanningResult, { valid: false, errors: ['PROJECT_SOURCE_ISSUE_MISMATCH'] });
+    assert.equal(run.trace.planningCheckedBeforeReasoning, true);
+    assert.equal('project' in run.trace.modelIssue, false);
+    assert.equal(run.trace.modelIssue.id, scenario.sourceIssue.issueNodeId);
+    assert.equal(run.result.route, scenario.sourceIssue.routingProposal.route,
+      'invalid planning data must not revoke independently authorized Issue-first work');
+    assert.equal(run.deliveryAuthorizationError, null);
+    assert.deepEqual(run.trace.protectedEffects, []);
+  }
 });
 
 test('shared webhook replay state suppresses duplicate delivery and stale Issue payload cannot change the route', async () => {
