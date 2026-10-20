@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -11,6 +11,7 @@ import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 import { classifyAndRoute, loadLifecycleConfig } from '../../scripts/issue-intake.mjs';
 import { handleWebhook } from '../../api/github/webhook.mjs';
 import { loadPinnedEvaluationReportSchema, routeEvaluationReports } from '../../scripts/lib/evaluation-finding-router.mjs';
+import { selectProjectPlanningContext } from '../../scripts/lib/project-planning-selection.mjs';
 import { normalizeProjectPlanningInput } from '../../scripts/lib/project-planning-context.mjs';
 import { InMemoryReplayStore, replayKey } from '../../scripts/lib/replay-protection.mjs';
 
@@ -649,9 +650,12 @@ test('synthetic Evaluation Report 2.0.0 routes to a non-actionable owner hold', 
   assert.equal(fixtures.contracts.evaluationFindingRouter.status, 'merged');
   assert.equal(fixtures.contracts.projectPlanning.pullRequest, 102);
   assert.equal(fixtures.contracts.projectPlanning.status, 'merged');
+  assert.equal(fixtures.contracts.projectSelection.pullRequest, 110);
+  assert.equal(fixtures.contracts.projectSelection.sourceCommit, '95fc1289312e0324ac407a2e2372580856291a44');
+  assert.equal(fixtures.contracts.projectSelection.adoption, 'offline-proposal-only');
 });
 
-test('missing Project read scope is rejected by the offline normalizer while Issue-first recovery remains authorized', async () => {
+test('missing Project read scope holds dependent selection while Issue-first recovery remains authorized', async () => {
   const scenario = fixtures.scenarios.projectReadFailure;
   const projectPlanningInput = await planningInputForScenario(scenario, scenario.planningContext.planningFields);
   const granted = normalizeProjectPlanningInput(projectPlanningInput);
@@ -660,6 +664,51 @@ test('missing Project read scope is rejected by the offline normalizer while Iss
   assert.equal(granted.value.sourceIssue.repository.id, scenario.sourceIssue.repositoryId);
   assert.equal(granted.value.sourceIssue.repository.fullName, scenario.sourceIssue.repositoryFullName);
   assert.equal(granted.value.sourceIssue.number, scenario.sourceIssue.issueNumber);
+  const candidate = structuredClone(projectPlanningInput);
+  delete candidate.approvedProject;
+  const policyBody = {
+    schemaVersion: 1,
+    policyId: 'offline-cross-stream-recovery',
+    version: 1,
+    topologyId: 'offline-synthetic-topology',
+    projects: [{
+      projectNodeId: candidate.project.nodeId,
+      fieldSchemaSha256: candidate.project.fieldSchemaSha256,
+      priority: 1,
+    }],
+  };
+  const policySha256 = createHash('sha256').update(JSON.stringify(policyBody)).digest('hex');
+  const selectionInput = {
+    access: { projectRead: 'granted' },
+    candidatesComplete: true,
+    sourceIssueIdentity: {
+      repositoryId: scenario.sourceIssue.repositoryId,
+      repositoryFullName: scenario.sourceIssue.repositoryFullName,
+      issueNumber: scenario.sourceIssue.issueNumber,
+      issueNodeId: scenario.sourceIssue.issueNodeId,
+    },
+    selectionPolicy: { ...policyBody, sha256: policySha256 },
+    expectedPolicySha256: policySha256,
+    candidates: [candidate],
+  };
+  const selected = selectProjectPlanningContext(selectionInput);
+  assert.equal(selected.valid, true);
+  assert.deepEqual(selected.value.selectedContext, granted.value);
+
+  const unavailable = structuredClone(selectionInput);
+  unavailable.access.projectRead = 'missing-scope';
+  unavailable.candidatesComplete = false;
+  unavailable.candidates[0].access.projectRead = 'missing-scope';
+  const held = selectProjectPlanningContext(unavailable);
+  assert.equal(held.valid, false);
+  assert.deepEqual(held.errors, ['PROJECT_READ_SCOPE_MISSING']);
+  assert.equal(held.value, undefined, 'Project-dependent selection must return no usable context');
+  assert.deepEqual(held.candidateEvidence.sourceIssueIdentity, selectionInput.sourceIssueIdentity);
+  assert.equal(held.candidateEvidence.trust, 'untrusted-planning-data');
+  const replay = structuredClone(unavailable);
+  replay.candidates.push(structuredClone(replay.candidates[0]));
+  assert.deepEqual(selectProjectPlanningContext(replay), held, 'replayed failure must retain the same stable gap');
+
   projectPlanningInput.access.projectRead = 'missing-scope';
 
   const { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario, {
@@ -674,6 +723,8 @@ test('missing Project read scope is rejected by the offline normalizer while Iss
   assert.equal(result.route, 'resume');
   assert.equal(result.metadata.lifecycleStage, 'execution');
   assert.equal(result.metadata.readiness, 'working');
+  assert.equal(result.issue, String(scenario.sourceIssue.issueNumber));
+  assert.deepEqual(trace.trustedIssueReads, [{ repository: scenario.sourceIssue.repositoryFullName, issueNumber: scenario.sourceIssue.issueNumber }]);
   assert.equal(trace.modelCalls, 0, 'manual Issue-first recovery must not invoke a model');
   assert.equal(trace.actorPermissionReads.length, 1);
   assert.deepEqual(trace.protectedEffects, []);

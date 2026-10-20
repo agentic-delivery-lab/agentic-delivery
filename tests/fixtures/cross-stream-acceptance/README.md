@@ -28,8 +28,13 @@ repository ID mismatch is rejected before API or model-adapter access.
 Same-number Issues are routed in both synthetic repositories and retain their
 distinct Issue nodes. A delayed event with stale Issue fields still re-fetches
 the current synthetic Issue before reasoning. The Project-read failure case
-records the missing-scope planning gap and exercises the existing Issue-first
-manual recovery route.
+first proves a valid Project selection bound to the same recovery Issue. With
+Project scope missing, the merged selector returns a stable failure with no
+usable context; replayed observations retain the same untrusted identity
+evidence. The existing Issue-first manual recovery route then remains available
+under its separate authorization and policy gates, with zero model calls and
+protected effects in the fixture. This is offline composition, not a live
+Project reader or runtime integration.
 
 The evaluation scenario sends its complete synthetic Evaluation Report 2.0.0
 through the offline router using the exact Architecture schema commit recorded

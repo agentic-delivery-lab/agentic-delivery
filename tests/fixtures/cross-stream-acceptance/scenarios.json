@@ -438,6 +438,12 @@
       "releaseVersion": "0.1.0-draft.24",
       "releaseStatus": "draft",
       "schemaCommit": "7b1d21462f70c411e75ae67ce80dcf688c9973e8"
+    },
+    "projectSelection": {
+      "pullRequest": 110,
+      "status": "merged",
+      "sourceCommit": "95fc1289312e0324ac407a2e2372580856291a44",
+      "adoption": "offline-proposal-only"
     }
   }
 }
