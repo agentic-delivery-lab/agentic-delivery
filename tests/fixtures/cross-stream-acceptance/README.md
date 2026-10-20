@@ -36,7 +36,11 @@ under its separate authorization and policy gates, with zero model calls and
 protected effects in the fixture. This is offline composition, not a live
 Project reader or runtime integration.
 
-The evaluation scenario sends its complete synthetic Evaluation Report 2.0.0
+The evaluation scenario deterministically grades a deliberately failing synthetic
+output: it requests `implement` for a Project-only card whose expected route is
+`ignore`. The failed capability case is separate from the unresolved-owner hold.
+No deployed candidate, model or baseline is evaluated. The test sends the
+complete synthetic Evaluation Report 2.0.0
 through the offline router using the exact Architecture schema commit recorded
 in the fixture. The report includes an owner-Issue assertion, but routing
 returns an `awaiting-owner-verification` disposition with no candidate target,

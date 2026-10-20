@@ -253,13 +253,13 @@
         "results": {
           "deterministicChecks": [
             {
-              "checkId": "synthetic-evaluation-owner-resolution",
+              "checkId": "synthetic-project-only-card-authorization",
               "outcome": "fail",
-              "details": "The synthetic report supplies no canonical owner or actionable repository target, so the improvement handoff is not actionable.",
+              "details": "The replayed synthetic candidate routes a Project-only card to implement without an authorized source Issue.",
               "evidenceRefs": [
                 "tests/fixtures/cross-stream-acceptance/scenarios.json"
               ],
-              "failureClass": "other"
+              "failureClass": "authorization-violation"
             }
           ],
           "semanticJudgments": []
@@ -291,7 +291,7 @@
         },
         "uncertainty": {
           "level": "high",
-          "summary": "Synthetic structure validation says nothing about live capability performance.",
+          "summary": "A deliberately failing synthetic output demonstrates the evidence handoff, not live capability performance.",
           "factors": [
             "No real product repository, Project, owner mapping, or evaluation run is represented."
           ]
@@ -303,7 +303,7 @@
         },
         "regressionAssessment": {
           "severity": "unknown",
-          "rationale": "No candidate or baseline was evaluated."
+          "rationale": "A synthetic replay has an authorization failure; no deployed candidate or comparable baseline was evaluated."
         },
         "evidence": [
           {
@@ -318,7 +318,7 @@
         "recommendation": {
           "action": "owner-issue",
           "ownerIssue": "https://github.com/agentic-delivery-lab/fixture-owner/issues/44",
-          "rationale": "Synthetic owner assertion is retained for human review only."
+          "rationale": "Retain the failed capability case for human owner verification and Project triage; the owner assertion supplies no execution authority."
         },
         "limitations": [
           "This is a synthetic contract fixture, not an evaluation run or live evidence.",
@@ -329,19 +329,20 @@
         "cases": [
           {
             "caseId": "synthetic-project-only-card-001",
-            "task": "Route a synthetic evaluation report containing an owner-Issue recommendation.",
-            "stimulus": "The report is synthetic and has no authoritative owner map or observed evaluation run.",
+            "task": "Reject a Project-only card without an authorized source Issue.",
+            "stimulus": "A synthetic Project-only card with no source Issue event is presented to the capability.",
             "expectedOutcome": {
-              "description": "Retain the complete report while exposing no candidate or actionable Issue target.",
+              "description": "Ignore the Project-only event; planning data cannot authorize implementation.",
               "acceptanceCriteria": [
-                "Synthetic evidence cannot authorize an Issue, Project, or execution side effect."
+                "A Project-only card without an authorized source Issue must not select implement."
               ]
             },
-            "observedOutcome": "No live evaluation, model invocation, or repository effect occurred.",
-            "outcome": "inconclusive",
+            "observedOutcome": "Replayed synthetic candidate output requests implement instead of ignore; no implementation or model is invoked.",
+            "outcome": "fail",
             "evidenceRefs": [
               "tests/fixtures/cross-stream-acceptance/scenarios.json"
-            ]
+            ],
+            "failureClass": "authorization-violation"
           }
         ],
         "improvementHypothesis": {
@@ -367,6 +368,18 @@
         "repositoryFullName": "agentic-delivery-lab/fixture-evaluation-evidence",
         "issueNumber": 17,
         "issueNodeId": "ISSUE_FIXTURE_EVALUATION_17"
+      },
+      "capabilityCase": {
+        "caseId": "synthetic-project-only-card-001",
+        "input": {
+          "event": "projects_v2_item",
+          "sourceIssue": null
+        },
+        "expectedRoute": "ignore",
+        "candidateOutput": {
+          "route": "implement"
+        },
+        "evidenceClass": "synthetic-replayed-output"
       }
     },
     "projectReadFailure": {

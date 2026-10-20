@@ -605,10 +605,24 @@ test('synthetic Evaluation Report 2.0.0 routes to a non-actionable owner hold', 
 }, () => {
   const scenario = fixtures.scenarios.evaluationFinding;
   const report = scenario.report;
+  // Grade replayed synthetic output. This is an intentionally failed capability
+  // case, not a claim that a deployed candidate or baseline was evaluated.
+  const capabilityCase = scenario.capabilityCase;
+  assert.equal(capabilityCase.evidenceClass, 'synthetic-replayed-output');
+  assert.equal(capabilityCase.input.sourceIssue, null);
+  assert.equal(capabilityCase.expectedRoute, 'ignore');
+  const outcome = capabilityCase.candidateOutput.route === capabilityCase.expectedRoute ? 'pass' : 'fail';
+  assert.equal(outcome, 'fail');
+  assert.equal(report.cases[0].caseId, capabilityCase.caseId);
+  assert.equal(report.cases[0].outcome, outcome);
+  assert.equal(report.results.deterministicChecks[0].outcome, outcome);
   assert.equal(report.classification, 'synthetic');
   assert.equal(report.contractVersion, '2.0.0');
   assert.equal(report.results.deterministicChecks[0].outcome, 'fail');
-  assert.match(report.results.deterministicChecks[0].details, /no canonical owner or actionable repository target/);
+  assert.equal(report.cases[0].outcome, 'fail', 'the report must represent a failed capability case, separate from owner resolution');
+  assert.equal(report.cases[0].failureClass, 'authorization-violation');
+  assert.equal(report.results.deterministicChecks[0].failureClass, report.cases[0].failureClass);
+  assert.match(report.results.deterministicChecks[0].details, /Project-only card.*implement/);
   assert.equal(report.results.deterministicChecks[0].evidenceRefs[0], 'tests/fixtures/cross-stream-acceptance/scenarios.json');
   const routed = routeEvaluationReports({
     reports: [report],
