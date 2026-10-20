@@ -30,7 +30,8 @@ test('each factory surface has an identity-bound profile with bounded commands',
     assert.ok(profile.commands.length);
     for (const command of profile.commands) {
       assert.ok(Array.isArray(command.argv));
-      assert.ok(command.timeoutMs > 0 && command.timeoutMs <= 600_000);
+      const maximum = profile.id === 'control-plane' ? 900_000 : 600_000;
+      assert.ok(command.timeoutMs > 0 && command.timeoutMs <= maximum);
       assert.ok(['delivery-verify','delivery-deps'].includes(command.sandbox));
       assert.ok(!command.argv.includes('sh') && !command.argv.includes('-c'));
     }

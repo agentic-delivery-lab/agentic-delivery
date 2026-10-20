@@ -12,7 +12,8 @@ const factory = (checks) => [
 ];
 const profiles = [
   { repositoryId: '1358455028', name: 'agentic-delivery', id: 'control-plane', install,
-    commands: [verify(['node','@controller/scripts/run-delivery-tests.mjs']),
+    // The full Control Plane suite can exceed ten minutes on supported hosts.
+    commands: [verify(['node','@controller/scripts/run-delivery-tests.mjs'], 900_000),
       ...['validate-toolchain.mjs','validate-adrs.mjs','validate-domain-language.mjs','validate-changelog.mjs','validate-config-files.mjs']
         .map((script) => verify(['node',`@controller/scripts/${script}`,'@workspace'])),
       ...['control-plane:boundary','traceability:check','migration:check'].map((check) => verify(['pnpm',check])),
