@@ -12,7 +12,11 @@ for each Project. The policy's SHA-256 is calculated over canonical JSON with
 the fields `schemaVersion`, `policyId`, `version`, `topologyId`, and `projects`;
 the Project entries are sorted by ascending priority and contain only
 `projectNodeId`, `fieldSchemaSha256`, and `priority`. The selector checks both
-the policy's digest and a separately supplied expected digest.
+the policy's digest and a separately supplied expected digest. It also rejects
+duplicate Project IDs and duplicate priorities. JSON Schema validates policy
+structure; it cannot establish these uniqueness rules or verify the digest.
+Consumers must use the selector's semantic validation before selection; a
+schema-valid policy alone is insufficient.
 
 The expected digest must come from a reviewed immutable release that has
 already resolved the topology and policy approval. This selector checks policy

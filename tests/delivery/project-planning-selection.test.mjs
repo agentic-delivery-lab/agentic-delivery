@@ -203,6 +203,22 @@ test('unknown policy fields are rejected instead of being silently ignored', asy
   assertBlocked(selectProjectPlanningContext(input), 'PROJECT_SELECTION_POLICY_INVALID');
 });
 
+test('duplicate Project IDs in a structurally valid policy fail semantic validation', async () => {
+  const candidate = candidateFor(await validProjectInput());
+  const policy = structuredClone(selectionPolicy);
+  policy.projects[1].projectNodeId = policy.projects[0].projectNodeId;
+  assert.equal(validateSelectionPolicy(policy), true);
+  assertBlocked(selectProjectPlanningContext(selectionInput(candidate, [candidate], { policy })), 'PROJECT_SELECTION_POLICY_INVALID');
+});
+
+test('duplicate priorities in a structurally valid policy fail semantic validation', async () => {
+  const candidate = candidateFor(await validProjectInput());
+  const policy = structuredClone(selectionPolicy);
+  policy.projects[1].priority = policy.projects[0].priority;
+  assert.equal(validateSelectionPolicy(policy), true);
+  assertBlocked(selectProjectPlanningContext(selectionInput(candidate, [candidate], { policy })), 'PROJECT_SELECTION_POLICY_INVALID');
+});
+
 test('policy project array order does not change its pinned digest or selected candidate', async () => {
   const base = await validProjectInput();
   const primary = candidateFor(base);

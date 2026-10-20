@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "project-planning-selection-policy.v1.schema.json",
   "title": "Project planning selection policy v1",
-  "description": "Offline policy input for selecting one Project planning context. The sha256 binds the canonical policy bytes but does not establish who approved the topology. A consumer must load the policy and expected digest from a separately reviewed immutable release. This policy never authorizes execution.",
+  "description": "Offline policy input for selecting one Project planning context. The sha256 binds the canonical policy bytes but does not establish who approved the topology. A consumer must load the policy and expected digest from a separately reviewed immutable release. This policy never authorizes execution. JSON Schema checks structure; the selector separately rejects duplicate Project IDs/priorities and verifies the digest. Schema validation alone is insufficient.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "policyId", "version", "topologyId", "projects", "sha256"],
