@@ -9,5 +9,8 @@
     "api/github/webhook.mjs": {
       "includeFiles": "config/participants.yml"
     }
+  },
+  "git": {
+    "deploymentEnabled": false
   }
 }

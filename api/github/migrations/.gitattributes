@@ -1,0 +1,2 @@
+# Preserve the reviewed migration digest on every supported checkout.
+0008-controller-receipt-attribution.sql text eol=lf

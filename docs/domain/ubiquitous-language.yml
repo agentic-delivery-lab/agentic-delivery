@@ -283,7 +283,7 @@ terms:
     definition: "A signed, versioned record carrying GitHub delivery identity, organization and installation identity, originating repository identity, event object identity, actor data, payload digest, and dispatch hop for central processing."
   - context: "agentic-delivery-control-plane"
     term: "controller receipt"
-    definition: "The durable per-delivery record that tracks controller processing status, lease ownership, retry timing, and an optional GitHub delivery ID so repeated dispatches can safely resume or be acknowledged after completion."
+    definition: "The durable per-delivery record that tracks controller processing status, lease ownership, retry timing, and an optional GitHub delivery ID. For an accepted invocation it also retains the originating repository identity, source Issue, pinned controller commit, and latest Actions run ID and attempt so settlement and retry remain attributable."
   - context: "agentic-delivery-control-plane"
     term: "webhook delivery archive"
     definition: "An explicitly approved operator disposition retaining unavailable historical delivery metadata and audit evidence while preventing automatic retries and checkpoint blocking; it does not establish completion of the original work."
