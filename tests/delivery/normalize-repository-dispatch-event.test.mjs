@@ -85,7 +85,7 @@ test('normalized event consumers pass the event path at process launch instead o
       }
     }
   }
-  assert.equal(consumers, 5);
+  assert.equal(consumers, 6);
   const observation = parseRepositoryYaml(await readFile(path.join(repositoryRoot, '.github/workflows/agent-observation.yml'), 'utf8'), 'observation');
   const pinnedObservation = observation.jobs.validate.steps.find((step) => step.name === 'Recheck with the immutable pinned observation validator');
   assert.match(pinnedObservation.run, /node controller\/scripts\/validate-observation-event.mjs dispatch-boundary$/);

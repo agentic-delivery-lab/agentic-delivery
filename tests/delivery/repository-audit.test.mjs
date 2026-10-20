@@ -66,9 +66,9 @@ test('the hosted portability matrix is internal-only and tests the frozen instal
   assert.match(workflow, /github\.event_name == 'pull_request'/);
   assert.match(workflow, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
   for (const runner of ['ubuntu-latest', 'macos-latest', 'windows-latest']) assert.ok(workflow.includes(runner));
-  const portability = workflow.slice(workflow.indexOf('  portability:'));
-  assert.equal((portability.match(/pnpm install --frozen-lockfile --ignore-scripts/g) ?? []).length, 1);
-  assert.equal((portability.match(/pnpm test/g) ?? []).length, 1);
+  const portability = parseRepositoryYaml(workflow, 'delivery quality workflow').jobs.portability;
+  assert.equal(portability.steps.filter(step => step.run?.includes('pnpm install --frozen-lockfile --ignore-scripts')).length, 1);
+  assert.equal(portability.steps.filter(step => step.run === 'pnpm test').length, 1);
 });
 
 test('pull request body workflow always reports a trusted read-only check', async () => {

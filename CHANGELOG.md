@@ -11,6 +11,14 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Issue #60 adds an interactive, owner-only field canary for two fixed repository/Issue identities. It snapshots values, verifies writes, restores original options or absence, and holds on concurrent changes or uncertain restoration. Preview is non-mutating; apply rejects fields already at the test option. A bounded operator test verified absence restoration in two repositories; App-scoped writes and runner admission remain separate acceptance steps.
+
+- Issue #111 prepares a source-pinned migration 0008 transaction plan with an inspected-target fingerprint, short lock/statement limits and rejection of schema changes since inspection. An explicit owner-only hosted workflow mode executes that fixed transaction and independently reads back column and constraint metadata; uncertain outcomes require reconciliation before retry.
+
+- Issue #111 adds an explicitly selected, owner-only, read-only controller receipt schema inspection. It uses the existing sealed workflow database connection and emits hashes/metadata; it does not apply migrations, expose credentials, run models or establish deployment acceptance.
+
+- [Issue #59](https://github.com/agentic-delivery-lab/agentic-delivery/issues/59) prepares selection contract `1.1.0` for the Agent Customizations repository rename. Its current locator binds to repository ID `1380894656`; exact historical release pins remain unchanged. The publication validator also admits schema version 2 with exact lock/record repository IDs and closed-schema validation, while preserving historical version 1 input. This does not activate participants or prove hosting access.
+
 - [Issue #103](https://github.com/agentic-delivery-lab/agentic-delivery/issues/103) adds an offline evaluation-finding router that validates the pinned report schema, preserves full report evidence, holds owner-Issue assertions as `awaiting-owner-verification` dispositions until an authoritative owner map exists, and marks comparator-dependent claims for human review. It grants no Issue, Project, or execution authority and does not enable a live consumer.
 
 - [Issue #101](https://github.com/agentic-delivery-lab/agentic-delivery/issues/101) proposes an offline-only Project planning context schema and fail-closed fixtures. The proposal keeps Project identity and planning facts separate from source-Issue authorization; live Project access and integration remain out of scope.
@@ -538,6 +546,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) aligns the invocation identity with the registered `Agentic Delivery Lab Invoker 7F3A` GitHub App name, slug, mention, and bot login across the actor catalog, code, tests, and agentic documentation.
 
 ### Fixed
+
+- [Control Plane Bug #111](https://github.com/agentic-delivery-lab/agentic-delivery/issues/111) records the originating repository, source Issue, controller commit, and Actions run identity on the durable receipt before delivery. A trusted workflow-revision finalizer verifies that attribution before completion or retry, including when an older participant pin lacks the finalizer. An empty or unresolved `hold` route remains retryable when its delivery job is skipped. Migration 0008 must be applied before enabling this workflow revision.
 
 - Issue routing now supplies a strict Structured Outputs schema with every property required, avoiding rejection of the optional legacy `state` alias. Legacy proposals remain readable, and the router may read its isolated evidence file.
 
