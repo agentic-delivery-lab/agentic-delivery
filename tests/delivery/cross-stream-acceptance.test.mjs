@@ -64,18 +64,56 @@ function controlPlaneCatalog() {
   return { fields, types };
 }
 
+// These adapters never forward requests. Canary tests prove that every named
+// mutation surface is observable, including participant registry publication.
+function mutationObserver() {
+  const effects = [];
+  const requests = [];
+  function recordGraphql(query) {
+    if (!/\bmutation\b/.test(query)) return;
+    const surface = /ProjectV2/.test(query) ? 'project' : 'issue-fields';
+    effects.push({ surface, method: 'graphql', query });
+  }
+  return {
+    effects,
+    requests,
+    graphqlImpl: async (query) => {
+      recordGraphql(query);
+      throw new Error('Offline GraphQL adapter does not execute requests.');
+    },
+    fetchImpl: async (url, options = {}) => {
+      const route = new URL(url).pathname;
+      const method = (options.method ?? 'GET').toUpperCase();
+      requests.push({ route, method });
+      if (route === '/graphql') {
+        recordGraphql(JSON.parse(options.body ?? '{}').query ?? '');
+      } else if (!['GET', 'HEAD'].includes(method)) {
+        let surface = 'repository';
+        if (route.includes('/contents/config/participants.yml')) surface = 'participant';
+        else if (/\/pulls(?:\/|$)/.test(route)) surface = 'pull-request';
+        else if (/\/releases(?:\/|$)/.test(route)) surface = 'release';
+        else if (/\/issues(?:\/|$)/.test(route)) surface = 'issue';
+        else if (/\/projects(?:\/|$)/.test(route)) surface = 'project';
+        effects.push({ surface, method, route });
+      }
+      return new Response(JSON.stringify({ message: 'Offline requests are disabled.' }), { status: 403 });
+    },
+  };
+}
+
 async function runIssueRoute(scenario, options = {}) {
   const { manualRecovery = false, eventAction = 'edited' } = options;
   const sourceIssue = scenario.sourceIssue;
   const eventRepositoryId = options.eventRepositoryId ?? sourceIssue.repositoryId;
   const eventRepository = options.eventRepository ?? sourceIssue.repositoryFullName;
   const { fields, types } = controlPlaneCatalog();
+  const observer = mutationObserver();
   const trace = {
     restReads: [],
     trustedIssueReads: [],
     actorPermissionReads: [],
     modelCalls: 0,
-    protectedEffects: [],
+    protectedEffects: observer.effects,
     modelIssue: null,
     projectPlanningResult: null,
   };
@@ -106,8 +144,7 @@ async function runIssueRoute(scenario, options = {}) {
     const method = options.method ?? 'GET';
     const route = `${parsed.pathname}${parsed.search}`;
     if (method !== 'GET') {
-      trace.protectedEffects.push({ surface: 'repository-or-issue', method, route });
-      return new Response(JSON.stringify({ message: 'Fixture writes are disabled.' }), { status: 403 });
+      return observer.fetchImpl(url, options);
     }
     assert.ok(parsed.pathname.startsWith(`${basePath}/`), `read escaped the originating repository: ${route}`);
     trace.restReads.push(route);
@@ -171,10 +208,7 @@ async function runIssueRoute(scenario, options = {}) {
     assert.equal('project' in issue, false, 'Project context must not be passed as Issue authorization');
     return structuredClone(sourceIssue.routingProposal);
   };
-  const graphqlImpl = async () => {
-    trace.protectedEffects.push({ surface: 'issue-fields', method: 'graphql' });
-    throw new Error('Unexpected offline fixture mutation.');
-  };
+  const graphqlImpl = observer.graphqlImpl;
   const env = {
     GITHUB_REPOSITORY: 'agentic-delivery-lab/agentic-delivery',
     ORIGIN_REPOSITORY: sourceIssue.repositoryFullName,
@@ -317,6 +351,33 @@ async function runIssueWebhook(scenario, { action, issue, deliveryId, replayStor
   });
   return output;
 }
+
+test('offline mutation observer detects each protected GitHub surface', async () => {
+  const observer = mutationObserver();
+  const requests = [
+    ['repository', '/repos/fixture/source/contents/file', { method: 'PUT' }],
+    ['issue', '/repos/fixture/source/issues/17', { method: 'PATCH' }],
+    ['issue-fields', '/graphql', { method: 'POST', body: JSON.stringify({ query: 'mutation { updateIssueField(input: {}) { clientMutationId } }' }) }],
+    ['pull-request', '/repos/fixture/source/pulls', { method: 'POST' }],
+    ['release', '/repos/fixture/source/releases', { method: 'POST' }],
+    ['participant', '/repos/fixture/controller/contents/config/participants.yml', { method: 'PUT' }],
+    ['project', '/graphql', { method: 'POST', body: JSON.stringify({ query: 'mutation { updateProjectV2ItemFieldValue(input: {}) { clientMutationId } }' }) }],
+  ];
+  for (const [surface, route, options] of requests) {
+    const response = await observer.fetchImpl(`https://api.github.com${route}`, options);
+    assert.equal(response.status, 403);
+    assert.equal(observer.effects.at(-1).surface, surface);
+  }
+  assert.equal(observer.effects.length, requests.length);
+  for (const [surface, query] of [
+    ['issue-fields', 'mutation { updateIssueField(input: {}) { clientMutationId } }'],
+    ['project', 'mutation { updateProjectV2ItemFieldValue(input: {}) { clientMutationId } }'],
+  ]) {
+    await assert.rejects(observer.graphqlImpl(query), /Offline GraphQL adapter/);
+    assert.equal(observer.effects.at(-1).surface, surface);
+  }
+  assert.equal(observer.effects.length, requests.length + 2);
+});
 
 test('factory capability work is routed only from its revalidated synthetic source Issue', async () => {
   assert.equal(fixtures.evidenceClass, 'offline-fixture');
@@ -602,7 +663,11 @@ test('swapping enrolled same-number repository identities is rejected before rou
 
 test('synthetic Evaluation Report 2.0.0 routes to a non-actionable owner hold', {
   skip: evaluationSchemaContract ? false : 'Set EVALUATION_ARCHITECTURE_ROOT to the pinned Architecture checkout.',
-}, () => {
+}, async (t) => {
+  const observer = mutationObserver();
+  t.mock.method(globalThis, 'fetch', observer.fetchImpl);
+  const registryBefore = await readFile(path.join(repositoryRoot, 'config/participants.yml'), 'utf8');
+  const registryObjectBefore = structuredClone(participantSource);
   const scenario = fixtures.scenarios.evaluationFinding;
   const report = scenario.report;
   // Grade replayed synthetic output. This is an intentionally failed capability
@@ -647,8 +712,10 @@ test('synthetic Evaluation Report 2.0.0 routes to a non-actionable owner hold', 
   assert.equal(scenario.disposition.executionAuthorized, false);
   assert.equal(scenario.disposition.sourceReportRef, report.reportId);
   assert.equal(scenario.disposition.sourceEvidenceRef, `${report.reportId}#evidence`);
-  assert.deepEqual(scenario.disposition.protectedEffects, []);
-  assert.equal(scenario.disposition.modelInvocations, 0);
+  assert.deepEqual(observer.effects, []);
+  assert.deepEqual(observer.requests, [], 'evaluation routing must make no network or model request');
+  assert.equal(await readFile(path.join(repositoryRoot, 'config/participants.yml'), 'utf8'), registryBefore);
+  assert.deepEqual(participantSource, registryObjectBefore);
   assert.deepEqual(report.evidence.map(({ kind }) => kind), ['source', 'result']);
   assert.equal(report.evidence[0].ref, 'tests/fixtures/cross-stream-acceptance/scenarios.json');
   assert.deepEqual(Object.keys(report).sort(), [

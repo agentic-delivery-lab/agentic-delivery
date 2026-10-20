@@ -55,3 +55,13 @@ rejected before either adapter runs, and a delivery-policy rejection produces
 no protected effect. No fixture performs a live API or model call, Issue-field
 mutation, repository write, pull request, release, participant change, Project
 mutation or evaluation run.
+
+Mutation observers record attempted repository-content, Issue, Issue-field,
+pull-request, release, participant-registry publication and Project writes at
+the injected REST/GraphQL boundaries. A separate canary test sends each kind of
+request to the same observers and verifies detection; no request is forwarded.
+The evaluation test observes global fetch requests during the actual routing
+call, rather than trusting a zero-effects field in the fixture. It also compares
+the in-memory and on-disk participant registry before and after routing. These
+checks cover the tested offline entry points and transports; they do not prove
+live runner isolation or every possible native process or filesystem effect.

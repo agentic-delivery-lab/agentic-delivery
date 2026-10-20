@@ -359,9 +359,7 @@
         },
         "sourceReportRef": "synthetic:agent-capability:cross-stream-example-v1",
         "sourceEvidenceRef": "synthetic:agent-capability:cross-stream-example-v1#evidence",
-        "executionAuthorized": false,
-        "modelInvocations": 0,
-        "protectedEffects": []
+        "executionAuthorized": false
       },
       "sourceIssue": {
         "repositoryId": "9000001083",
