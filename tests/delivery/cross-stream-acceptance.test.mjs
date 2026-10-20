@@ -321,8 +321,20 @@ test('factory capability work is routed only from its revalidated synthetic sour
   assert.equal(fixtures.evidenceClass, 'offline-fixture');
   const scenario = fixtures.scenarios.factoryCapability;
 
-  const { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario);
+  const { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario, {
+    projectPlanningInput: await planningInputForScenario(scenario, scenario.planningContext.planningFields),
+  });
   assert.equal(participantAuthorization.allowed, true);
+  assert.equal(trace.projectPlanningResult?.valid, true);
+  const planning = trace.projectPlanningResult.value;
+  assert.equal(planning.project.nodeId, scenario.planningContext.project.nodeId);
+  assert.equal(planning.item.nodeId, scenario.planningContext.item.nodeId);
+  assert.equal(planning.sourceIssue.repository.id, scenario.sourceIssue.repositoryId);
+  assert.equal(planning.sourceIssue.repository.fullName, trace.trustedIssueReads[0].repository);
+  assert.equal(planning.sourceIssue.number, trace.trustedIssueReads[0].issueNumber);
+  assert.equal(planning.sourceIssue.nodeId, trace.modelIssue.id);
+  assert.equal(planning.authority, 'planning-only');
+  assert.equal(trace.modelIssue.projectPlanningContext, undefined);
   assert.equal(deliveryAuthorizationError, null);
   assert.equal(deliveryPolicy.participantMode, 'active');
   assert.equal(deliveryPolicy.readOnlyRun, false);
@@ -343,8 +355,20 @@ test('synthetic product planning remains bound to its source Issue and does not 
   assert.equal(scenario.realProductRepository, null);
   assert.equal(scenario.productSteward, null);
 
-  const { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario);
+  const { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario, {
+    projectPlanningInput: await planningInputForScenario(scenario, scenario.planningContext.planningFields),
+  });
   assert.equal(participantAuthorization.allowed, true);
+  assert.equal(trace.projectPlanningResult?.valid, true);
+  const planning = trace.projectPlanningResult.value;
+  assert.equal(planning.project.nodeId, scenario.planningContext.project.nodeId);
+  assert.equal(planning.item.nodeId, scenario.planningContext.item.nodeId);
+  assert.equal(planning.sourceIssue.repository.id, scenario.sourceIssue.repositoryId);
+  assert.equal(planning.sourceIssue.repository.fullName, trace.trustedIssueReads[0].repository);
+  assert.equal(planning.sourceIssue.number, trace.trustedIssueReads[0].issueNumber);
+  assert.equal(planning.sourceIssue.nodeId, trace.modelIssue.id);
+  assert.equal(planning.authority, 'planning-only');
+  assert.equal(trace.modelIssue.projectPlanningContext, undefined);
   assert.equal(deliveryAuthorizationError, null);
   assert.equal(deliveryPolicy.participantMode, 'active');
   assert.equal(result.route, 'plan');
