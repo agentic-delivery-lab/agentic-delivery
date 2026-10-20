@@ -653,11 +653,13 @@ test('synthetic Evaluation Report 2.0.0 routes to a non-actionable owner hold', 
 
 test('missing Project read scope is rejected by the offline normalizer while Issue-first recovery remains authorized', async () => {
   const scenario = fixtures.scenarios.projectReadFailure;
-  const planningFixture = JSON.parse(await readFile(
-    path.join(repositoryRoot, 'tests/fixtures/project-planning-context/valid-offline-fixture.json'),
-    'utf8',
-  ));
-  const projectPlanningInput = structuredClone(planningFixture.input);
+  const projectPlanningInput = await planningInputForScenario(scenario, scenario.planningContext.planningFields);
+  const granted = normalizeProjectPlanningInput(projectPlanningInput);
+  assert.equal(granted.valid, true);
+  assert.equal(granted.value.sourceIssue.nodeId, scenario.sourceIssue.issueNodeId);
+  assert.equal(granted.value.sourceIssue.repository.id, scenario.sourceIssue.repositoryId);
+  assert.equal(granted.value.sourceIssue.repository.fullName, scenario.sourceIssue.repositoryFullName);
+  assert.equal(granted.value.sourceIssue.number, scenario.sourceIssue.issueNumber);
   projectPlanningInput.access.projectRead = 'missing-scope';
 
   const { result, trace, participantAuthorization, deliveryPolicy, deliveryAuthorizationError } = await runIssueRoute(scenario, {

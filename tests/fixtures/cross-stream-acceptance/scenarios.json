@@ -398,6 +398,26 @@
           "operation": "implementation"
         },
         "routingProposal": null
+      },
+      "planningContext": {
+        "authority": "planning-only",
+        "trust": "untrusted-planning-data",
+        "project": {
+          "nodeId": "PROJECT_FIXTURE_SECURITY_RECOVERY"
+        },
+        "item": {
+          "nodeId": "ITEM_FIXTURE_SECURITY_RECOVERY_19"
+        },
+        "planningFields": [
+          {
+            "key": "portfolio-group",
+            "value": "synthetic security recovery"
+          },
+          {
+            "key": "portfolio-sequence",
+            "value": 4
+          }
+        ]
       }
     }
   },
