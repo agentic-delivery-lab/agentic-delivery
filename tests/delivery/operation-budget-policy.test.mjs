@@ -4,7 +4,8 @@ import { currentOperationPolicyReference, INITIAL_OPERATION_LIMITS, matchesCurre
 
 test('the proposal reference survives serialization without becoming approval', () => {
   const reference = currentOperationPolicyReference();
-  assert.equal(reference.version, '1.0.0-proposed.1');
+  assert.equal(reference.version, '1.0.0-proposed.2');
+  assert.equal(Object.hasOwn(INITIAL_OPERATION_LIMITS, 'toolInvocations'), false);
   assert.match(reference.sha256, /^[a-f0-9]{64}$/);
   assert.ok(matchesCurrentOperationPolicy(JSON.parse(JSON.stringify(reference))));
   assert.equal(Object.isFrozen(INITIAL_OPERATION_LIMITS), true);

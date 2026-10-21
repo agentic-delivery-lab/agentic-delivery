@@ -1,7 +1,7 @@
 // agentic-primitive: {"id":"operation-resource-budget-store","kind":"validator","enforcement":"deterministic","adrs":["ADR-0009","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 const resources = Object.freeze({
   model: { column:'model_turns', limit:8 }, validation: { column:'validation_attempts', limit:3 },
-  tool: { column:'tool_invocations', limit:100 }, transport: { column:'transport_attempts', limit:8 },
+  transport: { column:'transport_attempts', limit:8 },
   controller: { column:'controller_attempts', limit:8 },
 });
 const scopeKeys = ['operationId','repositoryId','issue','controllerCommit','policySha256','contextSha256','runtimeSha256'];

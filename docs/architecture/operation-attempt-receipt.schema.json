@@ -21,10 +21,10 @@
   ],
   "properties": {
     "configuredLimits": {"anyOf": [{"type":"null"}, {"type":"object","additionalProperties":false,
-      "required":["activeTimeMs","modelTurns","validationAttempts","toolInvocations","childImplementations","recursionDepth","transportAttempts","controllerAttempts","concurrentImplementations","automaticBillingOrModelFallback"],
+      "required":["activeTimeMs","modelTurns","validationAttempts","childImplementations","recursionDepth","transportAttempts","controllerAttempts","concurrentImplementations","automaticBillingOrModelFallback"],
       "properties": {
         "activeTimeMs":{"type":"integer","minimum":1},"modelTurns":{"type":"integer","minimum":0},
-        "validationAttempts":{"type":"integer","minimum":0},"toolInvocations":{"type":"integer","minimum":0},
+        "validationAttempts":{"type":"integer","minimum":0},
         "childImplementations":{"type":"integer","minimum":0},"recursionDepth":{"type":"integer","minimum":0},
         "transportAttempts":{"type":"integer","minimum":0},"controllerAttempts":{"type":"integer","minimum":0},
         "concurrentImplementations":{"type":"integer","minimum":1},"automaticBillingOrModelFallback":{"type":"boolean"}

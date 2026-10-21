@@ -5,12 +5,12 @@ import path from 'node:path';
 import { ACTIVE_TIME_LIMIT_MS } from './operation-active-time.mjs';
 
 // A proposal fingerprint is identity, not approval or evidence of enforcement.
-// Tool, child, transport and concurrency admission remains separate work.
+// Child, transport and concurrency admission remains separate work.
+// The owner withdrew universal tool-count enforcement for stock Codex.
 export const INITIAL_OPERATION_LIMITS = Object.freeze({
   activeTimeMs: ACTIVE_TIME_LIMIT_MS,
   modelTurns: 8,
   validationAttempts: 3,
-  toolInvocations: 100,
   childImplementations: 0,
   recursionDepth: 0,
   transportAttempts: 8,
@@ -29,7 +29,7 @@ const implementations = [
 ].map((file) => ({ file, sha256: createHash('sha256').update(readFileSync(path.join(sourceRoot, file))).digest('hex') }));
 const reference = Object.freeze({
   id: 'factory-initial-operation-budget',
-  version: '1.0.0-proposed.1',
+  version: '1.0.0-proposed.2',
   sha256: createHash('sha256').update(JSON.stringify({ status: 'proposed', limits: INITIAL_OPERATION_LIMITS, implementations })).digest('hex'),
 });
 

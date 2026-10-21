@@ -499,11 +499,13 @@ instead of a new session or a fresh allowance. These stops require owner
 action; a subscription reset does not replenish the operation budget.
 
 These two counters are part of W08 implementation, not admission of a complete
-budget policy. Immutable policy pins, live cumulative active-time proof, tool and child
+budget policy. Immutable policy pins, live cumulative active-time proof, child
 operation enforcement, transport allowances, concurrency and interruption
-proof remain required before active admission. In particular, model tool calls
-must be counted before execution; activity notifications alone are not proof
-of a hard tool limit. The proposed bounds are not activated by this change.
+proof remain required before active admission. On 2026-10-21 the owner withdrew
+the universal 100-tool hard-limit requirement because supported stock-Codex
+interfaces do not establish that enforcement boundary. Codex remains unmodified;
+no replacement hook, broker or native tool counter is introduced. The remaining
+proposed bounds are not activated by this change.
 
 Implementation can span multiple model turns within its allowance. A `continue` outcome
 records exact remaining implementation tasks and starts the next turn without
@@ -549,7 +551,7 @@ records or replenish an allowance.
 
 Migration `0009-operation-resource-budgets.sql` and
 `OperationBudgetStore` prepare shared database counters for model turns,
-validation, tools, transport and controller attempts. Initialization requires
+validation, transport and controller attempts. Initialization requires
 explicit known consumption and binds one operation to its native repository,
 source Issue, controller, policy, approved-context and runtime fingerprints.
 Another UUID cannot reset the same Issue. Reservations require the exact live
@@ -562,8 +564,8 @@ The ledger has no expiry that can replenish the software allowance.
 This adapter and migration are source-only. They are not wired into live
 routing or native tool dispatch, and the migration has not been applied to a
 hosted database. Global implementation ownership, active-time integration,
-all-phase admission and a fail-closed native tool gate still require separate
-implementation and evidence. Disposable PostgreSQL tests prove SQL counter and
+all-phase admission still require separate implementation and evidence. The
+withdrawn universal tool budget has no SQL resource or admission gate. Disposable PostgreSQL tests prove SQL counter and
 fencing behavior, not Neon transport, runtime interception or activation.
 
 The account execution lock is acquired before App-token minting and saved-state admission. New-task comments are ignored without requesting credentials. The controller persists its active-time and attempt reservation before token minting; credential acquisition and preflight reads use the remaining execution deadline. Preflight failures and ignored inactive-source comments share the same token cleanup scope. They cannot post failure comments before preflight authorization completes. Unknown token-issuance responses or failed revocation retain the checkpoint and lock and require operator reconciliation before another mint. Revocation has a separate bounded cleanup timeout so exhaustion does not prevent cleanup. Runtime paths are removed only after this attempt prepared them.
@@ -597,8 +599,10 @@ provider instance cannot erase an earlier cleanup uncertainty.
 State version 5 publishes delivery evidence version 2. The record includes the
 operation UUID, native repository ID, proposal-policy fingerprint, controller,
 model-turn and validation consumption, and the active-time reservation at the
-publication checkpoint. Tool consumption is explicitly `null` while hard tool
-counting remains unproved; it must not be presented as zero. The policy status
+publication checkpoint. Tool consumption remains explicitly `null` as unknown
+telemetry; it must not be presented as zero or a configured tool ceiling. The
+proposal-policy version is now `1.0.0-proposed.2`. Saved operations with the old
+fingerprint require readmission without resetting spent allowance. The policy status
 remains proposed. The checkpoint does not claim final shutdown, settled total
 time, merge acceptance or milestone completion. Historical version-1 evidence
 remains readable for older state, but version-5 evidence cannot downgrade to

@@ -1277,7 +1277,7 @@ test('controller journals execution admission and settled publication as separat
   assert.equal(admission.outcome, 'admitted');
   assert.equal(terminal.outcome, 'candidate-published');
   assert.equal(terminal.schemaVersion, 2);
-  assert.equal(terminal.configuredLimits.toolInvocations, 100);
+  assert.equal(Object.hasOwn(terminal.configuredLimits, 'toolInvocations'), false);
   assert.equal(terminal.failureClass, null);
   assert.equal(terminal.operationId, admission.operationId);
   assert.equal(terminal.origin.repositoryId, '101');
