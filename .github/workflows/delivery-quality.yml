@@ -130,7 +130,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: agentic-delivery-lab/agentic-delivery-architecture
-          ref: 06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed
+          ref: 7b1d21462f70c411e75ae67ce80dcf688c9973e8
           path: node_modules/architecture-report-contract
           persist-credentials: false
 
@@ -253,7 +253,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: agentic-delivery-lab/agentic-delivery-architecture
-          ref: 06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed
+          ref: 7b1d21462f70c411e75ae67ce80dcf688c9973e8
           path: node_modules/architecture-report-contract
           persist-credentials: false
 

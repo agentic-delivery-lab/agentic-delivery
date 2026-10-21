@@ -10,6 +10,10 @@ Its deterministic result is the only architecture-review failure gate; its
 semantic findings and missing runtime evidence are advisory and must cite their
 sources.
 
+## Project planning context
+
+- [Project planning context selection](project-planning-context-selection.md) defines the offline pinned-policy selector for multiple Project links. It does not authorize execution or demonstrate live Project access.
+
 This guide describes how people and coding agents move a change through the repository's trunk. It complements [ADR-0004](../decisions/0004-use-trunk-based-delivery.md), [ADR-0005](../decisions/0005-use-conventional-commits-with-gitmoji.md), [ADR-0006](../decisions/0006-curate-a-changelog.md) and [ADR-0007](../decisions/0007-use-issue-linked-conventional-branch-names.md).
 
 ## Issue intake and routing

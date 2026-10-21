@@ -28,10 +28,11 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 - [Issue #59](https://github.com/agentic-delivery-lab/agentic-delivery/issues/59) prepares selection contract `1.1.0` for the Agent Customizations repository rename. Its current locator binds to repository ID `1380894656`; exact historical release pins remain unchanged. The publication validator also admits schema version 2 with exact lock/record repository IDs and closed-schema validation, while preserving historical version 1 input. This does not activate participants or prove hosting access.
 
-- [Issue #103](https://github.com/agentic-delivery-lab/agentic-delivery/issues/103) adds an offline evaluation-finding router that validates the pinned report schema, preserves full report evidence, holds owner-Issue assertions as `awaiting-owner-verification` dispositions until an authoritative owner map exists, and marks comparator-dependent claims for human review. It grants no Issue, Project, or execution authority, depends on Architecture PR #14, and does not enable a live consumer.
+- [Issue #103](https://github.com/agentic-delivery-lab/agentic-delivery/issues/103) adds an offline evaluation-finding router that validates the pinned report schema, preserves full report evidence, holds owner-Issue assertions as `awaiting-owner-verification` dispositions until an authoritative owner map exists, and marks comparator-dependent claims for human review. It grants no Issue, Project, or execution authority and does not enable a live consumer.
 
 - [Issue #101](https://github.com/agentic-delivery-lab/agentic-delivery/issues/101) proposes an offline-only Project planning context schema and fail-closed fixtures. The proposal keeps Project identity and planning facts separate from source-Issue authorization; live Project access and integration remain out of scope.
 
+- [Issue #108](https://github.com/agentic-delivery-lab/agentic-delivery/issues/108) adds synthetic cross-stream acceptance fixtures for Issue-first routing, same-number cross-repository isolation, Project-only event rejection, failed synthetic capability evidence holds, observable protected-mutation canaries, and Issue-first recovery when Project read scope is missing. It projects any grader-calibration dataset pins into derived evidence while retaining the full report. It validates Evaluation Report 2.0.0 against Architecture draft `0.1.0-draft.24` offline and withholds synthetic owner targets; it does not authorize writes or runtime adoption.
 - The draft controller release `0.2.0-draft.66` pins the strict routing-schema repair at `08728c4210ec2d227eec2b6c182dcf3bafd80db1` for the central shadow participant. Draft65 remains available for rollback. Intake continues to use draft65 until a separate reviewed bootstrap update selects the new registry.
 
 - [Issue #64](https://github.com/agentic-delivery-lab/agentic-delivery/issues/64) adds Neon-backed dispatch leases and controller receipts, persists cursors for bounded delivery-history scans, stores GitHub delivery IDs before advancing checkpoints, aggregates attempt outcomes across scan segments, and keeps active or uncertain webhook outcomes retryable.
@@ -166,11 +167,14 @@ and releases use [Semantic Versioning](https://semver.org/).
 Entries that reference issue #52 use it only as the persisted-plan context;
 they do not authorize migration, alter that issue's scope, or close it.
 
+- [Issue #107](https://github.com/agentic-delivery-lab/agentic-delivery/issues/107) adds an offline Project planning-context selector bound to a source repository and Issue, comparing repository names case-insensitively while retaining stable numeric and node identities. It uses a versioned policy with a separately supplied SHA-256 pin and explicit Project priority, collapses identical repeated items with case-normalized repository names, and resolves candidate errors independently of API order. It holds on unapproved, inaccessible, or ambiguous candidates without granting execution authority or enabling live Project access.
+
 ### Changed
 
 - Delivery evidence version 2 carries the saved operation identity, native repository, proposed policy and consumed allowance at publication. Historical version-1 records remain readable; state-version-5 records cannot omit operation evidence. Unknown tool consumption stays explicit rather than being reported as zero. Active native Issue Field requests now use the remaining operation time instead of a fixed 30-second timeout.
 
 - Central intake and delivery select the reviewed draft66 participant registry through bootstrap `0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80`. The controller includes the strict routing-schema repair; all participants remain in shadow mode. The previous bootstrap remains available for rollback.
+- Future Actions jobs use the official Codex CLI 0.160.0 package with pinned archive and package-tree digests; 0.159.3 remains the rollback version.
 
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.52` at
@@ -564,6 +568,9 @@ they do not authorize migration, alter that issue's scope, or close it.
 - App tokens are minted only under the account lock and a persisted time reservation. Early preflight exits revoke known tokens; uncertain issuance blocks fresh credentials and preserves recovery inputs.
 
 - Dependency preparation now reserves a validation attempt before installation. Failed installs retain their charge across resumes; successful preparation and final verification share the same reserved attempt.
+
+- Offline Project selection retains considered identities on success and untrusted supplied identities on failure, and rejects incomplete or undeclared candidate reads so planning gaps remain traceable.
+
 
 - [Control Plane Bug #111](https://github.com/agentic-delivery-lab/agentic-delivery/issues/111) records the originating repository, source Issue, controller commit, and Actions run identity on the durable receipt before delivery. A trusted workflow-revision finalizer verifies that attribution before completion or retry, including when an older participant pin lacks the finalizer. An empty or unresolved `hold` route remains retryable when its delivery job is skipped. Migration 0008 must be applied before enabling this workflow revision.
 

@@ -1,7 +1,7 @@
-$schema: https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/06e8f6e3daf4e1c5de99dd2342b9e775b9fb13ed/architecture/contracts/evaluation-report.schema.json
-contractVersion: 1.0.0
+$schema: https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/7b1d21462f70c411e75ae67ce80dcf688c9973e8/architecture/contracts/evaluation-report.schema.json
+contractVersion: 2.0.0
 reportId: synthetic:agent-capability:example-v1
-generatedAt: '2026-10-09T09:00:00Z'
+generatedAt: 2026-10-09T09:00:00Z
 classification: synthetic
 evaluationMode: offline
 layer: agent-capability
@@ -22,7 +22,27 @@ dataset:
     commit: 1123456789abcdef0123456789abcdef01234567
     path: evaluations/datasets/synthetic-review-cases.yml
     sha256: 1123456789abcdef0123456789abcdef1123456789abcdef0123456789abcdef
-  caseIds: [synthetic-safe-change-001]
+  caseIds:
+    - synthetic-safe-change-001
+  partition: synthetic
+  selection:
+    policyPin:
+      repository: agentic-delivery-lab/agentic-delivery-primitives
+      commit: "8888888888888888888888888888888888888888"
+      path: evaluations/fixtures/8-selection-policy.yml
+      sha256: "8888888888888888888888888888888888888888888888888888888888888888"
+    registeredAt: 2026-10-09T08:50:00Z
+    sampling: census
+    eligiblePopulation: The single named case in this offline test fixture.
+    inclusionCriteria:
+      - Include the complete fixture case set.
+    exclusions: []
+  integrity:
+    contaminationStatus: unknown
+    assessedAt: 2026-10-09T08:45:00Z
+    provenanceBasis: Offline synthetic test data; no empirical contamination assessment was performed.
+    evidenceRefs:
+      - https://example.invalid/evaluations/integrity/not-assessed
 dependencies:
   - id: example-evaluation-runner
     version: 1.0.0
@@ -40,6 +60,16 @@ graders:
       commit: 3123456789abcdef0123456789abcdef01234567
       path: evaluations/graders/deterministic.yml
       sha256: 3123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    evaluator:
+      id: synthetic-deterministic-evaluator
+      kind: deterministic-tool
+      version: placeholder-1.0.0
+    independence:
+      relation: unknown
+      basis: Offline test fixture; no evaluator or candidate run establishes independence.
+    calibration:
+      status: not-applicable
+      rationale: Offline test fixture; no evaluator calibration was run.
   semantic:
     id: example-semantic-review-rubric
     version: 1.0.0
@@ -48,12 +78,23 @@ graders:
       commit: 4123456789abcdef0123456789abcdef01234567
       path: evaluations/graders/semantic-review.yml
       sha256: 4123456789abcdef0123456789abcdef4123456789abcdef0123456789abcdef
+    evaluator:
+      id: synthetic-semantic-evaluator
+      kind: human
+      version: placeholder-1.0.0
+    independence:
+      relation: unknown
+      basis: Offline test fixture; no evaluator or candidate run establishes independence.
+    calibration:
+      status: not-applicable
+      rationale: Offline test fixture; no evaluator calibration was run.
 results:
   deterministicChecks:
     - checkId: synthetic-contract-shape
       outcome: pass
       details: The synthetic fixture contains a source pin and one named case.
-      evidenceRefs: [architecture/evaluation/examples/agent-capability-report.yml]
+      evidenceRefs:
+        - architecture/evaluation/examples/agent-capability-report.yml
   semanticJudgments: []
 baseline:
   status: unmeasured
@@ -99,3 +140,19 @@ limitations:
   - This is a synthetic contract fixture, not an evaluation run or live evidence.
   - All source pin values are format-only placeholders and do not resolve to real artifacts.
   - No paid model calls, repository writes, Issue writes, Project writes, activation, merge, or release occurred.
+runStartedAt: 2026-10-09T08:59:00Z
+cases:
+  - caseId: synthetic-safe-change-001
+    task: Exercise the pinned evaluation report contract with offline fixture data.
+    stimulus: Route a complete report while preserving source evidence and withholding unauthorized work.
+    expectedOutcome:
+      description: The report is retained as a non-actionable offline disposition.
+      acceptanceCriteria:
+        - The source report and evidence remain unchanged.
+    observedOutcome: The report is fixture data and was not run as a live evaluation.
+    outcome: inconclusive
+    evidenceRefs:
+      - https://example.invalid/evaluations/fixture/case-001
+improvementHypothesis:
+  status: not-proposed
+  rationale: No measured candidate or baseline supports an improvement hypothesis.
