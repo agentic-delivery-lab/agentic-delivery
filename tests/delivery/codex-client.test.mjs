@@ -5,6 +5,7 @@ import { rm } from 'node:fs/promises';
 import { CodexClient, quotaBoundary, quotaTelemetryUnavailable, formatQuotaDiagnostics, verifyModels, modelEnvironment, deliveryPermissions, checkConfiguration, AUTH_STORAGE_CONFIG, DEFAULT_PERMISSION_CONFIG, appServerFailure } from '../../scripts/lib/codex-client.mjs';
 
 const now = 1_800_000_000;
+const disabledSubagents = () => ({ agents: { enabled: false }, features: { multi_agent_v2: false } });
 const window = (usedPercent, windowDurationMins = 300) => ({ usedPercent, windowDurationMins, resetsAt: now + 100 });
 const quota = (used = 30, weekly = 20) => ({ rateLimits: { limitId: 'codex', credits:{hasCredits:false,unlimited:false}, primary: window(used), secondary: window(weekly, 10080) } });
 
@@ -112,11 +113,23 @@ test('tools have a private temporary home and cannot inherit Codex authenticatio
 });
 
 test('unsafe user and project configuration fails before thread startup', () => {
-  checkConfiguration({});
+  checkConfiguration(disabledSubagents());
   for (const config of [{hooks:{session_start:[]}}, {notify:['sh']}, {model_provider:'custom'},
     {model_providers:{openai:{base_url:'http://example.invalid'}}}, {chatgpt_base_url:'http://example.invalid'}]) {
-    assert.throws(() => checkConfiguration(config), /configuration/);
+    assert.throws(() => checkConfiguration({ ...disabledSubagents(), ...config }), /configuration/);
   }
+});
+
+test('enabled or unknown native subagent configuration holds before thread startup', () => {
+  for (const config of [
+    {}, { agents: { enabled: true }, features: { multi_agent_v2: false } },
+    { agents: { enabled: false }, features: { multi_agent_v2: true } },
+    { agents: { enabled: false }, features: { multi_agent_v2: { enabled: true } } },
+    { agents: { enabled: false }, features: {} },
+    { agents: {}, features: { multi_agent_v2: false } },
+  ]) assert.throws(() => checkConfiguration(config), /subagent configuration/i);
+  checkConfiguration(disabledSubagents());
+  checkConfiguration({ agents: { enabled: false }, features: { multi_agent_v2: { enabled: false } } });
 });
 
 test('app-server request errors retain bounded diagnostic metadata only', async (t) => {
@@ -222,7 +235,7 @@ test('starts persistent threads and resumes the exact UUID without a newest-sess
     toolEnv: {},
     request: async (method, params) => {
       calls.push({method, params});
-      if (method === 'config/read') return {config:{mcp_servers:{}}};
+      if (method === 'config/read') return {config:{...disabledSubagents(),mcp_servers:{}}};
       if (method === 'thread/start') return {thread:{id:'019fb023-24b8-7881-9119-509f078b610e'}};
       if (method === 'thread/resume') return {thread:{id:'019fb023-24b8-7881-9119-509f078b610e'}};
       throw new Error(`Unexpected request: ${method}`);
@@ -243,6 +256,11 @@ test('starts persistent threads and resumes the exact UUID without a newest-sess
   assert.equal(calls[3].method, 'thread/resume');
   assert.equal(calls[3].params.threadId, '019fb023-24b8-7881-9119-509f078b610e');
   assert.equal(calls[3].params.ephemeral, undefined);
+  for (const call of [calls[1], calls[3]]) {
+    assert.equal(call.params.config.agents.enabled, false);
+    assert.equal(call.params.config.features.multi_agent_v2, false);
+    assert.equal(call.params.config.features.multi_agent, false);
+  }
   assert.equal(calls.filter(({method}) => method === 'thread/list').length, 0);
 });
 
@@ -255,7 +273,7 @@ test('enables only explicitly inventoried MCP servers approved by the selected p
     approvedMcpServers: new Set(['firecrawl']),
     request: async (method, params) => {
       calls.push({ method, params });
-      if (method === 'config/read') return { config: { mcp_servers: { firecrawl: {}, context7: {}, chrome: {} } } };
+      if (method === 'config/read') return { config: { ...disabledSubagents(), mcp_servers: { firecrawl: {}, context7: {}, chrome: {} } } };
       throw new Error(`Unexpected request: ${method}`);
     },
   });

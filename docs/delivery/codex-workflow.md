@@ -507,6 +507,15 @@ interfaces do not establish that enforcement boundary. Codex remains unmodified;
 no replacement hook, broker or native tool counter is introduced. The remaining
 proposed bounds are not activated by this change.
 
+The client disables native subagents through the stock `agents.enabled=false`
+and `features.multi_agent_v2=false` settings at server startup and on thread
+start/resume. It checks effective configuration before either thread request;
+enabled or unknown values hold delivery. The legacy `multi_agent=false` setting
+is retained for compatibility. This restricts configured native subagent tools;
+it does not count arbitrary native tool calls or establish an operation-wide
+transport retry ceiling. Those remaining acceptance claims require separate
+evidence. No Codex source or binary is modified.
+
 Implementation can span multiple model turns within its allowance. A `continue` outcome
 records exact remaining implementation tasks and starts the next turn without
 human intervention. A `complete` outcome must have no remaining tasks or

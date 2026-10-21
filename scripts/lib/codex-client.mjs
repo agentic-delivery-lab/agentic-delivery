@@ -342,6 +342,12 @@ export function checkConfiguration(config) {
   if ((config.model_provider && config.model_provider !== 'openai') || Object.keys(config.model_providers ?? {}).length) {
     throw new Error('Custom provider configuration is not allowed for delivery.');
   }
+  const subagentsV2 = config.features?.multi_agent_v2;
+  const subagentsV2Disabled = subagentsV2 === false || (subagentsV2 !== null
+    && typeof subagentsV2 === 'object' && !Array.isArray(subagentsV2) && subagentsV2.enabled === false);
+  if (config.agents?.enabled !== false || !subagentsV2Disabled) {
+    throw new Error('Unsafe Codex subagent configuration. Native subagents must be explicitly disabled before delivery thread startup.');
+  }
 }
 
 function runtimeFiles(env) {
@@ -399,6 +405,7 @@ export class CodexClient extends EventEmitter {
       '-c', `permissions=${tomlValue(this.permissions)}`,
       '-c', `shell_environment_policy=${tomlValue({inherit:'none', set:this.toolEnv})}`,
       '-c', 'allow_login_shell=false', '-c', 'features.plugins=false', '-c', 'features.apps=false',
+      '-c', 'agents.enabled=false', '-c', 'features.multi_agent_v2=false', '-c', 'features.multi_agent=false',
       '-c', 'features.network_proxy=true',
       '-c', 'features.remote_plugin=false', 'app-server', '--listen', 'stdio://'], {
       cwd, env: this.processEnv, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32',
@@ -498,7 +505,8 @@ export class CodexClient extends EventEmitter {
       developerInstructions,
       config: {
         permissions: this.permissions, mcp_servers: mcpServers, web_search: 'disabled',
-        features: { multi_agent: false, apps: false, plugins: false, remote_plugin: false, tool_suggest: false, network_proxy:true },
+        agents: { enabled: false },
+        features: { multi_agent: false, multi_agent_v2: false, apps: false, plugins: false, remote_plugin: false, tool_suggest: false, network_proxy:true },
         allow_login_shell: false,
         shell_environment_policy: { inherit: 'none', set: this.toolEnv },
       },
