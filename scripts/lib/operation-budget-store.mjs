@@ -43,7 +43,7 @@ export class OperationBudgetStore {
     const columns = Object.values(resources).map(({column}) => column);
     const rows = await this.query(`INSERT INTO public.delivery_operation_budgets AS b
       (operation_id,origin_repository_id,source_issue_number,controller_commit,policy_sha256,context_sha256,runtime_sha256,${columns.join(',')})
-      SELECT $1::uuid,$2::bigint,$3::integer,$4,$5,$6,$7,$12::integer,$13::integer,$14::integer,$15::integer,$16::integer
+      SELECT $1::uuid,$2::bigint,$3::integer,$4,$5,$6,$7,$12::integer,$13::integer,$14::integer,$15::integer
       WHERE EXISTS (SELECT 1 FROM public.webhook_controller_receipts AS r WHERE ${fenceMatch})
       ON CONFLICT (origin_repository_id,source_issue_number) DO UPDATE SET operation_id = b.operation_id
       WHERE ${scopeMatch} AND ${columns.map((column,index) => `b.${column} >= $${12+index}::integer`).join(' AND ')}
