@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import path from 'node:path';
-import { resolveValidationProfile } from '../../scripts/lib/validation-profile.mjs';
+import { resolveValidationProfile, requireValidationProfileInputs } from '../../scripts/lib/validation-profile.mjs';
 const origin = { repositoryId: '1368850419', repository: 'agentic-delivery-lab/.github', controllerCommit: 'a'.repeat(40) };
 test('public adapter profile has no pnpm installation or factory metadata checks', () => {
   const profile = resolveValidationProfile(origin);
@@ -58,5 +58,22 @@ test('validation command paths cannot traverse outside a declared input', async 
   const roots = {workspace:path.resolve('fixture-workspace'),controllerRoot:path.resolve('fixture-controller')};
   for (const argument of ['@controller/../../outside','@workspace/../outside','@controller/..\\outside']) {
     assert.throws(() => materializeValidationCommand({argv:['node',argument]}, roots), /within its declared input/);
+  }
+});
+
+test('authority-dependent profiles require their declared input independently of command placeholders', () => {
+  const roots = { workspace: path.resolve('fixture-workspace'), controllerRoot: path.resolve('fixture-controller') };
+  for (const [repositoryId, name, requiredInput] of [
+    ['1380894616', 'agentic-delivery-architecture', 'requirementsSource'],
+    ['1380894656', 'agentic-delivery-agent-customizations', 'architectureSource'],
+    ['1380894756', '.github-private', 'primitiveSource'],
+  ]) {
+    const profile = resolveValidationProfile({ ...origin, repositoryId, repository: `agentic-delivery-lab/${name}` });
+    assert.deepEqual(profile.requiredReadOnlyInputs, [requiredInput]);
+    assert.throws(() => requireValidationProfileInputs(profile, roots), new RegExp(requiredInput));
+    assert.throws(() => requireValidationProfileInputs(profile, { ...roots, [requiredInput]: 'relative/path' }), new RegExp(requiredInput));
+    // This checks the presence contract only; the caller owns provenance and
+    // sandbox mounting, neither of which a unit fixture can establish.
+    assert.doesNotThrow(() => requireValidationProfileInputs(profile, { ...roots, [requiredInput]: path.resolve('admitted-source-fixture') }));
   }
 });

@@ -1022,6 +1022,58 @@ test('unsupported validation identity holds before model execution', async (t) =
   assert.equal(f.calls.prs.length, 0);
 });
 
+for (const [repositoryId, repository, requiredInput] of [
+  ['1380894616', 'agentic-delivery-lab/agentic-delivery-architecture', 'requirementsSource'],
+  ['1380894656', 'agentic-delivery-lab/agentic-delivery-agent-customizations', 'architectureSource'],
+]) {
+  test(`missing ${requiredInput} holds validation admission before model or token work`, async (t) => {
+    const f = await fixture(t);
+    f.dependencies.resolveValidationProfile = ({ controllerCommit }) => resolveValidationProfile({ repositoryId, repository, controllerCommit });
+    // Issue/env data must not provision an authority checkout.
+    f.env.AGENTIC_SOURCE_ROOT_REQUIREMENTS = '/untrusted/requirements';
+    f.env.ARCHITECTURE_REPORT_SCHEMA = '/untrusted/architecture/schema.json';
+    await assert.rejects(f.run(), (error) => error.code === 'VALIDATION_PROFILE_HOLD'
+      && new RegExp(`validation profile.*${requiredInput}`, 'i').test(error.message));
+    assert.equal(f.calls.clients, 0);
+    assert.deepEqual(f.calls.turns, []);
+    assert.deepEqual(f.calls.accessTokenRequests, []);
+    assert.deepEqual(f.calls.prs, []);
+    assert.deepEqual(f.calls.comments, []);
+    const receipts = await operationReceipts(f);
+    assert.equal(receipts.length, 2);
+    for (const receipt of receipts) {
+      assert.equal(receipt.outcome, 'held');
+      assert.equal(receipt.operationId, null);
+      assert.equal(receipt.actor.authorityChecked, false);
+      assert.equal(receipt.failureClass, 'profile');
+      assert.equal(receipt.stopReason, 'validation-profile-readmission');
+      assert.match(receipt.recoveryAction, /operator.*readmit/i);
+    }
+  });
+}
+
+test('missing authority input preserves the saved operation and spent consumption', async (t) => {
+  const f = await fixture(t);
+  f.faults.pauseImplementation = true;
+  await f.run();
+  const stateFile = path.join(f.issueRoot, 'state.json');
+  const saved = await readFile(stateFile, 'utf8');
+  const clients = f.calls.clients;
+  const turns = f.calls.turns.length;
+  const tokens = f.calls.accessTokenRequests.length;
+  const comments = f.calls.comments.length;
+  f.dependencies.resolveValidationProfile = ({ controllerCommit }) => resolveValidationProfile({
+    repositoryId: '1380894616', repository: 'agentic-delivery-lab/agentic-delivery-architecture', controllerCommit,
+  });
+  await assert.rejects(f.resume(), (error) => error.code === 'VALIDATION_PROFILE_HOLD');
+  assert.equal(await readFile(stateFile, 'utf8'), saved);
+  assert.equal(f.calls.clients, clients);
+  assert.equal(f.calls.turns.length, turns);
+  assert.equal(f.calls.accessTokenRequests.length, tokens);
+  assert.equal(f.calls.comments.length, comments);
+  assert.deepEqual(f.calls.prs, []);
+});
+
 test('public validation profile omits dependency installation and factory layout checks', async (t) => {
   const f = await fixture(t);
   f.dependencies.resolveValidationProfile = ({ controllerCommit }) => resolveValidationProfile({ repositoryId:'1368850419', repository:'agentic-delivery-lab/.github', controllerCommit });

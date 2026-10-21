@@ -23,9 +23,19 @@ Existing shadow participants remain shadow; Requirements remains unenrolled. Thi
 integration is not profile admission or evidence of active cross-repository delivery.
 
 Declared controller/workspace paths are resolved from trusted runtime state.
-Additional authority mounts require W12 admission; the private profile holds before
-model startup while its canonical source mount is unavailable. No Issue or
-environment path can supply that mount.
+Authority-dependent profiles declare required read-only inputs: Architecture
+requires Requirements source, Customizations requires the pinned Architecture
+report schema source, and the private adapter requires canonical primitive source.
+The controller checks these declarations before model startup, token issuance or
+protected writes. Missing inputs produce a validation-profile hold and operator
+readmission advice, rather than an availability retry. No Issue or environment
+path can provision them.
+
+The proposal version is `1.0.0-proposed.2`. Presence checks do not prove source
+identity, immutable pins or sandbox mounts. The trusted source resolver and actual
+mount admission remain separate work; this change neither supplies those mounts
+nor enables the dependent profiles. A changed saved profile still requires owner
+readmission without resetting spent operation allowance.
 
 Before admission, real target layouts and selected validators must be exercised.
 Trusted validator/source reproduction,

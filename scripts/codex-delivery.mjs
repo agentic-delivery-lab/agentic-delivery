@@ -1,4 +1,4 @@
-import { resolveValidationProfile, validationProfileReference, matchesValidationProfile, materializeValidationCommand } from './lib/validation-profile.mjs';
+import { resolveValidationProfile, validationProfileReference, matchesValidationProfile, materializeValidationCommand, requireValidationProfileInputs } from './lib/validation-profile.mjs';
 // agentic-primitive: {"id":"codex-delivery-controller","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0009","ADR-0012","ADR-0015","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import { execFile } from 'node:child_process';
 import { appendFile, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises';
@@ -424,6 +424,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   let executionAdmitted = false;
   let admissionRecorded = false;
   let savedStateAdmissionAttempted = false;
+  let earlyProfileAdmissionHeld = false;
   let terminalRecorded = false;
   let issuedTokenRevocationConfirmed = false;
   let receiptFailureCode = null;
@@ -623,8 +624,9 @@ export async function deliver(env = process.env, dependencies = {}) {
     if (!['refine', 'research', 'requirements', 'architecture', 'plan', 'implement', 'resume', 'validate', 'manual', 'coordinate'].includes(deliveryRoute)) throw new Error('Invalid intake route.');
     const controllerCommit = (await execute('git', ['-C', controllerRoot, 'rev-parse', 'HEAD'], { timeout: 30_000 })).stdout.trim();
     validationProfile = (dependencies.resolveValidationProfile ?? resolveValidationProfile)({ repositoryId: originRepositoryId, repository, controllerCommit });
-    // Additional authority mounts require W12 admission; no Issue/env path can
-    // provision them. Private publication holds until that resolver is installed.
+    // Additional authority mounts require trusted admission; no Issue/env path
+    // can provision them. Dependent profiles hold before model/token work.
+    requireValidationProfileInputs(validationProfile, validationInputs);
     for (const command of [...validationProfile.install, ...validationProfile.commands]) {
       materializeValidationCommand(command, validationInputs);
     }
@@ -1573,6 +1575,11 @@ legacy owner-only rule in the base instruction file.`;
     await audit(`## Review pull request ready\n\n${state.pr}\n\n${state.validation}\n\nRequired checks have been requested. Review and merge remain human actions.`);
   } catch (error) {
     receiptFailureCode = ['OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code) ? error.code : null;
+    if (!state && error?.code === 'VALIDATION_PROFILE_HOLD') {
+      // Use the common receipt/cleanup path without trusting saved operation
+      // identity or consumption before profile admission.
+      earlyProfileAdmissionHeld = true;
+    }
     if (!state) throw error;
     await client?.close().catch((failure) => { state.shutdownError = redact(failure.message, env); });
     const awaitingHuman = state.status === 'awaiting-human' && !['OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code);
@@ -1656,7 +1663,7 @@ legacy owner-only rule in the base instruction file.`;
         }
       } finally {
         try {
-          if (state || savedStateAdmissionAttempted) {
+          if (state || savedStateAdmissionAttempted || earlyProfileAdmissionHeld) {
             // An unreadable checkpoint supplies no trusted operation data. Keep
             // its bytes intact and record this attempt with unknown identity.
             const receiptState = state ?? {};

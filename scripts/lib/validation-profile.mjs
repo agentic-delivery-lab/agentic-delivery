@@ -19,10 +19,12 @@ const profiles = [
       ...['control-plane:boundary','traceability:check','migration:check'].map((check) => verify(['pnpm',check])),
       { argv: ['pnpm','audit','--audit-level=high','--ignore-pnpmfile'], timeoutMs: 600_000, sandbox: 'delivery-deps' } ] },
   { repositoryId: '1380894616', name: 'agentic-delivery-architecture', id: 'architecture', install,
+    requiredReadOnlyInputs: ['requirementsSource'],
     commands: factory(['architecture:check','migration:check']) },
   { repositoryId: '1416207421', name: 'agentic-delivery-requirements', id: 'requirements', install,
     commands: factory(['requirements:check']) },
   { repositoryId: '1380894656', name: 'agentic-delivery-agent-customizations', id: 'agent-customizations', install,
+    requiredReadOnlyInputs: ['architectureSource'],
     commands: factory(['primitive:check','migration:check']) },
   { repositoryId: '1380894705', name: 'agentic-delivery-distribution', id: 'distribution', install,
     commands: factory(['distribution:check']) },
@@ -45,7 +47,7 @@ export function resolveValidationProfile({ repositoryId, repository, controllerC
   if (!selected || !/^[a-f0-9]{40}$/.test(controllerCommit ?? '')) {
     throw new Error('The validation profile requires a supported repository identity and immutable controller commit.');
   }
-  const definition = { version: '1.0.0-proposed.1', ...selected };
+  const definition = { version: '1.0.0-proposed.2', ...selected };
   return freeze({ ...structuredClone(definition), controllerCommit,
     contentSha256: createHash('sha256').update(JSON.stringify(definition)).digest('hex') });
 }
@@ -76,4 +78,15 @@ export function materializeValidationCommand(command, { workspace, controllerRoo
     }
     return resolved;
   });
+}
+
+// Presence is an admission prerequisite, not proof of source provenance. The
+// trusted authority resolver must verify and mount these inputs; Issue/env paths
+// cannot provision them. No such resolver is installed by this proposal.
+export function requireValidationProfileInputs(profile, inputs) {
+  for (const name of profile.requiredReadOnlyInputs ?? []) {
+    if (typeof inputs[name] !== 'string' || !path.isAbsolute(inputs[name])) {
+      throw Object.assign(new Error(`The validation profile requires admitted read-only input ${name}; preserve the operation until trusted source admission is available.`), { code: 'VALIDATION_PROFILE_HOLD' });
+    }
+  }
 }
