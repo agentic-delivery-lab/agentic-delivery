@@ -693,3 +693,47 @@ test('routes a changed child issue to its coordinating lineage root', async () =
   assert.ok(calls.some((call) => call.route === '/issues/17'));
   assert.ok(!calls.some((call) => call.method === 'PUT'));
 });
+
+for (const scenario of [
+  { name: 'governance rejection', stage: 'proposal-validation', reasonCode: 'routing-proposal-rejected', nextAction: 'resolve-proposal-and-governance' },
+  { name: 'provider failure', stage: 'semantic-routing', reasonCode: 'semantic-routing-failed', nextAction: 'inspect-routing-and-governance' },
+  { name: 'conversation read failure', stage: 'conversation-read', reasonCode: 'conversation-read-failed', nextAction: 'restore-conversation-read' },
+  { name: 'shadow provider failure', shadow: true, stage: 'semantic-routing', reasonCode: 'semantic-routing-failed', nextAction: 'inspect-routing-and-governance' },
+]) {
+  test(`intake diagnoses ${scenario.name} without availability attribution or raw diagnostics`, async () => {
+    const secret = 'SYNTHETIC_PRIVATE_DIAGNOSTIC_DO_NOT_PUBLISH';
+    const fixture = apiFixture({
+      state: 'open', title: 'Synthetic task', body: 'Synthetic diagnostic fixture.',
+      labels: [{ name: 'type:task' }, { name: 'state:requirements' }, { name: 'adr:needed' }],
+    });
+    const shadowEnv = scenario.shadow ? {
+      PARTICIPANT_MODE: 'shadow', ORIGIN_REPOSITORY_ID: '777777777',
+      CODEX_DELIVERY_APP_ID: '5011055', CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060',
+      CODEX_DELIVERY_APP_PRIVATE_KEY: generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' }),
+    } : {};
+    const result = await classifyAndRoute({
+      env: { GITHUB_REPOSITORY: 'owner/repo', SOURCE_ISSUE: '17', GH_TOKEN: 'synthetic', GITHUB_ACTOR: 'maintainer', ...shadowEnv },
+      event: { action: 'edited', issue: {}, repository: { full_name: 'owner/repo' } },
+      config,
+      fetchImpl: async (url, options) => {
+        if (url.endsWith('/access_tokens')) return Response.json({ token: 'synthetic-shadow', expires_at: '2099-01-01T00:00:00Z' });
+        if (scenario.stage === 'conversation-read' && url.includes('/comments?')) throw new Error(secret);
+        return fixture.fetchImpl(url, options);
+      },
+      reasonRoute: async () => {
+        if (scenario.stage === 'semantic-routing') throw Object.assign(new Error(secret), { code: 'VALIDATION_PROFILE_HOLD' });
+        return { route: 'plan', workType: 'task', lifecycleStage: 'planning', readiness: 'ready',
+          governance: ['adr:needed'], orchestrationPattern: 'implementation-fresh', summary: 'Synthetic plan', message: '' };
+      },
+    });
+    assert.equal(result.route, 'hold');
+    assert.deepEqual(result.metadata.routingFailure, { stage: scenario.stage, reasonCode: scenario.reasonCode, nextAction: scenario.nextAction });
+    const mutations = fixture.calls.filter(({ method }) => method !== 'GET');
+    assert.equal(mutations.length, scenario.shadow ? 0 : 1);
+    if (!scenario.shadow) assert.equal(mutations[0].route, '/issues/17/comments');
+    const outward = JSON.stringify({ result, comment: mutations[0]?.body });
+    assert.doesNotMatch(outward, /after Codex is available|SYNTHETIC_PRIVATE_DIAGNOSTIC_DO_NOT_PUBLISH/);
+    assert.match(outward, /No issue fields changed/);
+    if (scenario.stage !== 'conversation-read') assert.match(outward, /governance/);
+  });
+}

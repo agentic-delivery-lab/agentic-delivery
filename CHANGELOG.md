@@ -561,6 +561,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- Issue intake now distinguishes conversation-read, semantic-routing and proposal-validation failures. Governance rejections no longer recommend waiting for Codex, raw exceptions stay out of comments, and shadow failures remain read-only. This is W22 source work under Issues #105/#111; runtime admission remains separate.
+
 - Control Plane validation allows fifteen minutes for its full test suite while retaining the remaining operation-time limit and profile readmission guard.
 
 - Unreadable saved delivery state now records held admission and terminal attempt receipts with unknown operation data, while preserving the original checkpoint and blocking execution.

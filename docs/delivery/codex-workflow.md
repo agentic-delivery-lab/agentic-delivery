@@ -705,3 +705,18 @@ Review PR CI runs repository code directly as the runner service account; it
 does not inherit the model-tool sandbox. Contributors with repository write
 access remain trusted to change workflows. Do not grant workflow approval to
 unreviewed code simply because the controller's own sandbox checks passed.
+
+## Intake routing failures
+
+Intake holds when conversation reading, semantic routing or deterministic
+proposal validation fails. Its `metadata.routingFailure` records the observed
+stage, a fixed reason code and a next-action identifier. Conversation read
+failures require restoring authorized access. Semantic failures require
+inspecting routing diagnostics and unresolved governance gates. Rejected
+proposals require resolving the proposal and any governance gates before
+rerunning intake. An exception does not prove that Codex is unavailable.
+
+These routing failure comments and result metadata omit raw exception messages.
+Shadow intake records the same safe diagnostics without posting a comment or changing issue fields.
+These diagnostics grant no retry, field-mutation or delivery authority. Runtime
+acceptance of this W22 proposal still requires an admitted Control Plane profile.

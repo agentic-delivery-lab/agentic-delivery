@@ -396,6 +396,7 @@ export async function classifyAndRoute({
     metadata = classifyIssue({ issue, config: effectiveConfig, mode: 'resume', eventKind: 'manual', available });
     metadata.reasons = [...metadata.reasons, 'A repository writer used manual recovery after semantic routing was unavailable.'];
   } else {
+    let routingStage = 'conversation-read';
     try {
       const comments = await issueConversation(api, issueNumber);
       if (issueComment && newerHumanComment(comments, event.comment.id)) {
@@ -405,13 +406,33 @@ export async function classifyAndRoute({
         await writeOutputs(result, env);
         return result;
       }
+      routingStage = 'semantic-routing';
       const proposal = await reasonRoute({ repositoryRoot, issue: { ...issue, comments }, event: { ...event, kind: routingEventKind }, config: effectiveConfig, env });
+      routingStage = 'proposal-validation';
       metadata = validateRoutingProposal({ proposal, issue, event: { ...event, kind: routingEventKind }, config: effectiveConfig, available });
-    } catch (error) {
-      const detail = String(error?.message ?? '').replace(/\s+/g, ' ').trim().slice(0, 500);
-      const message = `Routing could not be decided. No issue fields changed. Next: rerun issue intake after Codex is available.${detail ? `\n\nReason: ${detail}` : ''}`;
+    } catch {
+      // Attribute the failure to the controller-observed stage, never to an
+      // untrusted provider error code or message. An exception alone does not
+      // establish that Codex is unavailable or that governance permits retry.
+      const diagnostics = {
+        'conversation-read': {
+          reasonCode: 'conversation-read-failed', nextAction: 'restore-conversation-read',
+          advice: 'Restore authorized access to the issue conversation before rerunning intake.',
+        },
+        'semantic-routing': {
+          reasonCode: 'semantic-routing-failed', nextAction: 'inspect-routing-and-governance',
+          advice: 'Inspect routing diagnostics and unresolved governance gates before deciding whether to retry.',
+        },
+        'proposal-validation': {
+          reasonCode: 'routing-proposal-rejected', nextAction: 'resolve-proposal-and-governance',
+          advice: 'Resolve the rejected routing proposal and any unresolved governance gates before rerunning intake.',
+        },
+      };
+      const diagnostic = diagnostics[routingStage];
+      const message = `Routing could not be decided. No issue fields changed. Reason: ${diagnostic.reasonCode}. Next: ${diagnostic.advice}`;
       if (!readOnlyRun) await api(`/issues/${issueNumber}/comments`, 'POST', { body: message });
       metadata.route = 'hold';
+      metadata.routingFailure = { stage: routingStage, reasonCode: diagnostic.reasonCode, nextAction: diagnostic.nextAction };
       metadata.reasons = [...metadata.reasons, message];
       const result = resultFor(issue, metadata);
       await writeOutputs(result, env);
