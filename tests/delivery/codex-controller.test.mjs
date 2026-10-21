@@ -1028,6 +1028,7 @@ for (const [repositoryId, repository, requiredInput] of [
 ]) {
   test(`missing ${requiredInput} holds validation admission before model or token work`, async (t) => {
     const f = await fixture(t);
+    appCredentials(f);
     f.dependencies.resolveValidationProfile = ({ controllerCommit }) => resolveValidationProfile({ repositoryId, repository, controllerCommit });
     // Issue/env data must not provision an authority checkout.
     f.env.AGENTIC_SOURCE_ROOT_REQUIREMENTS = '/untrusted/requirements';
@@ -1065,6 +1066,7 @@ test('missing authority input preserves the saved operation and spent consumptio
   f.dependencies.resolveValidationProfile = ({ controllerCommit }) => resolveValidationProfile({
     repositoryId: '1380894616', repository: 'agentic-delivery-lab/agentic-delivery-architecture', controllerCommit,
   });
+  appCredentials(f);
   await assert.rejects(f.resume(), (error) => error.code === 'VALIDATION_PROFILE_HOLD');
   assert.equal(await readFile(stateFile, 'utf8'), saved);
   assert.equal(f.calls.clients, clients);
@@ -1119,9 +1121,13 @@ test('missing saved validation profile holds without provisioning a replacement 
 test('private validation holds while its canonical source input is unavailable', async (t) => {
   const f = await fixture(t);
   f.dependencies.resolveValidationProfile = ({controllerCommit}) => resolveValidationProfile({repositoryId:'1380894756',repository:'agentic-delivery-lab/.github-private',controllerCommit});
-  await assert.rejects(f.run(), /trusted absolute read-only input/);
+  appCredentials(f);
+  await assert.rejects(f.run(), (error) => error.code === 'VALIDATION_PROFILE_HOLD'
+    && /primitiveSource/.test(error.message));
   assert.equal(f.calls.clients,0);
   assert.equal(f.calls.prs.length,0);
+  assert.deepEqual(f.calls.accessTokenRequests, []);
+  assert.deepEqual(f.calls.comments, []);
 });
 
 test('failed validation records its candidate tree and command failure digest', async (t) => {
