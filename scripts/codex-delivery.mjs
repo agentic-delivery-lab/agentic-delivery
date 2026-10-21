@@ -608,6 +608,7 @@ export async function deliver(env = process.env, dependencies = {}) {
     if (stateWasSaved) {
       savedStateAdmissionAttempted = true;
       const saved = await readSavedState(stateFile, issue, repository);
+      admissionHoldSnapshot = saved;
       let reason;
       if (saved.issuedTokenCleanupPending) reason = 'Prior attempt-issued token revocation is unconfirmed; operator reconciliation is required before resumption.';
       else if (!saved.operationId) reason = 'The operation identity is unknown; preserve its source and consumption evidence.';
@@ -636,7 +637,6 @@ export async function deliver(env = process.env, dependencies = {}) {
           recordedAt:new Date(now()).toISOString(),
         });
         receiptFailureCode = 'OPERATION_BUDGET_HOLD';
-        admissionHoldSnapshot = saved;
         await emitOperationReceipt('admission', 'held', saved, false);
         return {status:'paused',reason};
       }

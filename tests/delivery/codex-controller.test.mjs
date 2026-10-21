@@ -1079,6 +1079,7 @@ test('missing authority input preserves the saved operation and spent consumptio
   await f.run();
   const stateFile = path.join(f.issueRoot, 'state.json');
   const saved = await readFile(stateFile, 'utf8');
+  const previousReceipts = new Set((await operationReceipts(f)).map(receipt => JSON.stringify(receipt)));
   const clients = f.calls.clients;
   const turns = f.calls.turns.length;
   const tokens = f.calls.accessTokenRequests.length;
@@ -1088,6 +1089,24 @@ test('missing authority input preserves the saved operation and spent consumptio
   });
   appCredentials(f);
   await assert.rejects(f.resume(), (error) => error.code === 'VALIDATION_PROFILE_HOLD');
+  const heldReceipts = (await operationReceipts(f)).filter(receipt => !previousReceipts.has(JSON.stringify(receipt)));
+  assert.equal(heldReceipts.length, 2);
+  assert.deepEqual(heldReceipts.map(receipt => receipt.stage).sort(), ['admission', 'terminal']);
+  const snapshot = JSON.parse(saved);
+  for (const receipt of heldReceipts) {
+    assert.equal(receipt.operationId, snapshot.operationId);
+    assert.deepEqual(receipt.policy, snapshot.budgetPolicyReference);
+    assert.deepEqual(receipt.activeTime, snapshot.activeTime);
+    assert.deepEqual(receipt.consumption, {
+      controllerAttempts: snapshot.controllerAttemptCount, modelTurns: snapshot.modelTurnCount,
+      validationAttempts: snapshot.validationAttemptCount, toolInvocations: null,
+    });
+    assert.equal(receipt.outcome, 'held');
+    assert.equal(receipt.actor.authorityChecked, false);
+    assert.equal(receipt.failureClass, 'profile');
+    assert.equal(receipt.stopReason, 'validation-profile-readmission');
+    assert.equal(receipt.configuredLimits.modelTurns, 8);
+  }
   assert.equal(await readFile(stateFile, 'utf8'), saved);
   assert.equal(f.calls.clients, clients);
   assert.equal(f.calls.turns.length, turns);

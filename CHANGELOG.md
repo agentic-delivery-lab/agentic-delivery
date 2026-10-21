@@ -563,7 +563,7 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
-- Saved-operation admission holds now write one terminal receipt after cleanup, preserving the saved identity and consumption without modifying the held checkpoint.
+- Saved-operation admission holds now write one terminal receipt after cleanup, preserving the saved identity and consumption without modifying the held checkpoint. Readable checkpoint identity and counters also survive a subsequent validation-profile input hold.
 
 - Missing operation checkpoints now hold before execution when any artifact survives in the operation namespace, including workspaces, journals and unknown files. Non-file checkpoints and uncertain filesystem inspection also hold. Preserved history is not replaced by a new UUID or zero counters; complete local-state loss still requires admitted durable-ledger integration (Issue #105, W08).
 
