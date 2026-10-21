@@ -746,7 +746,27 @@ test('changed policy identity holds before another model client or protected pub
   saved.budgetPolicyReference = { ...currentOperationPolicyReference(), sha256: '0'.repeat(64) };
   await writeFile(path.join(f.issueRoot, 'state.json'), JSON.stringify(saved));
   const clients = f.calls.clients;
+  const previousReceiptIds = new Set((await operationReceipts(f)).map(receipt => JSON.stringify(receipt)));
+  const checkpoint = await readFile(path.join(f.issueRoot, 'state.json'), 'utf8');
   const result = await f.resume();
+  const heldReceipts = (await operationReceipts(f)).filter(receipt => !previousReceiptIds.has(JSON.stringify(receipt)));
+  assert.equal(heldReceipts.length, 2, 'one admission and one terminal receipt per held attempt');
+  assert.deepEqual(heldReceipts.map(receipt => receipt.stage).sort(), ['admission', 'terminal']);
+  for (const receipt of heldReceipts) {
+    assert.equal(receipt.operationId, saved.operationId);
+    assert.deepEqual(receipt.policy, saved.budgetPolicyReference);
+    assert.deepEqual(receipt.consumption, {
+      controllerAttempts: saved.controllerAttemptCount, modelTurns: saved.modelTurnCount,
+      validationAttempts: saved.validationAttemptCount, toolInvocations: null,
+    });
+    assert.equal(receipt.outcome, 'held');
+    assert.equal(receipt.actor.authorityChecked, false);
+    assert.equal(receipt.stopReason, 'policy-readmission');
+  }
+  assert.deepEqual(heldReceipts.find(receipt => receipt.stage === 'terminal').shutdown, {
+    ownedExecutionStopped: true, activeTimeSettled: true, issuedTokenRevocationConfirmed: true,
+  });
+  assert.equal(await readFile(path.join(f.issueRoot, 'state.json'), 'utf8'), checkpoint);
   assert.equal(result.status, 'paused');
   assert.match(result.reason, /budget policy is missing or changed/);
   assert.equal(f.calls.clients, clients);

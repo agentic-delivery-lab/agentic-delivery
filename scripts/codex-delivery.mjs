@@ -450,6 +450,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   let executionAdmitted = false;
   let admissionRecorded = false;
   let savedStateAdmissionAttempted = false;
+  let admissionHoldSnapshot = null;
   let earlyAdmissionHeld = false;
   let terminalRecorded = false;
   let issuedTokenRevocationConfirmed = false;
@@ -635,10 +636,8 @@ export async function deliver(env = process.env, dependencies = {}) {
           recordedAt:new Date(now()).toISOString(),
         });
         receiptFailureCode = 'OPERATION_BUDGET_HOLD';
+        admissionHoldSnapshot = saved;
         await emitOperationReceipt('admission', 'held', saved, false);
-        await emitOperationReceipt('terminal', 'held', saved, false, {
-          ownedExecutionStopped: true, activeTimeSettled: Boolean(saved.activeTime && !saved.activeTime.reservation), issuedTokenRevocationConfirmed: true,
-        });
         return {status:'paused',reason};
       }
     }
@@ -1690,9 +1689,9 @@ legacy owner-only rule in the base instruction file.`;
       } finally {
         try {
           if (state || savedStateAdmissionAttempted || earlyAdmissionHeld) {
-            // An unreadable checkpoint supplies no trusted operation data. Keep
-            // its bytes intact and record this attempt with unknown identity.
-            const receiptState = state ?? {};
+            // A readable admission hold retains its snapshot without adopting
+            // it as writable state. Unreadable checkpoints remain unknown.
+            const receiptState = state ?? admissionHoldSnapshot ?? {};
             if (!admissionRecorded) await emitOperationReceipt('admission', 'held', receiptState, false, null, actor);
             const settled = !activeSegmentStarted || activeTimeSettled;
             const cleanupConfirmed = ownedExecutionStopped && settled && issuedTokenRevocationConfirmed;

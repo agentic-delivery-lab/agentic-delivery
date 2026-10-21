@@ -563,6 +563,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- Saved-operation admission holds now write one terminal receipt after cleanup, preserving the saved identity and consumption without modifying the held checkpoint.
+
 - Missing operation checkpoints now hold before execution when any artifact survives in the operation namespace, including workspaces, journals and unknown files. Non-file checkpoints and uncertain filesystem inspection also hold. Preserved history is not replaced by a new UUID or zero counters; complete local-state loss still requires admitted durable-ledger integration (Issue #105, W08).
 
 - Issue intake now distinguishes conversation-read, semantic-routing and proposal-validation failures. Governance rejections no longer recommend waiting for Codex, raw exceptions stay out of comments, and shadow failures remain read-only. This is W22 source work under Issues #105/#111; runtime admission remains separate.
