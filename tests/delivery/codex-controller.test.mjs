@@ -1405,3 +1405,87 @@ test('inactive saved-comment exits revoke App credentials and preserve unprepare
   assert.equal(f.calls.comments.length,comments);assert.equal(f.calls.clients,clients);
   assert.equal(await readFile(path.join(home,'preserved.txt'),'utf8'),'unprepared input');
 });
+
+
+test('lost checkpoint with retained operation history holds without replacement identity or protected work', async (t) => {
+  const f = await fixture(t);
+  await f.run();
+  const saved = await f.state();
+  const audit = await readFile(path.join(f.issueRoot, 'audit.jsonl'), 'utf8');
+  const priorReceipts = await operationReceipts(f);
+  await rm(path.join(f.issueRoot, 'state.json'));
+  const before = { clients: f.calls.clients, turns: f.calls.turns.length, comments: f.calls.comments.length,
+    tokens: f.calls.accessTokenRequests.length, prs: f.calls.prs.length, commands: f.calls.commands.length };
+  appCredentials(f);
+  await assert.rejects(() => f.resume(), error => error.code === 'OPERATION_BUDGET_HOLD');
+  await assert.rejects(access(path.join(f.issueRoot, 'state.json')));
+  assert.equal(await readFile(path.join(f.issueRoot, 'audit.jsonl'), 'utf8'), audit);
+  assert.equal(f.calls.clients, before.clients);
+  assert.equal(f.calls.turns.length, before.turns);
+  assert.equal(f.calls.comments.length, before.comments);
+  assert.equal(f.calls.accessTokenRequests.length, before.tokens);
+  assert.equal(f.calls.prs.length, before.prs);
+  assert.equal(f.calls.commands.length, before.commands);
+  const receipts = await operationReceipts(f);
+  for (const old of priorReceipts) assert.ok(receipts.some(value => JSON.stringify(value) === JSON.stringify(old)));
+  const held = receipts.filter(value => value.run.id === f.env.GITHUB_RUN_ID);
+  assert.equal(held.length, 2);
+  for (const receipt of held) {
+    assert.equal(receipt.operationId, null);
+    assert.equal(receipt.failureClass, 'budget');
+    assert.equal(receipt.stopReason, 'unknown-consumption');
+    assert.equal(receipt.actor.authorityChecked, false);
+    assert.equal(receipt.consumption.modelTurns, null);
+  }
+  assert.ok(saved.operationId);
+  assert.ok(saved.modelTurnCount > 0);
+});
+
+test('uncertain checkpoint filesystem type holds before profile, token or model work', async (t) => {
+  const f = await fixture(t);
+  await mkdir(path.join(f.issueRoot, 'state.json'), { recursive: true });
+  appCredentials(f);
+  await assert.rejects(() => f.run(), error => error.code === 'OPERATION_BUDGET_HOLD');
+  assert.equal(f.calls.clients, 0);
+  assert.equal(f.calls.accessTokenRequests.length, 0);
+  assert.equal(f.calls.comments.length, 0);
+  assert.equal(f.calls.commands.length, 0);
+  const receipts = await operationReceipts(f);
+  assert.equal(receipts.length, 2);
+  assert.ok(receipts.every(value => value.stopReason === 'unknown-consumption' && value.operationId === null));
+});
+
+
+test('audit evidence alone prevents fresh admission when the checkpoint and receipts are missing', async (t) => {
+  const f = await fixture(t);
+  await mkdir(f.issueRoot, { recursive: true });
+  const audit = '{"schemaVersion":1,"type":"delivery-audit","sourceIssue":7}\n';
+  await writeFile(path.join(f.issueRoot, 'audit.jsonl'), audit);
+  appCredentials(f);
+  await assert.rejects(() => f.run(), error => error.code === 'OPERATION_BUDGET_HOLD');
+  assert.equal(await readFile(path.join(f.issueRoot, 'audit.jsonl'), 'utf8'), audit);
+  await assert.rejects(access(path.join(f.issueRoot, 'state.json')));
+  assert.equal(f.calls.clients, 0);
+  assert.equal(f.calls.accessTokenRequests.length, 0);
+  assert.equal(f.calls.commands.length, 0);
+  assert.equal(f.calls.comments.length, 0);
+  const receipts = await operationReceipts(f);
+  assert.equal(receipts.length, 2);
+  assert.ok(receipts.every(value => value.operationId === null && value.stopReason === 'unknown-consumption'));
+});
+
+
+test('retained workspace without checkpoint or journals cannot be admitted as a fresh operation', async (t) => {
+  const f = await fixture(t);
+  await mkdir(f.workspace, { recursive: true });
+  const artifact = path.join(f.workspace, 'retained-work.txt');
+  await writeFile(artifact, 'preserve this uncertain operation');
+  appCredentials(f);
+  await assert.rejects(() => f.run(), error => error.code === 'OPERATION_BUDGET_HOLD');
+  assert.equal(await readFile(artifact, 'utf8'), 'preserve this uncertain operation');
+  await assert.rejects(access(path.join(f.issueRoot, 'state.json')));
+  assert.equal(f.calls.clients, 0);
+  assert.equal(f.calls.accessTokenRequests.length, 0);
+  assert.equal(f.calls.commands.length, 0);
+  assert.equal(f.calls.comments.length, 0);
+});

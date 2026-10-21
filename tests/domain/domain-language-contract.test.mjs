@@ -51,3 +51,19 @@ test('issue intake artifacts use the registered delivery-governance terms', asyn
     assert.ok(guide.includes(phrase), `missing intake term in delivery guide: ${phrase}`);
   }
 });
+
+
+test('repository validation profiles have a Control Plane meaning distinct from role and capability profiles', async () => {
+  const { parseRepositoryYaml } = await import('../../scripts/lib/yaml.mjs');
+  const register = parseRepositoryYaml(await text('docs/domain/ubiquitous-language.yml'), 'domain register');
+  const term = register.terms.find(value => value.term === 'repository validation profile');
+  assert.ok(term, 'repository validation profile must have a registered meaning');
+  assert.equal(term.context, 'agentic-delivery-control-plane');
+  assert.match(term.definition, /repository identity/);
+  assert.match(term.definition, /command/);
+  assert.match(term.definition, /source input/);
+  const guide = await text('docs/domain/README.md');
+  assert.match(guide, /agent profile.*role/s);
+  assert.match(guide, /capability profile.*capabilities/s);
+  assert.match(guide, /repository validation profile/);
+});

@@ -1,7 +1,7 @@
 import { resolveValidationProfile, validationProfileReference, matchesValidationProfile, materializeValidationCommand, requireValidationProfileInputs } from './lib/validation-profile.mjs';
 // agentic-primitive: {"id":"codex-delivery-controller","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0009","ADR-0012","ADR-0015","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import { execFile } from 'node:child_process';
-import { appendFile, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, unlink, writeFile, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -296,6 +296,32 @@ function failureRecoverability(error, operation) {
 }
 
 async function exists(file) { try { await import('node:fs/promises').then(({ access }) => access(file)); return true; } catch { return false; } }
+// A missing checkpoint is not a fresh operation when local history survives.
+// This local guard cannot prove first use after the entire state root is lost;
+// an admitted durable operation registry is still required for that boundary.
+async function operationCheckpointPresent(stateFile, issueRoot) {
+  const hold = () => Object.assign(new Error('Operation checkpoint or history is uncertain; preserve local evidence and reconcile consumption before readmission.'), { code: 'OPERATION_BUDGET_HOLD' });
+  const observe = async (file) => {
+    try { return await lstat(file); }
+    catch (error) {
+      if (error.code === 'ENOENT') return null;
+      throw hold();
+    }
+  };
+  const checkpoint = await observe(stateFile);
+  if (checkpoint) {
+    if (!checkpoint.isFile()) throw hold();
+    return true;
+  }
+  let artifacts;
+  try { artifacts = await readdir(issueRoot); }
+  catch { throw hold(); }
+  // Retained workspaces, partial journals and unknown files also make fresh
+  // admission uncertain. Do not inspect, delete or reinterpret their contents.
+  if (artifacts.length > 0) throw hold();
+  return false;
+}
+
 async function atomic(file, value) {
   await writeFile(`${file}.next`, JSON.stringify(value, null, 2), { mode: 0o600 });
   await rename(`${file}.next`, file);
@@ -424,7 +450,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   let executionAdmitted = false;
   let admissionRecorded = false;
   let savedStateAdmissionAttempted = false;
-  let earlyProfileAdmissionHeld = false;
+  let earlyAdmissionHeld = false;
   let terminalRecorded = false;
   let issuedTokenRevocationConfirmed = false;
   let receiptFailureCode = null;
@@ -577,7 +603,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   let runtimePrepared = false;
   try {
     await lock.writeFile(JSON.stringify({ runUrl, issue, pid: process.pid }));
-    const stateWasSaved = await exists(stateFile);
+    const stateWasSaved = await operationCheckpointPresent(stateFile, issueRoot);
     if (stateWasSaved) {
       savedStateAdmissionAttempted = true;
       const saved = await readSavedState(stateFile, issue, repository);
@@ -1575,10 +1601,10 @@ legacy owner-only rule in the base instruction file.`;
     await audit(`## Review pull request ready\n\n${state.pr}\n\n${state.validation}\n\nRequired checks have been requested. Review and merge remain human actions.`);
   } catch (error) {
     receiptFailureCode = ['OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code) ? error.code : null;
-    if (!state && error?.code === 'VALIDATION_PROFILE_HOLD') {
-      // Use the common receipt/cleanup path without trusting saved operation
-      // identity or consumption before profile admission.
-      earlyProfileAdmissionHeld = true;
+    if (!state && ['VALIDATION_PROFILE_HOLD','OPERATION_BUDGET_HOLD'].includes(error?.code)) {
+      // Use the common receipt/cleanup path without trusting operation identity
+      // or consumption before checkpoint and profile admission.
+      earlyAdmissionHeld = true;
     }
     if (!state) throw error;
     await client?.close().catch((failure) => { state.shutdownError = redact(failure.message, env); });
@@ -1663,7 +1689,7 @@ legacy owner-only rule in the base instruction file.`;
         }
       } finally {
         try {
-          if (state || savedStateAdmissionAttempted || earlyProfileAdmissionHeld) {
+          if (state || savedStateAdmissionAttempted || earlyAdmissionHeld) {
             // An unreadable checkpoint supplies no trusted operation data. Keep
             // its bytes intact and record this attempt with unknown identity.
             const receiptState = state ?? {};

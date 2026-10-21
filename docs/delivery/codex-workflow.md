@@ -720,3 +720,21 @@ These routing failure comments and result metadata omit raw exception messages.
 Shadow intake records the same safe diagnostics without posting a comment or changing issue fields.
 These diagnostics grant no retry, field-mutation or delivery authority. Runtime
 acceptance of this W22 proposal still requires an admitted Control Plane profile.
+
+## Missing operation checkpoint
+
+Before profile selection or model/token work, the controller checks checkpoint
+presence without treating filesystem inspection errors as absence. A checkpoint
+must be a regular file. If it is missing while any file or directory survives
+in the operation namespace, admission holds. This includes workspaces, partial
+journals and unknown files. Existing
+artifacts stay intact; new admission and terminal receipts record unknown
+identity and consumption. An operator must reconcile the original operation
+before readmission. The controller does not reconstruct counters from receipts
+or create a replacement UUID in this case.
+
+This is a local recovery guard. Loss of the entire state directory still cannot
+be distinguished from first use by this guard. The source-only durable ledger
+must be admitted and integrated with operation admission to close that remaining
+W08 gap; this change does not deploy or activate it. Full native resource bounds
+and compatible state/evidence release admission remain separate requirements.

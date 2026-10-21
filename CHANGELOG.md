@@ -171,6 +171,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Register the controller-owned repository validation profile separately from agent roles and permitted capability profiles; its identity fingerprint does not grant source, mount or runtime admission.
+
 - Delivery evidence version 2 carries the saved operation identity, native repository, proposed policy and consumed allowance at publication. Historical version-1 records remain readable; state-version-5 records cannot omit operation evidence. Unknown tool consumption stays explicit rather than being reported as zero. Active native Issue Field requests now use the remaining operation time instead of a fixed 30-second timeout.
 
 - Central intake and delivery select the reviewed draft66 participant registry through bootstrap `0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80`. The controller includes the strict routing-schema repair; all participants remain in shadow mode. The previous bootstrap remains available for rollback.
@@ -560,6 +562,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) aligns the invocation identity with the registered `Agentic Delivery Lab Invoker 7F3A` GitHub App name, slug, mention, and bot login across the actor catalog, code, tests, and agentic documentation.
 
 ### Fixed
+
+- Missing operation checkpoints now hold before execution when any artifact survives in the operation namespace, including workspaces, journals and unknown files. Non-file checkpoints and uncertain filesystem inspection also hold. Preserved history is not replaced by a new UUID or zero counters; complete local-state loss still requires admitted durable-ledger integration (Issue #105, W08).
 
 - Issue intake now distinguishes conversation-read, semantic-routing and proposal-validation failures. Governance rejections no longer recommend waiting for Codex, raw exceptions stay out of comments, and shadow failures remain read-only. This is W22 source work under Issues #105/#111; runtime admission remains separate.
 

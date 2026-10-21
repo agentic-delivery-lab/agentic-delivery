@@ -24,7 +24,9 @@ function diagnostic({outcome, state, shutdown, failureCode}) {
     if (failureCode === 'VALIDATION_PROFILE_HOLD') {
       failureClass = 'profile'; stopReason = 'validation-profile-readmission';
     } else if (failureCode === 'OPERATION_BUDGET_HOLD') {
-      if (!matchesCurrentOperationPolicy(state.budgetPolicyReference)) {
+      if (!state.operationId) {
+        failureClass = 'budget'; stopReason = 'unknown-consumption';
+      } else if (!matchesCurrentOperationPolicy(state.budgetPolicyReference)) {
         failureClass = 'policy'; stopReason = 'policy-readmission';
       } else {
         failureClass = 'budget';

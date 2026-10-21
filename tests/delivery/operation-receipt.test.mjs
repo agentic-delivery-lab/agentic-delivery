@@ -105,6 +105,7 @@ test('budget stop reasons distinguish limits, missing history and changed policy
     [{validationAttemptCount:3},'validation-attempt-limit'],
     [{activeTime:{version:1,limitMs:1800000,spentMs:1800000,reservation:null}},'active-time-limit'],
     [{modelTurnCount:null},'unknown-consumption'],
+    [{operationId:null,budgetPolicyReference:null},'unknown-consumption'],
     [{budgetPolicyReference:null},'policy-readmission'],
   ]) {
     const value = input();value.outcome='held';value.failureCode='OPERATION_BUDGET_HOLD';
