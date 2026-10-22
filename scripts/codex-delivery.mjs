@@ -281,7 +281,7 @@ export function deliveryExitCode(status) {
 
 function failureRecoverability(error, operation) {
   const message = String(error?.message ?? '');
-  if (['OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code)) return 'owner-action';
+  if (['OPERATION_ADMISSION_HOLD','OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code)) return 'owner-action';
   if (/operation identity is unknown|budget policy pin is unknown|budget policy has changed/i.test(message)) return 'owner-action';
   if (/operation (?:model turn|validation|active time) allowance is exhausted|(?:Model turn|Validation|Active time) consumption is unknown|Active time reservation is unsettled/i.test(message)) {
     return 'owner-action';
@@ -643,6 +643,15 @@ export async function deliver(env = process.env, dependencies = {}) {
     }
     if ((comment || (env.INVOCATION_EVENT === 'true' && env.INVOCATION_EVENT_NAME !== 'issues')) && !stateWasSaved) {
       return {status:'ignored', reason:'No saved continuation state exists for this issue.'};
+    }
+    // These source controls still lack durable/context/runtime admission.
+    // An active participant or environment assertion cannot approve them.
+    // Keep real Actions delivery held before identity allocation, credentials,
+    // model startup or publication until that admission is implemented.
+    if (env.GITHUB_ACTIONS === 'true') {
+      throw Object.assign(new Error('Operation policy and durable/context/runtime bindings are not admitted for Actions delivery; preserve history for interactive operator admission.'), {
+        code: 'OPERATION_ADMISSION_HOLD',
+      });
     }
     const deliveryRoute = env.INTAKE_ROUTE
       || (comment || (env.INVOCATION_EVENT === 'true' && env.INVOCATION_EVENT_NAME !== 'issues') || env.GITHUB_EVENT_NAME === 'workflow_dispatch' ? 'resume' : 'manual');
@@ -1599,15 +1608,15 @@ legacy owner-only rule in the base instruction file.`;
     await save();
     await audit(`## Review pull request ready\n\n${state.pr}\n\n${state.validation}\n\nRequired checks have been requested. Review and merge remain human actions.`);
   } catch (error) {
-    receiptFailureCode = ['OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code) ? error.code : null;
-    if (!state && ['VALIDATION_PROFILE_HOLD','OPERATION_BUDGET_HOLD'].includes(error?.code)) {
+    receiptFailureCode = ['OPERATION_ADMISSION_HOLD','OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code) ? error.code : null;
+    if (!state && ['OPERATION_ADMISSION_HOLD','VALIDATION_PROFILE_HOLD','OPERATION_BUDGET_HOLD'].includes(error?.code)) {
       // Use the common receipt/cleanup path without trusting operation identity
       // or consumption before checkpoint and profile admission.
       earlyAdmissionHeld = true;
     }
     if (!state) throw error;
     await client?.close().catch((failure) => { state.shutdownError = redact(failure.message, env); });
-    const awaitingHuman = state.status === 'awaiting-human' && !['OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code);
+    const awaitingHuman = state.status === 'awaiting-human' && !['OPERATION_ADMISSION_HOLD','OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code);
     const failedOperation = state.phase;
     state.status = awaitingHuman ? 'awaiting-human' : 'paused';
     state.reason = redact(error.message, env);
@@ -1626,7 +1635,7 @@ legacy owner-only rule in the base instruction file.`;
     };
     await save();
     if (!preflightComplete) {
-      if (['OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code)) return {status:state.status,reason:state.reason};
+      if (['OPERATION_ADMISSION_HOLD','OPERATION_BUDGET_HOLD','VALIDATION_PROFILE_HOLD'].includes(error?.code)) return {status:state.status,reason:state.reason};
       throw error;
     }
     const handoff = continuation(state);

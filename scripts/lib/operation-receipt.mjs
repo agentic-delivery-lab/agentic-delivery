@@ -21,7 +21,9 @@ function diagnostic({outcome, state, shutdown, failureCode}) {
   } else if (outcome === 'awaiting-human') {
     failureClass = 'clarification'; stopReason = 'source-clarification-required';
   } else if (outcome === 'held') {
-    if (failureCode === 'VALIDATION_PROFILE_HOLD') {
+    if (failureCode === 'OPERATION_ADMISSION_HOLD') {
+      failureClass = 'policy'; stopReason = 'policy-readmission';
+    } else if (failureCode === 'VALIDATION_PROFILE_HOLD') {
       failureClass = 'profile'; stopReason = 'validation-profile-readmission';
     } else if (failureCode === 'OPERATION_BUDGET_HOLD') {
       if (!state.operationId) {

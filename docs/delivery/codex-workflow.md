@@ -575,6 +575,15 @@ authorized. Concurrent requests cannot exceed the compiled limits; an uncertain
 response stays charged and replaying its key never authorizes execution twice.
 The ledger has no expiry that can replenish the software allowance.
 
+Real GitHub Actions delivery now holds with `OPERATION_ADMISSION_HOLD`
+before a new operation identity, App token, model process or protected write.
+An active participant mode or environment assertion cannot approve the proposed
+policy. The hold writes admission and terminal receipts; a readable saved
+checkpoint retains its identity and consumption without byte changes. An
+unknown fresh operation stays unknown. Offline fixture tests remain available.
+The hold must be replaced by actual trusted durable/context/runtime admission
+and its evidence, rather than removed to make an activation pass.
+
 This adapter and migration are source-only. They are not wired into live
 routing or controller reservations, and the migration has not been applied to a
 hosted database. Global implementation ownership, active-time integration,

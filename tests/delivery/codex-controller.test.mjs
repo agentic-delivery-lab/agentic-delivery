@@ -1528,3 +1528,64 @@ test('retained workspace without checkpoint or journals cannot be admitted as a 
   assert.equal(f.calls.commands.length, 0);
   assert.equal(f.calls.comments.length, 0);
 });
+
+test('unadmitted Actions delivery holds before allocating fresh identity or protected work', async (t) => {
+  const f = await fixture(t);
+  appCredentials(f);
+  f.env.GITHUB_ACTIONS = 'true';
+  f.env.OPERATION_POLICY_APPROVED = 'true';
+  f.env.OPERATION_RUNTIME_ADMITTED = 'true';
+  await assert.rejects(f.run(), (error) => error.code === 'OPERATION_ADMISSION_HOLD');
+  await assert.rejects(access(path.join(f.issueRoot, 'state.json')), /ENOENT/);
+  assert.equal(f.calls.clients, 0);
+  assert.deepEqual(f.calls.turns, []);
+  assert.deepEqual(f.calls.accessTokenRequests, []);
+  assert.deepEqual(f.calls.comments, []);
+  assert.deepEqual(f.calls.prs, []);
+  assert.deepEqual(f.calls.pushHeaders, []);
+  const receipts = await operationReceipts(f);
+  assert.equal(receipts.length, 2);
+  assert.deepEqual(receipts.map(receipt => receipt.stage).sort(), ['admission', 'terminal']);
+  for (const receipt of receipts) {
+    assert.equal(receipt.outcome, 'held');
+    assert.equal(receipt.operationId, null);
+    assert.equal(receipt.configuredLimits, null);
+    assert.equal(receipt.consumption.modelTurns, null);
+    assert.equal(receipt.actor.authorityChecked, false);
+    assert.equal(receipt.failureClass, 'policy');
+    assert.equal(receipt.stopReason, 'policy-readmission');
+    assert.match(receipt.recoveryAction, /operator.*policy.*history/i);
+  }
+});
+
+test('unadmitted Actions resume preserves readable identity, counters and checkpoint bytes', async (t) => {
+  const f = await fixture(t);
+  f.faults.pauseImplementation = true;
+  await f.run();
+  const stateFile = path.join(f.issueRoot, 'state.json');
+  const bytes = await readFile(stateFile, 'utf8');
+  const snapshot = JSON.parse(bytes);
+  const prior = new Set((await operationReceipts(f)).map(receipt => JSON.stringify(receipt)));
+  const before = {clients:f.calls.clients, turns:f.calls.turns.length, tokens:f.calls.accessTokenRequests.length,
+    comments:f.calls.comments.length, prs:f.calls.prs.length, pushes:f.calls.pushHeaders.length};
+  appCredentials(f);
+  f.env.GITHUB_ACTIONS = 'true';
+  await assert.rejects(f.resume(), (error) => error.code === 'OPERATION_ADMISSION_HOLD');
+  assert.equal(await readFile(stateFile, 'utf8'), bytes);
+  assert.deepEqual({clients:f.calls.clients, turns:f.calls.turns.length, tokens:f.calls.accessTokenRequests.length,
+    comments:f.calls.comments.length, prs:f.calls.prs.length, pushes:f.calls.pushHeaders.length}, before);
+  const held = (await operationReceipts(f)).filter(receipt => !prior.has(JSON.stringify(receipt)));
+  assert.equal(held.length, 2);
+  assert.deepEqual(held.map(receipt => receipt.stage).sort(), ['admission', 'terminal']);
+  for (const receipt of held) {
+    assert.equal(receipt.outcome, 'held');
+    assert.equal(receipt.operationId, snapshot.operationId);
+    assert.deepEqual(receipt.policy, snapshot.budgetPolicyReference);
+    assert.deepEqual(receipt.activeTime, snapshot.activeTime);
+    assert.deepEqual(receipt.consumption, {controllerAttempts:snapshot.controllerAttemptCount,
+      modelTurns:snapshot.modelTurnCount,validationAttempts:snapshot.validationAttemptCount,toolInvocations:null});
+    assert.equal(receipt.actor.authorityChecked, false);
+    assert.equal(receipt.failureClass, 'policy');
+    assert.equal(receipt.stopReason, 'policy-readmission');
+  }
+});
