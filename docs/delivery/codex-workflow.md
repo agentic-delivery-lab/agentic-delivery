@@ -500,7 +500,7 @@ action; a subscription reset does not replenish the operation budget.
 
 These two counters are part of W08 implementation, not admission of a complete
 budget policy. Immutable policy pins, live cumulative active-time proof, child
-operation enforcement, transport allowances, concurrency and interruption
+operation enforcement, concurrency and interruption
 proof remain required before active admission. On 2026-10-21 the owner withdrew
 the universal 100-tool hard-limit requirement because supported stock-Codex
 interfaces do not establish that enforcement boundary. Codex remains unmodified;
@@ -513,8 +513,12 @@ start/resume. It checks effective configuration before either thread request;
 enabled or unknown values hold delivery. The legacy `multi_agent=false` setting
 is retained for compatibility. This restricts configured native subagent tools;
 it does not count arbitrary native tool calls or establish an operation-wide
-transport retry ceiling. Those remaining acceptance claims require separate
-evidence. No Codex source or binary is modified.
+transport ceiling. Under the owner's keep/drop direction, the unsupported
+operation-wide eight-transport-attempt requirement is also withdrawn. Supported
+provider retry settings apply to a failed request or stream reconnection, not
+the aggregate number of native requests across model/tool interactions. The
+eight-controller-attempt limit remains distinct and unchanged. No Codex source
+or binary is modified.
 
 Implementation can span multiple model turns within its allowance. A `continue` outcome
 records exact remaining implementation tasks and starts the next turn without
@@ -560,7 +564,8 @@ records or replenish an allowance.
 
 Migration `0009-operation-resource-budgets.sql` and
 `OperationBudgetStore` prepare shared database counters for model turns,
-validation, transport and controller attempts. Initialization requires
+validation and controller attempts. The withdrawn native-transport resource is
+not a counter or configured allowance. Initialization requires
 explicit known consumption and binds one operation to its native repository,
 source Issue, controller, policy, approved-context and runtime fingerprints.
 Another UUID cannot reset the same Issue. Reservations require the exact live
@@ -571,7 +576,7 @@ response stays charged and replaying its key never authorizes execution twice.
 The ledger has no expiry that can replenish the software allowance.
 
 This adapter and migration are source-only. They are not wired into live
-routing or native tool dispatch, and the migration has not been applied to a
+routing or controller reservations, and the migration has not been applied to a
 hosted database. Global implementation ownership, active-time integration,
 all-phase admission still require separate implementation and evidence. The
 withdrawn universal tool budget has no SQL resource or admission gate. Disposable PostgreSQL tests prove SQL counter and
@@ -610,7 +615,7 @@ operation UUID, native repository ID, proposal-policy fingerprint, controller,
 model-turn and validation consumption, and the active-time reservation at the
 publication checkpoint. Tool consumption remains explicitly `null` as unknown
 telemetry; it must not be presented as zero or a configured tool ceiling. The
-proposal-policy version is now `1.0.0-proposed.2`. Saved operations with the old
+proposal-policy version is now `1.0.0-proposed.3`. Saved operations with the old
 fingerprint require readmission without resetting spent allowance. The policy status
 remains proposed. The checkpoint does not claim final shutdown, settled total
 time, merge acceptance or milestone completion. Historical version-1 evidence
@@ -749,5 +754,5 @@ or create a replacement UUID in this case.
 This is a local recovery guard. Loss of the entire state directory still cannot
 be distinguished from first use by this guard. The source-only durable ledger
 must be admitted and integrated with operation admission to close that remaining
-W08 gap; this change does not deploy or activate it. Full native resource bounds
-and compatible state/evidence release admission remain separate requirements.
+W08 gap; this change does not deploy or activate it. Enforcement of the retained
+bounds and compatible state/evidence release admission remain separate requirements.

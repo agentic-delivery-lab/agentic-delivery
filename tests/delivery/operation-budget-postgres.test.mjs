@@ -34,7 +34,7 @@ const client = { query:async (statement,values) => {
   const [header,...lines] = output.split(/\r?\n/);
   const columns = header.split(',');
   return lines.filter(Boolean).map((line) => Object.fromEntries(line.split(',').map((value,index) =>
-    [columns[index], /^(model_turns|validation_attempts|transport_attempts|controller_attempts)$/.test(columns[index]) ? Number(value) : value])));
+    [columns[index], /^(model_turns|validation_attempts|controller_attempts)$/.test(columns[index]) ? Number(value) : value])));
 } };
 const key = (value) => createHash('sha256').update(value).digest('hex');
 
@@ -46,7 +46,7 @@ test('real PostgreSQL budgets fence origin/attempt, serialize limits and survive
   const fence = {replayKey:`budget-fixture:${randomUUID()}`,leaseToken:'123:1',workflowRunId:'123',workflowRunAttempt:1};
   await databaseQuery(`INSERT INTO public.webhook_controller_receipts(replay_key,status,lease_token,lease_expires_at,expires_at,origin_repository,origin_repository_id,source_issue_number,controller_commit,workflow_run_id,workflow_run_attempt) VALUES ($1,'running',$2,clock_timestamp()+interval '5 minutes',clock_timestamp()+interval '1 day','fixture/repo',$3::bigint,$4::integer,$5,$6,$7::integer)`,[fence.replayKey,fence.leaseToken,scope.repositoryId,scope.issue,scope.controllerCommit,fence.workflowRunId,fence.workflowRunAttempt]);
   const store = new OperationBudgetStore({client});
-  const consumed = {model:0,validation:0,transport:0,controller:0};
+  const consumed = {model:0,validation:0,controller:0};
   await store.initialize(scope,consumed,fence);
   assert.equal((await store.reserve({...scope,repositoryId:'102'},'controller',key('wrong-origin'),fence)).allowed,false);
   assert.equal((await store.reserve(scope,'controller',key('wrong-attempt'),{...fence,workflowRunAttempt:2,leaseToken:'123:2'})).allowed,false);
@@ -58,7 +58,9 @@ test('real PostgreSQL budgets fence origin/attempt, serialize limits and survive
   const saved = await restarted.initialize(scope,consumed,fence);
   assert.equal(saved.controller_attempts,8);
   assert.equal(Object.hasOwn(saved, 'tool_invocations'), false);
+  assert.equal(Object.hasOwn(saved, 'transport_attempts'), false);
   await assert.rejects(() => restarted.reserve(scope,'tool',key('withdrawn-tool-budget'),fence), /resource/);
+  await assert.rejects(() => restarted.reserve(scope,'transport',key('withdrawn-native-transport-budget'),fence), /resource/);
   assert.equal((await restarted.reserve(scope,'controller',key('controller-0'),fence)).allowed,false);
   assert.equal((await restarted.reserve(scope,'controller',key('over-limit'),fence)).allowed,false);
   for (const changed of [{policySha256:'e'.repeat(64)},{contextSha256:'e'.repeat(64)},{runtimeSha256:'e'.repeat(64)},{operationId:randomUUID()}]) {
@@ -75,7 +77,7 @@ test('real PostgreSQL budgets fence origin/attempt, serialize limits and survive
   assert.equal((await restarted.reserve(scope,'validation',key('expired-lease'),fence)).allowed,false);
   await databaseQuery(`UPDATE public.webhook_controller_receipts SET lease_expires_at=clock_timestamp()+interval '5 minutes' WHERE replay_key=$1`,[fence.replayKey]);
   assert.equal((await restarted.initialize(scope,consumed,fence)).validation_attempts,0);
-  for (const [resource,remaining] of [['model',7],['validation',3],['transport',8]]) {
+  for (const [resource,remaining] of [['model',7],['validation',3]]) {
     for (let i=0;i<remaining;i++) assert.equal((await restarted.reserve(scope,resource,key(`${resource}-${i}`),fence)).allowed,true);
     assert.equal((await restarted.reserve(scope,resource,key(`${resource}-over`),fence)).allowed,false);
   }

@@ -650,6 +650,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Removed
 
+- Withdraw the unsupported operation-wide native transport ceiling under the owner's stock-software keep/drop direction. Proposed policy `1.0.0-proposed.3`, receipts and source-only SQL omit that allowance; the eight-controller-attempt limit and saved consumption remain. No database migration or runtime admission is activated.
+
 - Withdraw the universal 100-tool hard-limit proposal at the owner's request, retaining stock Codex. Remove its configured ceiling and unused SQL tool resource; retain unknown tool telemetry, supported controls, saved-state recovery and the separate unreadable-checkpoint receipt fix. No deployed database is altered.
 
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) removes superseded task plans and continuation notes after their relevant constraints are incorporated into the consolidated migration plan; their history remains available in Git.

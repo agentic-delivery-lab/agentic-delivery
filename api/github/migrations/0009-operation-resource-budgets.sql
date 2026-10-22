@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS public.delivery_operation_budgets (
   runtime_sha256 text NOT NULL CHECK (runtime_sha256 ~ '^[0-9a-f]{64}$'),
   model_turns integer NOT NULL CHECK (model_turns BETWEEN 0 AND 8),
   validation_attempts integer NOT NULL CHECK (validation_attempts BETWEEN 0 AND 3),
-  transport_attempts integer NOT NULL CHECK (transport_attempts BETWEEN 0 AND 8),
   controller_attempts integer NOT NULL CHECK (controller_attempts BETWEEN 0 AND 8),
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -20,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.delivery_operation_budgets (
 CREATE TABLE IF NOT EXISTS public.delivery_operation_reservations (
   operation_id uuid NOT NULL REFERENCES public.delivery_operation_budgets(operation_id),
   request_key text NOT NULL CHECK (request_key ~ '^[0-9a-f]{64}$'),
-  resource text NOT NULL CHECK (resource IN ('model', 'validation', 'transport', 'controller')),
+  resource text NOT NULL CHECK (resource IN ('model', 'validation', 'controller')),
   receipt_replay_key text NOT NULL,
   lease_token text NOT NULL,
   workflow_run_id text NOT NULL,
