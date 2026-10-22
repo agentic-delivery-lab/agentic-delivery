@@ -475,6 +475,7 @@ export async function deliver(env = process.env, dependencies = {}) {
   let validationProfile;
   const validationInputs = { workspace, controllerRoot };
   let ownedExecutionStopped = false;
+  let executionCleanupConfirmed = false;
   let activeTimeSettled = false;
   const activeOwner = `${env.GITHUB_RUN_ID ?? ''}:${env.GITHUB_RUN_ATTEMPT ?? '1'}`;
   const runUrl = `https://github.com/${repository}/actions/runs/${env.GITHUB_RUN_ID}`;
@@ -1684,6 +1685,7 @@ legacy owner-only rule in the base instruction file.`;
         activeTimeSettled = true;
       }
       await writes;
+      executionCleanupConfirmed = true;
     }
     finally {
       try {
@@ -1723,11 +1725,14 @@ legacy owner-only rule in the base instruction file.`;
             await rm(codexHome, { recursive: true, force: true }).catch(() => {});
           }
           await lock.close();
+          // Receipt persistence can fail after execution cleanup succeeds.
+          // Release ownership only after shutdown, settlement, checkpoint
+          // writes and credential revocation have all been confirmed.
+          if (executionCleanupConfirmed && issuedTokenRevocationConfirmed) await unlink(lockFile);
         }
       }
       if (!issuedTokenRevocationConfirmed) throw new Error('Attempt-issued token revocation could not be confirmed; operator reconciliation is required.');
     }
-    await unlink(lockFile);
   }
 }
 

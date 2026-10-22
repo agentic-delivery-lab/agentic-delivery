@@ -567,6 +567,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- Release the account lock after a terminal receipt-write failure when execution shutdown, active-time settlement, checkpoint writes and token revocation are confirmed; retain recovery files and uncertain ownership.
+
 - Bind the operation-policy identity to the durable budget store and SQL migration. Changing a reservation rule or limit now changes the fingerprint and requires readmission without resetting saved consumption.
 
 - Saved-operation admission holds now write one terminal receipt after cleanup, preserving the saved identity and consumption without modifying the held checkpoint. Readable checkpoint identity and counters also survive a subsequent validation-profile input hold.

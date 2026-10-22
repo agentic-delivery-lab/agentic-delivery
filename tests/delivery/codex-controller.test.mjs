@@ -545,6 +545,41 @@ test('publication retries reject new or edited issue discussion before pushing',
   assert.equal(f.calls.turns.length,previousTurns);
 });
 
+test('terminal receipt failure releases only a confirmed-clean account lock', async (t) => {
+  for (const shutdownUncertain of [false, true]) {
+    await t.test(shutdownUncertain ? 'retain uncertain execution' : 'release stopped execution', async (t) => {
+      const f = await fixture(t);
+      appCredentials(f);
+      f.faults.turnPause = true;
+      f.faults.shutdown = shutdownUncertain;
+      const { writeOperationReceipt } = await import('../../scripts/lib/operation-receipt.mjs');
+      f.dependencies.writeOperationReceipt = async (root, receipt) => {
+        if (receipt.stage === 'terminal') throw new Error('Fixture terminal receipt journal is unwritable');
+        return writeOperationReceipt(root, receipt);
+      };
+      let revoked = 0;
+      const fetchApi = f.dependencies.fetch;
+      f.dependencies.fetch = async (url, options) => {
+        if (url.endsWith('/installation/token') && options.method === 'DELETE') revoked++;
+        return fetchApi(url, options);
+      };
+      await assert.rejects(f.run(), /terminal receipt journal is unwritable/);
+      assert.equal(revoked, 1);
+      const saved = await f.state();
+      assert.equal(saved.status, 'paused');
+      assert.equal(saved.controllerAttemptCount, 1);
+      await access(f.workspace);
+      if (shutdownUncertain) {
+        await access(path.join(f.stateRoot, 'account.lock'));
+        assert.ok(saved.activeTime.reservation);
+      } else {
+        await assert.rejects(access(path.join(f.stateRoot, 'account.lock')), /ENOENT/);
+        assert.equal(saved.activeTime.reservation, null);
+      }
+    });
+  }
+});
+
 test('keeps the account lock when process termination cannot be confirmed', async (t) => {
   const f = await fixture(t); f.faults.turnPause = true; f.faults.shutdown = true;
   await assert.rejects(f.run(),/process group/);
