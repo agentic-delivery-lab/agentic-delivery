@@ -246,7 +246,8 @@ protocol JSON, and hidden runner details are not issue instructions.
 
 ## Continuation state and session correlation
 
-Persisted state is versioned and stores the repository, source issue, delivery
+Persisted state version 5 stores the repository, source issue, stable operation
+UUID, proposed budget-policy fingerprint, validation-profile reference, resource reservations, delivery
 phase, exact Codex session UUID, a waiting comment boundary, consumed comment
 IDs, and a separate execution record. The execution record contains the
 operation, Actions run ID/attempt/URL, recoverability, and redacted failure
@@ -256,6 +257,15 @@ controller saves the returned UUID before the first model turn and resumes
 later runs with `thread/resume` for that exact UUID. It does not use
 `codex resume --last`, a global newest-session lookup, or a new-thread fallback
 when a versioned state is missing or has an unresumable UUID.
+
+The operation UUID is distinct from delivery replay IDs and Codex session IDs.
+Its policy fingerprint binds the declared initial bounds and the relevant
+controller, client, loop and active-time implementation. A changed fingerprint
+requires owner readmission while preserving spent allowance; a missing
+fingerprint or operation identity is held, never initialized on resume. Version
+3 and 4 readers reject the new state version. Rollback still requires a supported
+composition with equivalent resource enforcement. The fingerprint identifies a
+proposal and does not approve its bounds or prove all limits are enforced.
 
 The `awaiting-human` execution status is an intentional boundary, not a failed
 Actions job. The handoff and its `CONTINUE.md` copy expose the same persisted identity:
@@ -448,14 +458,69 @@ if telemetry cannot be read. Five hours describes the subscription window and
 is the normal model-execution boundary, but a secondary window may stop work
 first. Preflight evidence records each returned window separately in the
 Actions job summary and runner log so the limiting window can be identified.
-A turn has no independent absolute duration limit: its 20-minute inactivity
-watchdog starts after `turn/start` acknowledges the active turn. It resets
-whenever the turn produces activity. The 5.5-hour controller timeout and
-350-minute Actions timeout are recovery failsafes. Their gap gives the
-controller time to save a handoff before Actions stops the job. Validation
-repairs are capped at three.
+A turn's 20-minute inactivity watchdog starts after `turn/start` acknowledges
+the active turn and resets whenever the turn produces activity. The candidate
+controller additionally reserves active time and uses the remaining part of
+its 30-minute cumulative allowance as its execution deadline. It limits
+controlled tool, Git, REST-write and active GraphQL request timeouts to that
+remainder. A client timeout does not prove that GitHub rejected a mutation;
+uncertain server outcomes still require readback and reconciliation.
+Settlement waits for confirmed owned execution shutdown; an unsettled prior
+reservation or backward clock evidence causes an inspection hold. Waiting
+between settled attempts does not consume active time. Live interruption and
+deadline enforcement evidence is still required for admission. The 5.5-hour
+pre-admission controller timeout and 350-minute Actions timeout remain recovery
+failsafes. Validation
+Dependency preparation reserves a validation attempt before its first install.
+A successful preparation checkpoint and its final candidate verification share
+that charged attempt. The checkpoint is cleared before verification so an
+interruption cannot start the same verification repeatedly. Failed preparation
+remains charged across resumes; clarification can continue a prepared third
+attempt but cannot allocate a fourth. Validation attempts are capped at three
+for the saved operation, including failed or
+interrupted attempts. The controller saves the reservation before validation
+commands run. Resuming after exhaustion cannot start another allowance, even
+after a manual repair.
 
-Implementation can span multiple model turns in one run. A `continue` outcome
+The saved operation also has a proposed eight-controller-attempt ceiling.
+The attempt reservation is saved with active-time admission before execution,
+including commit or publication retries that require no model turn. A ninth
+attempt holds before publication lookup, push or PR creation. Duplicate and
+ignored events do not start an active segment. This counter is distinct from
+the gateway's per-delivery replay receipts; linking trusted queued redelivery
+to the same operation still requires W10 evidence. The ceiling remains part
+of the proposed budget composition, not activated policy.
+
+The candidate operation limit is eight model turns across attempts and
+resumes. The controller saves each turn reservation before execution; a
+failed or interrupted turn stays charged. A continuation cannot reset either
+counter. Missing consumption history causes a hold for owner inspection
+instead of a new session or a fresh allowance. These stops require owner
+action; a subscription reset does not replenish the operation budget.
+
+These two counters are part of W08 implementation, not admission of a complete
+budget policy. Immutable policy pins, live cumulative active-time proof, child
+operation enforcement, concurrency and interruption
+proof remain required before active admission. On 2026-10-21 the owner withdrew
+the universal 100-tool hard-limit requirement because supported stock-Codex
+interfaces do not establish that enforcement boundary. Codex remains unmodified;
+no replacement hook, broker or native tool counter is introduced. The remaining
+proposed bounds are not activated by this change.
+
+The client disables native subagents through the stock `agents.enabled=false`
+and `features.multi_agent_v2=false` settings at server startup and on thread
+start/resume. It checks effective configuration before either thread request;
+enabled or unknown values hold delivery. The legacy `multi_agent=false` setting
+is retained for compatibility. This restricts configured native subagent tools;
+it does not count arbitrary native tool calls or establish an operation-wide
+transport ceiling. Under the owner's keep/drop direction, the unsupported
+operation-wide eight-transport-attempt requirement is also withdrawn. Supported
+provider retry settings apply to a failed request or stream reconnection, not
+the aggregate number of native requests across model/tool interactions. The
+eight-controller-attempt limit remains distinct and unchanged. No Codex source
+or binary is modified.
+
+Implementation can span multiple model turns within its allowance. A `continue` outcome
 records exact remaining implementation tasks and starts the next turn without
 human intervention. A `complete` outcome must have no remaining tasks or
 questions. Installation, repository verification, audit, commit, push, and
@@ -493,8 +558,78 @@ verified tree again.
 
 Publication retries must still match that verified tree, even if somebody has
 made another clean commit locally. Invalid saved state is left untouched for
-operator inspection. Older state without a source snapshot returns to planning
-before dependent work can continue.
+operator inspection. Older state without policy identity or consumption evidence
+is held for owner inspection. A source snapshot cannot substitute for those
+records or replenish an allowance.
+
+Migration `0009-operation-resource-budgets.sql` and
+`OperationBudgetStore` prepare shared database counters for model turns,
+validation and controller attempts. The withdrawn native-transport resource is
+not a counter or configured allowance. Initialization requires
+explicit known consumption and binds one operation to its native repository,
+source Issue, controller, policy, approved-context and runtime fingerprints.
+Another UUID cannot reset the same Issue. Reservations require the exact live
+controller receipt lease and run attempt. A single statement records a unique
+request and conditionally charges the bounded counter before execution can be
+authorized. Concurrent requests cannot exceed the compiled limits; an uncertain
+response stays charged and replaying its key never authorizes execution twice.
+The ledger has no expiry that can replenish the software allowance.
+
+Real GitHub Actions delivery now holds with `OPERATION_ADMISSION_HOLD`
+before a new operation identity, App token, model process or protected write.
+An active participant mode or environment assertion cannot approve the proposed
+policy. The hold writes admission and terminal receipts; a readable saved
+checkpoint retains its identity and consumption without byte changes. An
+unknown fresh operation stays unknown. Offline fixture tests remain available.
+The hold must be replaced by actual trusted durable/context/runtime admission
+and its evidence, rather than removed to make an activation pass.
+
+This adapter and migration are source-only. They are not wired into live
+routing or controller reservations, and the migration has not been applied to a
+hosted database. Global implementation ownership, active-time integration,
+all-phase admission still require separate implementation and evidence. The
+withdrawn universal tool budget has no SQL resource or admission gate. Disposable PostgreSQL tests prove SQL counter and
+fencing behavior, not Neon transport, runtime interception or activation.
+
+The account execution lock is acquired before App-token minting and saved-state admission. New-task comments are ignored without requesting credentials. The controller persists its active-time and attempt reservation before token minting; credential acquisition and preflight reads use the remaining execution deadline. Preflight failures and ignored inactive-source comments share the same token cleanup scope. They cannot post failure comments before preflight authorization completes. Unknown token-issuance responses or failed revocation retain the checkpoint and lock and require operator reconciliation before another mint. Revocation has a separate bounded cleanup timeout so exhaustion does not prevent cleanup. Runtime paths are removed only after this attempt prepared them.
+
+Version-2 attempt receipts include configured limits only for a matching policy fingerprint. Held outcomes carry a controller-owned failure class, stop reason and an interactive-operator recovery instruction. Provider error text is excluded. Unknown policy limits remain null; receipt diagnostics cannot authorize readmission or replenish consumption. Existing version-1 journal files remain historical observations.
+
+Each owned attempt also writes private version-2 records under
+`operation-receipts/`, validated by
+`docs/architecture/operation-attempt-receipt.schema.json`. Execution admission
+records the checked controller gates before model startup. Terminal records
+follow owned shutdown, time settlement and attempt-issued GitHub token revocation; uncertain
+cleanup records a hold and preserves recovery inputs. A published candidate
+is not accepted software. Admission failure prevents model execution and
+publication; terminal journal failure prevents disposal of the recovery tree.
+Pre-credential budget holds preserve the original state and record unknown
+identity or consumption as null, without creating a fresh allowance.
+
+These are attempt observations, not full activation decisions. Approved
+context remains null pending W12 and tool consumption remains unknown.
+Shutdown flags apply only to this attempt's owned execution, not another
+reservation owner. Journals reject public or redirected directories on POSIX,
+use exclusive temporary files, sync each file and atomically rename it. They
+also sync the directory where Node supports that operation; Windows ACL and
+production storage durability require their own admission evidence. Revocation
+confirmation covers attempt-issued App tokens, including tokens replaced by
+refresh; it does not claim revocation of operator-provided credentials. Failed
+revocation holds the attempt and keeps its recovery tree and account lock.
+The hold persists across resumption before another token can be minted; a new
+provider instance cannot erase an earlier cleanup uncertainty.
+
+State version 5 publishes delivery evidence version 2. The record includes the
+operation UUID, native repository ID, proposal-policy fingerprint, controller,
+model-turn and validation consumption, and the active-time reservation at the
+publication checkpoint. Tool consumption remains explicitly `null` as unknown
+telemetry; it must not be presented as zero or a configured tool ceiling. The
+proposal-policy version is now `1.0.0-proposed.3`. Saved operations with the old
+fingerprint require readmission without resetting spent allowance. The policy status
+remains proposed. The checkpoint does not claim final shutdown, settled total
+time, merge acceptance or milestone completion. Historical version-1 evidence
+remains readable for older state, but version-5 evidence cannot downgrade to
+omit its operation record. Marker and payload versions must agree.
 
 Codex startup and protocol failures publish only allowlisted error codes, HTTP
 status codes, and fixed diagnostic hints. For example, a recognized workspace
@@ -597,3 +732,36 @@ Review PR CI runs repository code directly as the runner service account; it
 does not inherit the model-tool sandbox. Contributors with repository write
 access remain trusted to change workflows. Do not grant workflow approval to
 unreviewed code simply because the controller's own sandbox checks passed.
+
+## Intake routing failures
+
+Intake holds when conversation reading, semantic routing or deterministic
+proposal validation fails. Its `metadata.routingFailure` records the observed
+stage, a fixed reason code and a next-action identifier. Conversation read
+failures require restoring authorized access. Semantic failures require
+inspecting routing diagnostics and unresolved governance gates. Rejected
+proposals require resolving the proposal and any governance gates before
+rerunning intake. An exception does not prove that Codex is unavailable.
+
+These routing failure comments and result metadata omit raw exception messages.
+Shadow intake records the same safe diagnostics without posting a comment or changing issue fields.
+These diagnostics grant no retry, field-mutation or delivery authority. Runtime
+acceptance of this W22 proposal still requires an admitted Control Plane profile.
+
+## Missing operation checkpoint
+
+Before profile selection or model/token work, the controller checks checkpoint
+presence without treating filesystem inspection errors as absence. A checkpoint
+must be a regular file. If it is missing while any file or directory survives
+in the operation namespace, admission holds. This includes workspaces, partial
+journals and unknown files. Existing
+artifacts stay intact; new admission and terminal receipts record unknown
+identity and consumption. An operator must reconcile the original operation
+before readmission. The controller does not reconstruct counters from receipts
+or create a replacement UUID in this case.
+
+This is a local recovery guard. Loss of the entire state directory still cannot
+be distinguished from first use by this guard. The source-only durable ledger
+must be admitted and integrated with operation admission to close that remaining
+W08 gap; this change does not deploy or activate it. Enforcement of the retained
+bounds and compatible state/evidence release admission remain separate requirements.

@@ -1,6 +1,9 @@
 // agentic-primitive: {"id":"harness-architecture-review","kind":"validator","enforcement":"deterministic","adrs":["ADR-0011","ADR-0013"],"domains":["agentic-delivery-governance"]}
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -11,7 +14,11 @@ import { validateArchitecturePin } from '../validate-architecture-pin.mjs';
 
 const execFileAsync = promisify(execFile);
 const ADR_FILE = /^docs\/decisions\/(\d{4})-[a-z0-9-]+\.md$/;
-const EVIDENCE_MARKER = /<!--\s*codex-delivery-evidence:v1\s*([\s\S]*?)\s*-->/i;
+const EVIDENCE_MARKER = /<!--\s*codex-delivery-evidence:v([0-9]+)\s*([\s\S]*?)\s*-->/i;
+const evidenceSchema = JSON.parse(readFileSync(new globalThis.URL('../../docs/architecture/delivery-evidence.schema.json', import.meta.url), 'utf8'));
+const evidenceAjv = new Ajv2020({ strict: false });
+addFormats(evidenceAjv);
+const validateOperationEvidence = evidenceAjv.compile(evidenceSchema.properties.operation);
 const TEXT_EXTENSIONS = new Set(['.md', '.mjs', '.js', '.yml', '.yaml', '.json', '.jsonc', '.toml', '.txt']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHA = /^[0-9a-f]{40}$/i;
@@ -157,10 +164,16 @@ export function matchesPattern(file, pattern) {
 }
 
 export function parseEvidenceMarker(body) {
-  const match = EVIDENCE_MARKER.exec(String(body ?? ''));
-  if (!match) return null;
+  const source = String(body ?? '');
+  const markers = source.match(/<!--\s*codex-delivery-evidence:/gi) ?? [];
+  if (markers.length === 0) return null;
+  if (markers.length !== 1) return { __error: 'Multiple delivery evidence markers are ambiguous.' };
+  const match = EVIDENCE_MARKER.exec(source);
+  if (!match) return { __error: 'Delivery evidence marker is malformed.' };
+  if (![1, 2].includes(Number(match[1]))) return { __error: 'Delivery evidence version is unsupported.' };
   try {
-    const value = JSON.parse(match[1]);
+    const value = JSON.parse(match[2]);
+    if (value?.schemaVersion !== Number(match[1])) return { __error: 'Evidence marker and payload version do not match.' };
     return value && typeof value === 'object' ? value : { __error: 'Evidence marker must contain an object.' };
   } catch {
     return { __error: 'Evidence marker is not valid JSON.' };
@@ -176,14 +189,18 @@ function check(id, status, message, evidence = []) {
   return { id, status, message, evidence };
 }
 
-export function validateEvidenceRecord(value, { repository, issueNumber, head } = {}) {
+export function validateEvidenceRecord(value, { repository, repositoryId, issueNumber, head } = {}) {
   const errors = [];
   const required = ['schemaVersion', 'producer', 'repository', 'sourceIssue', 'deliveryRun', 'revision', 'codexSession', 'modelTurns', 'architectureContext', 'validation', 'auditCheckpoint'];
   if (!value || typeof value !== 'object' || Array.isArray(value)) return { valid: false, errors: ['Evidence must be an object.'] };
   for (const key of required) if (value[key] === undefined) errors.push(`missing ${key}`);
-  const allowed = new Set([...required, 'telemetry']);
+  const allowed = new Set([...required, 'telemetry', ...(value.schemaVersion === 2 ? ['operation'] : [])]);
   for (const key of Object.keys(value)) if (!allowed.has(key)) errors.push(`unexpected property ${key}`);
-  if (value.schemaVersion !== 1) errors.push('schemaVersion must be 1');
+  if (![1, 2].includes(value.schemaVersion)) errors.push('schemaVersion must be 1 or 2');
+  if (value.schemaVersion === 2 && !validateOperationEvidence(value.operation)) errors.push('operation evidence is missing or invalid');
+  if (value.auditCheckpoint?.stateVersion >= 5 && value.schemaVersion !== 2) errors.push('state version 5 requires operation evidence version 2');
+  if (value.operation?.activeTime?.reservation && value.operation.activeTime.reservation.owner !== `${value.deliveryRun?.id}:${value.deliveryRun?.attempt}`) errors.push('operation active-time owner does not match the delivery run');
+  if (value.schemaVersion === 2 && repositoryId !== undefined && value.operation?.repositoryId !== String(repositoryId)) errors.push('operation repository ID does not match the review origin');
   if (value.producer !== 'codex-delivery') errors.push('producer must be codex-delivery');
   if (typeof value.repository !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(value.repository)) errors.push('repository is invalid');
   if (repository && value.repository !== repository) errors.push('repository does not match the review repository');
@@ -256,12 +273,12 @@ async function eventData(eventPath) {
   try { return JSON.parse(await readFile(eventPath, 'utf8')); } catch (error) { throw new Error(`Cannot read pull-request event: ${error.message}`); }
 }
 
-function validateEvidence(value, { repository, issueNumber, head }) {
+function validateEvidence(value, { repository, repositoryId, issueNumber, head }) {
   if (!value) return { status: 'not-applicable', message: 'No Codex delivery evidence marker is present; treat this as a human-created pull request unless other evidence says otherwise.', evidence: [] };
   if (value.__error) return { status: 'fail', message: value.__error, evidence: [] };
-  const result = validateEvidenceRecord(value, { repository, issueNumber, head });
+  const result = validateEvidenceRecord(value, { repository, repositoryId, issueNumber, head });
   if (!result.valid) return { status: 'fail', message: `Evidence marker validation failed: ${result.errors.join('; ')}.`, evidence: [] };
-  return { status: 'pass', message: 'Codex delivery evidence marker is complete and correlated to this revision.', evidence: ['pull-request body:codex-delivery-evidence:v1'] };
+  return { status: 'pass', message: 'Codex delivery evidence marker is complete and correlated to this revision.', evidence: [`pull-request body:codex-delivery-evidence:v${value.schemaVersion}`] };
 }
 
 export async function deterministicReview({
@@ -439,7 +456,7 @@ export async function deterministicReview({
     : check('domain-register-structure', 'pass', 'Every mapped bounded context has a register in the reviewed revision.', ['docs/domain/ubiquitous-language.yml', 'docs/architecture/harness-review.yml']));
   checks.push(check('runtime-context-minimal', 'pass', 'Traceability metadata is kept separate from runtime context selection; semantic review receives affected local ADR evidence and only external ADRs cited in the sanitized pull-request body from the validated Architecture Authority pin.', ['docs/architecture/adr-primitive-index.json', 'scripts/lib/architecture-review-agent.mjs']));
 
-  const evidence = validateEvidence(parseEvidenceMarker(pullRequest.body), { repository, issueNumber, head });
+  const evidence = validateEvidence(parseEvidenceMarker(pullRequest.body), { repository, repositoryId: event.repository?.id, issueNumber, head });
   checks.push(check('delivery-evidence', evidence.status, evidence.message, evidence.evidence));
 
   const reviewWorkflow = '.github/workflows/harness-architecture-review.yml';

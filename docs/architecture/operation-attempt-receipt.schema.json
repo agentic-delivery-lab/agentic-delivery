@@ -1,0 +1,223 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "stage",
+    "operationId",
+    "origin",
+    "actor",
+    "run",
+    "policy",
+    "profile",
+    "consumption",
+    "activeTime",
+    "authorityContext",
+    "outcome",
+    "shutdown",
+    "recordedAt",
+    "priorIssuedTokenCleanupPending",
+    "configuredLimits", "failureClass", "stopReason", "recoveryAction"
+  ],
+  "properties": {
+    "configuredLimits": {"anyOf": [{"type":"null"}, {"type":"object","additionalProperties":false,
+      "required":["activeTimeMs","modelTurns","validationAttempts","childImplementations","recursionDepth","controllerAttempts","concurrentImplementations","automaticBillingOrModelFallback"],
+      "properties": {
+        "activeTimeMs":{"type":"integer","minimum":1},"modelTurns":{"type":"integer","minimum":0},
+        "validationAttempts":{"type":"integer","minimum":0},
+        "childImplementations":{"type":"integer","minimum":0},"recursionDepth":{"type":"integer","minimum":0},
+        "controllerAttempts":{"type":"integer","minimum":0},
+        "concurrentImplementations":{"type":"integer","minimum":1},"automaticBillingOrModelFallback":{"type":"boolean"}
+      }}]},
+    "failureClass": {"enum":[null,"budget","policy","profile","credential-cleanup","shutdown","clarification","execution"]},
+    "stopReason": {"enum":[null,"issued-token-revocation-unconfirmed","execution-or-time-settlement-unconfirmed","source-clarification-required","validation-profile-readmission","policy-readmission","unknown-consumption","active-time-limit","controller-attempt-limit","validation-attempt-limit","model-turn-limit","resource-reservation-unconfirmed","execution-held"]},
+    "recoveryAction": {"anyOf":[{"type":"null"},{"type":"string","minLength":1,"maxLength":512}]},
+    "schemaVersion": {"const": 2},
+    "stage": {"enum": ["admission", "terminal"]},
+    "operationId": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"}
+      ]
+    },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "repositoryId", "issue"],
+      "properties": {
+        "repository": {"type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$"},
+        "repositoryId": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "issue": {"type": "integer", "minimum": 1}
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["login", "authorityChecked"],
+      "properties": {
+        "login": {"anyOf": [{"type": "null"}, {"type": "string", "minLength": 1}]},
+        "authorityChecked": {"type": "boolean"}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "attempt"],
+      "properties": {
+        "id": {"anyOf": [{"type": "null"}, {"type": "string", "pattern": "^[1-9][0-9]*$"}]},
+        "attempt": {"anyOf": [{"type": "null"}, {"type": "string", "pattern": "^[1-9][0-9]*$"}]}
+      }
+    },
+    "policy": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version", "sha256"],
+          "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "version": {"type": "string", "minLength": 1},
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    },
+    "profile": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version", "contentSha256", "controllerCommit"],
+          "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "version": {"type": "string", "minLength": 1},
+            "contentSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "controllerCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+          }
+        }
+      ]
+    },
+    "consumption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["controllerAttempts", "modelTurns", "validationAttempts", "toolInvocations"],
+      "properties": {
+        "controllerAttempts": {"anyOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+        "modelTurns": {"anyOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+        "validationAttempts": {"anyOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+        "toolInvocations": {"type": "null"}
+      }
+    },
+    "activeTime": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["version", "limitMs", "spentMs", "reservation"],
+          "properties": {
+            "version": {"const": 1},
+            "limitMs": {"type": "integer", "minimum": 1},
+            "spentMs": {"type": "integer", "minimum": 0},
+            "reservation": {
+              "anyOf": [
+                {"type": "null"},
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["owner", "startedAtMs"],
+                  "properties": {
+                    "owner": {"type": "string", "pattern": "^[1-9][0-9]*:[1-9][0-9]*$"},
+                    "startedAtMs": {"type": "integer", "minimum": 0}
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "authorityContext": {"type": "null"},
+    "outcome": {"enum": ["admitted", "held", "awaiting-human", "candidate-published", "route-completed"]},
+    "shutdown": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ownedExecutionStopped", "activeTimeSettled", "issuedTokenRevocationConfirmed"],
+          "properties": {
+            "ownedExecutionStopped": {"type": "boolean"},
+            "activeTimeSettled": {"type": "boolean"},
+            "issuedTokenRevocationConfirmed": {"type": "boolean"}
+          }
+        }
+      ]
+    },
+    "recordedAt": {"type": "string", "format": "date-time"},
+    "priorIssuedTokenCleanupPending": {"type": "boolean"}
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Operation attempt receipt v2",
+  "description": "A local attempt observation, not approval of unresolved context, unknown tool consumption, software acceptance or activation.",
+  "allOf": [
+    {
+      "if":{"properties":{"outcome":{"enum":["held","awaiting-human"]}}},
+      "then":{"properties":{"failureClass":{"type":"string"},"stopReason":{"type":"string"},"recoveryAction":{"type":"string"}}},
+      "else":{"properties":{"failureClass":{"type":"null"},"stopReason":{"type":"null"},"recoveryAction":{"type":"null"}}}
+    },
+    {
+      "if": {"properties": {"stage": {"const": "admission"}}},
+      "then": {"properties": {"outcome": {"enum": ["admitted", "held"]}, "shutdown": {"type": "null"}}},
+      "else": {
+        "properties": {
+          "outcome": {"enum": ["held", "awaiting-human", "candidate-published", "route-completed"]},
+          "shutdown": {"type": "object"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"outcome": {"enum": ["admitted", "awaiting-human", "candidate-published", "route-completed"]}}
+      },
+      "then": {
+        "properties": {
+          "operationId": {"type": "string"},
+          "policy": {"type": "object"},
+          "profile": {"type": "object"},
+          "activeTime": {"type": "object"},
+          "actor": {"properties": {"authorityChecked": {"const": true}}},
+          "consumption": {
+            "properties": {
+              "controllerAttempts": {"type": "integer"},
+              "modelTurns": {"type": "integer"},
+              "validationAttempts": {"type": "integer"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"outcome": {"enum": ["candidate-published", "route-completed"]}}},
+      "then": {
+        "properties": {
+          "operationId": {"type": "string"},
+          "shutdown": {
+            "properties": {
+              "ownedExecutionStopped": {"const": true},
+              "activeTimeSettled": {"const": true},
+              "issuedTokenRevocationConfirmed": {"const": true}
+            }
+          },
+          "activeTime": {"type": "object", "properties": {"reservation": {"type": "null"}}}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"priorIssuedTokenCleanupPending": {"const": true}}},
+      "then": {"properties": {"outcome": {"const": "held"}}}
+    }
+  ]
+}

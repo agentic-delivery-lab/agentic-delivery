@@ -69,6 +69,14 @@ checks integrity, not approval; a separately reviewed immutable release must
 supply the policy and expected digest. No live Project read or write path is
 enabled by this proposal.
 
+A `repository validation profile` belongs to the delivery controller. It binds
+validation commands and required source inputs to a participant repository
+identity. An `agent profile` defines an agent role; a `capability profile` defines
+permitted capabilities. A repository validation profile does not grant either
+role or capability authority. Its version and digest identify the proposed
+commands; approved source provenance, read-only mounts and runtime admission
+remain separate checks under ADR-0009 and ADR-0018.
+
 Participant compatibility with the delivery evidence contract is declared as
 SemVer in release and participant metadata. The integer `schemaVersion` inside
 each current delivery evidence record identifies its record format major; it

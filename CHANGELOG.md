@@ -11,6 +11,19 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Issue #105 holds unadmitted GitHub Actions delivery before allocating an operation identity, minting an App token, starting model work or publishing. An active mode or environment flag cannot approve the proposed policy. Held receipts preserve readable saved identity and consumption without changing checkpoint bytes; the source-only durable/context/runtime gate remains required before activation.
+
+- Delivery disables native subagents through stock Codex configuration and holds thread startup or resume when effective settings are enabled or unknown. This does not establish a universal tool counter or operation-wide transport enforcement.
+
+- Version-2 attempt receipts identify configured limits, budget stops and operator recovery actions while excluding provider diagnostics and retaining unknown policy limits as unknown.
+
+- A source-only operation budget ledger proposes durable shared counters bound to native origin, immutable context/runtime fingerprints and a live controller lease. Disposable PostgreSQL verifies limits, concurrent reservations, restart and uncertain-response behavior. No hosted migration or runtime wiring is activated.
+
+- Operation attempts now retain schema-validated admission and terminal records in a private journal. Uncertain shutdown, settlement or attempt-issued token revocation records a hold; unresolved context and tool consumption remain explicit. Journal failure prevents model startup or disposal of recovery inputs.
+
+- W11 proposes identity-bound validation command profiles for all seven factory surfaces, with version/digest evidence and no pnpm installation for either GitHub adapter. The controller binds the selected profile to state version 5, holds missing/changed pins, and records command-result hashes with the candidate tree. Authority-dependent execution holds before model/token work until required Requirements, Architecture or canonical primitive inputs are admitted; environment paths cannot provision them. Profile admission and actual cross-repository delivery remain pending.
+
+- [Issue #105](https://github.com/agentic-delivery-lab/agentic-delivery/issues/105) saves controller-attempt, validation-attempt, model-turn and active-time reservations before execution, retains one operation UUID and proposal fingerprint across continuation and resume, and holds changed policy, missing history or exhausted allowances for owner action. Publication retries share the proposed eight-controller-attempt ceiling. Exhausted resumptions hold before token minting and queued comments; deadline stops retain local evidence without another GitHub write. State version 5 prevents older readers from ignoring mandatory allowance and profile fields. Active time excludes settled clarification waiting and is settled only after confirmed owned shutdown. Controlled command timeouts use the remaining allowance. This is partial W08 implementation: complete policy admission, live deadline, child, transport, concurrency and interruption proof remain outstanding; no participant or proposed budget policy is activated.
 - Issue #60 adds an interactive, owner-only field canary for two fixed repository/Issue identities. It snapshots values, verifies writes, restores original options or absence, and holds on concurrent changes or uncertain restoration. Preview is non-mutating; apply rejects fields already at the test option. A bounded operator test verified absence restoration in two repositories; App-scoped writes and runner admission remain separate acceptance steps.
 
 - Issue #111 prepares a source-pinned migration 0008 transaction plan with an inspected-target fingerprint, short lock/statement limits and rejection of schema changes since inspection. An explicit owner-only hosted workflow mode executes that fixed transaction and independently reads back column and constraint metadata; uncertain outcomes require reconciliation before retry.
@@ -161,6 +174,10 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #107](https://github.com/agentic-delivery-lab/agentic-delivery/issues/107) adds an offline Project planning-context selector bound to a source repository and Issue, comparing repository names case-insensitively while retaining stable numeric and node identities. It uses a versioned policy with a separately supplied SHA-256 pin and explicit Project priority, collapses identical repeated items with case-normalized repository names, and resolves candidate errors independently of API order. It holds on unapproved, inaccessible, or ambiguous candidates without granting execution authority or enabling live Project access.
 
 ### Changed
+
+- Register the controller-owned repository validation profile separately from agent roles and permitted capability profiles; its identity fingerprint does not grant source, mount or runtime admission.
+
+- Delivery evidence version 2 carries the saved operation identity, native repository, proposed policy and consumed allowance at publication. Historical version-1 records remain readable; state-version-5 records cannot omit operation evidence. Unknown tool consumption stays explicit rather than being reported as zero. Active native Issue Field requests now use the remaining operation time instead of a fixed 30-second timeout.
 
 - Central intake and delivery select the reviewed draft66 participant registry through bootstrap `0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80`. The controller includes the strict routing-schema repair; all participants remain in shadow mode. The previous bootstrap remains available for rollback.
 - Future Actions jobs use the official Codex CLI 0.160.0 package with pinned archive and package-tree digests; 0.159.3 remains the rollback version.
@@ -550,6 +567,24 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- Release the account lock after a terminal receipt-write failure when execution shutdown, active-time settlement, checkpoint writes and token revocation are confirmed; retain recovery files and uncertain ownership.
+
+- Bind the operation-policy identity to the durable budget store and SQL migration. Changing a reservation rule or limit now changes the fingerprint and requires readmission without resetting saved consumption.
+
+- Saved-operation admission holds now write one terminal receipt after cleanup, preserving the saved identity and consumption without modifying the held checkpoint. Readable checkpoint identity and counters also survive a subsequent validation-profile input hold.
+
+- Missing operation checkpoints now hold before execution when any artifact survives in the operation namespace, including workspaces, journals and unknown files. Non-file checkpoints and uncertain filesystem inspection also hold. Preserved history is not replaced by a new UUID or zero counters; complete local-state loss still requires admitted durable-ledger integration (Issue #105, W08).
+
+- Issue intake now distinguishes conversation-read, semantic-routing and proposal-validation failures. Governance rejections no longer recommend waiting for Codex, raw exceptions stay out of comments, and shadow failures remain read-only. This is W22 source work under Issues #105/#111; runtime admission remains separate.
+
+- Control Plane validation allows fifteen minutes for its full test suite while retaining the remaining operation-time limit and profile readmission guard.
+
+- Unreadable saved delivery state now records held admission and terminal attempt receipts with unknown operation data, while preserving the original checkpoint and blocking execution.
+
+- App tokens are minted only under the account lock and a persisted time reservation. Early preflight exits revoke known tokens; uncertain issuance blocks fresh credentials and preserves recovery inputs.
+
+- Dependency preparation now reserves a validation attempt before installation. Failed installs retain their charge across resumes; successful preparation and final verification share the same reserved attempt.
+
 - Offline Project selection retains considered identities on success and untrusted supplied identities on failure, and rejects incomplete or undeclared candidate reads so planning gaps remain traceable.
 
 - [Control Plane Bug #111](https://github.com/agentic-delivery-lab/agentic-delivery/issues/111) records the originating repository, source Issue, controller commit, and Actions run identity on the durable receipt before delivery. A trusted workflow-revision finalizer verifies that attribution before completion or retry, including when an older participant pin lacks the finalizer. An empty or unresolved `hold` route remains retryable when its delivery job is skipped. Migration 0008 must be applied before enabling this workflow revision.
@@ -620,6 +655,10 @@ they do not authorize migration, alter that issue's scope, or close it.
 - Paused delivery runs return to planning when the source issue changes, preserve invalid saved state for inspection, and refuse to publish changes that no longer match the verified tree.
 
 ### Removed
+
+- Withdraw the unsupported operation-wide native transport ceiling under the owner's stock-software keep/drop direction. Proposed policy `1.0.0-proposed.3`, receipts and source-only SQL omit that allowance; the eight-controller-attempt limit and saved consumption remain. No database migration or runtime admission is activated.
+
+- Withdraw the universal 100-tool hard-limit proposal at the owner's request, retaining stock Codex. Remove its configured ceiling and unused SQL tool resource; retain unknown tool telemetry, supported controls, saved-state recovery and the separate unreadable-checkpoint receipt fix. No deployed database is altered.
 
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) removes superseded task plans and continuation notes after their relevant constraints are incorporated into the consolidated migration plan; their history remains available in Git.
 
