@@ -25,6 +25,8 @@ const implementations = [
   'scripts/lib/codex-client.mjs',
   'scripts/lib/codex-loop.mjs',
   'scripts/lib/operation-active-time.mjs',
+  'scripts/lib/operation-budget-store.mjs',
+  'api/github/migrations/0009-operation-resource-budgets.sql',
   'scripts/lib/operation-budget-policy.mjs',
 ].map((file) => ({ file, sha256: createHash('sha256').update(readFileSync(path.join(sourceRoot, file))).digest('hex') }));
 const reference = Object.freeze({
