@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
@@ -116,6 +117,27 @@ test('Architecture review rejects mutable or implicit source selection', async (
     validateArchitecturePin({ architectureRoot }),
     (error) => error instanceof ArchitecturePinValidationError && error.exitCode === 2,
   );
+});
+
+test('Architecture digest reproduction works through a symlinked temporary directory', async (t) => {
+  const scratch = await mkdtemp(path.join(os.tmpdir(), 'architecture-pin-temp-alias-'));
+  t.after(() => rm(scratch, { recursive: true, force: true }));
+  const physical = path.join(scratch, 'physical');
+  const alias = path.join(scratch, 'alias');
+  await mkdir(physical);
+  await symlink(physical, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  const pinnedRoot = await pinnedArchitectureCheckout(t, currentArchitectureCommit);
+  const manifest = JSON.parse(await readFile(path.join(pinnedRoot, 'architecture/generated/architecture-release.json'), 'utf8'));
+  const { stdout } = await execFileAsync(process.execPath, [
+    path.join(repositoryRoot, 'scripts/validate-architecture-pin.mjs'),
+    '--architecture-root', pinnedRoot,
+    '--architecture-commit', currentArchitectureCommit,
+    '--architecture-digest', manifest.contentSha256,
+  ], {
+    encoding: 'utf8',
+    env: { ...process.env, TMPDIR: alias, TMP: alias, TEMP: alias },
+  });
+  assert.match(stdout, /Architecture pin passed:/);
 });
 
 test('Architecture pin CLI accepts the pnpm option separator', async (t) => {

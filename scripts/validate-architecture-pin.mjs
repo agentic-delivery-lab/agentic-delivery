@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -70,7 +70,9 @@ async function digestAtCommit(root, commit) {
   const temporaryScript = path.join(temporaryRoot, 'architecture-content-digest.mjs');
   try {
     await writeFile(temporaryScript, source, 'utf8');
-    return (await execFileAsync(process.execPath, [temporaryScript, root, commit], {
+    // Node resolves module paths physically. Use that same path for argv[1]
+    // so the unchanged pinned tool's CLI guard also works through /var aliases.
+    return (await execFileAsync(process.execPath, [await realpath(temporaryScript), root, commit], {
       encoding: 'utf8',
       windowsHide: true,
       maxBuffer: 32 * 1024 * 1024,

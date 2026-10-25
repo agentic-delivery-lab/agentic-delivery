@@ -10,7 +10,9 @@ their original version; this reader does not rewrite them.
 
 The check still requires an immutable commit, the exact checked-out head by
 default, the expected source repository, required paths and policy/tooling
-hashes, and a content digest reproduced by the tool at that commit. A draft
+hashes, and a content digest reproduced by the tool at that commit. The
+unchanged pinned digest script runs through its physical path so Node can
+recognize its CLI entry point when the host temporary directory is a symlink. A draft
 can supply development review evidence. Passing the check does not approve an
 operation context, update controller dependencies, admit a validation profile
 or activate a participant. Issue #106 retains its approved-context gate.
