@@ -134,6 +134,15 @@ jobs:
           path: node_modules/architecture-report-contract
           persist-credentials: false
 
+      - name: Check out the reviewed Architecture pin contract fixtures
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-architecture
+          ref: 59df514a3a6dc8a75b79b3fc75fe61aae4e6fdf3
+          fetch-depth: 0
+          path: node_modules/architecture-pin-contract
+          persist-credentials: false
+
       - name: Exercise offline evaluation routing against the immutable contract
         env:
           EVALUATION_ROUTE_OUTPUT: ${{ runner.temp }}/evaluation-route.json
@@ -174,6 +183,7 @@ jobs:
       - name: Run repository tests
         env:
           EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-report-contract
+          ARCHITECTURE_PIN_TEST_ROOT: ${{ github.workspace }}/node_modules/architecture-pin-contract
         run: pnpm test
 
       - name: Validate changelog structure
@@ -257,9 +267,19 @@ jobs:
           path: node_modules/architecture-report-contract
           persist-credentials: false
 
+      - name: Check out the reviewed Architecture pin contract fixtures
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-architecture
+          ref: 59df514a3a6dc8a75b79b3fc75fe61aae4e6fdf3
+          fetch-depth: 0
+          path: node_modules/architecture-pin-contract
+          persist-credentials: false
+
       - name: Run repository tests
         env:
           EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-report-contract
+          ARCHITECTURE_PIN_TEST_ROOT: ${{ github.workspace }}/node_modules/architecture-pin-contract
         run: pnpm test
 
   inspect-receipt-schema:

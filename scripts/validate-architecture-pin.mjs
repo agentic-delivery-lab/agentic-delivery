@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,19 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const SHA1 = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const DEFAULT_REPOSITORY = 'agentic-delivery-lab/agentic-delivery-architecture';
+// These are complete, reviewed source-contract combinations. Recognizing one
+// for read-only review does not admit it as an operation's runtime context.
+const SUPPORTED_CONTRACT_SETS = [
+  {
+    architectureRelease: '4.0.0', conformance: '1.0.0', adrPrimitiveIndex: '3.0.0',
+    decisionInventory: '1.0.0', architectureArtifacts: '1.0.0',
+  },
+  ...['3.0.0', '4.0.0'].map((adrPrimitiveIndex) => ({
+    architectureRelease: '5.1.0', conformance: '1.0.0', adrPrimitiveIndex,
+    decisionInventory: '1.1.0', architectureArtifacts: '1.0.0',
+    evaluationReport: '2.0.0', requirementsReference: '1.0.0',
+  })),
+];
 const REQUIRED_PATHS = [
   'architecture/generated/architecture-release.json',
   'architecture/generated/adr-primitive-index.json',
@@ -57,7 +70,9 @@ async function digestAtCommit(root, commit) {
   const temporaryScript = path.join(temporaryRoot, 'architecture-content-digest.mjs');
   try {
     await writeFile(temporaryScript, source, 'utf8');
-    return (await execFileAsync(process.execPath, [temporaryScript, root, commit], {
+    // Node resolves module paths physically. Use that same path for argv[1]
+    // so the unchanged pinned tool's CLI guard also works through /var aliases.
+    return (await execFileAsync(process.execPath, [await realpath(temporaryScript), root, commit], {
       encoding: 'utf8',
       windowsHide: true,
       maxBuffer: 32 * 1024 * 1024,
@@ -121,10 +136,10 @@ export async function validateArchitecturePin({
       || release.decisionIds.some((id) => !/^(ADR|ADP|ADD)-\d{4}$/.test(id))) {
       errors.push('Architecture release decisionIds must list versioned decision identifiers');
     }
-    if (release.contractVersions?.architectureRelease !== '4.0.0'
-      || release.contractVersions?.adrPrimitiveIndex !== '3.0.0'
-      || release.contractVersions?.decisionInventory !== '1.0.0'
-      || release.contractVersions?.architectureArtifacts !== '1.0.0') {
+    const versions = release.contractVersions;
+    if (!versions || typeof versions !== 'object' || Array.isArray(versions)
+      || !SUPPORTED_CONTRACT_SETS.some((supported) => Object.keys(versions).length === Object.keys(supported).length
+        && Object.entries(supported).every(([name, version]) => versions[name] === version))) {
       errors.push('Architecture release contract versions are unsupported');
     }
   }

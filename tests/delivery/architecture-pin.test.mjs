@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -9,28 +9,26 @@ import { promisify } from 'node:util';
 import { ArchitecturePinValidationError, validateArchitecturePin } from '../../scripts/validate-architecture-pin.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
-const architectureRoot = path.resolve(repositoryRoot, '../agentic-delivery-architecture');
+const architectureRoot = process.env.ARCHITECTURE_PIN_TEST_ROOT ?? path.resolve(repositoryRoot, '../agentic-delivery-architecture');
+const currentArchitectureCommit = '59df514a3a6dc8a75b79b3fc75fe61aae4e6fdf3';
+const previousArchitectureCommit = '6392c3770219304a78393faac42276e12eb1525f';
 const execFileAsync = promisify(execFile);
 
 async function controllerRelease() {
   return JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
 }
 
-async function pinnedArchitectureCheckout(t, commit) {
-  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-architecture-pin-test-'));
+async function pinnedArchitectureCheckout(t, commit, sourceRoot = architectureRoot) {
+  const fixtureContainer = `${repositoryRoot}.worktrees`;
+  await mkdir(fixtureContainer, { recursive: true });
+  const temporaryRoot = await mkdtemp(path.join(fixtureContainer, 'architecture-pin-test-'));
   t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
-  await execFileAsync('git', ['clone', '--quiet', '--no-local', architectureRoot, temporaryRoot], { encoding: 'utf8' });
+  await execFileAsync('git', ['clone', '--quiet', '--no-local', sourceRoot, temporaryRoot], { encoding: 'utf8' });
   await execFileAsync('git', ['-C', temporaryRoot, 'checkout', '--quiet', '--detach', commit], { encoding: 'utf8' });
   return temporaryRoot;
 }
 
 test('Architecture review pins the exact release, digest, policy, and model sources', async (t) => {
-  try {
-    await readFile(path.join(architectureRoot, 'architecture/generated/architecture-release.json'));
-  } catch {
-    t.skip('Architecture Authority checkout is not available in this workspace');
-    return;
-  }
   const release = await controllerRelease();
   const pinnedRoot = await pinnedArchitectureCheckout(t, release.dependencies.architecture.commit);
   const result = await validateArchitecturePin({
@@ -48,13 +46,55 @@ test('Architecture review pins the exact release, digest, policy, and model sour
   assert.equal(result.reproducedDigest, result.contentSha256);
 });
 
-test('Architecture review fails closed on a mismatched release digest', async (t) => {
-  try {
-    await readFile(path.join(architectureRoot, 'architecture/generated/architecture-release.json'));
-  } catch {
-    t.skip('Architecture Authority checkout is not available in this workspace');
-    return;
+test('Architecture review reproduces both reviewed 5.1 releases with historical and current index contracts', async (t) => {
+  for (const commit of [previousArchitectureCommit, currentArchitectureCommit]) {
+    const pinnedRoot = await pinnedArchitectureCheckout(t, commit);
+    const manifest = JSON.parse(await readFile(path.join(pinnedRoot, 'architecture/generated/architecture-release.json'), 'utf8'));
+    const result = await validateArchitecturePin({
+      architectureRoot: pinnedRoot,
+      architectureCommit: commit,
+      architectureVersion: manifest.version,
+      architectureDigest: manifest.contentSha256,
+    });
+    assert.equal(result.status, 'passed');
+    assert.equal(result.commit, commit);
+    assert.equal(result.reproducedDigest, manifest.contentSha256);
+    assert.equal(manifest.status, 'draft');
+    await assert.rejects(validateArchitecturePin({
+      architectureRoot: pinnedRoot,
+      architectureCommit: commit,
+      architectureDigest: '0'.repeat(64),
+    }), (error) => error instanceof ArchitecturePinValidationError && /requested review pin/.test(error.message));
   }
+});
+
+test('Architecture review rejects mixed, unknown and incomplete contract sets', async (t) => {
+  const pinnedRoot = await pinnedArchitectureCheckout(t, currentArchitectureCommit);
+  const manifestPath = path.join(pinnedRoot, 'architecture/generated/architecture-release.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  for (const mutation of [
+    { architectureRelease: '4.0.0' },
+    { decisionInventory: '1.0.0' },
+    { adrPrimitiveIndex: '99.0.0' },
+    { requirementsReference: undefined },
+    { evaluationReport: '99.0.0' },
+    { unexpectedContract: '1.0.0' },
+  ]) {
+    const changed = structuredClone(manifest);
+    Object.assign(changed.contractVersions, mutation);
+    await writeFile(manifestPath, `${JSON.stringify(changed, null, 2)}\n`);
+    await execFileAsync('git', ['-C', pinnedRoot, 'add', 'architecture/generated/architecture-release.json']);
+    await execFileAsync('git', ['-C', pinnedRoot, '-c', 'user.name=Architecture pin fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Synthetic incompatible contract fixture']);
+    const { stdout } = await execFileAsync('git', ['-C', pinnedRoot, 'rev-parse', 'HEAD']);
+    await assert.rejects(validateArchitecturePin({
+      architectureRoot: pinnedRoot,
+      architectureCommit: stdout.trim(),
+      architectureDigest: manifest.contentSha256,
+    }), (error) => error instanceof ArchitecturePinValidationError && /contract versions are unsupported/.test(error.message));
+  }
+});
+
+test('Architecture review fails closed on a mismatched release digest', async (t) => {
   const release = await controllerRelease();
   const pinnedRoot = await pinnedArchitectureCheckout(t, release.dependencies.architecture.commit);
   await assert.rejects(
@@ -79,13 +119,28 @@ test('Architecture review rejects mutable or implicit source selection', async (
   );
 });
 
+test('Architecture digest reproduction works through a symlinked temporary directory', async (t) => {
+  const scratch = await mkdtemp(path.join(os.tmpdir(), 'architecture-pin-temp-alias-'));
+  t.after(() => rm(scratch, { recursive: true, force: true }));
+  const physical = path.join(scratch, 'physical');
+  const alias = path.join(scratch, 'alias');
+  await mkdir(physical);
+  await symlink(physical, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  const pinnedRoot = await pinnedArchitectureCheckout(t, currentArchitectureCommit);
+  const manifest = JSON.parse(await readFile(path.join(pinnedRoot, 'architecture/generated/architecture-release.json'), 'utf8'));
+  const { stdout } = await execFileAsync(process.execPath, [
+    path.join(repositoryRoot, 'scripts/validate-architecture-pin.mjs'),
+    '--architecture-root', pinnedRoot,
+    '--architecture-commit', currentArchitectureCommit,
+    '--architecture-digest', manifest.contentSha256,
+  ], {
+    encoding: 'utf8',
+    env: { ...process.env, TMPDIR: alias, TMP: alias, TEMP: alias },
+  });
+  assert.match(stdout, /Architecture pin passed:/);
+});
+
 test('Architecture pin CLI accepts the pnpm option separator', async (t) => {
-  try {
-    await readFile(path.join(architectureRoot, 'architecture/generated/architecture-release.json'));
-  } catch {
-    t.skip('Architecture Authority checkout is not available in this workspace');
-    return;
-  }
   const release = await controllerRelease();
   const pinnedRoot = await pinnedArchitectureCheckout(t, release.dependencies.architecture.commit);
   const script = path.join(repositoryRoot, 'scripts/validate-architecture-pin.mjs');
