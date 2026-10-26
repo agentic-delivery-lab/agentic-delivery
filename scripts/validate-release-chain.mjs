@@ -10,7 +10,7 @@ import { parseRepositoryYaml } from './lib/yaml.mjs';
 import { validatePrimitiveSelection, primitiveSelectionMatchesDependency } from './lib/primitive-selection.mjs';
 import { validateEventCatalog } from './lib/event-catalog.mjs';
 import { validateControllerRelease } from './lib/control-plane-contracts.mjs';
-import { validateArchitecturePin } from './validate-architecture-pin.mjs';
+import { supportsArchitectureContracts, validateArchitecturePin } from './validate-architecture-pin.mjs';
 
 const execFileAsync = promisify(execFile);
 const SHA1 = /^[0-9a-f]{40}$/;
@@ -112,12 +112,19 @@ async function validatePreparedSource(repository, sourceCommit, manifestCommit, 
   equal(errors, `${label} prepared-source digest`, reproduced, digest);
 }
 
-async function validateNativeProducerSources({ architectureRoot, primitivesRoot, architectureDependency, primitiveDependency,
-  architectureRelease, primitiveRelease }, errors) {
+function assertNativeProducerContracts(architectureRelease, primitiveRelease) {
   if (primitiveRelease.schemaVersion !== 1 || primitiveRelease.$schema !== '../schemas/primitive-release.schema.json'
     || primitiveRelease.capabilityPolicyVersion !== '0.1.0' || !['draft', 'released'].includes(primitiveRelease.status)) {
     throw new ReleaseChainValidationError('Primitive release contract is unsupported for the native v3 graph');
   }
+  if (architectureRelease.schemaVersion !== 2 || !supportsArchitectureContracts(architectureRelease.contractVersions)) {
+    throw new ReleaseChainValidationError('Architecture release contract versions are unsupported');
+  }
+}
+
+export async function validateNativeProducerSources({ architectureRoot, primitivesRoot, architectureDependency, primitiveDependency,
+  architectureRelease, primitiveRelease }, errors) {
+  assertNativeProducerContracts(architectureRelease, primitiveRelease);
   try {
     await validateArchitecturePin({ architectureRoot, architectureCommit: architectureDependency.commit,
       architectureDigest: architectureDependency.contentSha256, architectureVersion: architectureDependency.version, requireHead: false });
@@ -125,6 +132,7 @@ async function validateNativeProducerSources({ architectureRoot, primitivesRoot,
       architectureRelease.contentSha256, 'tools/architecture-content-digest.mjs', 'Architecture', errors);
     await validatePreparedSource(primitivesRoot, primitiveRelease.sourceCommit, primitiveDependency.commit,
       primitiveRelease.contentSha256, 'tools/primitive-content-digest.mjs', 'Primitive', errors);
+    if (errors.length > 0) return;
     const impact = primitiveRelease.architecture;
     if (impact?.id !== architectureRelease.architectureId || !SHA1.test(impact?.releaseManifestCommit ?? '')
       || !SHA256.test(impact?.releaseManifestSha256 ?? '')
@@ -139,6 +147,7 @@ async function validateNativeProducerSources({ architectureRoot, primitivesRoot,
     const manifest = JSON.parse(rawManifest);
     equal(errors, 'Primitive impact Architecture version', manifest.version, impact.version);
     equal(errors, 'Primitive impact Architecture prepared commit', manifest.sourceCommit, impact.sourceCommit);
+    if (errors.length > 0) return;
     await validateArchitecturePin({ architectureRoot, architectureCommit: impact.releaseManifestCommit,
       architectureDigest: manifest.contentSha256, architectureVersion: impact.version, requireHead: false });
     await validatePreparedSource(architectureRoot, manifest.sourceCommit, impact.releaseManifestCommit,
@@ -289,6 +298,7 @@ export async function validateReleaseChain({
   const primitiveRelease = primitiveDependency?.commit && SHA1.test(primitiveDependency.commit)
     ? await readJsonAtCommit(primitivesRoot, primitiveDependency.commit, 'manifests/primitive-release.json')
     : await readJson(path.join(primitivesRoot, 'manifests/primitive-release.json'));
+  if (native) assertNativeProducerContracts(architectureRelease, primitiveRelease);
   const primitiveLock = parseRepositoryYaml(
     architectureDependency?.commit && SHA1.test(architectureDependency.commit)
       ? await readTextAtCommit(architectureRoot, architectureDependency.commit, 'architecture/references/primitive-catalog.lock.yml')
@@ -433,19 +443,6 @@ export async function validateReleaseChain({
       errors,
     );
   }
-  if (native) {
-    const errorsBeforeProvenance = errors.length;
-    await validateNativeProducerSources({ architectureRoot, primitivesRoot, architectureDependency, primitiveDependency,
-      architectureRelease, primitiveRelease }, errors);
-    if (errors.length !== errorsBeforeProvenance) {
-      throw new ReleaseChainValidationError(`Native producer provenance failed:\n${errors.join('\n')}`);
-    }
-  }
-  const architectureDigest = await digestWith(architectureRoot, 'tools/architecture-content-digest.mjs', architectureDependency.commit, 'Architecture', errors);
-  const primitiveDigest = await digestWith(primitivesRoot, 'tools/primitive-content-digest.mjs', primitiveDependency.commit, 'Primitive', errors);
-  equal(errors, 'Architecture dependency digest', architectureDigest, architectureDependency.contentSha256);
-  equal(errors, 'Primitive dependency digest', primitiveDigest, primitiveDependency.contentSha256);
-
   equal(errors, 'Distribution Control Plane commit', bundle.controlPlane?.commit, controller.commit);
   equal(errors, 'Distribution Architecture commit', bundle.architecture?.commit, architectureDependency.commit);
   equal(errors, 'Distribution Architecture digest', bundle.architecture?.contentSha256, architectureDependency.contentSha256);
@@ -577,6 +574,23 @@ export async function validateReleaseChain({
       }
     }
   }
+
+  // Metadata and projection failures must reject before any producer tool runs.
+  if (native && errors.length > 0) {
+    throw new ReleaseChainValidationError(`Native graph metadata failed:\n${errors.join('\n')}`);
+  }
+  if (native) {
+    const errorsBeforeProvenance = errors.length;
+    await validateNativeProducerSources({ architectureRoot, primitivesRoot, architectureDependency, primitiveDependency,
+      architectureRelease, primitiveRelease }, errors);
+    if (errors.length !== errorsBeforeProvenance) {
+      throw new ReleaseChainValidationError(`Native producer provenance failed:\n${errors.join('\n')}`);
+    }
+  }
+  const architectureDigest = await digestWith(architectureRoot, 'tools/architecture-content-digest.mjs', architectureDependency.commit, 'Architecture', errors);
+  const primitiveDigest = await digestWith(primitivesRoot, 'tools/primitive-content-digest.mjs', primitiveDependency.commit, 'Primitive', errors);
+  equal(errors, 'Architecture dependency digest', architectureDigest, architectureDependency.contentSha256);
+  equal(errors, 'Primitive dependency digest', primitiveDigest, primitiveDependency.contentSha256);
 
   if (errors.length > 0) throw new ReleaseChainValidationError(`release-chain check failed:\n${errors.join('\n')}`);
   return {

@@ -27,6 +27,12 @@ const SUPPORTED_CONTRACT_SETS = [
     evaluationReport: '2.0.0', requirementsReference: '1.0.0',
   })),
 ];
+export function supportsArchitectureContracts(versions) {
+  return Boolean(versions && typeof versions === 'object' && !Array.isArray(versions)
+    && SUPPORTED_CONTRACT_SETS.some(supported => Object.keys(versions).length === Object.keys(supported).length
+      && Object.entries(supported).every(([name, version]) => versions[name] === version)));
+}
+
 const REQUIRED_PATHS = [
   'architecture/generated/architecture-release.json',
   'architecture/generated/adr-primitive-index.json',
@@ -142,9 +148,7 @@ export async function validateArchitecturePin({
       errors.push('Architecture release decisionIds must list versioned decision identifiers');
     }
     const versions = release.contractVersions;
-    if (!versions || typeof versions !== 'object' || Array.isArray(versions)
-      || !SUPPORTED_CONTRACT_SETS.some((supported) => Object.keys(versions).length === Object.keys(supported).length
-        && Object.entries(supported).every(([name, version]) => versions[name] === version))) {
+    if (!supportsArchitectureContracts(versions)) {
       errors.push('Architecture release contract versions are unsupported');
     }
   }

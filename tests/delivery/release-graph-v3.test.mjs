@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
-import { validateReleaseChain } from '../../scripts/validate-release-chain.mjs';
+import { validateNativeProducerSources, validateReleaseChain } from '../../scripts/validate-release-chain.mjs';
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 
 const exec = promisify(execFile);
@@ -180,7 +180,7 @@ test('v3 graph rejects unsupported producer contracts from immutable fixture com
   await assert.rejects(validateReleaseChain(inputs), /Primitive release contract is unsupported/);
 });
 
-test('v3 graph requires impact coverage for the selected Architecture inventory', async (t) => {
+test('native producer provenance rejects a wrong impact inventory hash', async (t) => {
   const inputs = await fixture(t);
   const clone = path.resolve(inputs.controlPlaneRoot, '../uncovered-primitive');
   await exec('git', ['clone', '--quiet', '--shared', inputs.primitivesRoot, clone]);
@@ -196,7 +196,15 @@ test('v3 graph requires impact coverage for the selected Architecture inventory'
   inputs.release.dependencies.primitives.commit = commit;
   inputs.release.compatibility.controllers[0].dependencies.primitives.commit = commit;
   await json(inputs.controlPlaneRoot, 'config/controller-release.json', inputs.release);
-  await assert.rejects(validateReleaseChain(inputs), /impact Architecture inventory/);
+  const architectureRelease = JSON.parse(await git(inputs.architectureRoot, 'show',
+    `${architectureCommit}:architecture/generated/architecture-release.json`));
+  const errors = [];
+  // Exercise the producer proof directly: a mismatched full graph now rejects
+  // at the earlier metadata barrier, before this proof is allowed to run.
+  await validateNativeProducerSources({ architectureRoot: inputs.architectureRoot, primitivesRoot: clone,
+    architectureDependency: inputs.release.dependencies.architecture, primitiveDependency: inputs.release.dependencies.primitives,
+    architectureRelease, primitiveRelease: manifest }, errors);
+  assert.ok(errors.some(error => error.includes('impact Architecture inventory')), errors.join('\n'));
 });
 
 test('v3 graph rejects an unsupported Architecture contract combination', async (t) => {
@@ -216,4 +224,57 @@ test('v3 graph rejects an unsupported Architecture contract combination', async 
   inputs.release.compatibility.controllers[0].dependencies.architecture.commit = commit;
   await json(inputs.controlPlaneRoot, 'config/controller-release.json', inputs.release);
   await assert.rejects(validateReleaseChain(inputs), /contract versions are unsupported/);
+});
+
+// A marker proves rejection precedes executable producer tooling. The script
+// exists only in this owned negative fixture and is never a published tool.
+async function markerProducer(inputs, role) {
+  const architecture = role === 'architecture';
+  const source = architecture ? inputs.architectureRoot : inputs.primitivesRoot;
+  const clone = path.resolve(inputs.controlPlaneRoot, `../marker-${role}`);
+  const marker = path.resolve(inputs.controlPlaneRoot, `../${role}-tool-ran`);
+  await exec('git', ['clone', '--quiet', '--shared', source, clone]);
+  await git(clone, 'checkout', '--quiet', '--detach', architecture ? architectureCommit : primitiveCommit);
+  const tool = architecture ? 'tools/architecture-content-digest.mjs' : 'tools/primitive-content-digest.mjs';
+  const digest = inputs.release.dependencies[architecture ? 'architecture' : 'primitives'].contentSha256;
+  await writeFile(path.join(clone, tool), `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(marker)}, 'executed');\nprocess.stdout.write(${JSON.stringify(digest)});\n`);
+  return { clone, marker };
+}
+async function commitMarker(clone) {
+  await git(clone, 'add', '.');
+  await git(clone, '-c', 'user.name=Synthetic graph fixture', '-c', 'user.email=fixture@example.invalid',
+    'commit', '-qm', 'Synthetic producer execution marker');
+  return (await git(clone, 'rev-parse', 'HEAD')).trim();
+}
+
+test('wrong Primitive manifest digest rejects before executing its digest tool', async t => {
+  const inputs = await fixture(t);
+  const { clone, marker } = await markerProducer(inputs, 'primitives');
+  const file = 'manifests/primitive-release.json';
+  const manifest = JSON.parse(await readFile(path.join(clone, file), 'utf8'));
+  manifest.contentSha256 = 'f'.repeat(64);
+  await json(clone, file, manifest);
+  const commit = await commitMarker(clone);
+  inputs.primitivesRoot = clone;
+  inputs.release.dependencies.primitives.commit = commit;
+  inputs.release.compatibility.controllers[0].dependencies.primitives.commit = commit;
+  await json(inputs.controlPlaneRoot, 'config/controller-release.json', inputs.release);
+  await assert.rejects(validateReleaseChain(inputs), /Primitive release digest/);
+  await assert.rejects(access(marker), { code: 'ENOENT' });
+});
+
+test('impact manifest hash rejects before executing that Architecture digest tool', async t => {
+  const inputs = await fixture(t);
+  const { clone, marker } = await markerProducer(inputs, 'architecture');
+  const commit = await commitMarker(clone);
+  const architectureRelease = JSON.parse(await git(inputs.architectureRoot, 'show', `${architectureCommit}:architecture/generated/architecture-release.json`));
+  const primitiveRelease = JSON.parse(await git(inputs.primitivesRoot, 'show', `${primitiveCommit}:manifests/primitive-release.json`));
+  Object.assign(primitiveRelease.architecture, { releaseManifestCommit: commit, releaseManifestSha256: 'f'.repeat(64),
+    version: architectureRelease.version, sourceCommit: architectureRelease.sourceCommit });
+  const errors = [];
+  await validateNativeProducerSources({ architectureRoot: clone, primitivesRoot: inputs.primitivesRoot,
+    architectureDependency: inputs.release.dependencies.architecture, primitiveDependency: inputs.release.dependencies.primitives,
+    architectureRelease, primitiveRelease }, errors);
+  assert.ok(errors.some(error => error.includes('impact Architecture manifest hash')), errors.join('\n'));
+  await assert.rejects(access(marker), { code: 'ENOENT' });
 });
