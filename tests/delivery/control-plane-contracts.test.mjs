@@ -71,8 +71,13 @@ test('v3 rejects wrong or mixed native identities, incomplete pins and unknown f
 test('v3 closed schema preserves legacy contracts and rejects identity-shape mixing', async () => {
   for (const version of [1, 2]) {
     const file = `schemas/controller-release.v${version}.schema.json`;
-    const { stdout } = await execFileAsync('git', ['-C', repositoryRoot, 'show', `52d1dea2f6259d365723f90ce01d771da802edc9:${file}`]);
-    assert.equal(await readFile(path.join(repositoryRoot, file), 'utf8'), stdout);
+    const blob = async revision => (await execFileAsync('git', ['-C', repositoryRoot, 'rev-parse', `${revision}:${file}`])).stdout.trim();
+    const original = await blob('52d1dea2f6259d365723f90ce01d771da802edc9');
+    assert.equal(await blob('HEAD'), original, 'committed historical schema bytes must remain unchanged');
+    // Git may use CRLF in a Windows checkout. Apply its declared clean filters
+    // while checking the local bytes too; do not relax the immutable blob check.
+    const checkout = await execFileAsync('git', ['-C', repositoryRoot, 'hash-object', `--path=${file}`, file]);
+    assert.equal(checkout.stdout.trim(), original, 'filtered checkout must preserve the exact historical schema blob');
   }
   const schema = JSON.parse(await readFile(path.join(repositoryRoot, 'schemas/controller-release.v3.schema.json'), 'utf8'));
   const check = new Ajv2020({ strict: true }).compile(schema);
