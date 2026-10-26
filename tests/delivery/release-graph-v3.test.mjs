@@ -70,7 +70,7 @@ async function fixture(t) {
   release.compatibility.controllers.unshift({ version: release.version, commit: codeCommit,
     contracts: structuredClone(release.contracts), dependencies: structuredClone(release.dependencies) });
   await json(controlPlaneRoot, 'config/controller-release.json', release);
-  const generatedFrom = { primitiveRelease: primitive.releaseId, primitiveSourceCommit: primitiveCommit,
+  const generatedFrom = { primitiveRepository, primitiveRelease: primitive.releaseId, primitiveSourceCommit: primitiveCommit,
     primitiveContentSha256: primitive.contentSha256, architectureCommit,
     architectureContentSha256: architecture.contentSha256, controlPlaneCommit: codeCommit, automationSourceCommit: codeCommit };
   await json(distributionRoot, 'manifests/workflow-bundle.json', { schemaVersion: 1, status: 'draft', bundleVersion: '0.1.0-synthetic',
@@ -86,14 +86,14 @@ async function fixture(t) {
   await json(distributionRoot, 'manifests/capabilities.lock.json', { schemaVersion: 2,
     primitiveRepository, primitiveRepositoryId: 1380894656, primitiveRelease: primitive.releaseId,
     sourceCommit: primitiveCommit, contentSha256: primitive.contentSha256 });
-  await json(distributionRoot, 'packages/agent-plugin/plugin.json', { generatedFrom });
+  await json(distributionRoot, 'packages/agent-plugin/plugin.json', { schemaVersion: 1, generatedFrom });
   const sourcePath = 'automations/templates/prepare-validation-evidence.automation.md';
   const targetPath = 'packages/agent-plugin/automations/prepare-validation-evidence.automation.md';
   const automation = await git(controlPlaneRoot, 'show', `${codeCommit}:${sourcePath}`);
   await mkdir(path.dirname(path.join(distributionRoot, targetPath)), { recursive: true });
   await writeFile(path.join(distributionRoot, targetPath), automation);
   await json(distributionRoot, 'manifests/automation-projections.lock.json', {
-    canonicalRepository: cpRepository, sourceCommit: codeCommit, projectionRepository: 'agentic-delivery-lab/agentic-delivery-distribution',
+    schemaVersion: 1, canonicalRepository: cpRepository, sourceCommit: codeCommit, projectionRepository: 'agentic-delivery-lab/agentic-delivery-distribution',
     templates: [{ id: 'prepare-validation-evidence', sourceRef: codeCommit, sourcePath, targetPath, contentSha256: hash(automation) }],
   });
   await json(privateRoot, 'provenance/agents.lock.json', { schemaVersion: 2,
@@ -278,4 +278,26 @@ test('impact manifest hash rejects before executing that Architecture digest too
     architectureRelease, primitiveRelease }, errors);
   assert.ok(errors.some(error => error.includes('impact Architecture manifest hash')), errors.join('\n'));
   await assert.rejects(access(marker), { code: 'ENOENT' });
+});
+
+test('v3 graph rejects unknown projection contracts and a stale plugin repository name', async t => {
+  const inputs = await fixture(t);
+  for (const [directory, file] of [
+    [inputs.distributionRoot, 'manifests/workflow-bundle.json'],
+    [inputs.distributionRoot, 'manifests/sources.lock.json'],
+    [inputs.distributionRoot, 'packages/agent-plugin/plugin.json'],
+    [inputs.distributionRoot, 'manifests/automation-projections.lock.json'],
+    [inputs.distributionRoot, 'manifests/capabilities.lock.json'],
+    [inputs.privateRoot, 'provenance/agents.lock.json'],
+  ]) {
+    const original = JSON.parse(await readFile(path.join(directory, file), 'utf8'));
+    await json(directory, file, { ...original, schemaVersion: 99 });
+    await assert.rejects(validateReleaseChain(inputs), /contract version/, file);
+    await json(directory, file, original);
+  }
+  const file = 'packages/agent-plugin/plugin.json';
+  const plugin = JSON.parse(await readFile(path.join(inputs.distributionRoot, file), 'utf8'));
+  plugin.generatedFrom.primitiveRepository = 'agentic-delivery-lab/agentic-delivery-primitives';
+  await json(inputs.distributionRoot, file, plugin);
+  await assert.rejects(validateReleaseChain(inputs), /Agent Plugin Primitive repository/);
 });

@@ -463,8 +463,12 @@ export async function validateReleaseChain({
       equal(errors, `Source lock ${label} repository`, source?.repository, expectedRepository);
       equal(errors, `Source lock ${label} repository ID`, source?.repositoryId, expectedId);
     }
-    equal(errors, 'Capabilities source contract version', capabilities.schemaVersion, 2);
-    equal(errors, 'Private publication source contract version', privateLock.schemaVersion, 2);
+    for (const [label, document, version] of [
+      ['Workflow bundle', bundle, 1], ['Source lock', sourceLock, 1],
+      ['Agent Plugin', plugin, 1], ['Automation projection', automationLock, 1],
+      ['Capabilities source', capabilities, 2], ['Private publication source', privateLock, 2],
+    ]) equal(errors, `${label} contract version`, document.schemaVersion, version);
+    equal(errors, 'Agent Plugin Primitive repository', plugin.generatedFrom?.primitiveRepository, primitiveDependency.repository);
   }
   equal(errors, 'Source lock Control Plane commit', lockedControlPlane?.commit, bundle.controlPlane?.commit);
   equal(errors, 'Source lock Architecture commit', lockedArchitecture?.commit, bundle.architecture?.commit);

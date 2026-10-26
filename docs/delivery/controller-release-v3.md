@@ -48,7 +48,13 @@ bind the declared bootstrap and source commits rather than moving a consumer
 back to a stale graph.
 
 Distribution inventory, bundle, plugin, automation and publication provenance
-must agree with the selected controller and producer pins. Tests of planned
+must agree with the selected controller and producer pins. The native graph
+accepts bundle1, source-lock1, plugin1 and automation-lock1, with capabilities2
+and private-publication2. Unknown schema versions reject even when their
+other fields match. The plugin Primitive repository name must match the
+native dependency; its identity is bound through the source lock. Composition
+tooling comes from the reviewed workflow/source revision, separately from the
+delivery runtime code pin. Tests of planned
 combinations are compatibility fixtures, not proof that those consumers have
 adopted the graph. W16 acceptance still needs the actual accepted source
 combination, wrong-ID/digest/version rejection, installation, managed update,
