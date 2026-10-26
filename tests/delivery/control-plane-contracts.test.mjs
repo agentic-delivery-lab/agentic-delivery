@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
+import Ajv2020 from 'ajv/dist/2020.js';
 
 import { invocationEnvelope } from '../../scripts/lib/agent-invocation.mjs';
 import {
@@ -18,6 +18,86 @@ import { validateControllerRelease as validateReleaseManifest } from '../../scri
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const execFileAsync = promisify(execFile);
+
+async function nativeReleaseFixture() {
+  const { stdout } = await execFileAsync('git', ['-C', repositoryRoot, 'show', '52d1dea2f6259d365723f90ce01d771da802edc9:config/controller-release.json']);
+  const release = JSON.parse(stdout);
+  release.schemaVersion = 3;
+  release.$schema = '../schemas/controller-release.v3.schema.json';
+  release.version = '0.2.0-draft.67';
+  release.dependencies.architecture.repositoryId = 1380894616;
+  release.dependencies.primitives.repository = 'agentic-delivery-lab/agentic-delivery-agent-customizations';
+  release.dependencies.primitives.repositoryId = 1380894656;
+  release.compatibility.controllers.unshift({
+    version: release.version, commit: release.commit,
+    contracts: structuredClone(release.contracts), dependencies: structuredClone(release.dependencies),
+  });
+  return release;
+}
+
+test('v3 binds current native identities and retains exact historical rollback entries', async () => {
+  const release = await nativeReleaseFixture();
+  const before = structuredClone(release);
+  assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
+  assert.deepEqual(release, before);
+  const prior = release.compatibility.controllers[1];
+  assert.equal(controllerPinMatchesRelease(release, {
+    controller: { version: prior.version, commit: prior.commit },
+    contracts: prior.contracts, dependencies: prior.dependencies,
+  }), true);
+});
+
+test('v3 rejects wrong or mixed native identities, incomplete pins and unknown fields', async () => {
+  for (const mutate of [
+    r => { r.dependencies.primitives.repositoryId = '1380894656'; },
+    r => { r.dependencies.primitives.repositoryId = 999999; },
+    r => { r.dependencies.architecture.repositoryId = 1380894656; },
+    r => { delete r.dependencies.architecture.repositoryId; },
+    r => { r.dependencies.primitives.repository = 'agentic-delivery-lab/agentic-delivery-primitives'; },
+    r => { r.dependencies.primitives.contentSha256 = null; },
+    r => { r.dependencies.primitives.unreviewed = true; },
+    r => { r.compatibility.controllers[1].dependencies.primitives.repositoryId = 1380894656; },
+    r => { r.compatibility.controllers[0].dependencies.primitives.commit = 'f'.repeat(40); },
+    r => { r.compatibility.controllers.shift(); },
+    r => { r.unreviewed = true; },
+    r => { r.schemaVersion = 4; },
+  ]) {
+    const release = await nativeReleaseFixture();
+    mutate(release);
+    assert.equal(validateControllerRelease(release).valid, false);
+  }
+});
+
+test('v3 closed schema preserves legacy contracts and rejects identity-shape mixing', async () => {
+  for (const version of [1, 2]) {
+    const file = `schemas/controller-release.v${version}.schema.json`;
+    const { stdout } = await execFileAsync('git', ['-C', repositoryRoot, 'show', `52d1dea2f6259d365723f90ce01d771da802edc9:${file}`]);
+    assert.equal(await readFile(path.join(repositoryRoot, file), 'utf8'), stdout);
+  }
+  const schema = JSON.parse(await readFile(path.join(repositoryRoot, 'schemas/controller-release.v3.schema.json'), 'utf8'));
+  const check = new Ajv2020({ strict: false }).compile(schema);
+  const valid = await nativeReleaseFixture();
+  assert.equal(check(valid), true, JSON.stringify(check.errors));
+  for (const mutate of [
+    r => { r.dependencies.primitives.repositoryId = '1380894656'; },
+    r => { delete r.dependencies.architecture.repositoryId; },
+    r => { r.dependencies.primitives.contentSha256 = null; },
+    r => { r.compatibility.controllers[1].dependencies.primitives.repositoryId = 1380894656; },
+    r => { r.unreviewed = true; },
+  ]) {
+    const invalid = structuredClone(valid);
+    mutate(invalid);
+    assert.equal(check(invalid), false);
+  }
+});
+
+test('malformed v3 history returns validation errors rather than throwing', async () => {
+  const release = await nativeReleaseFixture();
+  delete release.version;
+  delete release.commit;
+  release.compatibility.controllers = [null];
+  assert.equal(validateControllerRelease(release).valid, false);
+});
 
 test('contract schemas are present and self-identifying', async () => {
   for (const file of ['event-envelope.v1.schema.json', 'event-catalog.v1.schema.json', 'participant-registry.v1.schema.json', 'controller-release.v1.schema.json', 'controller-release.v2.schema.json', 'github-app-contract.v1.schema.json', 'github-app-contract.v2.schema.json', 'primitive-selection.v1.schema.json']) {
@@ -75,7 +155,9 @@ test('the checked-in controller release pins every enrolled participant and requ
 });
 
 test('controller release validation rejects pins missing durable invocation receipt runtime', async (t) => {
-  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-release-runtime-'));
+  const fixtureContainer = `${repositoryRoot}.worktrees`;
+  await mkdir(fixtureContainer, { recursive: true });
+  const temporaryRoot = await mkdtemp(path.join(fixtureContainer, 'controller-release-runtime-'));
   t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
   await execFileAsync('git', ['clone', '--quiet', '--shared', '--no-checkout', repositoryRoot, temporaryRoot], { encoding: 'utf8' });
   await mkdir(path.join(temporaryRoot, 'config'), { recursive: true });

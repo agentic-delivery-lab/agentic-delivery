@@ -11,6 +11,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Controller release contract v3 binds current Architecture and AgentCustomizations pins to native numeric repository IDs and immutable digests while retaining exact historical rollback entries. Primitive selection crosses this typed boundary explicitly; metadata does not migrate enrollment or approve runtime admission.
+
 - Issue #105 holds unadmitted GitHub Actions delivery before allocating an operation identity, minting an App token, starting model work or publishing. An active mode or environment flag cannot approve the proposed policy. Held receipts preserve readable saved identity and consumption without changing checkpoint bytes; the source-only durable/context/runtime gate remains required before activation.
 
 - Delivery disables native subagents through stock Codex configuration and holds thread startup or resume when effective settings are enabled or unknown. This does not establish a universal tool counter or operation-wide transport enforcement.
