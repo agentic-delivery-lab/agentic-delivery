@@ -5,6 +5,8 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
+import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
+
 import { ReleaseChainValidationError, validateBootstrapWorkflowPins, validateReleaseChain, primitiveLocatorForVersion } from '../../scripts/validate-release-chain.mjs';
 
 test('release-name migration admits only the declared versioned locator and unchanged native ID', () => {
@@ -81,7 +83,12 @@ test('the pinned workflow source contains the validator and reusable workflow en
   }
   await assert.doesNotReject(() => validateReleaseChain({ controlPlaneRoot: repositoryRoot, ...siblingRoots }));
   const workflow = await readFile(path.join(siblingRoots.privateRoot, '.github/workflows/validate-published-agents.yml'), 'utf8');
-  assert.match(workflow, /agentic-delivery-primitives/);
+  const publication = JSON.parse(await readFile(path.join(siblingRoots.privateRoot, 'provenance/agents.lock.json'), 'utf8'));
+  const parsed = parseRepositoryYaml(workflow, 'private publication workflow');
+  const canonicalCheckouts = Object.values(parsed.jobs ?? {}).flatMap(job => job.steps ?? [])
+    .filter(step => step.uses?.startsWith('actions/checkout@') && step.with?.path === 'primitives');
+  assert.equal(canonicalCheckouts.length, 1);
+  assert.equal(canonicalCheckouts[0].with.repository, publication.canonicalRepository);
   assert.match(workflow, /steps\.provenance\.outputs\.source_commit/);
   assert.match(workflow, /--primitive-root primitives/);
 });
