@@ -25,7 +25,7 @@ import {
 import { handleWebhook, webhookHandler } from '../../api/github/webhook.mjs';
 import { prepareAgentInvocation } from '../../scripts/prepare-agent-invocation.mjs';
 import { NeonReplayStore } from '../../scripts/lib/neon-replay-store.mjs';
-import { parseParticipantRegistry } from '../../scripts/lib/participant-registry.mjs';
+import { loadParticipantRegistry, parseParticipantRegistry, participantForRepository } from '../../scripts/lib/participant-registry.mjs';
 import { InMemoryReplayStore, validateReceivedAt } from '../../scripts/lib/replay-protection.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
@@ -449,10 +449,12 @@ test('webhook authorizes a tagged writer and dispatches only immutable metadata'
   assert.equal(envelope.actor.login, 'sjefsharp');
   assert.equal(envelope.body_digest.length, 64);
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
-  assert.deepEqual(envelope.controller, {
-    version: release.version,
-    commit: release.commit,
-  });
+  const registry = await loadParticipantRegistry(repositoryRoot);
+  assert.equal(registry.valid, true);
+  const participant = participantForRepository(registry, envelope.repository_id);
+  assert.deepEqual(envelope.controller, participant.controller);
+  // Publishing a newer release does not silently change enrollment.
+  assert.notDeepEqual(envelope.controller, { version: release.version, commit: release.commit });
   assert.equal(Object.keys(envelope).length, 17);
   assert.match(envelope.received_at, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(envelope.organization_id, '327861320');

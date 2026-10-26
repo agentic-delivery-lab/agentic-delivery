@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -208,26 +208,17 @@ test('dispatch normalizer writes a separate event file for pinned readers', asyn
 
 test('normalized events pass invocation, observation, and finalizer readers at their immutable pins', async (t) => {
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
-  const workspace = await mkdtemp(path.join(repositoryRoot, '.rdr-'));
+  const container = `${repositoryRoot}.worktrees`;
+  await mkdir(container, { recursive: true });
+  const workspace = await mkdtemp(path.join(container, 'pinned-dispatch-readers-'));
   const invocationRoot = path.join(workspace, 'invocation');
   const observationRoot = path.join(workspace, 'observation');
-  const worktrees = [];
-  t.after(async () => {
-    let cleanupError;
-    for (const worktree of worktrees.reverse()) {
-      try {
-        await execFileAsync('git', ['worktree', 'remove', '--force', worktree], { cwd: repositoryRoot });
-      } catch (error) {
-        cleanupError ??= error;
-      }
-    }
-    await rm(workspace, { recursive: true, force: true });
-    if (cleanupError) throw cleanupError;
-  });
-  await execFileAsync('git', ['worktree', 'add', '--detach', invocationRoot, release.bootstrapCommit], { cwd: repositoryRoot });
-  worktrees.push(invocationRoot);
-  await execFileAsync('git', ['worktree', 'add', '--detach', observationRoot, release.commit], { cwd: repositoryRoot });
-  worktrees.push(observationRoot);
+  t.after(() => rm(workspace, { recursive: true, force: true }));
+  for (const [checkout, commit] of [[invocationRoot, release.bootstrapCommit], [observationRoot, release.commit]]) {
+    await execFileAsync('git', ['clone', '--quiet', '--shared', '--no-checkout', repositoryRoot, checkout]);
+    await execFileAsync('git', ['-C', checkout, 'checkout', '--quiet', '--detach', commit]);
+    await symlink(path.join(repositoryRoot, 'node_modules'), path.join(checkout, 'node_modules'), 'junction');
+  }
 
   const invocationReader = await import(pathToFileURL(path.join(invocationRoot, 'scripts/prepare-agent-invocation.mjs')).href);
   const policyReader = await import(pathToFileURL(path.join(invocationRoot, 'scripts/lib/resolve-delivery-participant.mjs')).href);
@@ -304,8 +295,13 @@ test('normalized events pass invocation, observation, and finalizer readers at t
     assert.equal(normalized.client_payload.delivery_id, envelope.delivery_id);
 
     if (fields.reader === 'observation') {
+      const mismatched = structuredClone(normalized);
+      mismatched.client_payload.controller.commit = 'f'.repeat(40);
+      mismatched.client_payload.dispatch_signature = dispatchEnvelopeSignature({ secret, envelope: mismatched.client_payload });
+      const mismatchedPath = path.join(workspace, 'mismatched-controller.json');
+      await writeFile(mismatchedPath, JSON.stringify(mismatched));
       await assert.rejects(observationReader.validateObservationEvent({
-        eventPath: normalizedPath, repositoryRoot: observationRoot,
+        eventPath: mismatchedPath, repositoryRoot: observationRoot,
         controllerRepository: 'agentic-delivery-lab/agentic-delivery',
         dispatchSecret: secret, now: () => dispatchTimestamp,
       }), /controller pin does not match/);
@@ -320,15 +316,25 @@ test('normalized events pass invocation, observation, and finalizer readers at t
       assert.equal(result.controller.commit, observationParticipant.controller.commit);
     } else if (fields.reader === 'finalizer') {
       const finalized = [];
+      const identities = [];
       const store = {
+        recordControllerIdentity: async (key, options) => identities.push({ key, ...options }),
         completeController: async (key, options) => finalized.push({ outcome: 'completed', key, ...options }),
-        retryController: async (key, options) => finalized.push({ outcome: 'retryable', key, ...options }),
+        retryController: async (key, options) => {
+          finalized.push({ outcome: 'retryable', key, ...options });
+          return { status: 'retryable' };
+        },
       };
       for (const [resultName, expectedStatus] of [['success', 'completed'], ['failure', 'retryable']]) {
         const result = await finalizerReader.finalizeAgentInvocation({
           env: {
             GITHUB_EVENT_PATH: normalizedPath,
             INVOCATION_RESULT: resultName,
+            INVOCATION_ROUTE: 'research',
+            ORIGIN_REPOSITORY: envelope.repository_full_name,
+            ORIGIN_REPOSITORY_ID: envelope.repository_id,
+            SOURCE_ISSUE: String(envelope.source.issue_number),
+            CONTROLLER_COMMIT: envelope.controller.commit,
             GITHUB_RUN_ID: '123456',
             GITHUB_RUN_ATTEMPT: '1',
           },
@@ -336,6 +342,10 @@ test('normalized events pass invocation, observation, and finalizer readers at t
         });
         assert.deepEqual(result, { status: expectedStatus });
       }
+      assert.equal(identities.length, 2);
+      assert.equal(identities[0].identity.controllerCommit, envelope.controller.commit);
+      assert.equal(identities[0].identity.originRepositoryId, envelope.repository_id);
+      assert.deepEqual(identities[0].identity, identities[1].identity);
       assert.equal(finalized.length, 2);
       assert.equal(finalized[0].key, `${envelope.installation_id}:${envelope.delivery_id}`);
       assert.equal(finalized[0].leaseToken, '123456:1');

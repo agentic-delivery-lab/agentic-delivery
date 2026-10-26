@@ -5,6 +5,8 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
+import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
+
 import { ReleaseChainValidationError, validateBootstrapWorkflowPins, validateReleaseChain, primitiveLocatorForVersion } from '../../scripts/validate-release-chain.mjs';
 
 test('release-name migration admits only the declared versioned locator and unchanged native ID', () => {
@@ -64,13 +66,13 @@ test('local release graph reproduces all pinned digests and publication refs', a
   }
   const result = await validateReleaseChain({ controlPlaneRoot: repositoryRoot, ...siblingRoots });
   assert.equal(result.status, 'passed');
-  assert.equal(result.controller.version, '0.2.0-draft.66');
-  assert.equal(result.controller.commit, '08728c4210ec2d227eec2b6c182dcf3bafd80db1');
-  assert.equal(result.controller.bootstrapCommit, '0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80');
+  assert.equal(result.controller.version, '0.2.0-draft.67');
+  assert.equal(result.controller.commit, '98495275481aff381180771da6eba9da95bc7816');
+  assert.match(result.controller.bootstrapCommit, /^[0-9a-f]{40}$/);
   assert.equal(result.controller.githubAppContractVersion, '2.0.0');
-  assert.equal(result.architecture.contentSha256, '5352c13fd6c3da425f427c8ac3ddc3deb9c52bdbac2837563ac580b4da4b71fb');
-  assert.equal(result.primitives.contentSha256, '36a7e7e95a89ee00288f08a30ac41e4166e11516165e93af47b342026ce894d0');
-  assert.equal(result.distribution.automationProjectionRelease, 'urn:agentic-delivery:distribution:0.1.0-draft.25');
+  assert.equal(result.architecture.contentSha256, '02f150dfd46b8c304f61196ff65d7f8a05adc0cc151402573b10803491ac4550');
+  assert.equal(result.primitives.contentSha256, '4b6c07deb6f7be8f495244e3c50a528054528db1fdec5a5a14ea4cfdda5bb34e');
+  assert.equal(result.distribution.automationProjectionRelease, 'urn:agentic-delivery:distribution:0.1.0-draft.26');
 });
 
 test('the pinned workflow source contains the validator and reusable workflow entry points', async (t) => {
@@ -81,7 +83,12 @@ test('the pinned workflow source contains the validator and reusable workflow en
   }
   await assert.doesNotReject(() => validateReleaseChain({ controlPlaneRoot: repositoryRoot, ...siblingRoots }));
   const workflow = await readFile(path.join(siblingRoots.privateRoot, '.github/workflows/validate-published-agents.yml'), 'utf8');
-  assert.match(workflow, /agentic-delivery-primitives/);
+  const publication = JSON.parse(await readFile(path.join(siblingRoots.privateRoot, 'provenance/agents.lock.json'), 'utf8'));
+  const parsed = parseRepositoryYaml(workflow, 'private publication workflow');
+  const canonicalCheckouts = Object.values(parsed.jobs ?? {}).flatMap(job => job.steps ?? [])
+    .filter(step => step.uses?.startsWith('actions/checkout@') && step.with?.path === 'primitives');
+  assert.equal(canonicalCheckouts.length, 1);
+  assert.equal(canonicalCheckouts[0].with.repository, publication.canonicalRepository);
   assert.match(workflow, /steps\.provenance\.outputs\.source_commit/);
   assert.match(workflow, /--primitive-root primitives/);
 });

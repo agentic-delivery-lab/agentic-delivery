@@ -143,6 +143,15 @@ jobs:
           path: node_modules/architecture-pin-contract
           persist-credentials: false
 
+      - name: Check out the current Customizations graph fixture
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-agent-customizations
+          ref: 69beab027d8b28fc082fa6054f4def5ba0146e3c
+          fetch-depth: 0
+          path: node_modules/customizations-pin-contract
+          persist-credentials: false
+
       - name: Exercise offline evaluation routing against the immutable contract
         env:
           EVALUATION_ROUTE_OUTPUT: ${{ runner.temp }}/evaluation-route.json
@@ -184,6 +193,8 @@ jobs:
         env:
           EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-report-contract
           ARCHITECTURE_PIN_TEST_ROOT: ${{ github.workspace }}/node_modules/architecture-pin-contract
+          RELEASE_GRAPH_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-pin-contract
+          RELEASE_GRAPH_PRIMITIVES_ROOT: ${{ github.workspace }}/node_modules/customizations-pin-contract
         run: pnpm test
 
       - name: Validate changelog structure
@@ -276,10 +287,21 @@ jobs:
           path: node_modules/architecture-pin-contract
           persist-credentials: false
 
+      - name: Check out the current Customizations graph fixture
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-agent-customizations
+          ref: 69beab027d8b28fc082fa6054f4def5ba0146e3c
+          fetch-depth: 0
+          path: node_modules/customizations-pin-contract
+          persist-credentials: false
+
       - name: Run repository tests
         env:
           EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-report-contract
           ARCHITECTURE_PIN_TEST_ROOT: ${{ github.workspace }}/node_modules/architecture-pin-contract
+          RELEASE_GRAPH_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-pin-contract
+          RELEASE_GRAPH_PRIMITIVES_ROOT: ${{ github.workspace }}/node_modules/customizations-pin-contract
         run: pnpm test
 
   inspect-receipt-schema:

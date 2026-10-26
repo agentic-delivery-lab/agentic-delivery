@@ -13,6 +13,7 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const SHA1 = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const DEFAULT_REPOSITORY = 'agentic-delivery-lab/agentic-delivery-architecture';
+const immutableGitEnv = () => ({ ...process.env, GIT_NO_REPLACE_OBJECTS: '1', GIT_NO_LAZY_FETCH: '1' });
 // These are complete, reviewed source-contract combinations. Recognizing one
 // for read-only review does not admit it as an operation's runtime context.
 const SUPPORTED_CONTRACT_SETS = [
@@ -26,6 +27,12 @@ const SUPPORTED_CONTRACT_SETS = [
     evaluationReport: '2.0.0', requirementsReference: '1.0.0',
   })),
 ];
+export function supportsArchitectureContracts(versions) {
+  return Boolean(versions && typeof versions === 'object' && !Array.isArray(versions)
+    && SUPPORTED_CONTRACT_SETS.some(supported => Object.keys(versions).length === Object.keys(supported).length
+      && Object.entries(supported).every(([name, version]) => versions[name] === version)));
+}
+
 const REQUIRED_PATHS = [
   'architecture/generated/architecture-release.json',
   'architecture/generated/adr-primitive-index.json',
@@ -46,8 +53,9 @@ export class ArchitecturePinValidationError extends Error {
 
 async function git(root, args, encoding = 'utf8') {
   try {
-    return (await execFileAsync('git', ['-C', root, ...args], {
+    return (await execFileAsync('git', ['--no-replace-objects', '--no-lazy-fetch', '-C', root, ...args], {
       encoding,
+      env: immutableGitEnv(),
       windowsHide: true,
       maxBuffer: 32 * 1024 * 1024,
     })).stdout;
@@ -74,6 +82,7 @@ async function digestAtCommit(root, commit) {
     // so the unchanged pinned tool's CLI guard also works through /var aliases.
     return (await execFileAsync(process.execPath, [await realpath(temporaryScript), root, commit], {
       encoding: 'utf8',
+      env: immutableGitEnv(),
       windowsHide: true,
       maxBuffer: 32 * 1024 * 1024,
     })).stdout.trim();
@@ -110,7 +119,9 @@ export async function validateArchitecturePin({
   }
 
   const errors = [];
-  await git(architectureRoot, ['cat-file', '-e', `${architectureCommit}^{commit}`]);
+  if ((await git(architectureRoot, ['cat-file', '-t', architectureCommit])).trim() !== 'commit') {
+    throw new ArchitecturePinValidationError('architectureCommit must identify a commit object', 2);
+  }
   const head = (await git(architectureRoot, ['rev-parse', 'HEAD'])).trim();
   if (requireHead && head !== architectureCommit) errors.push(`checked-out Architecture HEAD ${head} does not equal requested commit ${architectureCommit}`);
 
@@ -137,16 +148,18 @@ export async function validateArchitecturePin({
       errors.push('Architecture release decisionIds must list versioned decision identifiers');
     }
     const versions = release.contractVersions;
-    if (!versions || typeof versions !== 'object' || Array.isArray(versions)
-      || !SUPPORTED_CONTRACT_SETS.some((supported) => Object.keys(versions).length === Object.keys(supported).length
-        && Object.entries(supported).every(([name, version]) => versions[name] === version))) {
+    if (!supportsArchitectureContracts(versions)) {
       errors.push('Architecture release contract versions are unsupported');
     }
   }
   if (release.sourceRepository !== expectedRepository) errors.push(`Architecture release sourceRepository must be ${expectedRepository}`);
   if (!SHA1.test(String(release.sourceCommit ?? ''))) errors.push('Architecture release sourceCommit must be immutable');
   else {
-    try { await git(architectureRoot, ['cat-file', '-e', `${release.sourceCommit}^{commit}`]); }
+    try {
+      if ((await git(architectureRoot, ['cat-file', '-t', release.sourceCommit])).trim() !== 'commit') {
+        errors.push('Architecture release sourceCommit must identify a commit object');
+      }
+    }
     catch { errors.push('Architecture release sourceCommit is not present in the pinned repository history'); }
   }
   if (!SHA256.test(String(release.contentSha256 ?? ''))) errors.push('Architecture release contentSha256 must be a SHA-256 digest');
@@ -190,6 +203,8 @@ export async function validateArchitecturePin({
     }
   } else errors.push('Architecture release must declare a tooling lock path');
 
+  // Unknown or mismatched metadata cannot authorize executing its digest tool.
+  if (errors.length > 0) throw releaseError(errors);
   let reproducedDigest = null;
   try {
     reproducedDigest = await digestAtCommit(architectureRoot, architectureCommit);
