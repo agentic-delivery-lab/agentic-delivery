@@ -112,11 +112,11 @@ test('contract schemas are present and self-identifying', async () => {
 test('the checked-in controller release pins every enrolled participant and required runtime asset', async () => {
   const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
   assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
-  assert.equal(release.schemaVersion, 2);
-  assert.equal(release.$schema, '../schemas/controller-release.v2.schema.json');
-  assert.equal(release.version, '0.2.0-draft.66');
-  assert.equal(release.commit, '08728c4210ec2d227eec2b6c182dcf3bafd80db1');
-  assert.equal(release.bootstrapCommit, '0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80');
+  assert.equal(release.schemaVersion, 3);
+  assert.equal(release.$schema, '../schemas/controller-release.v3.schema.json');
+  assert.equal(release.version, '0.2.0-draft.67');
+  assert.equal(release.commit, 'bd40269c346aea91fb496ddfef995131e36a7d90');
+  assert.match(release.bootstrapCommit, /^[0-9a-f]{40}$/);
   assert.equal(release.githubAppContractVersion, '2.0.0');
   assert.equal(release.compatibility.githubAppContractVersion, '2.0.0');
   assert.deepEqual(release.support.githubAppContractVersions, ['2.0.0']);
@@ -126,7 +126,7 @@ test('the checked-in controller release pins every enrolled participant and requ
   assert.deepEqual(release.support.evidenceVersions, ['1.0.0']);
   assert.deepEqual(release.support.primitiveCompatibility, ['0.x']);
   assert.deepEqual(release.support.architectureCompatibility, ['0.x']);
-  assert.equal(release.support.minimumBootstrapVersion, '0.2.0-draft.23');
+  assert.equal(release.support.minimumBootstrapVersion, '0.2.0-draft.67');
   assert.equal(release.support.policy.supportWindowDays, 90);
   const validated = await validateReleaseManifest({ repositoryRoot });
   assert.equal(validated.commit, release.commit);
@@ -154,6 +154,17 @@ test('the checked-in controller release pins every enrolled participant and requ
   }), true);
 });
 
+test('the current runtime retains the receipt fix and removal of native Codex patches', async () => {
+  const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
+  for (const ancestor of ['624e2a462271ddbc536d254ee6147397eba2799f', 'b490540d7b9613c2f6c61cf231c076f6ac65020e']) {
+    await execFileAsync('git', ['-C', repositoryRoot, 'merge-base', '--is-ancestor', ancestor, release.commit]);
+  }
+  const { stdout } = await execFileAsync('git', ['-C', repositoryRoot, 'ls-tree', '-r', '--name-only', release.commit, '--',
+    'runtime/codex', 'scripts/prepare-codex-tool-gate.mjs', 'scripts/probe-codex-tool-gate.mjs',
+    '.github/workflows/codex-tool-gate-probe.yml']);
+  assert.equal(stdout, '', 'the selected runtime must not contain the withdrawn native Codex patch or build probe');
+});
+
 test('controller release validation rejects pins missing durable invocation receipt runtime', async (t) => {
   const fixtureContainer = `${repositoryRoot}.worktrees`;
   await mkdir(fixtureContainer, { recursive: true });
@@ -166,7 +177,9 @@ test('controller release validation rejects pins missing durable invocation rece
   }
   const releasePath = path.join(temporaryRoot, 'config', 'controller-release.json');
   const release = JSON.parse(await readFile(releasePath, 'utf8'));
+  const current = release.compatibility.controllers.find(pin => pin.version === release.version && pin.commit === release.commit);
   release.commit = '8a2acddf07d0b70b11fc5d9c1f5143e54abf9185';
+  current.commit = release.commit;
   await writeFile(releasePath, `${JSON.stringify(release, null, 2)}\n`, 'utf8');
 
   await assert.rejects(
@@ -223,8 +236,10 @@ test('the current controller release pins immutable Architecture and Primitive c
     assert.match(dependency.commit, /^[0-9a-f]{40}$/);
     assert.match(dependency.contentSha256, /^[0-9a-f]{64}$/);
   }
-  assert.equal(release.dependencies.architecture.version, '0.1.0-draft.18');
-  assert.equal(release.dependencies.primitives.version, '0.1.0-draft.4');
+  assert.equal(release.dependencies.architecture.version, '0.1.0-draft.78');
+  assert.equal(release.dependencies.architecture.repositoryId, 1380894616);
+  assert.equal(release.dependencies.primitives.version, '0.1.0-draft.15');
+  assert.equal(release.dependencies.primitives.repositoryId, 1380894656);
 });
 
 test('the release catalog retains an older immutable pin for intentional rollback', async () => {

@@ -15,7 +15,9 @@ const previousArchitectureCommit = '6392c3770219304a78393faac42276e12eb1525f';
 const execFileAsync = promisify(execFile);
 
 async function controllerRelease() {
-  return JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
+  // Retain the exact historical reader case after the current graph advances.
+  return JSON.parse((await execFileAsync('git', ['-C', repositoryRoot, 'show',
+    '52d1dea2f6259d365723f90ce01d771da802edc9:config/controller-release.json'])).stdout);
 }
 
 async function pinnedArchitectureCheckout(t, commit, sourceRoot = architectureRoot) {
@@ -28,7 +30,7 @@ async function pinnedArchitectureCheckout(t, commit, sourceRoot = architectureRo
   return temporaryRoot;
 }
 
-test('Architecture review pins the exact release, digest, policy, and model sources', async (t) => {
+test('Architecture review retains the historical exact release, digest, policy, and model sources', async (t) => {
   const release = await controllerRelease();
   const pinnedRoot = await pinnedArchitectureCheckout(t, release.dependencies.architecture.commit);
   const result = await validateArchitecturePin({

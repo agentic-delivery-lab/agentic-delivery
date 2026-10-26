@@ -40,7 +40,9 @@ No generic coercion or name-only fallback admits a v3 dependency. Callers pass
 The forward graph separates the immutable runtime-code commit, trusted
 bootstrap commit and workflow-source commit. Bootstrap enrollment selects a
 supported controller; publishing new release metadata does not migrate that
-enrollment. The delivery runtime does not load its own release manifest as a
+enrollment. Draft67 declares minimum bootstrap version draft67; historical
+bootstrap compatibility does not admit this native dependency contract. The
+delivery runtime does not load its own release manifest as a
 substitute for the trusted bootstrap selection. A workflow projection must
 bind the declared bootstrap and source commits rather than moving a consumer
 back to a stale graph.
@@ -63,7 +65,10 @@ reinstate withdrawn native tool or transport ceilings.
 For the native graph, the checker supports Primitive release schema 1 with
 capability policy 0.1.0 and a reviewed Architecture contract tuple. It reproduces
 each producer digest at both its prepared source and manifest commit, and
-checks that the prepared source is an ancestor of the manifest. Primitive
+checks that the prepared source is an ancestor of the manifest. Known graph
+metadata or projection errors reject before producer digest tools execute. An
+impact manifest hash, version or prepared-source mismatch also rejects before
+executing that manifest's tool. Primitive
 impact provenance binds an exact Architecture manifest and decision inventory.
 A newer selected Architecture release may change catalog packaging while
 retaining that exact inventory; a changed inventory requires new impact
