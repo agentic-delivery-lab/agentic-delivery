@@ -65,7 +65,7 @@ test('local release graph reproduces all pinned digests and publication refs', a
   const result = await validateReleaseChain({ controlPlaneRoot: repositoryRoot, ...siblingRoots });
   assert.equal(result.status, 'passed');
   assert.equal(result.controller.version, '0.2.0-draft.67');
-  assert.equal(result.controller.commit, 'bd40269c346aea91fb496ddfef995131e36a7d90');
+  assert.equal(result.controller.commit, '98495275481aff381180771da6eba9da95bc7816');
   assert.match(result.controller.bootstrapCommit, /^[0-9a-f]{40}$/);
   assert.equal(result.controller.githubAppContractVersion, '2.0.0');
   assert.equal(result.architecture.contentSha256, '02f150dfd46b8c304f61196ff65d7f8a05adc0cc151402573b10803491ac4550');

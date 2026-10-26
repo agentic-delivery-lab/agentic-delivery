@@ -3,8 +3,8 @@
   "schemaVersion": 3,
   "controllerId": "agentic-delivery",
   "version": "0.2.0-draft.67",
-  "commit": "bd40269c346aea91fb496ddfef995131e36a7d90",
-  "bootstrapCommit": "279470aaee64e1351acb4284905aa05f24e74e24",
+  "commit": "98495275481aff381180771da6eba9da95bc7816",
+  "bootstrapCommit": "98495275481aff381180771da6eba9da95bc7816",
   "contracts": {
     "eventEnvelope": 1,
     "lifecycle": "1.0.0",
@@ -65,7 +65,7 @@
     "controllers": [
       {
         "version": "0.2.0-draft.67",
-        "commit": "bd40269c346aea91fb496ddfef995131e36a7d90",
+        "commit": "98495275481aff381180771da6eba9da95bc7816",
         "contracts": {
           "eventEnvelope": 1,
           "lifecycle": "1.0.0",
