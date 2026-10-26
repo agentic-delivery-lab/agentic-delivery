@@ -39,6 +39,7 @@ async function fixture(t) {
   const privateRoot = path.join(scratch, 'synthetic-publication');
   await exec('git', ['clone', '--quiet', '--shared', root, controlPlaneRoot]);
   const base = (await git(controlPlaneRoot, 'rev-parse', 'HEAD')).trim();
+  const checkedOutRelease = JSON.parse(await readFile(path.join(controlPlaneRoot, 'config/controller-release.json'), 'utf8'));
   const release = JSON.parse(await git(controlPlaneRoot, 'show', '52d1dea2f6259d365723f90ce01d771da802edc9:config/controller-release.json'));
   const architecture = JSON.parse(await git(architectureRoot, 'show', `${architectureCommit}:architecture/generated/architecture-release.json`));
   const primitive = JSON.parse(await git(primitivesRoot, 'show', `${primitiveCommit}:manifests/primitive-release.json`));
@@ -52,7 +53,7 @@ async function fixture(t) {
   await json(controlPlaneRoot, selectionPath, selection);
   for (const file of ['.github/workflows/issue-intake.yml', '.github/workflows/codex-delivery.yml']) {
     const source = await readFile(path.join(controlPlaneRoot, file), 'utf8');
-    await writeFile(path.join(controlPlaneRoot, file), source.replaceAll(release.bootstrapCommit, base));
+    await writeFile(path.join(controlPlaneRoot, file), source.replaceAll(checkedOutRelease.bootstrapCommit, base));
   }
   await git(controlPlaneRoot, 'add', '.');
   await git(controlPlaneRoot, '-c', 'user.name=Synthetic graph fixture', '-c', 'user.email=fixture@example.invalid',

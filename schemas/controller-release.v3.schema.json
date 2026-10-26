@@ -369,7 +369,8 @@
                 "repository": {
                   "const": "agentic-delivery-lab/agentic-delivery-architecture"
                 }
-              }
+              },
+              "type": "object"
             }
           ]
         },
@@ -383,7 +384,8 @@
                 "repository": {
                   "const": "agentic-delivery-lab/agentic-delivery-primitives"
                 }
-              }
+              },
+              "type": "object"
             }
           ]
         }

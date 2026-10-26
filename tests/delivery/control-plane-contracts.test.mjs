@@ -75,7 +75,7 @@ test('v3 closed schema preserves legacy contracts and rejects identity-shape mix
     assert.equal(await readFile(path.join(repositoryRoot, file), 'utf8'), stdout);
   }
   const schema = JSON.parse(await readFile(path.join(repositoryRoot, 'schemas/controller-release.v3.schema.json'), 'utf8'));
-  const check = new Ajv2020({ strict: false }).compile(schema);
+  const check = new Ajv2020({ strict: true }).compile(schema);
   const valid = await nativeReleaseFixture();
   assert.equal(check(valid), true, JSON.stringify(check.errors));
   for (const mutate of [
