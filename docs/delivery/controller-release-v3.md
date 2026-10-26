@@ -15,12 +15,21 @@ IDs are integers and digests are required. Wrong identities, partial native
 pins, null digests and unknown fields reject before dependency admission.
 Matching metadata alone does not prove hosting access or runtime approval.
 
+The checker consumes caller-admitted tooling and producer checkouts. It must
+not run digest tools selected by an Issue, Project, arbitrary download or
+untrusted repository path. Commit/digest reproduction is not an independent
+approval mechanism. Git reads ignore replacement refs and lazy fetching;
+pinned digest children inherit the same flags. Stock Git must support
+`--no-lazy-fetch`; no Git or producer tool is patched to provide this behavior.
+See the [official Git documentation](https://github.com/git/htmldocs/blob/gh-pages/git.adoc).
+
 The historical v1/v2 schemas remain immutable. V3 compatibility entries can
 retain the complete historical idless dependency shape or the complete native
 shape. They cannot mix the two. The catalog must contain the exact current
 controller's contracts and dependency pins; a mismatched catalog entry cannot
 supply another set of inputs for the same current version/commit. Historical
-pins remain available for explicit rollback.
+pins remain available as historical compatibility records. Their presence does
+not approve those controllers for active rollback.
 
 Primitive selection1.1 retains its string-typed native ID. Its comparison with
 v3 dependencies is an explicit version boundary: each side must equal its
@@ -44,6 +53,18 @@ combination, wrong-ID/digest/version rejection, installation, managed update,
 interruption recovery and rollback evidence. Draft metadata does not approve
 the Issue #106 runtime context, a validation profile or participant activation.
 
-Rollback selects an exact supported historical controller and its dependency
-set. It preserves saved operation consumption and the existing admission
-holds; it does not reinstate withdrawn native tool/transport ceilings.
+An active rollback requires a separately admitted exact controller and its
+dependency set, including proof that saved operation consumption and admission
+holds survive the transition. Historical shadow enrollments alone do not
+provide that proof. The current runtime source retains the receipt fix and
+the removal of the native Codex experiment; publishing this graph does not
+reinstate withdrawn native tool or transport ceilings.
+
+For the native graph, the checker supports Primitive release schema 1 with
+capability policy 0.1.0 and a reviewed Architecture contract tuple. It reproduces
+each producer digest at both its prepared source and manifest commit, and
+checks that the prepared source is an ancestor of the manifest. Primitive
+impact provenance binds an exact Architecture manifest and decision inventory.
+A newer selected Architecture release may change catalog packaging while
+retaining that exact inventory; a changed inventory requires new impact
+evidence. These source checks do not approve a runtime context.

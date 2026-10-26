@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,11 +9,14 @@ import { promisify } from 'node:util';
 import { parseRepositoryYaml } from './lib/yaml.mjs';
 import { validatePrimitiveSelection, primitiveSelectionMatchesDependency } from './lib/primitive-selection.mjs';
 import { validateEventCatalog } from './lib/event-catalog.mjs';
+import { validateControllerRelease } from './lib/control-plane-contracts.mjs';
+import { validateArchitecturePin } from './validate-architecture-pin.mjs';
 
 const execFileAsync = promisify(execFile);
 const SHA1 = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const immutableGitEnv = () => ({ ...process.env, GIT_NO_REPLACE_OBJECTS: '1', GIT_NO_LAZY_FETCH: '1' });
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -73,8 +76,9 @@ async function git(repository, args) {
 
 async function gitRaw(repository, args) {
   try {
-    return (await execFileAsync('git', ['-C', repository, ...args], {
+    return (await execFileAsync('git', ['--no-replace-objects', '--no-lazy-fetch', '-C', repository, ...args], {
       encoding: 'utf8',
+      env: immutableGitEnv(),
       windowsHide: true,
       maxBuffer: 32 * 1024 * 1024,
     })).stdout;
@@ -84,14 +88,69 @@ async function gitRaw(repository, args) {
 }
 
 async function assertCommit(repository, commit, label, errors) {
-  if (!SHA1.test(commit ?? '')) {
+  if (typeof commit !== 'string' || !SHA1.test(commit)) {
     errors.push(`${label} must be a 40-character commit SHA`);
-    return;
+    return false;
   }
   try {
-    if ((await git(repository, ['cat-file', '-t', commit])) !== 'commit') errors.push(`${label} is not a commit in ${repository}`);
+    if ((await git(repository, ['cat-file', '-t', commit])) !== 'commit') {
+      errors.push(`${label} is not a commit in ${repository}`);
+      return false;
+    }
+    return true;
   } catch (error) {
     errors.push(error.message);
+    return false;
+  }
+}
+
+async function validatePreparedSource(repository, sourceCommit, manifestCommit, digest, script, label, errors) {
+  if (!await assertCommit(repository, sourceCommit, `${label} prepared source`, errors)) return;
+  try { await git(repository, ['merge-base', '--is-ancestor', sourceCommit, manifestCommit]); }
+  catch { errors.push(`${label} prepared source must be an ancestor of its manifest commit`); return; }
+  const reproduced = await digestWith(repository, script, manifestCommit, `${label} prepared source`, errors, sourceCommit);
+  equal(errors, `${label} prepared-source digest`, reproduced, digest);
+}
+
+async function validateNativeProducerSources({ architectureRoot, primitivesRoot, architectureDependency, primitiveDependency,
+  architectureRelease, primitiveRelease }, errors) {
+  if (primitiveRelease.schemaVersion !== 1 || primitiveRelease.$schema !== '../schemas/primitive-release.schema.json'
+    || primitiveRelease.capabilityPolicyVersion !== '0.1.0' || !['draft', 'released'].includes(primitiveRelease.status)) {
+    throw new ReleaseChainValidationError('Primitive release contract is unsupported for the native v3 graph');
+  }
+  try {
+    await validateArchitecturePin({ architectureRoot, architectureCommit: architectureDependency.commit,
+      architectureDigest: architectureDependency.contentSha256, architectureVersion: architectureDependency.version, requireHead: false });
+    await validatePreparedSource(architectureRoot, architectureRelease.sourceCommit, architectureDependency.commit,
+      architectureRelease.contentSha256, 'tools/architecture-content-digest.mjs', 'Architecture', errors);
+    await validatePreparedSource(primitivesRoot, primitiveRelease.sourceCommit, primitiveDependency.commit,
+      primitiveRelease.contentSha256, 'tools/primitive-content-digest.mjs', 'Primitive', errors);
+    const impact = primitiveRelease.architecture;
+    if (impact?.id !== architectureRelease.architectureId || !SHA1.test(impact?.releaseManifestCommit ?? '')
+      || !SHA256.test(impact?.releaseManifestSha256 ?? '')
+      || impact?.decisionInventoryPath !== 'architecture/references/decision-inventory.yml'
+      || !SHA256.test(impact?.decisionInventorySha256 ?? '')) {
+      errors.push('Primitive impact Architecture reference is unsupported');
+      return;
+    }
+    if (!await assertCommit(architectureRoot, impact.releaseManifestCommit, 'Primitive impact Architecture manifest', errors)) return;
+    const rawManifest = await readTextAtCommitRaw(architectureRoot, impact.releaseManifestCommit, 'architecture/generated/architecture-release.json');
+    equal(errors, 'Primitive impact Architecture manifest hash', sha256(rawManifest), impact.releaseManifestSha256);
+    const manifest = JSON.parse(rawManifest);
+    equal(errors, 'Primitive impact Architecture version', manifest.version, impact.version);
+    equal(errors, 'Primitive impact Architecture prepared commit', manifest.sourceCommit, impact.sourceCommit);
+    await validateArchitecturePin({ architectureRoot, architectureCommit: impact.releaseManifestCommit,
+      architectureDigest: manifest.contentSha256, architectureVersion: impact.version, requireHead: false });
+    await validatePreparedSource(architectureRoot, manifest.sourceCommit, impact.releaseManifestCommit,
+      manifest.contentSha256, 'tools/architecture-content-digest.mjs', 'Primitive impact Architecture', errors);
+    const inventory = await readTextAtCommitRaw(architectureRoot, impact.releaseManifestCommit, impact.decisionInventoryPath);
+    equal(errors, 'Primitive impact Architecture inventory hash', sha256(inventory), impact.decisionInventorySha256);
+    // The selected Architecture may advance its catalog/packaging contract
+    // while the exact decision inventory covered by Primitive impact is stable.
+    const selectedInventory = await readTextAtCommitRaw(architectureRoot, architectureDependency.commit, impact.decisionInventoryPath);
+    equal(errors, 'Primitive impact Architecture inventory coverage', selectedInventory, inventory);
+  } catch (error) {
+    errors.push(`Native producer provenance validation failed: ${error.message}`);
   }
 }
 
@@ -104,7 +163,7 @@ async function assertPathAtCommit(repository, commit, relativePath, label, error
   }
 }
 
-async function digestWith(repository, script, pinnedCommit, label, errors) {
+async function digestWith(repository, script, pinnedCommit, label, errors, revision = pinnedCommit) {
   let temporaryRoot;
   try {
     // Execute the digest implementation from the exact dependency commit. A
@@ -117,8 +176,9 @@ async function digestWith(repository, script, pinnedCommit, label, errors) {
     temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'agentic-release-chain-'));
     const temporaryScript = path.join(temporaryRoot, path.basename(script));
     await writeFile(temporaryScript, pinnedSource, 'utf8');
-    const output = (await execFileAsync(process.execPath, [temporaryScript, repository, pinnedCommit], {
+    const output = (await execFileAsync(process.execPath, [await realpath(temporaryScript), repository, revision], {
       encoding: 'utf8',
+      env: immutableGitEnv(),
       windowsHide: true,
       maxBuffer: 32 * 1024 * 1024,
     })).stdout.trim();
@@ -204,7 +264,10 @@ export async function validateReleaseChain({
   const controllerRepository = appContract.controller?.repository;
   const organization = appContract.organization?.login;
   const controller = await readJson(path.join(controlPlaneRoot, 'config/controller-release.json'));
-  if (controller.schemaVersion === 2 && SHA1.test(controller.commit ?? '')) {
+  const controllerValidation = validateControllerRelease(controller);
+  if (!controllerValidation.valid) throw new ReleaseChainValidationError(`Controller release is invalid:\n${controllerValidation.errors.join('\n')}`);
+  const native = controller.schemaVersion === 3;
+  if ([2, 3].includes(controller.schemaVersion) && SHA1.test(controller.commit ?? '')) {
     try {
       const releaseAppContract = await readJsonAtCommit(
         controlPlaneRoot,
@@ -279,7 +342,7 @@ export async function validateReleaseChain({
     errors.push('Control Plane organization identity must be a valid owner name');
   }
   equal(errors, 'Architecture dependency repository', architectureDependency.repository, `${organization}/agentic-delivery-architecture`);
-  equal(errors, 'Primitive dependency repository', primitiveDependency.repository, `${organization}/agentic-delivery-primitives`);
+  equal(errors, 'Primitive dependency repository', primitiveDependency.repository, `${organization}/${native ? 'agentic-delivery-agent-customizations' : 'agentic-delivery-primitives'}`);
   equal(errors, 'Architecture release version', architectureRelease.version, architectureDependency.version);
   equal(errors, 'Architecture release source repository', architectureRelease.sourceRepository, architectureDependency.repository);
   equal(errors, 'Architecture release digest', architectureRelease.contentSha256, architectureDependency.contentSha256);
@@ -291,7 +354,7 @@ export async function validateReleaseChain({
     primitiveCatalog,
   });
   if (!primitiveSelectionResult.valid) errors.push(...primitiveSelectionResult.errors.map((error) => `Primitive selection: ${error}`));
-  if (!primitiveSelectionMatchesDependency(primitiveSelection, primitiveDependency)) {
+  if (!primitiveSelectionMatchesDependency(primitiveSelection, primitiveDependency, { dependencySchemaVersion: controller.schemaVersion })) {
     errors.push('Primitive selection must match the exact dependency pin under the identity-bound repository-name migration');
   }
   equal(errors, 'Primitive selection release id', primitiveSelection.source?.releaseId, primitiveRelease.releaseId);
@@ -306,12 +369,20 @@ export async function validateReleaseChain({
   equal(errors, 'Architecture lock release version', primitiveLock.source?.releaseVersion, primitiveDependency.version);
   equal(errors, 'Architecture lock source commit', primitiveLock.source?.sourceCommit, primitiveDependency.commit);
   equal(errors, 'Architecture lock digest', primitiveLock.source?.contentSha256, primitiveDependency.contentSha256);
+  if (native) {
+    equal(errors, 'Architecture lock schema version', primitiveLock.schemaVersion, 2);
+    equal(errors, 'Architecture lock repository ID', primitiveLock.source?.repositoryId, primitiveDependency.repositoryId);
+  }
 
+  const errorsBeforeCommitChecks = errors.length;
   await assertCommit(architectureRoot, architectureDependency.commit, 'Architecture dependency commit', errors);
   await assertCommit(primitivesRoot, primitiveDependency.commit, 'Primitive dependency commit', errors);
   await assertCommit(controlPlaneRoot, controller.commit, 'Control Plane release commit', errors);
   await assertCommit(controlPlaneRoot, controller.bootstrapCommit, 'Control Plane bootstrap commit', errors);
   await assertCommit(controlPlaneRoot, bundle.workflowSource?.commit, 'Distribution workflow source commit', errors);
+  if (native && errors.length !== errorsBeforeCommitChecks) {
+    throw new ReleaseChainValidationError(`Native source pins must identify available commit objects:\n${errors.join('\n')}`);
+  }
   for (const relativePath of [
     'scripts/authorize-issue-event.mjs',
     'scripts/prepare-agent-invocation.mjs',
@@ -362,6 +433,14 @@ export async function validateReleaseChain({
       errors,
     );
   }
+  if (native) {
+    const errorsBeforeProvenance = errors.length;
+    await validateNativeProducerSources({ architectureRoot, primitivesRoot, architectureDependency, primitiveDependency,
+      architectureRelease, primitiveRelease }, errors);
+    if (errors.length !== errorsBeforeProvenance) {
+      throw new ReleaseChainValidationError(`Native producer provenance failed:\n${errors.join('\n')}`);
+    }
+  }
   const architectureDigest = await digestWith(architectureRoot, 'tools/architecture-content-digest.mjs', architectureDependency.commit, 'Architecture', errors);
   const primitiveDigest = await digestWith(primitivesRoot, 'tools/primitive-content-digest.mjs', primitiveDependency.commit, 'Primitive', errors);
   equal(errors, 'Architecture dependency digest', architectureDigest, architectureDependency.contentSha256);
@@ -375,6 +454,21 @@ export async function validateReleaseChain({
   const lockedArchitecture = sourceById(sourceLock.sources, 'architecture');
   const lockedPrimitives = sourceById(sourceLock.sources, 'primitives');
   const lockedWorkflow = sourceById(sourceLock.sources, 'distribution-workflow');
+  if (native) {
+    equal(errors, 'Distribution Control Plane repository', bundle.controlPlane?.repository, controllerRepository);
+    equal(errors, 'Distribution Architecture repository', bundle.architecture?.repository, architectureDependency.repository);
+    for (const [label, source, expectedRepository, expectedId] of [
+      ['Control Plane', lockedControlPlane, controllerRepository, 1358455028],
+      ['Architecture', lockedArchitecture, architectureDependency.repository, architectureDependency.repositoryId],
+      ['Primitive', lockedPrimitives, primitiveDependency.repository, primitiveDependency.repositoryId],
+      ['workflow', lockedWorkflow, controllerRepository, 1358455028],
+    ]) {
+      equal(errors, `Source lock ${label} repository`, source?.repository, expectedRepository);
+      equal(errors, `Source lock ${label} repository ID`, source?.repositoryId, expectedId);
+    }
+    equal(errors, 'Capabilities source contract version', capabilities.schemaVersion, 2);
+    equal(errors, 'Private publication source contract version', privateLock.schemaVersion, 2);
+  }
   equal(errors, 'Source lock Control Plane commit', lockedControlPlane?.commit, bundle.controlPlane?.commit);
   equal(errors, 'Source lock Architecture commit', lockedArchitecture?.commit, bundle.architecture?.commit);
   equal(errors, 'Source lock Primitive commit', lockedPrimitives?.commit, primitiveDependency.commit);
