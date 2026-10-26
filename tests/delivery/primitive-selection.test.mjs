@@ -7,6 +7,20 @@ import Ajv2020 from 'ajv/dist/2020.js';
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 import { validatePrimitiveSelection, primitiveSelectionMatchesDependency } from '../../scripts/lib/primitive-selection.mjs';
 
+test('selection 1.1 compares typed IDs only at an explicit v3 dependency boundary', () => {
+  const selection = { schemaVersion: 1, contractVersion: '1.1.0', source: {
+    repository: 'agentic-delivery-lab/agentic-delivery-agent-customizations', repositoryId: '1380894656',
+    version: '0.1.0-draft.15', commit: 'a'.repeat(40), contentSha256: 'b'.repeat(64),
+  } };
+  const dependency = { ...selection.source, repositoryId: 1380894656 };
+  assert.equal(primitiveSelectionMatchesDependency(selection, dependency, { dependencySchemaVersion: 3 }), true);
+  assert.equal(primitiveSelectionMatchesDependency(selection, dependency), false);
+  for (const id of ['1380894656', 999999, undefined]) {
+    assert.equal(primitiveSelectionMatchesDependency(selection, { ...dependency, repositoryId: id }, { dependencySchemaVersion: 3 }), false);
+  }
+  assert.equal(primitiveSelectionMatchesDependency(selection, dependency, { dependencySchemaVersion: 4 }), false);
+});
+
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const selection = parseRepositoryYaml(
   await readFile(path.join(repositoryRoot, 'config/primitive-selection.yml'), 'utf8'),

@@ -11,6 +11,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Controller release contract v3 binds current Architecture and AgentCustomizations pins to native numeric repository IDs and immutable digests while retaining exact historical compatibility records. Primitive selection crosses this typed boundary explicitly; metadata does not migrate enrollment or approve runtime admission.
+
 - Issue #105 holds unadmitted GitHub Actions delivery before allocating an operation identity, minting an App token, starting model work or publishing. An active mode or environment flag cannot approve the proposed policy. Held receipts preserve readable saved identity and consumption without changing checkpoint bytes; the source-only durable/context/runtime gate remains required before activation.
 
 - Delivery disables native subagents through stock Codex configuration and holds thread startup or resume when effective settings are enabled or unknown. This does not establish a universal tool counter or operation-wide transport enforcement.
@@ -174,6 +176,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #107](https://github.com/agentic-delivery-lab/agentic-delivery/issues/107) adds an offline Project planning-context selector bound to a source repository and Issue, comparing repository names case-insensitively while retaining stable numeric and node identities. It uses a versioned policy with a separately supplied SHA-256 pin and explicit Project priority, collapses identical repeated items with case-normalized repository names, and resolves candidate errors independently of API order. It holds on unapproved, inaccessible, or ambiguous candidates without granting execution authority or enabling live Project access.
 
 ### Changed
+
+- Draft controller metadata `0.2.0-draft.67` selects the corrected stock-Codex runtime source, Architecture draft78 and AgentCustomizations draft15 under native identity contract v3. Its minimum bootstrap is draft67; historical shadow enrollments remain unchanged and active admission is still held.
 
 - Register the controller-owned repository validation profile separately from agent roles and permitted capability profiles; its identity fingerprint does not grant source, mount or runtime admission.
 

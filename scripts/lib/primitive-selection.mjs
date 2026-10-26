@@ -37,7 +37,7 @@ function addError(errors, message) {
 /** Compare release metadata across the approved name migration, not hosting
  * access. The old immutable dependency is preserved; all tree pins must match.
  */
-export function primitiveSelectionMatchesDependency(selection, dependency) {
+export function primitiveSelectionMatchesDependency(selection, dependency, { dependencySchemaVersion = 2 } = {}) {
   const source = selection?.source;
   if (!source || !dependency || !SEMVER.test(source.version ?? '')
     || !SHA1.test(source.commit ?? '') || !SHA256.test(source.contentSha256 ?? '')) return false;
@@ -48,6 +48,14 @@ export function primitiveSelectionMatchesDependency(selection, dependency) {
     && source.repository === HISTORICAL_PRIMITIVES_REPOSITORY
     && !Object.hasOwn(source, 'repositoryId');
   if (!current && !historical) return false;
+  if (dependencySchemaVersion === 3) {
+    // Selection 1.1 deliberately retains its string-typed identity. V3
+    // dependency pins use the native integer; neither side is coerced.
+    return current && selection.schemaVersion === 1
+      && dependency.repository === CUSTOMIZATIONS_REPOSITORY && dependency.repositoryId === 1380894656
+      && ['version', 'commit', 'contentSha256'].every((key) => source[key] === dependency[key]);
+  }
+  if (![1, 2].includes(dependencySchemaVersion)) return false;
   const historicalDependency = dependency.repository === HISTORICAL_PRIMITIVES_REPOSITORY
     && (!Object.hasOwn(dependency, 'repositoryId') || dependency.repositoryId === CUSTOMIZATIONS_REPOSITORY_ID);
   const currentDependency = current && dependency.repository === CUSTOMIZATIONS_REPOSITORY

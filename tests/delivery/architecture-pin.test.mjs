@@ -15,7 +15,9 @@ const previousArchitectureCommit = '6392c3770219304a78393faac42276e12eb1525f';
 const execFileAsync = promisify(execFile);
 
 async function controllerRelease() {
-  return JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
+  // Retain the exact historical reader case after the current graph advances.
+  return JSON.parse((await execFileAsync('git', ['-C', repositoryRoot, 'show',
+    '52d1dea2f6259d365723f90ce01d771da802edc9:config/controller-release.json'])).stdout);
 }
 
 async function pinnedArchitectureCheckout(t, commit, sourceRoot = architectureRoot) {
@@ -28,7 +30,7 @@ async function pinnedArchitectureCheckout(t, commit, sourceRoot = architectureRo
   return temporaryRoot;
 }
 
-test('Architecture review pins the exact release, digest, policy, and model sources', async (t) => {
+test('Architecture review retains the historical exact release, digest, policy, and model sources', async (t) => {
   const release = await controllerRelease();
   const pinnedRoot = await pinnedArchitectureCheckout(t, release.dependencies.architecture.commit);
   const result = await validateArchitecturePin({
@@ -117,6 +119,32 @@ test('Architecture review rejects mutable or implicit source selection', async (
     validateArchitecturePin({ architectureRoot }),
     (error) => error instanceof ArchitecturePinValidationError && error.exitCode === 2,
   );
+});
+
+test('Architecture pins identify commit objects rather than annotated tag objects', async (t) => {
+  const pinnedRoot = await pinnedArchitectureCheckout(t, currentArchitectureCommit);
+  await execFileAsync('git', ['-C', pinnedRoot, '-c', 'user.name=Pin fixture', '-c', 'user.email=fixture@example.invalid', 'tag', '-a', 'synthetic-pin-tag', '-m', 'Synthetic tag fixture', currentArchitectureCommit]);
+  const { stdout } = await execFileAsync('git', ['-C', pinnedRoot, 'rev-parse', 'refs/tags/synthetic-pin-tag']);
+  await assert.rejects(validateArchitecturePin({
+    architectureRoot: pinnedRoot, architectureCommit: stdout.trim(), requireHead: false,
+  }), /commit object/);
+});
+
+test('Architecture pin reads and pinned digest children ignore local replacement refs', async (t) => {
+  const pinnedRoot = await pinnedArchitectureCheckout(t, currentArchitectureCommit);
+  const file = path.join(pinnedRoot, 'architecture/generated/architecture-release.json');
+  const manifest = JSON.parse(await readFile(file, 'utf8'));
+  await writeFile(file, `${JSON.stringify({ ...manifest, version: '0.1.0-synthetic-replacement' }, null, 2)}\n`);
+  await execFileAsync('git', ['-C', pinnedRoot, 'add', 'architecture/generated/architecture-release.json']);
+  await execFileAsync('git', ['-C', pinnedRoot, '-c', 'user.name=Pin fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'Synthetic replacement fixture']);
+  const { stdout } = await execFileAsync('git', ['-C', pinnedRoot, 'rev-parse', 'HEAD']);
+  await execFileAsync('git', ['-C', pinnedRoot, 'replace', currentArchitectureCommit, stdout.trim()]);
+  const result = await validateArchitecturePin({
+    architectureRoot: pinnedRoot, architectureCommit: currentArchitectureCommit,
+    architectureVersion: manifest.version, architectureDigest: manifest.contentSha256, requireHead: false,
+  });
+  assert.equal(result.version, manifest.version);
+  assert.equal(result.reproducedDigest, manifest.contentSha256);
 });
 
 test('Architecture digest reproduction works through a symlinked temporary directory', async (t) => {

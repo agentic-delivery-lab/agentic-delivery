@@ -28,6 +28,15 @@ const ARTIFACT_REPOSITORIES = Object.freeze({
   architecture: 'agentic-delivery-lab/agentic-delivery-architecture',
   primitives: 'agentic-delivery-lab/agentic-delivery-primitives',
 });
+const NATIVE_ARTIFACTS = Object.freeze({
+  architecture: { repository: ARTIFACT_REPOSITORIES.architecture, repositoryId: 1380894616 },
+  primitives: { repository: 'agentic-delivery-lab/agentic-delivery-agent-customizations', repositoryId: 1380894656 },
+});
+
+function closedShape(value, keys) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
 
 function semverMajor(version) {
   const match = typeof version === 'string' ? /^(\d+)\./.exec(version) : null;
@@ -43,23 +52,34 @@ function addError(errors, path, message) {
   errors.push(`${path} ${message}`);
 }
 
-function validateArtifactPin(pin, path, expectedRepository, errors) {
+function validateArtifactPin(pin, path, expectedRepository, errors, { repositoryId, strict = false } = {}) {
   if (!pin || typeof pin !== 'object' || Array.isArray(pin)) {
     addError(errors, path, 'must be an object');
     return;
   }
+  if (strict && !closedShape(pin, ['repository', 'version', 'commit', 'contentSha256', ...(repositoryId === undefined ? [] : ['repositoryId'])])) {
+    addError(errors, path, 'has an unsupported pin shape');
+  }
   if (pin.repository !== expectedRepository) addError(errors, `${path}.repository`, `must be ${expectedRepository}`);
+  if (repositoryId !== undefined && pin.repositoryId !== repositoryId) addError(errors, `${path}.repositoryId`, `must be the native integer ${repositoryId}`);
   if (typeof pin.version !== 'string' || !SEMVER.test(pin.version)) addError(errors, `${path}.version`, 'must use SemVer');
   if (typeof pin.commit !== 'string' || !SHA1.test(pin.commit)) addError(errors, `${path}.commit`, 'must be a 40-character hexadecimal SHA');
   if (pin.contentSha256 !== null && (typeof pin.contentSha256 !== 'string' || !SHA256.test(pin.contentSha256))) addError(errors, `${path}.contentSha256`, 'must be a SHA-256 digest or null');
+  if (repositoryId !== undefined && (typeof pin.contentSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(pin.contentSha256))) {
+    addError(errors, `${path}.contentSha256`, 'must be an immutable SHA-256 digest for a native identity pin');
+  }
 }
 
-function validateDependencies(dependencies, path, errors) {
+function validateDependencies(dependencies, path, errors, { native = false, strict = false } = {}) {
   if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) {
     addError(errors, path, 'must be an object');
     return;
   }
-  for (const [name, repository] of Object.entries(ARTIFACT_REPOSITORIES)) validateArtifactPin(dependencies[name], `${path}.${name}`, repository, errors);
+  if (strict && !closedShape(dependencies, ['architecture', 'primitives'])) addError(errors, path, 'has an unsupported dependency shape');
+  for (const [name, repository] of Object.entries(ARTIFACT_REPOSITORIES)) {
+    validateArtifactPin(dependencies[name], `${path}.${name}`, native ? NATIVE_ARTIFACTS[name].repository : repository, errors,
+      { strict, ...(native ? { repositoryId: NATIVE_ARTIFACTS[name].repositoryId } : {}) });
+  }
 }
 
 function validIssueNumber(value) {
@@ -178,11 +198,12 @@ export function assertEventEnvelope(envelope) {
 export function validateControllerRelease(release) {
   const errors = [];
   if (!release || typeof release !== 'object' || Array.isArray(release)) return { valid: false, errors: ['release must be an object'] };
-  if (![1, 2].includes(release.schemaVersion)) addError(errors, 'schemaVersion', 'must be 1 or 2');
-  if (release.schemaVersion === 2 && release.$schema !== '../schemas/controller-release.v2.schema.json') {
-    addError(errors, '$schema', 'must reference controller-release.v2.schema.json');
+  const native = release.schemaVersion === 3;
+  if (![1, 2, 3].includes(release.schemaVersion)) addError(errors, 'schemaVersion', 'must be 1, 2 or 3');
+  if ([2, 3].includes(release.schemaVersion) && release.$schema !== `../schemas/controller-release.v${release.schemaVersion}.schema.json`) {
+    addError(errors, '$schema', `must reference controller-release.v${release.schemaVersion}.schema.json`);
   }
-  if (release.schemaVersion === 2 && (typeof release.githubAppContractVersion !== 'string' || !SEMVER.test(release.githubAppContractVersion))) {
+  if ([2, 3].includes(release.schemaVersion) && (typeof release.githubAppContractVersion !== 'string' || !SEMVER.test(release.githubAppContractVersion))) {
     addError(errors, 'githubAppContractVersion', 'must use SemVer');
   }
   if (release.controllerId !== 'agentic-delivery') addError(errors, 'controllerId', 'must be agentic-delivery');
@@ -190,6 +211,15 @@ export function validateControllerRelease(release) {
   if (typeof release.commit !== 'string' || !SHA1.test(release.commit)) addError(errors, 'commit', 'must be a 40-character hexadecimal SHA');
   if (typeof release.bootstrapCommit !== 'string' || !SHA1.test(release.bootstrapCommit)) addError(errors, 'bootstrapCommit', 'must be a 40-character hexadecimal SHA');
   const contracts = release.contracts;
+  if (native) {
+    for (const [name, value, keys] of [
+      ['release', release, ['$schema', 'schemaVersion', 'controllerId', 'version', 'commit', 'bootstrapCommit', 'githubAppContractVersion', 'contracts', 'support', 'dependencies', 'compatibility']],
+      ['contracts', contracts, ['eventEnvelope', 'lifecycle', 'stateMachine', 'evidence']],
+      ['support', release.support, ['eventEnvelopeVersions', 'lifecycleVersions', 'stateMachineVersions', 'evidenceVersions', 'githubAppContractVersions', 'primitiveCompatibility', 'architectureCompatibility', 'minimumBootstrapVersion', 'policy']],
+      ['support.policy', release.support?.policy, ['supportWindowDays', 'majorStrategy', 'preReleaseException', 'securityRevocation']],
+      ['compatibility', release.compatibility, ['eventEnvelope', 'lifecycle', 'stateMachine', 'evidence', 'githubAppContractVersion', 'controllers']],
+    ]) if (!closedShape(value, keys)) addError(errors, name, 'has an unsupported v3 shape');
+  }
   if (!contracts || typeof contracts !== 'object' || Array.isArray(contracts)) addError(errors, 'contracts', 'must be an object');
   else {
     if (!Number.isInteger(contracts.eventEnvelope) || contracts.eventEnvelope < 1) addError(errors, 'contracts.eventEnvelope', 'must be a positive integer');
@@ -210,7 +240,7 @@ export function validateControllerRelease(release) {
         addError(errors, `support.${name}`, 'must contain SemVer versions');
       }
     }
-    if (release.schemaVersion === 2
+    if ([2, 3].includes(release.schemaVersion)
       && (!Array.isArray(support.githubAppContractVersions) || support.githubAppContractVersions.length === 0
         || support.githubAppContractVersions.some((version) => typeof version !== 'string' || !SEMVER.test(version)))) {
       addError(errors, 'support.githubAppContractVersions', 'must contain SemVer versions');
@@ -239,13 +269,13 @@ export function validateControllerRelease(release) {
           addError(errors, `support.${name}Versions`, `must include contracts.${name}`);
         }
       }
-      if (release.schemaVersion === 2 && Array.isArray(support.githubAppContractVersions)
+      if ([2, 3].includes(release.schemaVersion) && Array.isArray(support.githubAppContractVersions)
         && !support.githubAppContractVersions.includes(release.githubAppContractVersion)) {
         addError(errors, 'support.githubAppContractVersions', 'must include githubAppContractVersion');
       }
     }
   }
-  validateDependencies(release.dependencies, 'dependencies', errors);
+  validateDependencies(release.dependencies, 'dependencies', errors, { native, strict: native });
   if (release.dependencies && typeof release.dependencies === 'object' && !Array.isArray(release.dependencies)
     && release.support && typeof release.support === 'object' && !Array.isArray(release.support)) {
     const architectureVersion = release.dependencies.architecture?.version;
@@ -275,7 +305,7 @@ export function validateControllerRelease(release) {
         addError(errors, `compatibility.${name}`, `must match contracts.${name}`);
       }
     }
-    if (release.schemaVersion === 2) {
+    if ([2, 3].includes(release.schemaVersion)) {
       if (typeof release.compatibility.githubAppContractVersion !== 'string' || !SEMVER.test(release.compatibility.githubAppContractVersion)) {
         addError(errors, 'compatibility.githubAppContractVersion', 'must use SemVer');
       }
@@ -303,7 +333,18 @@ export function validateControllerRelease(release) {
           if (!Number.isInteger(pinContracts.eventEnvelope) || pinContracts.eventEnvelope < 1) addError(errors, `compatibility.controllers.${index}.contracts.eventEnvelope`, 'must be a positive integer');
           for (const name of ['lifecycle', 'stateMachine', 'evidence']) if (typeof pinContracts[name] !== 'string' || !SEMVER.test(pinContracts[name])) addError(errors, `compatibility.controllers.${index}.contracts.${name}`, 'must use SemVer');
         }
-        validateDependencies(pin.dependencies, `compatibility.controllers.${index}.dependencies`, errors);
+        if (native && (!closedShape(pin, ['version', 'commit', 'contracts', 'dependencies'])
+          || !closedShape(pin.contracts, ['eventEnvelope', 'lifecycle', 'stateMachine', 'evidence']))) {
+          addError(errors, `compatibility.controllers.${index}`, 'has an unsupported v3 history shape');
+        }
+        const nativeHistory = native && ['architecture', 'primitives'].some((name) => Object.hasOwn(pin.dependencies?.[name] ?? {}, 'repositoryId'));
+        validateDependencies(pin.dependencies, `compatibility.controllers.${index}.dependencies`, errors, { native: nativeHistory, strict: native });
+      }
+      if (native && !release.compatibility.controllers.some((pin) => pin?.version === release.version && pin?.commit === release.commit
+        && ['eventEnvelope', 'lifecycle', 'stateMachine', 'evidence'].every((key) => pin?.contracts?.[key] === release.contracts?.[key])
+        && ['architecture', 'primitives'].every((name) => ['repository', 'repositoryId', 'version', 'commit', 'contentSha256']
+          .every((key) => pin?.dependencies?.[name]?.[key] === release.dependencies?.[name]?.[key])))) {
+        addError(errors, 'compatibility.controllers', 'must retain the exact current controller contracts and native dependency pins');
       }
     }
   }
