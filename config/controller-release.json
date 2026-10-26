@@ -4,7 +4,7 @@
   "controllerId": "agentic-delivery",
   "version": "0.2.0-draft.67",
   "commit": "bd40269c346aea91fb496ddfef995131e36a7d90",
-  "bootstrapCommit": "bd40269c346aea91fb496ddfef995131e36a7d90",
+  "bootstrapCommit": "279470aaee64e1351acb4284905aa05f24e74e24",
   "contracts": {
     "eventEnvelope": 1,
     "lifecycle": "1.0.0",
