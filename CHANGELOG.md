@@ -175,6 +175,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Update the pinned Codex CLI from 0.160.0 to 0.164.0 after verifying the official release asset digest; the pull request waits for no-generation runner capability checks before semantic review.
+
 - Register the controller-owned repository validation profile separately from agent roles and permitted capability profiles; its identity fingerprint does not grant source, mount or runtime admission.
 
 - Delivery evidence version 2 carries the saved operation identity, native repository, proposed policy and consumed allowance at publication. Historical version-1 records remain readable; state-version-5 records cannot omit operation evidence. Unknown tool consumption stays explicit rather than being reported as zero. Active native Issue Field requests now use the remaining operation time instead of a fixed 30-second timeout.
