@@ -177,7 +177,7 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
-- Update the pinned Codex CLI from 0.160.0 to 0.164.0 after verifying the official release asset digest; the pull request waits for no-generation runner capability checks before semantic review.
+- Update the pinned Codex CLI from 0.160.0 to 0.164.0 with verified official archive and package-tree digests. The previous 0.160.0 pin remains the rollback value; candidate runner capability checks run without model generation before semantic review.
 
 - Draft controller metadata `0.2.0-draft.67` selects the corrected stock-Codex runtime source, Architecture draft78 and AgentCustomizations draft15 under native identity contract v3. Its minimum bootstrap is draft67; historical shadow enrollments remain unchanged and active admission is still held.
 
@@ -186,7 +186,6 @@ they do not authorize migration, alter that issue's scope, or close it.
 - Delivery evidence version 2 carries the saved operation identity, native repository, proposed policy and consumed allowance at publication. Historical version-1 records remain readable; state-version-5 records cannot omit operation evidence. Unknown tool consumption stays explicit rather than being reported as zero. Active native Issue Field requests now use the remaining operation time instead of a fixed 30-second timeout.
 
 - Central intake and delivery select the reviewed draft66 participant registry through bootstrap `0e6bdae2d3e2e5ece2a2b2d440d90b9727737a80`. The controller includes the strict routing-schema repair; all participants remain in shadow mode. The previous bootstrap remains available for rollback.
-- Future Actions jobs use the official Codex CLI 0.160.0 package with pinned archive and package-tree digests; 0.159.3 remains the rollback version.
 
 - The controller release manifest and central participant registry now target
   `0.2.0-draft.52` at
