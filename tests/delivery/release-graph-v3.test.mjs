@@ -301,3 +301,19 @@ test('v3 graph rejects unknown projection contracts and a stale plugin repositor
   await json(inputs.distributionRoot, file, plugin);
   await assert.rejects(validateReleaseChain(inputs), /Agent Plugin Primitive repository/);
 });
+
+test('impact hash rejects before executing a tool shared with the selected Architecture commit', async t => {
+  const inputs = await fixture(t);
+  const { clone, marker } = await markerProducer(inputs, 'architecture');
+  const commit = await commitMarker(clone);
+  const architectureRelease = JSON.parse(await git(inputs.architectureRoot, 'show', `${architectureCommit}:architecture/generated/architecture-release.json`));
+  const primitiveRelease = JSON.parse(await git(inputs.primitivesRoot, 'show', `${primitiveCommit}:manifests/primitive-release.json`));
+  Object.assign(primitiveRelease.architecture, { releaseManifestCommit: commit, releaseManifestSha256: 'f'.repeat(64),
+    version: architectureRelease.version, sourceCommit: architectureRelease.sourceCommit });
+  const errors = [];
+  await validateNativeProducerSources({ architectureRoot: clone, primitivesRoot: inputs.primitivesRoot,
+    architectureDependency: { ...inputs.release.dependencies.architecture, commit },
+    primitiveDependency: inputs.release.dependencies.primitives, architectureRelease, primitiveRelease }, errors);
+  assert.ok(errors.some(error => error.includes('impact Architecture manifest hash')), errors.join('\n'));
+  await assert.rejects(access(marker), { code: 'ENOENT' });
+});

@@ -104,10 +104,13 @@ async function assertCommit(repository, commit, label, errors) {
   }
 }
 
-async function validatePreparedSource(repository, sourceCommit, manifestCommit, digest, script, label, errors) {
+async function validatePreparedSourceMetadata(repository, sourceCommit, manifestCommit, label, errors) {
   if (!await assertCommit(repository, sourceCommit, `${label} prepared source`, errors)) return;
   try { await git(repository, ['merge-base', '--is-ancestor', sourceCommit, manifestCommit]); }
-  catch { errors.push(`${label} prepared source must be an ancestor of its manifest commit`); return; }
+  catch { errors.push(`${label} prepared source must be an ancestor of its manifest commit`); }
+}
+
+async function reproducePreparedSource(repository, sourceCommit, manifestCommit, digest, script, label, errors) {
   const reproduced = await digestWith(repository, script, manifestCommit, `${label} prepared source`, errors, sourceCommit);
   equal(errors, `${label} prepared-source digest`, reproduced, digest);
 }
@@ -126,13 +129,8 @@ export async function validateNativeProducerSources({ architectureRoot, primitiv
   architectureRelease, primitiveRelease }, errors) {
   assertNativeProducerContracts(architectureRelease, primitiveRelease);
   try {
-    await validateArchitecturePin({ architectureRoot, architectureCommit: architectureDependency.commit,
-      architectureDigest: architectureDependency.contentSha256, architectureVersion: architectureDependency.version, requireHead: false });
-    await validatePreparedSource(architectureRoot, architectureRelease.sourceCommit, architectureDependency.commit,
-      architectureRelease.contentSha256, 'tools/architecture-content-digest.mjs', 'Architecture', errors);
-    await validatePreparedSource(primitivesRoot, primitiveRelease.sourceCommit, primitiveDependency.commit,
-      primitiveRelease.contentSha256, 'tools/primitive-content-digest.mjs', 'Primitive', errors);
-    if (errors.length > 0) return;
+    // Validate all impact bindings before any producer code runs. In particular,
+    // the impact commit can be the same object as the selected Architecture pin.
     const impact = primitiveRelease.architecture;
     if (impact?.id !== architectureRelease.architectureId || !SHA1.test(impact?.releaseManifestCommit ?? '')
       || !SHA256.test(impact?.releaseManifestSha256 ?? '')
@@ -144,20 +142,34 @@ export async function validateNativeProducerSources({ architectureRoot, primitiv
     if (!await assertCommit(architectureRoot, impact.releaseManifestCommit, 'Primitive impact Architecture manifest', errors)) return;
     const rawManifest = await readTextAtCommitRaw(architectureRoot, impact.releaseManifestCommit, 'architecture/generated/architecture-release.json');
     equal(errors, 'Primitive impact Architecture manifest hash', sha256(rawManifest), impact.releaseManifestSha256);
+    if (errors.length > 0) return;
     const manifest = JSON.parse(rawManifest);
+    assertNativeProducerContracts(manifest, primitiveRelease);
+    equal(errors, 'Primitive impact Architecture identity', manifest.architectureId, impact.id);
     equal(errors, 'Primitive impact Architecture version', manifest.version, impact.version);
     equal(errors, 'Primitive impact Architecture prepared commit', manifest.sourceCommit, impact.sourceCommit);
+    const inventory = await readTextAtCommitRaw(architectureRoot, impact.releaseManifestCommit, impact.decisionInventoryPath);
+    equal(errors, 'Primitive impact Architecture inventory hash', sha256(inventory), impact.decisionInventorySha256);
+    // Catalog/packaging may advance while the exact covered inventory is stable.
+    const selectedInventory = await readTextAtCommitRaw(architectureRoot, architectureDependency.commit, impact.decisionInventoryPath);
+    equal(errors, 'Primitive impact Architecture inventory coverage', selectedInventory, inventory);
+    await validatePreparedSourceMetadata(architectureRoot, architectureRelease.sourceCommit, architectureDependency.commit, 'Architecture', errors);
+    await validatePreparedSourceMetadata(primitivesRoot, primitiveRelease.sourceCommit, primitiveDependency.commit, 'Primitive', errors);
+    await validatePreparedSourceMetadata(architectureRoot, manifest.sourceCommit, impact.releaseManifestCommit, 'Primitive impact Architecture', errors);
+    if (errors.length > 0) return;
+
+    await validateArchitecturePin({ architectureRoot, architectureCommit: architectureDependency.commit,
+      architectureDigest: architectureDependency.contentSha256, architectureVersion: architectureDependency.version, requireHead: false });
+    await reproducePreparedSource(architectureRoot, architectureRelease.sourceCommit, architectureDependency.commit,
+      architectureRelease.contentSha256, 'tools/architecture-content-digest.mjs', 'Architecture', errors);
+    if (errors.length > 0) return;
+    await reproducePreparedSource(primitivesRoot, primitiveRelease.sourceCommit, primitiveDependency.commit,
+      primitiveRelease.contentSha256, 'tools/primitive-content-digest.mjs', 'Primitive', errors);
     if (errors.length > 0) return;
     await validateArchitecturePin({ architectureRoot, architectureCommit: impact.releaseManifestCommit,
       architectureDigest: manifest.contentSha256, architectureVersion: impact.version, requireHead: false });
-    await validatePreparedSource(architectureRoot, manifest.sourceCommit, impact.releaseManifestCommit,
+    await reproducePreparedSource(architectureRoot, manifest.sourceCommit, impact.releaseManifestCommit,
       manifest.contentSha256, 'tools/architecture-content-digest.mjs', 'Primitive impact Architecture', errors);
-    const inventory = await readTextAtCommitRaw(architectureRoot, impact.releaseManifestCommit, impact.decisionInventoryPath);
-    equal(errors, 'Primitive impact Architecture inventory hash', sha256(inventory), impact.decisionInventorySha256);
-    // The selected Architecture may advance its catalog/packaging contract
-    // while the exact decision inventory covered by Primitive impact is stable.
-    const selectedInventory = await readTextAtCommitRaw(architectureRoot, architectureDependency.commit, impact.decisionInventoryPath);
-    equal(errors, 'Primitive impact Architecture inventory coverage', selectedInventory, inventory);
   } catch (error) {
     errors.push(`Native producer provenance validation failed: ${error.message}`);
   }

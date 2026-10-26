@@ -5,7 +5,10 @@ and the original W16 remediation plan under
 [Architecture #11](https://github.com/agentic-delivery-lab/agentic-delivery-architecture/issues/11),
 coordinated with [Architecture #7](https://github.com/agentic-delivery-lab/agentic-delivery-architecture/issues/7)
 and [Distribution #2](https://github.com/agentic-delivery-lab/agentic-delivery-distribution/issues/2).
-This implements the existing ADR-0018 ownership and immutable-pin boundary;
+Issue105 records the current owner-authorized Control Plane portion of W16;
+its earlier numerical keep/drop dispositions remain historical and do not
+themselves supply this assignment. This implements the existing ADR-0018
+ownership and immutable-pin boundary;
 it does not add a new authority or change a participant's mode.
 
 V3 current dependency pins contain exactly repository, repositoryId, version,
@@ -74,7 +77,9 @@ each producer digest at both its prepared source and manifest commit, and
 checks that the prepared source is an ancestor of the manifest. Known graph
 metadata or projection errors reject before producer digest tools execute. An
 impact manifest hash, version or prepared-source mismatch also rejects before
-executing that manifest's tool. Primitive
+executing either the selected or impact manifest's tool, including when they
+refer to the same commit. Prepared-source and inventory metadata checks also
+precede those executions. Primitive
 impact provenance binds an exact Architecture manifest and decision inventory.
 A newer selected Architecture release may change catalog packaging while
 retaining that exact inventory; a changed inventory requires new impact
