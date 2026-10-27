@@ -94,7 +94,7 @@ jobs:
               architectureDigest: process.env.ARCHITECTURE_DIGEST,
               implementationCommit: process.env.IMPLEMENTATION_COMMIT,
               affectedIdentifiers: identifiers,
-            }) + "\\n");
+            }) + "\n");
           '
 
       - name: Validate the conformance request against the pinned Architecture
