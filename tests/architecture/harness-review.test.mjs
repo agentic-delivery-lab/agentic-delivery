@@ -234,7 +234,9 @@ test('the current architecture map covers the official ADR set and emits a conci
 });
 
 test('review reads provisional architecture evidence from the requested head revision', async (t) => {
-  const fixture = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-revision-review-'));
+  const container = path.join(`${repositoryRoot}.worktrees`, 'owned-clones');
+  await mkdir(container, { recursive: true });
+  const fixture = await mkdtemp(path.join(container, 'agentic-delivery-revision-review-'));
   t.after(() => rm(fixture, { recursive: true, force: true }));
   const clone = path.join(fixture, 'repository');
   const { execFile } = await import('node:child_process');

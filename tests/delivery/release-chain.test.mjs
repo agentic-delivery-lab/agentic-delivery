@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -159,7 +159,9 @@ test('release-chain validation executes digest tools from the pinned dependency 
     return;
   }
 
-  const temporaryRoot = await mkdtemp(path.join('/tmp', 'agentic-release-chain-test-'));
+  const container = path.join(`${repositoryRoot}.worktrees`, 'owned-clones');
+  await mkdir(container, { recursive: true });
+  const temporaryRoot = await mkdtemp(path.join(container, 'agentic-release-chain-test-'));
   const temporaryArchitectureRoot = path.join(temporaryRoot, 'architecture');
   try {
     await execFileAsync('git', ['clone', '--local', '--no-hardlinks', siblingRoots.architectureRoot, temporaryArchitectureRoot], {
