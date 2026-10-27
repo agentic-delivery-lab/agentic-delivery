@@ -204,3 +204,18 @@ test('the reusable Architecture workflow writes a readable conformance request',
     implementationCommit: 'c'.repeat(40), affectedIdentifiers: identifiers,
   });
 });
+
+test('each reusable workflow selects the validated producer package manager', async () => {
+  for (const [filename, job, checkoutName] of [
+    ['agentic-delivery-quality.yml', 'control-plane-contract', 'Check out the pinned Control Plane'],
+    ['agentic-delivery-architecture-review.yml', 'architecture-contract', 'Check out the pinned Architecture Authority'],
+  ]) {
+    const workflow = parseRepositoryYaml(await readFile(path.join(repositoryRoot, '.github/workflows', filename), 'utf8'));
+    const steps = workflow.jobs[job].steps;
+    const checkout = steps.find((step) => step.name === checkoutName);
+    const setup = steps.find((step) => step.name === 'Set up pnpm and Node.js');
+    assert.ok(steps.indexOf(checkout) < steps.indexOf(setup), 'Pinned producer checkout must precede toolchain selection.');
+    assert.equal(setup.with['package-json-file'], `${checkout.with.path}/package.json`,
+      `${filename} must select the producer toolchain rather than the consumer package or an absent workspace root.`);
+  }
+});

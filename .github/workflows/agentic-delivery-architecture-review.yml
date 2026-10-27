@@ -58,6 +58,7 @@ jobs:
         uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
           runtime: node@24
+          package-json-file: architecture/package.json
           install: false
 
       - name: Install pinned Architecture dependencies
