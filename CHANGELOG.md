@@ -572,6 +572,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- Read-only Architecture consumer validation selects its exact Requirements, Customizations and imported decision sources from the pinned typed metadata, checks native identities and commit objects, and prepares the stock isolated Structurizr runtime. A hosted consumer check calls both reusable entry points; source validation remains separate from runtime admission.
+
 - The read-only consumer quality workflow fetches full controller history and release tags so declared historical controller and bootstrap pins can be validated in a fresh checkout.
 
 - The reusable Architecture workflow writes valid conformance-request JSON instead of appending a literal escape sequence. The request retains the exact Architecture pin, content digest, implementation commit and affected identifiers.
