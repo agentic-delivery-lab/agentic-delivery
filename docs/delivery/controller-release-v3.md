@@ -84,3 +84,35 @@ impact provenance binds an exact Architecture manifest and decision inventory.
 A newer selected Architecture release may change catalog packaging while
 retaining that exact inventory; a changed inventory requires new impact
 evidence. These source checks do not approve a runtime context.
+
+## Read-only consumer workflow inputs
+
+The consumer quality workflow needs full Control Plane history and release
+tags. Historical controller and bootstrap pins can be outside the selected
+runtime's ancestry; a shallow checkout cannot establish their object types.
+
+The current Architecture consumer uses the typed draft78 contract tuple:
+Architecture release5.1, index4, inventory1.1, artifacts1, conformance1,
+evaluation2 and Requirements reference1. Its Requirements lock is schema1,
+Primitive catalog lock schema2, and decision inventory schema1. Unknown schema
+versions and mixed or unknown contract tuples reject before checkout outputs
+are produced. Historical callers
+retain their immutable workflow-source pins; this reader does not reinterpret
+older lock formats as the current native contract.
+
+Validation source commits come from the pinned Architecture metadata, with
+exact native repository identities and fixed checkout locations. The current
+Customizations checkout also supplies immutable historical Primitive origin
+objects. Historical inventory spellings remain unchanged. Missing, moving or
+non-commit source references fail before producer validation.
+
+The Architecture workflow uses the supported Ubuntu26.04 host and prepares
+the stock isolated Structurizr runtime through the pinned producer's
+`architecture:prepare` command. The `consumer-workflow-quality` workflow calls
+both real reusable entry points on fresh hosted runners, independently of
+metadata and projection fixtures.
+
+These jobs are read-only source validation. They receive no App credentials,
+approve no runtime context or validation profile, and activate no participant.
+Consumer adapters must select the corrected immutable workflow source after
+its checks and review; the runtime and bootstrap pins remain separate.

@@ -20,8 +20,11 @@ permissions:
 
 jobs:
   architecture-contract:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
+    env:
+      GIT_NO_REPLACE_OBJECTS: '1'
+      GIT_NO_LAZY_FETCH: '1'
     steps:
       - name: Check out the participating repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -41,6 +44,7 @@ jobs:
           repository: agentic-delivery-lab/agentic-delivery-architecture
           ref: ${{ inputs.architecture_commit }}
           path: architecture
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Confirm the checkout matches the requested pin
@@ -54,17 +58,171 @@ jobs:
         uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
           runtime: node@24
+          package-json-file: architecture/package.json
           install: false
+
+      - name: Install pinned Architecture dependencies
+        run: pnpm --dir architecture install --frozen-lockfile --ignore-scripts
+
+      - name: Read the pinned validation sources
+        id: validation-sources
+        working-directory: architecture
+        run: |
+          node --input-type=module <<'JS' >> "$GITHUB_OUTPUT"
+          import { readFileSync } from 'node:fs';
+          import { parseRepositoryYaml } from './tools/lib/yaml.mjs';
+          const json = (file) => JSON.parse(readFileSync(file, 'utf8'));
+          const yaml = (file) => parseRepositoryYaml(readFileSync(file, 'utf8'), file);
+          const release = json('architecture/generated/architecture-release.json');
+          const requirements = json('architecture/references/requirements.lock.json');
+          const primitives = yaml('architecture/references/primitive-catalog.lock.yml');
+          const inventory = yaml('architecture/references/decision-inventory.yml');
+          const architecture = 'agentic-delivery-lab/agentic-delivery-architecture';
+          const customizations = 'agentic-delivery-lab/agentic-delivery-agent-customizations';
+          const contracts = { architectureRelease: '5.1.0', conformance: '1.0.0',
+            adrPrimitiveIndex: '4.0.0', decisionInventory: '1.1.0',
+            architectureArtifacts: '1.0.0', evaluationReport: '2.0.0', requirementsReference: '1.0.0' };
+          if (release.schemaVersion !== 2 || release.sourceRepository !== architecture
+            || release.contractVersions === null || typeof release.contractVersions !== 'object'
+            || Array.isArray(release.contractVersions)
+            || Object.keys(release.contractVersions).length !== Object.keys(contracts).length
+            || Object.entries(contracts).some(([key, value]) => release.contractVersions?.[key] !== value)
+            || requirements.schemaVersion !== 1
+            || requirements.repository !== 'agentic-delivery-lab/agentic-delivery-requirements'
+            || requirements.repositoryId !== 1416207421
+            || primitives.schemaVersion !== 2 || primitives.source?.repository !== customizations
+            || primitives.source.repositoryId !== 1380894656
+            || inventory.schemaVersion !== 1
+            || inventory.canonicalRepository?.repository !== architecture
+            || inventory.canonicalRepository.repositoryId !== 1380894616
+            || !Array.isArray(inventory.records) || !Array.isArray(inventory.historicalVariants)) {
+            throw new Error('Unsupported or mismatched Architecture validation source contract.');
+          }
+          const sources = { architecture: new Set(), requirements: new Set(),
+            primitives: new Set(), control_plane: new Set(), distribution: new Set() };
+          const commit = (key, value) => {
+            if (typeof value !== 'string' || !/^[0-9a-f]{40}$/.test(value)) {
+              throw new Error('Validation source commit must be immutable: ' + key);
+            }
+            sources[key].add(value);
+          };
+          commit('architecture', release.sourceCommit);
+          commit('requirements', requirements.commit);
+          commit('primitives', primitives.source.sourceCommit);
+          const identities = {
+            [architecture]: [1380894616, 'architecture'],
+            'agentic-delivery-lab/agentic-delivery': [1358455028, 'control_plane'],
+            'agentic-delivery-lab/agentic-delivery-distribution': [1380894705, 'distribution'],
+            [customizations]: [1380894656, 'primitives'],
+            // Immutable imported origins retain their historical locator.
+            'agentic-delivery-lab/agentic-delivery-primitives': [1380894656, 'primitives'],
+          };
+          const origin = (value) => {
+            const identity = Object.hasOwn(identities, value?.repository) ? identities[value.repository] : null;
+            if (!identity || value.repositoryId !== identity[0]) {
+              throw new Error('Unknown native decision-source identity.');
+            }
+            commit(identity[1], value.sourceCommit);
+          };
+          for (const record of inventory.records) {
+            if (record.origin?.type === 'proposed') {
+              if (Object.hasOwn(record.origin, 'sourceCommit')) throw new Error('Proposed origin cannot select source code.');
+            } else if (['architecture-baseline', 'imported-text'].includes(record.origin?.type)) {
+              origin(record.origin);
+            } else throw new Error('Unsupported decision origin.');
+          }
+          for (const variant of inventory.historicalVariants) origin(variant);
+          if (sources.control_plane.size !== 1 || sources.distribution.size !== 1) {
+            throw new Error('Expected one immutable imported Control Plane and Distribution source.');
+          }
+          const outputs = {
+            requirements_commit: requirements.commit,
+            primitives_commit: primitives.source.sourceCommit,
+            control_plane_commit: [...sources.control_plane][0],
+            distribution_commit: [...sources.distribution][0],
+            source_commits: JSON.stringify(Object.fromEntries(Object.entries(sources)
+              .map(([key, values]) => [key, [...values].sort()]))),
+          };
+          process.stdout.write(Object.entries(outputs).map(([key, value]) => key + '=' + value + '\n').join(''));
+          JS
+
+      - name: Check out the pinned Requirements validation source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-requirements
+          ref: ${{ steps.validation-sources.outputs.requirements_commit }}
+          path: architecture/sources/requirements
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out the pinned Customizations validation source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-agent-customizations
+          ref: ${{ steps.validation-sources.outputs.primitives_commit }}
+          path: architecture/sources/primitives
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out the imported Control Plane decision source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery
+          ref: ${{ steps.validation-sources.outputs.control_plane_commit }}
+          path: architecture/sources/control-plane
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out the imported Distribution decision source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-distribution
+          ref: ${{ steps.validation-sources.outputs.distribution_commit }}
+          path: architecture/sources/distribution
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify the declared source commit objects
+        working-directory: architecture
+        env:
+          VALIDATION_SOURCES: ${{ steps.validation-sources.outputs.source_commits }}
+        run: |
+          node --input-type=module <<'JS'
+          import { execFileSync } from 'node:child_process';
+          const sources = JSON.parse(process.env.VALIDATION_SOURCES);
+          const paths = { architecture: '.', requirements: 'sources/requirements',
+            primitives: 'sources/primitives', control_plane: 'sources/control-plane',
+            distribution: 'sources/distribution' };
+          for (const [key, root] of Object.entries(paths)) {
+            if (!Array.isArray(sources[key]) || sources[key].length === 0) throw new Error('Missing declared source: ' + key);
+            for (const commit of sources[key]) {
+              if (typeof commit !== 'string' || !/^[0-9a-f]{40}$/.test(commit)
+                || execFileSync('git', ['--no-replace-objects', '--no-lazy-fetch', '-C', root,
+                  'cat-file', '-t', commit], { encoding: 'utf8' }).trim() !== 'commit') {
+                throw new Error('Validation requires an exact commit object: ' + key);
+              }
+            }
+          }
+          JS
 
       - name: Validate the pinned Architecture release
         run: node architecture/tools/validate-architecture-release.mjs architecture "$ARCHITECTURE_COMMIT"
         env:
           ARCHITECTURE_COMMIT: ${{ inputs.architecture_commit }}
 
-      - name: Install and validate Architecture Authority
+      - name: Prepare stock isolated Structurizr runtime
+        working-directory: architecture
         run: |
-          pnpm --dir architecture install --frozen-lockfile --ignore-scripts
-          pnpm --dir architecture architecture:check
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap
+          bwrap --version
+          python3 --version
+          sha256sum /usr/bin/bwrap /usr/bin/python3
+          pnpm architecture:prepare
+
+      - name: Validate Architecture Authority
+        run: pnpm --dir architecture architecture:check
 
       - name: Compute the immutable Architecture content digest
         id: architecture-digest
@@ -94,7 +252,7 @@ jobs:
               architectureDigest: process.env.ARCHITECTURE_DIGEST,
               implementationCommit: process.env.IMPLEMENTATION_COMMIT,
               affectedIdentifiers: identifiers,
-            }) + "\\n");
+            }) + "\n");
           '
 
       - name: Validate the conformance request against the pinned Architecture

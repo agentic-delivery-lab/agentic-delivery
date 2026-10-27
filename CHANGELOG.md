@@ -572,6 +572,17 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- Reusable validation workflows explicitly select pnpm from the pinned
+  producer package file instead of the workspace-root package manifest.
+  Hosted callers verify the supported producer pair; external consumers with
+  different package managers still require their own integration evidence.
+
+- Read-only Architecture consumer validation selects its exact Requirements, Customizations and imported decision sources from the pinned typed metadata, checks native identities and commit objects, and prepares the stock isolated Structurizr runtime. A hosted consumer check calls both reusable entry points; source validation remains separate from runtime admission.
+
+- The read-only consumer quality workflow fetches full controller history and release tags so declared historical controller and bootstrap pins can be validated in a fresh checkout.
+
+- The reusable Architecture workflow writes valid conformance-request JSON instead of appending a literal escape sequence. The request retains the exact Architecture pin, content digest, implementation commit and affected identifiers.
+
 - Read-only Architecture review accepts the reviewed 5.1 contract sets, including the current Customizations index, while rejecting mixed or unknown contracts and retaining exact commit and digest checks. Pinned digest scripts run through their physical path so macOS temporary-directory aliases reproduce the same digest. Controller dependency pins and runtime admission remain separate.
 
 - Release the account lock after a terminal receipt-write failure when execution shutdown, active-time settlement, checkpoint writes and token revocation are confirmed; retain recovery files and uncertain ownership.

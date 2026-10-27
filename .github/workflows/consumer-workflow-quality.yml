@@ -1,0 +1,32 @@
+name: consumer-workflow-quality
+
+# Exercise the real reusable entry points on fresh hosted runners. These
+# read-only calls validate the accepted producer pair; they do not admit or
+# activate a participating repository.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  consumer-control-plane:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/agentic-delivery-quality.yml
+    with:
+      controller_commit: 98495275481aff381180771da6eba9da95bc7816
+
+  consumer-architecture:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/agentic-delivery-architecture-review.yml
+    with:
+      architecture_commit: 59df514a3a6dc8a75b79b3fc75fe61aae4e6fdf3
+      affected_identifiers: '["urn:agentic-delivery:architecture:authority"]'

@@ -229,12 +229,17 @@ test('the current architecture map covers the official ADR set and emits a conci
   const contexts = parseRepositoryYaml(reviewMap, 'harness review map')['bounded-contexts'];
   const controlPlane = contexts.find((context) => context.id === 'agentic-delivery-control-plane');
   assert.ok(controlPlane.paths.includes('.github/workflows/agent-observation.yml'));
+  for (const workflow of ['agentic-delivery-quality.yml', 'agentic-delivery-architecture-review.yml', 'consumer-workflow-quality.yml']) {
+    assert.ok(controlPlane.paths.includes(`.github/workflows/${workflow}`), `Reusable validation must select the Control Plane context: ${workflow}`);
+  }
   assert.match(formatReviewMarkdown(review), /Harness Architecture Review/);
   assert.match(formatReviewMarkdown(review), /adr-map-coverage/);
 });
 
 test('review reads provisional architecture evidence from the requested head revision', async (t) => {
-  const fixture = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-revision-review-'));
+  const container = path.join(`${repositoryRoot}.worktrees`, 'owned-clones');
+  await mkdir(container, { recursive: true });
+  const fixture = await mkdtemp(path.join(container, 'agentic-delivery-revision-review-'));
   t.after(() => rm(fixture, { recursive: true, force: true }));
   const clone = path.join(fixture, 'repository');
   const { execFile } = await import('node:child_process');
