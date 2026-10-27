@@ -572,9 +572,10 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
-- Reusable validation workflows select pnpm from the pinned producer package
-  file, including when the consumer has a different package manager or no
-  package manifest.
+- Reusable validation workflows explicitly select pnpm from the pinned
+  producer package file instead of the workspace-root package manifest.
+  Hosted callers verify the supported producer pair; external consumers with
+  different package managers still require their own integration evidence.
 
 - Read-only Architecture consumer validation selects its exact Requirements, Customizations and imported decision sources from the pinned typed metadata, checks native identities and commit objects, and prepares the stock isolated Structurizr runtime. A hosted consumer check calls both reusable entry points; source validation remains separate from runtime admission.
 
