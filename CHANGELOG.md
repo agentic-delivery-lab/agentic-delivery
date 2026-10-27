@@ -572,6 +572,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- The read-only consumer quality workflow fetches full controller history and release tags so declared historical controller and bootstrap pins can be validated in a fresh checkout.
+
 - The reusable Architecture workflow writes valid conformance-request JSON instead of appending a literal escape sequence. The request retains the exact Architecture pin, content digest, implementation commit and affected identifiers.
 
 - Read-only Architecture review accepts the reviewed 5.1 contract sets, including the current Customizations index, while rejecting mixed or unknown contracts and retaining exact commit and digest checks. Pinned digest scripts run through their physical path so macOS temporary-directory aliases reproduce the same digest. Controller dependency pins and runtime admission remain separate.
