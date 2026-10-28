@@ -30,6 +30,27 @@ export class ReleaseChainValidationError extends Error {
   }
 }
 
+// Translate this factory's versioned projection metadata. This is not a
+// general Agent Plugins validator or proof that a client loaded the package.
+export function distributionPluginProjection(manifest) {
+  const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const unsupported = () => new ReleaseChainValidationError('Agent Plugin projection format or metadata contract version is unsupported');
+  if (!record(manifest)) throw unsupported();
+  if (Object.hasOwn(manifest, '$schema')) {
+    const projection = manifest.extensions?.['io.github.agentic-delivery-lab'];
+    if (manifest.$schema !== 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'
+      || manifest.name !== 'agentic-delivery' || typeof manifest.version !== 'string' || !manifest.version.trim()
+      || ['schemaVersion', 'id', 'status', 'generatedFrom', 'projections'].some((key) => Object.hasOwn(manifest, key))
+      || !record(manifest.extensions) || !record(projection)
+      || projection.schemaVersion !== 1 || projection.id !== manifest.name || Object.hasOwn(projection, 'version')) {
+      throw unsupported();
+    }
+    return { ...projection, version: manifest.version };
+  }
+  if (manifest.schemaVersion !== 1 || Object.hasOwn(manifest, 'extensions')) throw unsupported();
+  return manifest;
+}
+
 async function readJson(file) {
   try {
     return JSON.parse(await readFile(file, 'utf8'));
@@ -345,7 +366,7 @@ export async function validateReleaseChain({
   const sourceLock = await readJson(path.join(distributionRoot, 'manifests/sources.lock.json'));
   const automationLock = await readJson(path.join(distributionRoot, 'manifests/automation-projections.lock.json'));
   const capabilities = await readJson(path.join(distributionRoot, 'manifests/capabilities.lock.json'));
-  const plugin = await readJson(path.join(distributionRoot, 'packages/agent-plugin/plugin.json'));
+  const plugin = distributionPluginProjection(await readJson(path.join(distributionRoot, 'packages/agent-plugin/plugin.json')));
   const privateLock = await readJson(path.join(privateRoot, 'provenance/agents.lock.json'));
   const privateSurface = parseRepositoryYaml(await readText(path.join(privateRoot, 'provenance/surface.yml')), path.join(privateRoot, 'provenance/surface.yml'));
   const privateRuleset = await readJson(path.join(privateRoot, '.github/rulesets/require-publication-review.json'));

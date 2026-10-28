@@ -177,6 +177,11 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Release-chain validation reads factory projection metadata from the standard
+  Agent Plugins 1.0 manifest extension while retaining historical flat records.
+  Unknown formats and ambiguous source metadata are rejected. This does not
+  establish client installation or enablement.
+
 - Update the pinned Codex CLI from 0.160.0 to 0.164.0 with verified official archive and package-tree digests. The previous 0.160.0 pin remains the rollback value; candidate runner capability checks run without model generation before semantic review.
 
 - Draft controller metadata `0.2.0-draft.67` selects the corrected stock-Codex runtime source, Architecture draft78 and AgentCustomizations draft15 under native identity contract v3. Its minimum bootstrap is draft67; historical shadow enrollments remain unchanged and active admission is still held.

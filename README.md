@@ -68,6 +68,16 @@ moving branch. The publication check accepts a zero-agent private surface
 while the Copilot entitlement is pending; a non-empty projection must also
 reproduce every published file from the pinned Primitive checkout.
 
+The release-chain reader accepts historical flat plugin projection records
+(`schemaVersion: 1`) and factory metadata under
+`extensions["io.github.agentic-delivery-lab"]` in an
+[Agent Plugins 1.0 manifest](https://code.visualstudio.com/docs/agents/reference/agent-plugin-reference).
+The standard package supplies its version; the factory extension retains
+the projection identity, status, source pins and paths. Unknown formats or
+ambiguous metadata fail closed. This translates factory provenance; it does
+not validate every client capability or prove installation, entitlement or
+enablement. Distribution must migrate its package separately.
+
 `pnpm migration:source:check` is read-only. It verifies that each filtered
 history source map is based on the declared source snapshot and fails closed
 when a draft was generated from another branch. It does not run a history
