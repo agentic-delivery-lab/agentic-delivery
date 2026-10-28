@@ -295,6 +295,11 @@ async function primitiveAgentAtCommit(repository, commit, agentId) {
 // Public projection/provenance checks share the full graph implementation.
 // This scope excludes private publication and does not grant release admission.
 export async function validateDistributionReleaseChain(options = {}) {
+  const missing = ['controlPlaneRoot', 'architectureRoot', 'primitivesRoot', 'distributionRoot']
+    .filter((key) => !options[key]);
+  if (missing.length > 0) {
+    throw new ReleaseChainValidationError(`public Distribution validation requires: ${missing.join(', ')}`, 2);
+  }
   return validateReleaseChainScope(options, false);
 }
 

@@ -85,6 +85,11 @@ checks the public producer and Distribution graph without reading private
 publication data. Supply `controlPlaneRoot`, `architectureRoot`, `primitivesRoot`
 and `distributionRoot`. Its result explicitly reports
 `validationScope: public-distribution` and omits private publication counts.
+All four roots are required by this public API; the full API retains its
+existing default for `controlPlaneRoot`. Hosted producer fixtures exercise the
+public path with a standard plugin, absent private publication, and wrong-ID
+and digest rejection. Their controller/projection metadata is synthetic;
+separate sibling-dependent cases validate the real local candidate graph.
 It shares the exact producer-contract, immutable-source, digest and projection
 checks used by full validation. `validateReleaseChain` and the existing CLI
 continue to require and validate private publication. Neither entry point

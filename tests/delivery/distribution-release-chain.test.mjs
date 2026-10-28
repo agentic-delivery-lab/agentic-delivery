@@ -20,6 +20,10 @@ async function publicSourcesAvailable(t) {
 
 test('public validation requires its explicit source roots', async () => {
   await assert.rejects(validateDistributionReleaseChain(), /architectureRoot/);
+  for (const key of Object.keys(inputs)) {
+    await assert.rejects(validateDistributionReleaseChain({ ...inputs, [key]: undefined }),
+      (error) => error.exitCode === 2 && error.message.includes(key));
+  }
 });
 
 test('full validation still requires private publication inputs', async () => {
