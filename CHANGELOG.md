@@ -572,6 +572,9 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- Release-chain JSON reports retain the validated GitHub App contract version
+  from the pinned controller manifest.
+
 - Reusable validation workflows explicitly select pnpm from the pinned
   producer package file instead of the workspace-root package manifest.
   Hosted callers verify the supported producer pair; external consumers with

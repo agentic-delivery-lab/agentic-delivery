@@ -611,7 +611,12 @@ export async function validateReleaseChain({
   if (errors.length > 0) throw new ReleaseChainValidationError(`release-chain check failed:\n${errors.join('\n')}`);
   return {
     status: 'passed',
-    controller: { version: controller.version, commit: controller.commit, bootstrapCommit: controller.bootstrapCommit },
+    controller: {
+      version: controller.version,
+      commit: controller.commit,
+      bootstrapCommit: controller.bootstrapCommit,
+      githubAppContractVersion: controller.githubAppContractVersion,
+    },
     architecture: { version: architectureDependency.version, commit: architectureDependency.commit, contentSha256: architectureDependency.contentSha256 },
     primitives: { version: primitiveDependency.version, commit: primitiveDependency.commit, contentSha256: primitiveDependency.contentSha256 },
     primitiveSelection: { version: primitiveSelection.source.version, commit: primitiveSelection.source.commit, contentSha256: primitiveSelection.source.contentSha256 },
