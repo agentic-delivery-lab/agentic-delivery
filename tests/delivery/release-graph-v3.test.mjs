@@ -6,7 +6,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
-import { validateNativeProducerSources, validateReleaseChain } from '../../scripts/validate-release-chain.mjs';
+import { validateDistributionReleaseChain, validateNativeProducerSources, validateReleaseChain } from '../../scripts/validate-release-chain.mjs';
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 
 const exec = promisify(execFile);
@@ -136,6 +136,46 @@ test('planned v3 graph reproduces real current producers and canonical automatio
   assert.equal(result.architecture.commit, architectureCommit);
   assert.equal(result.primitives.commit, primitiveCommit);
   assert.equal(result.privatePublicationAgents, 0);
+});
+
+async function publicFixture(t) {
+  const { privateRoot, ...inputs } = await fixture(t);
+  // Delete only this fixture's owned synthetic data. Public validation must
+  // succeed without a private publication tree, including on hosted runners.
+  await rm(privateRoot, { recursive: true, force: true });
+  const pluginPath = path.join(inputs.distributionRoot, 'packages/agent-plugin/plugin.json');
+  const projection = JSON.parse(await readFile(pluginPath, 'utf8'));
+  await json(inputs.distributionRoot, 'packages/agent-plugin/plugin.json', {
+    $schema: 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json',
+    name: 'agentic-delivery', version: '0.1.0-synthetic',
+    extensions: { 'io.github.agentic-delivery-lab': { ...projection, id: 'agentic-delivery' } },
+  });
+  return inputs;
+}
+
+test('public planned graph reproduces pinned producers without private publication', async (t) => {
+  const result = await validateDistributionReleaseChain(await publicFixture(t));
+  assert.equal(result.status, 'passed');
+  assert.equal(result.validationScope, 'public-distribution');
+  assert.equal(Object.hasOwn(result, 'privatePublicationAgents'), false);
+  assert.equal(result.architecture.commit, architectureCommit);
+  assert.equal(result.primitives.commit, primitiveCommit);
+});
+
+test('public planned graph rejects wrong source ID and digest without private publication', async (t) => {
+  const inputs = await publicFixture(t);
+  const file = 'manifests/sources.lock.json';
+  const original = JSON.parse(await readFile(path.join(inputs.distributionRoot, file), 'utf8'));
+  const wrongId = structuredClone(original);
+  wrongId.sources.find((source) => source.id === 'architecture').repositoryId = 1;
+  await json(inputs.distributionRoot, file, wrongId);
+  await assert.rejects(validateDistributionReleaseChain(inputs), /Architecture repository ID/);
+  await json(inputs.distributionRoot, file, original);
+  const capabilitiesFile = 'manifests/capabilities.lock.json';
+  const capabilities = JSON.parse(await readFile(path.join(inputs.distributionRoot, capabilitiesFile), 'utf8'));
+  capabilities.contentSha256 = '0'.repeat(64);
+  await json(inputs.distributionRoot, capabilitiesFile, capabilities);
+  await assert.rejects(validateDistributionReleaseChain(inputs), /Capabilities Primitive digest/);
 });
 
 test('v3 graph rejects a wrong native dependency ID and a wrong inventory ID', async (t) => {

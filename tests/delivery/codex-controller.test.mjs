@@ -39,7 +39,7 @@ async function fixture(t) {
   await writeFile(eventFile, JSON.stringify({repository:{id:101,full_name:'fixture/repo',owner:{login:'maintainer'}}}));
   const env = {...process.env, GITHUB_ACTIONS:'false', GH_TOKEN:'fixture-token', PUBLISH_TOKEN:'fixture-publish-token', GITHUB_EVENT_PATH:eventFile, RUNNER_WORKSPACE:root,
     CODEX_DELIVERY_STATE_DIR:stateRoot, GITHUB_REPOSITORY:'fixture/repo', GITHUB_ACTOR:'maintainer', PARTICIPANT_MODE:'active',
-    GITHUB_EVENT_NAME:'workflow_call', READ_ONLY_RUN:'false', GITHUB_RUN_ID:'1', SOURCE_ISSUE:'7'};
+    GITHUB_EVENT_NAME:'workflow_call', READ_ONLY_RUN:'false', GITHUB_RUN_ID:'1', GITHUB_RUN_ATTEMPT:'1', SOURCE_ISSUE:'7'};
   const calls = {turns:[], prompts:[], commands:[], comments:[], prs:[], threads:[], publishHeaders:[], pushHeaders:[], accessTokenRequests:[], clients:0, closes:0};
   const faults = {
     permission:'write', sourceState:'open', sourceTitle:'Add a file', sourceBody:'Create result.txt', sourceComments:[],
@@ -580,14 +580,18 @@ test('terminal receipt failure releases only a confirmed-clean account lock', as
   }
 });
 
-test('keeps the account lock when process termination cannot be confirmed', async (t) => {
-  const f = await fixture(t); f.faults.turnPause = true; f.faults.shutdown = true;
-  await assert.rejects(f.run(),/process group/);
-  await access(path.join(f.stateRoot,'account.lock'));
-  assert.equal((await f.state()).activeTime.reservation.owner, '1:1');
-  assert.equal((await f.state()).activeTime.spentMs, 0);
-  assert.match(await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8'),/Delivery paused/);
-});
+for (const attempt of ['1', '2']) {
+  test(`keeps the account lock when process termination cannot be confirmed on attempt ${attempt}`, async (t) => {
+    const f = await fixture(t); f.faults.turnPause = true; f.faults.shutdown = true;
+    // Attempt 1 uses the fixture default even when the host is on a rerun.
+    if (attempt === '2') f.env.GITHUB_RUN_ATTEMPT = attempt;
+    await assert.rejects(f.run(),/process group/);
+    await access(path.join(f.stateRoot,'account.lock'));
+    assert.equal((await f.state()).activeTime.reservation.owner, `1:${attempt}`);
+    assert.equal((await f.state()).activeTime.spentMs, 0);
+    assert.match(await readFile(path.join(f.issueRoot,'CONTINUE.md'),'utf8'),/Delivery paused/);
+  });
+}
 
 test('manual repair cannot replenish exhausted validation or repeat implementation', async (t) => {
   const f = await fixture(t); f.faults.validation = true;
