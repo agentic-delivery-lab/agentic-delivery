@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 
-import { ReleaseChainValidationError, validateBootstrapWorkflowPins, validateReleaseChain, primitiveLocatorForVersion } from '../../scripts/validate-release-chain.mjs';
+import { ReleaseChainValidationError, validateBootstrapWorkflowPins, validateReleaseChain, primitiveLocatorForVersion, distributionPluginProjection } from '../../scripts/validate-release-chain.mjs';
 
 test('release-name migration admits only the declared versioned locator and unchanged native ID', () => {
   assert.equal(primitiveLocatorForVersion(1, 'agentic-delivery-lab/agentic-delivery-primitives'), true);
@@ -33,6 +33,14 @@ async function exists(directory) {
     return true;
   } catch {
     return false;
+  }
+}
+
+async function copyPrivateSurfaceFixture(target) {
+  await mkdir(target, { recursive: true });
+  // The validator consumes publication data, not a copied Git checkout.
+  for (const relative of ['.github', 'agents', 'profile', 'provenance']) {
+    await cp(path.join(siblingRoots.privateRoot, relative), path.join(target, relative), { recursive: true });
   }
 }
 
@@ -93,6 +101,36 @@ test('the pinned workflow source contains the validator and reusable workflow en
   assert.match(workflow, /--primitive-root primitives/);
 });
 
+test('a standard plugin preserves producer graph checks through its factory extension', async (t) => {
+  const available = await Promise.all(Object.values(siblingRoots).map(exists));
+  if (!available.every(Boolean)) {
+    t.skip('split repositories are not checked out in this workspace');
+    return;
+  }
+  const temporaryRoot = await mkdtemp(path.join('/tmp', 'agentic-standard-plugin-'));
+  t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+  // Projection data only; no source checkout, Git storage or dependencies.
+  for (const relative of ['manifests', 'bootstrap/templates', 'packages/agent-plugin']) {
+    const destination = path.join(temporaryRoot, relative);
+    await mkdir(path.dirname(destination), { recursive: true });
+    await cp(path.join(siblingRoots.distributionRoot, relative), destination, { recursive: true });
+  }
+  const pluginPath = path.join(temporaryRoot, 'packages/agent-plugin/plugin.json');
+  const { version, ...projection } = distributionPluginProjection(JSON.parse(await readFile(pluginPath, 'utf8')));
+  const manifest = {
+    $schema: 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json',
+    name: 'agentic-delivery',
+    version,
+    extensions: { 'io.github.agentic-delivery-lab': projection },
+  };
+  await writeFile(pluginPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  const inputs = { controlPlaneRoot: repositoryRoot, ...siblingRoots, distributionRoot: temporaryRoot };
+  assert.equal((await validateReleaseChain(inputs)).status, 'passed');
+  projection.generatedFrom.primitiveContentSha256 = '0'.repeat(64);
+  await writeFile(pluginPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  await assert.rejects(validateReleaseChain(inputs), /Agent Plugin Primitive digest/);
+});
+
 test('release-chain validation requires canonical Primitive reproduction in the private workflow', async (t) => {
   const available = await Promise.all(Object.values(siblingRoots).map(exists));
   if (!available.every(Boolean)) {
@@ -103,7 +141,7 @@ test('release-chain validation requires canonical Primitive reproduction in the 
   const temporaryRoot = await mkdtemp(path.join('/tmp', 'agentic-release-private-test-'));
   const temporaryPrivateRoot = path.join(temporaryRoot, 'private');
   try {
-    await cp(siblingRoots.privateRoot, temporaryPrivateRoot, { recursive: true });
+    await copyPrivateSurfaceFixture(temporaryPrivateRoot);
     const workflowPath = path.join(temporaryPrivateRoot, '.github/workflows/validate-published-agents.yml');
     const workflow = await readFile(workflowPath, 'utf8');
     await writeFile(workflowPath, workflow.replace('--primitive-root primitives', '--primitive-root untrusted'), 'utf8');
@@ -126,7 +164,7 @@ test('release-chain validation requires protected private publication desired st
   const temporaryRoot = await mkdtemp(path.join('/tmp', 'agentic-release-private-ruleset-test-'));
   const temporaryPrivateRoot = path.join(temporaryRoot, 'private');
   try {
-    await cp(siblingRoots.privateRoot, temporaryPrivateRoot, { recursive: true });
+    await copyPrivateSurfaceFixture(temporaryPrivateRoot);
     const rulesetPath = path.join(temporaryPrivateRoot, '.github/rulesets/require-publication-review.json');
     const ruleset = JSON.parse(await readFile(rulesetPath, 'utf8'));
     ruleset.bypass_actors = [{ actor_id: 1, actor_type: 'User', bypass_mode: 'always' }];
