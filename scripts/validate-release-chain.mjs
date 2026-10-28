@@ -292,14 +292,25 @@ async function primitiveAgentAtCommit(repository, commit, agentId) {
  * repositories. The paths are inputs to a release-coordination check; no
  * runtime code imports a sibling repository or relies on a relative path.
  */
-export async function validateReleaseChain({
+// Public projection/provenance checks share the full graph implementation.
+// This scope excludes private publication and does not grant release admission.
+export async function validateDistributionReleaseChain(options = {}) {
+  return validateReleaseChainScope(options, false);
+}
+
+export async function validateReleaseChain(options = {}) {
+  return validateReleaseChainScope(options, true);
+}
+
+async function validateReleaseChainScope({
   controlPlaneRoot = repositoryRoot,
   architectureRoot,
   primitivesRoot,
   distributionRoot,
   privateRoot,
-} = {}) {
-  const required = { architectureRoot, primitivesRoot, distributionRoot, privateRoot };
+}, includePrivatePublication) {
+  const required = { architectureRoot, primitivesRoot, distributionRoot,
+    ...(includePrivatePublication ? { privateRoot } : {}) };
   const missing = Object.entries(required).filter(([, value]) => !value).map(([name]) => name);
   if (missing.length > 0) throw new ReleaseChainValidationError(`release-chain check requires: ${missing.join(', ')}`, 2);
 
@@ -369,10 +380,6 @@ export async function validateReleaseChain({
   const automationLock = await readJson(path.join(distributionRoot, 'manifests/automation-projections.lock.json'));
   const capabilities = await readJson(path.join(distributionRoot, 'manifests/capabilities.lock.json'));
   const plugin = distributionPluginProjection(await readJson(path.join(distributionRoot, 'packages/agent-plugin/plugin.json')));
-  const privateLock = await readJson(path.join(privateRoot, 'provenance/agents.lock.json'));
-  const privateSurface = parseRepositoryYaml(await readText(path.join(privateRoot, 'provenance/surface.yml')), path.join(privateRoot, 'provenance/surface.yml'));
-  const privateRuleset = await readJson(path.join(privateRoot, '.github/rulesets/require-publication-review.json'));
-  const privateWorkflow = await readText(path.join(privateRoot, '.github/workflows/validate-published-agents.yml'));
   const issueIntakeWorkflow = await readText(path.join(controlPlaneRoot, '.github/workflows/issue-intake.yml'));
   const codexDeliveryWorkflow = await readText(path.join(controlPlaneRoot, '.github/workflows/codex-delivery.yml'));
 
@@ -501,7 +508,7 @@ export async function validateReleaseChain({
     for (const [label, document, version] of [
       ['Workflow bundle', bundle, 1], ['Source lock', sourceLock, 1],
       ['Agent Plugin', plugin, 1], ['Automation projection', automationLock, 1],
-      ['Capabilities source', capabilities, 2], ['Private publication source', privateLock, 2],
+      ['Capabilities source', capabilities, 2],
     ]) equal(errors, `${label} contract version`, document.schemaVersion, version);
     equal(errors, 'Agent Plugin Primitive repository', plugin.generatedFrom?.primitiveRepository, primitiveDependency.repository);
   }
@@ -555,63 +562,72 @@ export async function validateReleaseChain({
     codexDeliveryWorkflow,
   }));
 
-  equal(errors, 'Private surface repository name', privateSurface.repositoryName, '.github-private');
-  equal(errors, 'Private surface visibility', privateSurface.requiredVisibility, 'private');
-  if (!privateSurface.consumedPaths?.includes('profile/README.md')) errors.push('private surface must declare profile/README.md as a GitHub-consumed path');
-  if (!privateSurface.consumedPaths?.includes('agents/*.agent.md')) errors.push('private surface must declare agents/*.agent.md as a GitHub-consumed path');
-  if (!privateSurface.governancePaths?.includes('.github/rulesets/require-publication-review.json')) errors.push('private surface must declare its publication ruleset as a governance path');
-  if (privateRuleset.name !== 'Require private publication review') errors.push('private publication ruleset must have the approved name');
-  if (privateRuleset.target !== 'branch') errors.push('private publication ruleset must target branches');
-  if (privateRuleset.enforcement !== 'active') errors.push('private publication ruleset desired state must be active');
-  if (!Array.isArray(privateRuleset.bypass_actors) || privateRuleset.bypass_actors.length !== 0) errors.push('private publication ruleset must not declare bypass actors');
-  if (!privateRuleset.conditions?.ref_name?.include?.includes('~DEFAULT_BRANCH')) errors.push('private publication ruleset must target the default branch');
-  const rules = Array.isArray(privateRuleset.rules) ? privateRuleset.rules : [];
-  const requiredChecksRule = rules.find((rule) => rule?.type === 'required_status_checks');
-  const requiredChecks = requiredChecksRule?.parameters?.required_status_checks ?? [];
-  if (!requiredChecks.some((check) => check?.context === 'validate-published-agents / validate')) errors.push('private publication ruleset must require the published-agent validator');
-  const pullRequestRule = rules.find((rule) => rule?.type === 'pull_request');
-  if (pullRequestRule?.parameters?.require_code_owner_review !== true) errors.push('private publication ruleset must require a code-owner review');
-  if (!(Number.isInteger(pullRequestRule?.parameters?.required_approving_review_count) && pullRequestRule.parameters.required_approving_review_count >= 1)) errors.push('private publication ruleset must require at least one approval');
-  if (!rules.some((rule) => rule?.type === 'non_fast_forward')) errors.push('private publication ruleset must reject non-fast-forward updates');
-  if (!primitiveLocatorForVersion(privateLock.schemaVersion, privateLock.canonicalRepository, privateLock.canonicalRepositoryId)) errors.push('Private publication canonical repository identity is invalid');
-  if (!Array.isArray(privateLock.agents)) errors.push('private publication lock agents must be an array');
-  if (!privateWorkflow.includes(`repository: ${bundle.workflowSource?.repository}`)) errors.push('private validator must check out the declared workflow source repository');
-  if (!privateWorkflow.includes(`ref: ${bundle.workflowSource?.commit}`)) errors.push('private validator must pin the declared workflow source commit');
-  if (!privateWorkflow.includes(`repository: ${privateLock.canonicalRepository}`)) errors.push('private validator must check out the canonical Primitive repository');
-  if (!privateWorkflow.includes('steps.provenance.outputs.source_commit')) errors.push('private validator must derive the Primitive source from publication provenance');
-  if (!privateWorkflow.includes('--primitive-root primitives')) errors.push('private validator must reproduce projections from the checked-out Primitive source');
-  if (!/^\s*persist-credentials:\s*false\s*$/m.test(privateWorkflow)) errors.push('private validator checkouts must disable persisted credentials');
-  if (/^\s*secrets\s*:/m.test(privateWorkflow)) errors.push('private publication workflow must not receive central secrets');
-  for (const [index, agent] of (Array.isArray(privateLock.agents) ? privateLock.agents : []).entries()) {
-    const prefix = `private publication agent ${index}`;
-    equal(errors, `${prefix} source repository`, agent.sourceRepository, privateLock.canonicalRepository);
-    if (privateLock.schemaVersion === 2) equal(errors, `${prefix} source repository ID`, agent.sourceRepositoryId, privateLock.canonicalRepositoryId);
-    equal(errors, `${prefix} source commit`, agent.sourceCommit, primitiveDependency.commit);
-    equal(errors, `${prefix} source ref`, agent.sourceRef, primitiveDependency.commit);
-    equal(errors, `${prefix} promotion release`, agent.promotionRelease, primitiveRelease.releaseId);
-    if (!SHA256.test(agent.contentSha256 ?? '')) errors.push(`${prefix} contentSha256 must be a SHA-256 digest`);
-    if (!/^agents\/[a-z0-9]+(?:-[a-z0-9-]*[a-z0-9])?\.agent\.md$/.test(String(agent.targetPath ?? ''))) {
-      errors.push(`${prefix} targetPath must identify a published .agent.md file`);
-      continue;
-    }
-    const canonicalAgent = SHA1.test(String(primitiveDependency.commit ?? ''))
-      ? await primitiveAgentAtCommit(primitivesRoot, primitiveDependency.commit, agent.agentId).catch((error) => {
-        errors.push(`${prefix} canonical Primitive source could not be enumerated: ${error.message}`);
-        return null;
-      })
-      : null;
-    if (!canonicalAgent) errors.push(`${prefix} canonical Primitive source for ${agent.agentId} is missing`);
-    if (SHA1.test(String(primitiveDependency.commit ?? '')) && SHA256.test(agent.contentSha256 ?? '')) {
-      try {
-        if (!canonicalAgent) throw new Error('canonical Primitive source is missing');
-        const canonical = canonicalAgent.source;
-        const projection = await readText(path.join(privateRoot, agent.targetPath));
-        equal(errors, `${prefix} source/projection content`, projection, canonical);
-        equal(errors, `${prefix} source digest`, sha256(canonical), agent.contentSha256);
-      } catch (error) {
-        errors.push(`${prefix} source/projection could not be reproduced: ${error.message}`);
+  let privatePublicationAgents;
+  if (includePrivatePublication) {
+    const privateLock = await readJson(path.join(privateRoot, 'provenance/agents.lock.json'));
+    const privateSurface = parseRepositoryYaml(await readText(path.join(privateRoot, 'provenance/surface.yml')), path.join(privateRoot, 'provenance/surface.yml'));
+    const privateRuleset = await readJson(path.join(privateRoot, '.github/rulesets/require-publication-review.json'));
+    const privateWorkflow = await readText(path.join(privateRoot, '.github/workflows/validate-published-agents.yml'));
+    if (native) equal(errors, 'Private publication source contract version', privateLock.schemaVersion, 2);
+    equal(errors, 'Private surface repository name', privateSurface.repositoryName, '.github-private');
+    equal(errors, 'Private surface visibility', privateSurface.requiredVisibility, 'private');
+    if (!privateSurface.consumedPaths?.includes('profile/README.md')) errors.push('private surface must declare profile/README.md as a GitHub-consumed path');
+    if (!privateSurface.consumedPaths?.includes('agents/*.agent.md')) errors.push('private surface must declare agents/*.agent.md as a GitHub-consumed path');
+    if (!privateSurface.governancePaths?.includes('.github/rulesets/require-publication-review.json')) errors.push('private surface must declare its publication ruleset as a governance path');
+    if (privateRuleset.name !== 'Require private publication review') errors.push('private publication ruleset must have the approved name');
+    if (privateRuleset.target !== 'branch') errors.push('private publication ruleset must target branches');
+    if (privateRuleset.enforcement !== 'active') errors.push('private publication ruleset desired state must be active');
+    if (!Array.isArray(privateRuleset.bypass_actors) || privateRuleset.bypass_actors.length !== 0) errors.push('private publication ruleset must not declare bypass actors');
+    if (!privateRuleset.conditions?.ref_name?.include?.includes('~DEFAULT_BRANCH')) errors.push('private publication ruleset must target the default branch');
+    const rules = Array.isArray(privateRuleset.rules) ? privateRuleset.rules : [];
+    const requiredChecksRule = rules.find((rule) => rule?.type === 'required_status_checks');
+    const requiredChecks = requiredChecksRule?.parameters?.required_status_checks ?? [];
+    if (!requiredChecks.some((check) => check?.context === 'validate-published-agents / validate')) errors.push('private publication ruleset must require the published-agent validator');
+    const pullRequestRule = rules.find((rule) => rule?.type === 'pull_request');
+    if (pullRequestRule?.parameters?.require_code_owner_review !== true) errors.push('private publication ruleset must require a code-owner review');
+    if (!(Number.isInteger(pullRequestRule?.parameters?.required_approving_review_count) && pullRequestRule.parameters.required_approving_review_count >= 1)) errors.push('private publication ruleset must require at least one approval');
+    if (!rules.some((rule) => rule?.type === 'non_fast_forward')) errors.push('private publication ruleset must reject non-fast-forward updates');
+    if (!primitiveLocatorForVersion(privateLock.schemaVersion, privateLock.canonicalRepository, privateLock.canonicalRepositoryId)) errors.push('Private publication canonical repository identity is invalid');
+    if (!Array.isArray(privateLock.agents)) errors.push('private publication lock agents must be an array');
+    if (!privateWorkflow.includes(`repository: ${bundle.workflowSource?.repository}`)) errors.push('private validator must check out the declared workflow source repository');
+    if (!privateWorkflow.includes(`ref: ${bundle.workflowSource?.commit}`)) errors.push('private validator must pin the declared workflow source commit');
+    if (!privateWorkflow.includes(`repository: ${privateLock.canonicalRepository}`)) errors.push('private validator must check out the canonical Primitive repository');
+    if (!privateWorkflow.includes('steps.provenance.outputs.source_commit')) errors.push('private validator must derive the Primitive source from publication provenance');
+    if (!privateWorkflow.includes('--primitive-root primitives')) errors.push('private validator must reproduce projections from the checked-out Primitive source');
+    if (!/^\s*persist-credentials:\s*false\s*$/m.test(privateWorkflow)) errors.push('private validator checkouts must disable persisted credentials');
+    if (/^\s*secrets\s*:/m.test(privateWorkflow)) errors.push('private publication workflow must not receive central secrets');
+    for (const [index, agent] of (Array.isArray(privateLock.agents) ? privateLock.agents : []).entries()) {
+      const prefix = `private publication agent ${index}`;
+      equal(errors, `${prefix} source repository`, agent.sourceRepository, privateLock.canonicalRepository);
+      if (privateLock.schemaVersion === 2) equal(errors, `${prefix} source repository ID`, agent.sourceRepositoryId, privateLock.canonicalRepositoryId);
+      equal(errors, `${prefix} source commit`, agent.sourceCommit, primitiveDependency.commit);
+      equal(errors, `${prefix} source ref`, agent.sourceRef, primitiveDependency.commit);
+      equal(errors, `${prefix} promotion release`, agent.promotionRelease, primitiveRelease.releaseId);
+      if (!SHA256.test(agent.contentSha256 ?? '')) errors.push(`${prefix} contentSha256 must be a SHA-256 digest`);
+      if (!/^agents\/[a-z0-9]+(?:-[a-z0-9-]*[a-z0-9])?\.agent\.md$/.test(String(agent.targetPath ?? ''))) {
+        errors.push(`${prefix} targetPath must identify a published .agent.md file`);
+        continue;
+      }
+      const canonicalAgent = SHA1.test(String(primitiveDependency.commit ?? ''))
+        ? await primitiveAgentAtCommit(primitivesRoot, primitiveDependency.commit, agent.agentId).catch((error) => {
+          errors.push(`${prefix} canonical Primitive source could not be enumerated: ${error.message}`);
+          return null;
+        })
+        : null;
+      if (!canonicalAgent) errors.push(`${prefix} canonical Primitive source for ${agent.agentId} is missing`);
+      if (SHA1.test(String(primitiveDependency.commit ?? '')) && SHA256.test(agent.contentSha256 ?? '')) {
+        try {
+          if (!canonicalAgent) throw new Error('canonical Primitive source is missing');
+          const canonical = canonicalAgent.source;
+          const projection = await readText(path.join(privateRoot, agent.targetPath));
+          equal(errors, `${prefix} source/projection content`, projection, canonical);
+          equal(errors, `${prefix} source digest`, sha256(canonical), agent.contentSha256);
+        } catch (error) {
+          errors.push(`${prefix} source/projection could not be reproduced: ${error.message}`);
+        }
       }
     }
+    privatePublicationAgents = Array.isArray(privateLock.agents) ? privateLock.agents.length : 0;
   }
 
   // Metadata and projection failures must reject before any producer tool runs.
@@ -645,7 +661,7 @@ export async function validateReleaseChain({
     primitiveSelection: { version: primitiveSelection.source.version, commit: primitiveSelection.source.commit, contentSha256: primitiveSelection.source.contentSha256 },
     eventCatalog: { version: eventCatalog.version },
     distribution: { bundleVersion: bundle.bundleVersion, workflowCommit: bundle.workflowSource.commit, automationProjectionRelease: automationLock.projectionRelease },
-    privatePublicationAgents: Array.isArray(privateLock.agents) ? privateLock.agents.length : 0,
+    ...(includePrivatePublication ? { privatePublicationAgents } : { validationScope: 'public-distribution' }),
   };
 }
 

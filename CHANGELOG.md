@@ -11,6 +11,8 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Distribution can reuse public release-chain validation without private publication access. The explicitly scoped result preserves producer provenance, digest and projection checks; full validation still requires private publication. Hosting identity, release approval and bootstrap admission remain separate.
+
 - Controller release contract v3 binds current Architecture and AgentCustomizations pins to native numeric repository IDs and immutable digests while retaining exact historical compatibility records. Primitive selection crosses this typed boundary explicitly; metadata does not migrate enrollment or approve runtime admission.
 
 - Issue #105 holds unadmitted GitHub Actions delivery before allocating an operation identity, minting an App token, starting model work or publishing. An active mode or environment flag cannot approve the proposed policy. Held receipts preserve readable saved identity and consumption without changing checkpoint bytes; the source-only durable/context/runtime gate remains required before activation.
