@@ -45,6 +45,7 @@ for (const [label, change] of [
   ['mismatched package identity', (m) => { m.name = 'another-package'; }],
   ['missing factory extension', (m) => { m.extensions = {}; }],
   ['unknown factory metadata version', (m) => { m.extensions['io.github.agentic-delivery-lab'].schemaVersion = 2; }],
+  ['unknown factory metadata field', (m) => { m.extensions['io.github.agentic-delivery-lab'].unknown = 'conflicting'; }],
   ['ambiguous nested version', (m) => { m.extensions['io.github.agentic-delivery-lab'].version = '0.1.0-draft.99'; }],
   ['ambiguous top-level source pins', (m) => { m.generatedFrom = legacy.generatedFrom; }],
 ]) {
@@ -62,5 +63,12 @@ test('an unsupported standard manifest cannot fall back to flat legacy fields', 
 test('unknown legacy metadata versions and mixed containers are rejected', () => {
   for (const manifest of [{ ...legacy, schemaVersion: 2 }, { ...legacy, extensions: {} }, null, []]) {
     assert.throws(() => releaseChain.distributionPluginProjection(manifest), /Agent Plugin.*(format|metadata)/i);
+  }
+});
+
+
+test('legacy metadata rejects standard-only or unknown top-level fields', () => {
+  for (const key of ['name', 'description', 'author', 'homepage', 'repository', 'license', 'keywords', 'extensions', 'unknown']) {
+    assert.throws(() => releaseChain.distributionPluginProjection({ ...legacy, [key]: 'conflicting-package' }), /Agent Plugin.*(format|metadata)/i, key);
   }
 });

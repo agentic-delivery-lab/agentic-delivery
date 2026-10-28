@@ -73,10 +73,12 @@ The release-chain reader accepts historical flat plugin projection records
 `extensions["io.github.agentic-delivery-lab"]` in an
 [Agent Plugins 1.0 manifest](https://code.visualstudio.com/docs/agents/reference/agent-plugin-reference).
 The standard package supplies its version; the factory extension retains
-the projection identity, status, source pins and paths. Unknown formats or
-ambiguous metadata fail closed. This translates factory provenance; it does
-not validate every client capability or prove installation, entitlement or
-enablement. Distribution must migrate its package separately.
+the projection identity, status, source pins and paths. Unknown formats,
+unknown projection fields and ambiguous metadata fail closed. Status and package
+version are retained as provenance; this reader does not establish their
+admission or compatibility. It does not validate every client capability or
+prove installation, entitlement or enablement. Distribution must migrate its
+package separately.
 
 `pnpm migration:source:check` is read-only. It verifies that each filtered
 history source map is based on the declared source snapshot and fails closed

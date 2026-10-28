@@ -34,6 +34,7 @@ export class ReleaseChainValidationError extends Error {
 // general Agent Plugins validator or proof that a client loaded the package.
 export function distributionPluginProjection(manifest) {
   const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const metadataKeys = new Set(['schemaVersion', 'id', 'version', 'status', 'generatedFrom', 'projections']);
   const unsupported = () => new ReleaseChainValidationError('Agent Plugin projection format or metadata contract version is unsupported');
   if (!record(manifest)) throw unsupported();
   if (Object.hasOwn(manifest, '$schema')) {
@@ -42,12 +43,13 @@ export function distributionPluginProjection(manifest) {
       || manifest.name !== 'agentic-delivery' || typeof manifest.version !== 'string' || !manifest.version.trim()
       || ['schemaVersion', 'id', 'status', 'generatedFrom', 'projections'].some((key) => Object.hasOwn(manifest, key))
       || !record(manifest.extensions) || !record(projection)
+      || Object.keys(projection).some((key) => !metadataKeys.has(key))
       || projection.schemaVersion !== 1 || projection.id !== manifest.name || Object.hasOwn(projection, 'version')) {
       throw unsupported();
     }
     return { ...projection, version: manifest.version };
   }
-  if (manifest.schemaVersion !== 1 || Object.hasOwn(manifest, 'extensions')) throw unsupported();
+  if (manifest.schemaVersion !== 1 || Object.keys(manifest).some((key) => !metadataKeys.has(key))) throw unsupported();
   return manifest;
 }
 
