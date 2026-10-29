@@ -1,0 +1,50 @@
+name: github-app-coverage
+
+# agentic-primitive: {"id":"owner-github-app-coverage-workflow","kind":"workflow","enforcement":"deterministic","adrs":["ADR-0018"],"domains":["agentic-delivery-control-plane"]}
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Exact accepted main commit to inspect with the bounded metadata audit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: owner-github-app-coverage
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository_id == '1358455028' &&
+      github.actor_id == '14937399' &&
+      github.triggering_actor == github.actor &&
+      github.ref == 'refs/heads/main' &&
+      inputs.source_commit == github.sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the exact operator-selected source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up the pinned stock runtime
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          install: false
+
+      - name: Observe fixed factory App coverage with scoped metadata tokens
+        env:
+          APP_COVERAGE_SOURCE_COMMIT: ${{ inputs.source_commit }}
+          CODEX_DELIVERY_APP_ID: '5011055'
+          CODEX_DELIVERY_APP_INSTALLATION_ID: '163255060'
+          CODEX_DELIVERY_APP_PRIVATE_KEY: ${{ secrets.CODEX_DELIVERY_APP_PRIVATE_KEY }}
+        run: node scripts/collect-github-inventory.mjs --app-coverage

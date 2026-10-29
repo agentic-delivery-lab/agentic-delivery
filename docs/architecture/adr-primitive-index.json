@@ -309,6 +309,7 @@
         "evaluation-finding-router-cli",
         "event-catalog",
         "event-catalog-validator",
+        "github-app-coverage-observation",
         "github-app-publication-boundary",
         "github-app-token-provider",
         "intake-caller-provenance-guard",
@@ -325,6 +326,7 @@
         "operator-issue-field-canary",
         "organization-metadata-runbook",
         "organization-webhook-ingress",
+        "owner-github-app-coverage-workflow",
         "participant-registry",
         "participant-registry-validator",
         "primitive-selection-contract",
@@ -387,6 +389,7 @@
         "evaluation-finding-router-cli",
         "event-catalog",
         "event-catalog-validator",
+        "github-app-coverage-observation",
         "github-app-publication-boundary",
         "github-app-token-provider",
         "intake-caller-provenance-guard",
@@ -403,6 +406,7 @@
         "operator-issue-field-canary",
         "organization-metadata-runbook",
         "organization-webhook-ingress",
+        "owner-github-app-coverage-workflow",
         "participant-registry",
         "participant-registry-validator",
         "primitive-selection-contract",
@@ -852,6 +856,19 @@
       ]
     },
     {
+      "id": "github-app-coverage-observation",
+      "path": "scripts/lib/github-app-coverage.mjs",
+      "location": "scripts/lib/github-app-coverage.mjs",
+      "kind": "script",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ]
+    },
+    {
       "id": "github-app-publication-boundary",
       "path": ".github/workflows/codex-delivery.yml",
       "location": ".github/workflows/codex-delivery.yml",
@@ -1267,6 +1284,19 @@
       "domains": [
         "agentic-delivery-control-plane",
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "owner-github-app-coverage-workflow",
+      "path": ".github/workflows/github-app-coverage.yml",
+      "location": ".github/workflows/github-app-coverage.yml",
+      "kind": "workflow",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {

@@ -311,15 +311,19 @@ export async function collectGithubInventory({ organization = 'agentic-delivery-
 }
 
 function usage() {
-  return 'Usage: node scripts/collect-github-inventory.mjs [--org <login>] [--output <path>]';
+  return 'Usage: node scripts/collect-github-inventory.mjs [--org <login>] [--output <path>] [--app-coverage]';
 }
 
 function parseArgs(args) {
   const options = { organization: 'agentic-delivery-lab' };
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
+    if (['--org', '--output'].includes(argument) && (!args[index + 1] || args[index + 1].startsWith('--'))) {
+      throw new GithubInventoryError(`${argument} requires a value\n${usage()}`, 2);
+    }
     if (argument === '--org') options.organization = args[++index];
     else if (argument === '--output') options.output = args[++index];
+    else if (argument === '--app-coverage') options.appCoverage = true;
     else throw new GithubInventoryError(`Unknown argument: ${argument}\n${usage()}`, 2);
     if (!options.organization || (argument === '--output' && !options.output)) throw new GithubInventoryError(`${argument} requires a value\n${usage()}`, 2);
   }
@@ -330,9 +334,15 @@ const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === fileUR
 if (isMainModule) {
   try {
     const options = parseArgs(process.argv.slice(2));
-    const report = await collectGithubInventory({ organization: options.organization });
+    if (options.appCoverage && options.organization !== 'agentic-delivery-lab') throw new GithubInventoryError('App coverage has a fixed organization scope.', 2);
+    let report;
+    if (options.appCoverage) {
+      const { collectGithubAppCoverage } = await import('./lib/github-app-coverage.mjs');
+      report = await collectGithubAppCoverage();
+    } else report = await collectGithubInventory({ organization: options.organization });
     if (options.output) await writeFile(options.output, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    if (options.appCoverage && !report.currentFactorySetCoverageVerified) process.exitCode = 1;
   } catch (error) {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = error.exitCode ?? 1;
