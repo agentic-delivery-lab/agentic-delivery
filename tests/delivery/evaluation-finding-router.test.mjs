@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -425,4 +425,182 @@ routeTest('preserves each report layer and owner candidate without collapsing di
 
 routeTest('rejects schema bytes that differ from the pinned Architecture digest', () => {
   assert.throws(() => compilePinnedEvaluationReportSchema('not the pinned schema bytes'), /schema SHA-256 does not match the pinned Architecture contract/);
+});
+
+function mappedReport({ capability = false } = {}) {
+  const input = report();
+  input.layer = capability ? 'agent-capability' : 'factory';
+  input.subject = {
+    layer: input.layer,
+    id: capability ? 'repository-delivery-validation' : 'evaluation-finding-router',
+    version: '0.1.0',
+    sourcePin: capability ? {
+      repository: 'agentic-delivery-lab/agentic-delivery-agent-customizations',
+      commit: '69beab027d8b28fc082fa6054f4def5ba0146e3c', path: 'capabilities/catalog.yml',
+      sha256: '6e5cde0bcbdf62bcf1376af09d0ad7870c6c945733b81639e684c0da2006c0c6',
+    } : {
+      repository: ownerRepository, commit: 'cb9c0a15d3859de6849e8c02ab17f114ec9ee914',
+      path: 'scripts/lib/evaluation-finding-router.mjs',
+      sha256: 'd99b2594c71ed04039e0295b16c938efc007cf0f00d103e75a291b12c116a6b7',
+    },
+  };
+  if (capability) input.recommendation.ownerIssue = 'https://github.com/agentic-delivery-lab/agentic-delivery-agent-customizations/issues/3';
+  return input;
+}
+
+async function routeWithOwners(reports) {
+  const { loadPinnedEvaluationOwnership } = await import('../../scripts/lib/evaluation-finding-router.mjs');
+  const ownershipContract = await loadPinnedEvaluationOwnership(architectureRoot);
+  return routeEvaluationReports({ reports, schemaContract, sourceIssueUrl, ownershipContract });
+}
+
+routeTest('pinned ownership yields a repository-only human-review proposal with unresolved live evidence', async () => {
+  const input = mappedReport();
+  const result = await routeWithOwners([input, structuredClone(input)]);
+  assert.equal(result.proposals.length, 1);
+  assert.equal(result.dispositions.length, 0);
+  const proposal = result.proposals[0];
+  assert.deepEqual(proposal.target, { repository: ownerRepository, repositoryId: 1358455028 });
+  assert.equal(proposal.status, 'awaiting-human-prioritization');
+  assert.equal(proposal.duplicateCount, 2);
+  assert.equal(proposal.ownershipVerification.status, 'mapped-for-review');
+  assert.equal(proposal.ownershipVerification.nativeIdentity, 'expected-from-pinned-map-not-reverified');
+  assert.equal(proposal.requiresTargetVerification, true);
+  assert.equal(proposal.requiresHumanPrioritization, true);
+  assert.equal(proposal.empiricalClaimsVerified, false);
+  assert.equal(proposal.executionAuthorized, false);
+  assert.equal(result.mutationsRequested, false);
+  assert.equal(proposal.sourceEvidence.verification, 'references-preserved-but-not-retrieved');
+  assert.deepEqual(proposal.sourceReport, input);
+  assert.equal(proposal.ownershipVerification.mappingReference.sha256.length, 64);
+  assert.equal(proposal.ownershipVerification.schemaReference.sha256.length, 64);
+  assert.equal('issueUrl' in proposal.target, false);
+  assert.equal('priority' in proposal, false);
+  assert.equal('lifecycleStage' in proposal, false);
+});
+
+routeTest('capability evidence routes to its distinct canonical Customizations owner', async () => {
+  const result = await routeWithOwners([mappedReport({ capability: true })]);
+  assert.deepEqual(result.proposals[0].target, { repository: 'agentic-delivery-lab/agentic-delivery-agent-customizations', repositoryId: 1380894656 });
+});
+
+routeTest('synthetic reports remain non-actionable even with a matching pinned owner', async () => {
+  const input = mappedReport(); input.classification = 'synthetic';
+  const result = await routeWithOwners([input]);
+  assert.equal(result.proposals.length, 0);
+  assert.equal('target' in result.dispositions[0], false);
+  assert.equal('candidateTarget' in result.dispositions[0], false);
+});
+
+routeTest('unmapped subjects and changed source paths cannot borrow a known owner', async () => {
+  for (const field of ['id', 'path', 'repository', 'product-layer']) {
+    const input = mappedReport();
+    if (field === 'id') input.subject.id = 'other-subject';
+    else if (field === 'product-layer') { input.layer = 'product-outcome'; input.subject.layer = input.layer; }
+    else input.subject.sourcePin[field] = field === 'path' ? 'scripts/lib/other.mjs' : 'agentic-delivery-lab/agentic-delivery-distribution';
+    const result = await routeWithOwners([input]);
+    assert.equal(result.proposals.length, 0);
+    assert.equal(result.dispositions[0].status, 'awaiting-owner-verification');
+  }
+});
+
+routeTest('a report owner assertion cannot override the pinned owner or self-target the source Issue', async () => {
+  const wrong = mappedReport(); wrong.recommendation.ownerIssue = 'https://github.com/agentic-delivery-lab/agentic-delivery-architecture/issues/11';
+  await assert.rejects(routeWithOwners([wrong]), /pinned owner/);
+  const recursive = mappedReport(); recursive.recommendation.ownerIssue = sourceIssueUrl;
+  await assert.rejects(routeWithOwners([recursive]), /source Issue/);
+});
+
+routeTest('ownership contracts require exact pinned bytes and cannot be forged or mutated', async () => {
+  const module = await import('../../scripts/lib/evaluation-finding-router.mjs');
+  assert.throws(() => module.compilePinnedEvaluationOwnership('{}', '{}'), /SHA-256/);
+  assert.throws(() => routeEvaluationReports({ reports: [mappedReport()], schemaContract, sourceIssueUrl, ownershipContract: {} }), /pinned Architecture ownership/);
+  const ownershipContract = await module.loadPinnedEvaluationOwnership(architectureRoot);
+  assert.equal(Object.isFrozen(ownershipContract), true);
+  assert.throws(() => { ownershipContract.mappingPin.repository = 'attacker/owner'; }, TypeError);
+});
+
+routeTest('existing offline command loads the fixed mapping and emits a review proposal without mutation', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'evaluation-owner-command-'));
+  try {
+    const file = path.join(directory, 'report.json');
+    await writeFile(file, JSON.stringify(mappedReport()));
+    const result = await routeEvaluationFindingReports([
+      '--architecture-root', architectureRoot, '--source-issue', sourceIssueUrl, '--report', file,
+    ]);
+    assert.equal(result.proposals.length, 1);
+    assert.deepEqual(result.proposals[0].target, { repository: ownerRepository, repositoryId: 1358455028 });
+    assert.equal(result.proposals[0].executionAuthorized, false);
+    assert.equal(result.mutationsRequested, false);
+    assert.equal(result.ownership.mappingPin.sha256, '81d549c1288505767af5a836f078434e94f7d46b29d810325b217b36bedb574b');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+const currentReportSchemaCommit = 'e1cb20f94ee398c8a26899cc6219b380975da3ca';
+const currentReportSchemaUrl = `https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/${currentReportSchemaCommit}/architecture/contracts/evaluation-report.schema.json`;
+
+routeTest('the offline command accepts the current producer schema pin and retains its exact provenance', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'evaluation-current-schema-'));
+  try {
+    const input = structuredClone(syntheticUnmeasuredReport);
+    input.$schema = currentReportSchemaUrl;
+    const file = path.join(directory, 'report.json'); await writeFile(file, JSON.stringify(input));
+    const result = await routeEvaluationFindingReports([
+      '--architecture-root', architectureRoot, '--source-issue', sourceIssueUrl, '--report', file,
+    ]);
+    assert.equal(result.proposals.length, 0);
+    assert.equal(result.dispositions[0].status, 'no-action');
+    assert.equal(result.dispositions[0].reportReference.schema.url, currentReportSchemaUrl);
+    assert.equal(result.dispositions[0].reportReference.schema.sourcePin.commit, currentReportSchemaCommit);
+    assert.equal(result.schemaPin.commit, currentReportSchemaCommit);
+    assert.equal(result.mutationsRequested, false);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+routeTest('explicit schema dispatch preserves mixed pinned provenance and rejects unknown immutable refs', async () => {
+  const { loadPinnedEvaluationReportSchemas } = await import('../../scripts/lib/evaluation-finding-router.mjs');
+  const contracts = await loadPinnedEvaluationReportSchemas(architectureRoot);
+  const old = structuredClone(syntheticUnmeasuredReport);
+  const current = structuredClone(old); current.$schema = currentReportSchemaUrl; current.reportId += ':current';
+  const result = routeEvaluationReports({ reports: [old, current], schemaContract: contracts, sourceIssueUrl });
+  assert.equal(result.schemaPin, null);
+  assert.equal(result.schemaPins.length, 2);
+  assert.deepEqual(result.dispositions.map(v => v.reportReference.schema.url), [old.$schema, current.$schema]);
+  for (const ref of ['main', 'a'.repeat(40)]) {
+    const unknown = structuredClone(current); unknown.$schema = current.$schema.replace(currentReportSchemaCommit, ref);
+    assert.throws(() => routeEvaluationReports({ reports: [unknown], schemaContract: contracts, sourceIssueUrl }), EvaluationFindingRoutingError);
+  }
+  assert.throws(() => route([current]), /immutable Architecture schema pin/, 'the legacy single-pin API retains its exact original contract');
+});
+
+routeTest('current producer schema routes each mapped observed subject with exact provenance and held authority', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'evaluation-current-owner-'));
+  try {
+    for (const capability of [false, true]) {
+      const input = mappedReport({ capability });
+      input.$schema = currentReportSchemaUrl;
+      input.subject.sourcePin.repository = input.subject.sourcePin.repository.toUpperCase();
+      const file = path.join(directory, 'report.json');
+      await writeFile(file, JSON.stringify(input));
+      const result = await routeEvaluationFindingReports([
+        '--architecture-root', architectureRoot, '--source-issue', sourceIssueUrl, '--report', file,
+      ]);
+      assert.equal(result.proposals.length, 1);
+      assert.equal(result.dispositions.length, 0);
+      const proposal = result.proposals[0];
+      assert.deepEqual(proposal.target, capability
+        ? { repository: 'agentic-delivery-lab/agentic-delivery-agent-customizations', repositoryId: 1380894656 }
+        : { repository: ownerRepository, repositoryId: 1358455028 });
+      assert.equal(result.schemaPin.commit, currentReportSchemaCommit);
+      assert.equal(proposal.reportReference.schema.url, currentReportSchemaUrl);
+      assert.equal(proposal.reportReference.schema.sourcePin.commit, currentReportSchemaCommit);
+      assert.deepEqual(proposal.sourceReport, input);
+      assert.equal(proposal.status, 'awaiting-human-prioritization');
+      assert.equal(proposal.requiresTargetVerification, true);
+      assert.equal(proposal.requiresHumanPrioritization, true);
+      assert.equal(proposal.empiricalClaimsVerified, false);
+      assert.equal(proposal.executionAuthorized, false);
+      assert.equal(result.mutationsRequested, false);
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });

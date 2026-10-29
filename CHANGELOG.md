@@ -11,6 +11,12 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Route evaluation findings to repository-only review proposals through an
+  integrity-bound Architecture ownership map. Preserve synthetic/unknown-owner
+  holds, report provenance and evidence limits; target verification and human
+  prioritization remain required. The existing offline command performs no
+  Issue/Project mutation or execution.
+
 - Distribution can reuse public release-chain validation without private publication access. The explicitly scoped result preserves producer provenance, digest and projection checks; full validation still requires private publication. Hosting identity, release approval and bootstrap admission remain separate.
 
 - Controller release contract v3 binds current Architecture and AgentCustomizations pins to native numeric repository IDs and immutable digests while retaining exact historical compatibility records. Primitive selection crosses this typed boundary explicitly; metadata does not migrate enrollment or approve runtime admission.
@@ -578,6 +584,10 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) aligns the invocation identity with the registered `Agentic Delivery Lab Invoker 7F3A` GitHub App name, slug, mention, and bot login across the actor catalog, code, tests, and agentic documentation.
 
 ### Fixed
+
+- Accept the current evaluation producer's exact reviewed schema pin alongside
+  the historical pin after verifying identical contract bytes. Preserve each
+  report's schema provenance and synthetic holds; reject moving/unknown refs.
 
 - Release-chain JSON reports retain the validated GitHub App contract version
   from the pinned controller manifest.
