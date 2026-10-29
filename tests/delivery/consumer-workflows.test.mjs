@@ -20,8 +20,10 @@ async function architectureInputFixture() {
   assert.ok(step, 'Architecture validation must supply its declared source dependencies.');
   const inline = step.run.match(/node --input-type=module <<'JS'[^\n]*\n([\s\S]+)\nJS\s*$/);
   assert.ok(inline);
-  const candidates = [path.join(repositoryRoot, 'node_modules/architecture-pin-contract'),
-    path.resolve(repositoryRoot, '../agentic-delivery-architecture')];
+  const candidates = process.env.ARCHITECTURE_PIN_TEST_ROOT
+    ? [path.resolve(repositoryRoot, process.env.ARCHITECTURE_PIN_TEST_ROOT)]
+    : [path.join(repositoryRoot, 'node_modules/architecture-pin-contract'),
+      path.resolve(repositoryRoot, '../agentic-delivery-architecture')];
   let root;
   for (const candidate of candidates) {
     try {
@@ -217,5 +219,18 @@ test('each reusable workflow selects the validated producer package manager', as
     assert.ok(steps.indexOf(checkout) < steps.indexOf(setup), 'Pinned producer checkout must precede toolchain selection.');
     assert.equal(setup.with['package-json-file'], `${checkout.with.path}/package.json`,
       `${filename} must select the producer toolchain rather than the consumer package or an absent workspace root.`);
+  }
+});
+
+test('an explicit Architecture fixture cannot fall back to another checkout', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'missing-architecture-fixture-'));
+  const previous = process.env.ARCHITECTURE_PIN_TEST_ROOT;
+  try {
+    process.env.ARCHITECTURE_PIN_TEST_ROOT = directory;
+    await assert.rejects(architectureInputFixture(), /required immutable Architecture draft78 fixture/);
+  } finally {
+    if (previous === undefined) delete process.env.ARCHITECTURE_PIN_TEST_ROOT;
+    else process.env.ARCHITECTURE_PIN_TEST_ROOT = previous;
+    await rm(directory, { recursive: true, force: true });
   }
 });
