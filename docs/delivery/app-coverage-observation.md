@@ -60,10 +60,14 @@ confirmed. Unavailable or inconsistent observations remain unverified. A 403 or
 
 `allRepositoriesSelected` separately records observed `all` versus `selected`
 installation metadata; it is null when that metadata is unavailable. Verified
-access to the current seven repositories cannot resolve the canonical
-All-repositories drift or prove future enrollment. `runtimeAdmissionAuthorized`
-and `repositoryMutationsRequested` remain false. The report has no runtime
-admission consumer.
+access to the current seven repositories cannot prove future enrollment.
+[Canonical Architecture ADR-0018 at the selected immutable release](https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/59df514a3a6dc8a75b79b3fc75fe61aae4e6fdf3/decisions/0018-organization-wide-agentic-delivery-control-plane-distribution-and-versioning.md#decision-outcome)
+chooses All-repositories installation access with independent participant
+registration. The historical local ADR copy and current versioned App contract
+still specify selected-repository access. This audit observes that distinction;
+it neither resolves the contract drift nor changes either source of authority.
+`runtimeAdmissionAuthorized` and `repositoryMutationsRequested` remain false.
+The report has no runtime admission consumer.
 
 API work has a 180-second window, individual execution requests have at most
 15 seconds, and responses are limited to 1 MiB. Redirects are rejected and the
