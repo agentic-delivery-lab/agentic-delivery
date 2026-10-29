@@ -11,6 +11,12 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The existing organization inventory command can collect an owner-triggered
+  App coverage observation for the seven current factory repositories. Each
+  token requests one native repository ID and metadata read access, with scope
+  verification and revocation. Current-set access remains separate from All
+  repository selection, enrollment and runtime admission.
+
 - Route evaluation findings to repository-only review proposals through an
   integrity-bound Architecture ownership map. Preserve synthetic/unknown-owner
   holds, report provenance and evidence limits; target verification and human

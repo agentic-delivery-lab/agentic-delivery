@@ -54,13 +54,18 @@ It deliberately reports live GitHub App installation, webhook delivery,
 organization-field, and repository-local CI evidence as external checks; it
 does not imply that those operator surfaces are active.
 
-`pnpm organization:inventory` is read-only. It reports the repositories and
+The default `pnpm organization:inventory` is read-only. It reports the repositories and
 GitHub capabilities visible to the authenticated identity and marks
 permission or entitlement gaps as unavailable evidence; it never treats an
 inaccessible endpoint as proof that a feature or repository is absent. Use
 `pnpm run organization:inventory -- --output <path>` when a local JSON report
 is needed. Do not commit live reports containing organization metadata unless a
 separate evidence decision requires it.
+
+The owner-only [App coverage observation](docs/delivery/app-coverage-observation.md)
+uses the existing inventory command with repository-scoped metadata tokens and
+confirmed revocation. Its fixed current-repository scope and observed installation
+selection remain separate from enrollment, permission changes and runtime admission.
 
 Cross-repository validators require explicit checkout roots and immutable
 release pins. They intentionally do not guess sibling paths or follow a

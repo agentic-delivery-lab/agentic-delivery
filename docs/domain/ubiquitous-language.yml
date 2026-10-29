@@ -10,6 +10,9 @@ bounded_contexts:
     name: "Agentic delivery control plane"
     definition: "The organization-aware delivery controller that receives signed GitHub events, validates participation and contracts, routes eligible work, orchestrates bounded execution, and performs authorized write-back without owning the durable work-state record."
 terms:
+  - context: "agentic-delivery-control-plane"
+    term: "App coverage observation"
+    definition: "Time-scoped native GitHub App installation and repository-identity evidence from an owner-triggered metadata audit. It separates verified access to the bounded current repository set from installation selection, enrollment, runtime admission and permission changes."
   - context: "agentic-delivery-governance"
     term: "implementation plan"
     definition: "A clarified source issue outcome, constraints, verification approach, and ordered tasks that guide implementation."
