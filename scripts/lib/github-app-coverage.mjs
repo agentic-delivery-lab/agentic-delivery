@@ -40,7 +40,7 @@ function validateOwnerEnvironment(env) {
   if (env.GITHUB_ACTIONS !== 'true' || env.GITHUB_EVENT_NAME !== 'workflow_dispatch'
       || env.GITHUB_ACTOR_ID !== '14937399' || env.GITHUB_REPOSITORY_ID !== '1358455028'
       || typeof env.GITHUB_ACTOR !== 'string' || !env.GITHUB_ACTOR || env.GITHUB_TRIGGERING_ACTOR !== env.GITHUB_ACTOR
-      || env.GITHUB_REPOSITORY !== 'agentic-delivery-lab/agentic-delivery' || env.GITHUB_REF !== 'refs/heads/main'
+      || env.GITHUB_REPOSITORY !== appContract.controller?.repository || env.GITHUB_REF !== 'refs/heads/main'
       || !/^[0-9a-f]{40}$/.test(env.GITHUB_SHA ?? '')
       || !/^[1-9][0-9]*$/.test(env.GITHUB_RUN_ID ?? '') || !/^[1-9][0-9]*$/.test(env.GITHUB_RUN_ATTEMPT ?? '')) {
     throw new Error('App coverage requires the owner-only trusted main workflow.');
@@ -117,6 +117,7 @@ export async function collectGithubAppCoverage({ env = process.env, fetchImpl = 
   const sourceCommit = await getSourceCommit();
   if (sourceCommit !== env.GITHUB_SHA) throw new Error('App coverage source commit does not match the trusted workflow.');
   if (env.CODEX_DELIVERY_APP_ID !== String(appId) || env.CODEX_DELIVERY_APP_INSTALLATION_ID !== String(installationId)
+      || appContract.controller?.repository !== targets[0].fullName
       || appContract.organization?.id !== String(organizationId) || appContract.organization?.login !== organization) {
     throw new Error('App configuration does not match the reviewed coverage scope.');
   }
