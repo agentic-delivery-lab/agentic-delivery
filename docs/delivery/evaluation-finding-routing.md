@@ -48,8 +48,12 @@ adoption. Report schema `2.0.0` retains its separate immutable pins.
 Match the exact report layer, subject ID and source repository/path against the
 explicit mapping. The current declarations cover the Customizations validation
 capability and Control Plane finding router. Unknown subjects, changed paths and
-unmapped product outcomes remain `awaiting-owner-verification`. Participant
-membership and context-review stewardship do not establish ownership. Synthetic
+unmapped product outcomes remain `awaiting-owner-verification`. Ownership is
+version-independent within that identity: a different subject commit or digest
+still matches the same repository/path declaration. The complete report retains
+those exact pins, but this offline operation does not retrieve their content or
+verify that the claimed evidence belongs to them. Participant membership and
+context-review stewardship do not establish ownership. Synthetic
 reports never expose a target. A report owner assertion that contradicts a
 matched pinned owner is rejected.
 
