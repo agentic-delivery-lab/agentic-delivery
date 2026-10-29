@@ -39,8 +39,11 @@ canonical URL and rejects a self-targeting source Issue. The supported offline
 command separately loads ownership contract `1.0.0` from immutable Architecture
 source `6cd215fd5af50fc042f010cbdc70495c1e71d91b`, binding both
 `architecture/evaluation/owners.json` and its schema to exact SHA-256 digests.
-This source candidate is being reviewed in Architecture PR28; it is not runtime
-adoption. Report schema2.0.0 retains its separate original immutable pin.
+Architecture [PR #28](https://github.com/agentic-delivery-lab/agentic-delivery-architecture/pull/28)
+accepted this source at merge commit
+`7a8dd0b651ea0d0535a77c87a3eb7e8fb786ed71`. The pinned source remains a draft
+contract for offline review; source acceptance does not authorize runtime
+adoption. Report schema `2.0.0` retains its separate immutable pins.
 
 Match the exact report layer, subject ID and source repository/path against the
 explicit mapping. The current declarations cover the Customizations validation
