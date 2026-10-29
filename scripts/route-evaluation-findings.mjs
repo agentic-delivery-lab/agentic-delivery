@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
-import { loadPinnedEvaluationReportSchema, routeEvaluationReports } from './lib/evaluation-finding-router.mjs';
+import { loadPinnedEvaluationReportSchema, loadPinnedEvaluationOwnership, routeEvaluationReports } from './lib/evaluation-finding-router.mjs';
 
 export class EvaluationFindingCliError extends Error {
   constructor(message) {
@@ -49,7 +49,9 @@ export async function routeEvaluationFindingReports(argv, { cwd = process.cwd() 
   }
 
   const schemaContract = await loadPinnedEvaluationReportSchema(path.resolve(cwd, options['--architecture-root']));
+  const ownershipContract = await loadPinnedEvaluationOwnership(path.resolve(cwd, options['--architecture-root']));
   return routeEvaluationReports({
+    ownershipContract,
     reports,
     schemaContract,
     sourceIssueUrl: options['--source-issue'],

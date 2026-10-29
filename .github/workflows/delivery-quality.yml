@@ -126,11 +126,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Check out the pinned Architecture report contract
+      - name: Check out the pinned offline evaluation contracts
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: agentic-delivery-lab/agentic-delivery-architecture
-          ref: 7b1d21462f70c411e75ae67ce80dcf688c9973e8
+          ref: 6cd215fd5af50fc042f010cbdc70495c1e71d91b
+          # Ownership and the original report schema have separate immutable pins.
+          fetch-depth: 0
           path: node_modules/architecture-report-contract
           persist-credentials: false
 
@@ -270,11 +272,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Check out the pinned Architecture report contract
+      - name: Check out the pinned offline evaluation contracts
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: agentic-delivery-lab/agentic-delivery-architecture
-          ref: 7b1d21462f70c411e75ae67ce80dcf688c9973e8
+          ref: 6cd215fd5af50fc042f010cbdc70495c1e71d91b
+          # Ownership and the original report schema have separate immutable pins.
+          fetch-depth: 0
           path: node_modules/architecture-report-contract
           persist-credentials: false
 

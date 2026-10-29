@@ -11,6 +11,12 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Route evaluation findings to repository-only review proposals through an
+  integrity-bound Architecture ownership map. Preserve synthetic/unknown-owner
+  holds, report provenance and evidence limits; target verification and human
+  prioritization remain required. The existing offline command performs no
+  Issue/Project mutation or execution.
+
 - Distribution can reuse public release-chain validation without private publication access. The explicitly scoped result preserves producer provenance, digest and projection checks; full validation still requires private publication. Hosting identity, release approval and bootstrap admission remain separate.
 
 - Controller release contract v3 binds current Architecture and AgentCustomizations pins to native numeric repository IDs and immutable digests while retaining exact historical compatibility records. Primitive selection crosses this typed boundary explicitly; metadata does not migrate enrollment or approve runtime admission.

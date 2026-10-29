@@ -8,6 +8,7 @@ import addFormats from 'ajv-formats';
 
 const execFileAsync = promisify(execFile);
 const COMPILED_CONTRACTS = new WeakSet();
+const OWNERSHIP_CONTRACTS = new WeakMap();
 const GITHUB_ISSUE_URL = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/([1-9][0-9]*)$/;
 const MEASURED_CLAIMS = new Set(['improvement', 'regression', 'no-change']);
 
@@ -20,6 +21,22 @@ export const EVALUATION_REPORT_SCHEMA_PIN = Object.freeze({
 });
 
 export const EVALUATION_REPORT_SCHEMA_URL = `https://github.com/${EVALUATION_REPORT_SCHEMA_PIN.repository}/blob/${EVALUATION_REPORT_SCHEMA_PIN.commit}/${EVALUATION_REPORT_SCHEMA_PIN.path}`;
+
+// Offline source candidate from Architecture PR28; source acceptance and
+// runtime adoption remain separate from this integrity-bound consumer.
+export const EVALUATION_OWNERSHIP_PIN = Object.freeze({
+  repository: 'agentic-delivery-lab/agentic-delivery-architecture',
+  commit: '6cd215fd5af50fc042f010cbdc70495c1e71d91b',
+  path: 'architecture/evaluation/owners.json',
+  sha256: '81d549c1288505767af5a836f078434e94f7d46b29d810325b217b36bedb574b',
+  contractVersion: '1.0.0',
+});
+export const EVALUATION_OWNERSHIP_SCHEMA_PIN = Object.freeze({
+  repository: EVALUATION_OWNERSHIP_PIN.repository,
+  commit: EVALUATION_OWNERSHIP_PIN.commit,
+  path: 'architecture/contracts/evaluation-owners.schema.json',
+  sha256: '61241f71db8ae9eed2e0f182d783415b04b353f5fb2aae935eb9ab53e9eda1d3',
+});
 
 export class EvaluationFindingRoutingError extends Error {
   constructor(message) {
@@ -101,6 +118,49 @@ export async function loadPinnedEvaluationReportSchema(architectureRoot) {
     throw new EvaluationFindingRoutingError(`Could not read the pinned Architecture evaluation schema: ${error.message}`);
   }
   return compilePinnedEvaluationReportSchema(schemaSource);
+}
+
+export function compilePinnedEvaluationOwnership(mappingSource, schemaSource) {
+  const mappingText = Buffer.isBuffer(mappingSource) ? mappingSource.toString('utf8') : String(mappingSource ?? '');
+  const schemaText = Buffer.isBuffer(schemaSource) ? schemaSource.toString('utf8') : String(schemaSource ?? '');
+  if (sha256(mappingText) !== EVALUATION_OWNERSHIP_PIN.sha256
+      || sha256(schemaText) !== EVALUATION_OWNERSHIP_SCHEMA_PIN.sha256) {
+    throw new EvaluationFindingRoutingError('Evaluation ownership mapping/schema SHA-256 must match the pinned Architecture bytes.');
+  }
+  const mapping = JSON.parse(mappingText);
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  addFormats(ajv);
+  const validate = ajv.compile(JSON.parse(schemaText));
+  if (!validate(mapping)) throw new EvaluationFindingRoutingError(`Invalid pinned ownership map: ${schemaValidationErrors(validate.errors)}`);
+  const subjects = new Set();
+  for (const entry of mapping.mappings) {
+    const key = canonicalJson([entry.layer, entry.subjectId, entry.subjectSource.repositoryId, entry.subjectSource.path]);
+    if (subjects.has(key)) throw new EvaluationFindingRoutingError('Duplicate or conflicting pinned owner mappings.');
+    subjects.add(key);
+  }
+  // Keep parsed mappings private. A caller cannot mutate a validated owner's
+  // identity through a returned object or manufacture a validated contract.
+  const contract = Object.freeze({ mappingPin: EVALUATION_OWNERSHIP_PIN, schemaPin: EVALUATION_OWNERSHIP_SCHEMA_PIN });
+  OWNERSHIP_CONTRACTS.set(contract, mapping.mappings);
+  return contract;
+}
+
+export async function loadPinnedEvaluationOwnership(architectureRoot) {
+  if (typeof architectureRoot !== 'string' || !architectureRoot) {
+    throw new EvaluationFindingRoutingError('An Architecture checkout containing the pinned ownership commit is required.');
+  }
+  async function readPin(pin) {
+    try {
+      const result = await execFileAsync('git', [
+        '--no-lazy-fetch', '--no-replace-objects', '-c', 'core.fsmonitor=false',
+        '-C', architectureRoot, 'show', `${pin.commit}:${pin.path}`,
+      ], { encoding: 'utf8', windowsHide: true, maxBuffer: 2 * 1024 * 1024 });
+      return result.stdout;
+    } catch (error) {
+      throw new EvaluationFindingRoutingError(`Could not read pinned Architecture ownership bytes: ${error.message}`);
+    }
+  }
+  return compilePinnedEvaluationOwnership(await readPin(EVALUATION_OWNERSHIP_PIN), await readPin(EVALUATION_OWNERSHIP_SCHEMA_PIN));
 }
 
 function canonicalIssueUrl(value, description) {
@@ -242,7 +302,7 @@ function buildSourceEvidence(report) {
   };
 }
 
-function routeOne(report, { schemaContract, sourceIssueUrl, canonicalReport, comparisonAssessment }) {
+function routeOne(report, { schemaContract, sourceIssueUrl, canonicalReport, comparisonAssessment, ownershipContract }) {
   const reportReference = buildReportReference(report, schemaContract, canonicalReport);
   const action = report.recommendation.action;
   const shared = {
@@ -277,8 +337,39 @@ function routeOne(report, { schemaContract, sourceIssueUrl, canonicalReport, com
         status: 'unresolved',
         source: 'recommendation.ownerIssue',
         requiresHumanConfirmation: true,
-        reason: 'Synthetic reports cannot expose an owner target, and no authoritative owner mapping is pinned.',
+        reason: ownershipContract
+          ? 'Synthetic reports cannot expose an owner target, even when an ownership mapping is pinned.'
+          : 'Synthetic reports cannot expose an owner target, and no authoritative owner mapping is pinned.',
       },
+      executionAuthorized: false,
+    };
+  }
+
+  const mappings = ownershipContract ? OWNERSHIP_CONTRACTS.get(ownershipContract) : [];
+  const mapping = mappings.find(entry => entry.layer === report.layer
+    && entry.subjectId === report.subject.id
+    && entry.subjectSource.repository.toLowerCase() === report.subject.sourcePin.repository.toLowerCase()
+    && entry.subjectSource.path === report.subject.sourcePin.path);
+  if (mapping) {
+    if (targetRepository.toLowerCase() !== mapping.owner.repository.toLowerCase()) {
+      throw new EvaluationFindingRoutingError('Report owner Issue contradicts the pinned owner repository.');
+    }
+    return {
+      ...shared,
+      action,
+      status: 'awaiting-human-prioritization',
+      target: { ...mapping.owner },
+      ownershipVerification: {
+        status: 'mapped-for-review',
+        mappingReference: { ...ownershipContract.mappingPin },
+        schemaReference: { ...ownershipContract.schemaPin },
+        mappingSourceIssue: mapping.sourceIssue,
+        subjectRepositoryId: mapping.subjectSource.repositoryId,
+        nativeIdentity: 'expected-from-pinned-map-not-reverified',
+      },
+      requiresTargetVerification: true,
+      requiresHumanPrioritization: true,
+      empiricalClaimsVerified: false,
       executionAuthorized: false,
     };
   }
@@ -292,13 +383,18 @@ function routeOne(report, { schemaContract, sourceIssueUrl, canonicalReport, com
       status: 'unresolved',
       source: 'recommendation.ownerIssue',
       requiresHumanConfirmation: true,
-      reason: 'No authoritative owner mapping is pinned for this report layer.',
+      reason: ownershipContract
+        ? 'No pinned owner mapping matches this report layer, subject and source.'
+        : 'No authoritative owner mapping is pinned for this report layer.',
     },
     executionAuthorized: false,
   };
 }
 
-export function routeEvaluationReports({ reports, schemaContract, sourceIssueUrl } = {}) {
+export function routeEvaluationReports({ reports, schemaContract, sourceIssueUrl, ownershipContract } = {}) {
+  if (ownershipContract !== undefined && !OWNERSHIP_CONTRACTS.has(ownershipContract)) {
+    throw new EvaluationFindingRoutingError('A contract compiled from the pinned Architecture ownership bytes is required.');
+  }
   if (!COMPILED_CONTRACTS.has(schemaContract)) {
     throw new EvaluationFindingRoutingError('A schema contract compiled from the pinned Architecture bytes is required.');
   }
@@ -331,6 +427,7 @@ export function routeEvaluationReports({ reports, schemaContract, sourceIssueUrl
       sourceIssueUrl: canonicalSourceIssue,
       canonicalReport,
       comparisonAssessment,
+      ownershipContract,
     });
     if (result.target) {
       result.duplicateCount = duplicateCount;
@@ -342,6 +439,7 @@ export function routeEvaluationReports({ reports, schemaContract, sourceIssueUrl
 
   return {
     schemaPin: { ...schemaContract.pin },
+    ...(ownershipContract ? { ownership: { mappingPin: { ...ownershipContract.mappingPin }, schemaPin: { ...ownershipContract.schemaPin } } } : {}),
     sourceIssueUrl: canonicalSourceIssue,
     proposals,
     dispositions,
