@@ -36,7 +36,7 @@ function schemaPinForReport(report, schemaContract) {
 
 export const EVALUATION_REPORT_SCHEMA_URL = `https://github.com/${EVALUATION_REPORT_SCHEMA_PIN.repository}/blob/${EVALUATION_REPORT_SCHEMA_PIN.commit}/${EVALUATION_REPORT_SCHEMA_PIN.path}`;
 
-// Offline source candidate from Architecture PR28; source acceptance and
+// Offline source accepted in Architecture PR28; source acceptance and
 // runtime adoption remain separate from this integrity-bound consumer.
 export const EVALUATION_OWNERSHIP_PIN = Object.freeze({
   repository: 'agentic-delivery-lab/agentic-delivery-architecture',
@@ -166,6 +166,10 @@ export async function loadPinnedEvaluationReportSchemas(architectureRoot) {
   return compileEvaluationReportSchema(sources[0], EVALUATION_REPORT_SCHEMA_PINS);
 }
 
+function ownershipRoutingKey(layer, subjectId, repository, sourcePath) {
+  return canonicalJson([layer, subjectId, repository.toLowerCase(), sourcePath]);
+}
+
 export function compilePinnedEvaluationOwnership(mappingSource, schemaSource) {
   const mappingText = Buffer.isBuffer(mappingSource) ? mappingSource.toString('utf8') : String(mappingSource ?? '');
   const schemaText = Buffer.isBuffer(schemaSource) ? schemaSource.toString('utf8') : String(schemaSource ?? '');
@@ -179,10 +183,15 @@ export function compilePinnedEvaluationOwnership(mappingSource, schemaSource) {
   const validate = ajv.compile(JSON.parse(schemaText));
   if (!validate(mapping)) throw new EvaluationFindingRoutingError(`Invalid pinned ownership map: ${schemaValidationErrors(validate.errors)}`);
   const subjects = new Set();
+  const routingSubjects = new Set();
   for (const entry of mapping.mappings) {
     const key = canonicalJson([entry.layer, entry.subjectId, entry.subjectSource.repositoryId, entry.subjectSource.path]);
-    if (subjects.has(key)) throw new EvaluationFindingRoutingError('Duplicate or conflicting pinned owner mappings.');
+    const routingKey = ownershipRoutingKey(entry.layer, entry.subjectId, entry.subjectSource.repository, entry.subjectSource.path);
+    if (subjects.has(key) || routingSubjects.has(routingKey)) {
+      throw new EvaluationFindingRoutingError('Duplicate or conflicting pinned owner mappings.');
+    }
     subjects.add(key);
+    routingSubjects.add(routingKey);
   }
   // Keep parsed mappings private. A caller cannot mutate a validated owner's
   // identity through a returned object or manufacture a validated contract.
@@ -392,10 +401,10 @@ function routeOne(report, { schemaContract, sourceIssueUrl, canonicalReport, com
   }
 
   const mappings = ownershipContract ? OWNERSHIP_CONTRACTS.get(ownershipContract) : [];
-  const mapping = mappings.find(entry => entry.layer === report.layer
-    && entry.subjectId === report.subject.id
-    && entry.subjectSource.repository.toLowerCase() === report.subject.sourcePin.repository.toLowerCase()
-    && entry.subjectSource.path === report.subject.sourcePin.path);
+  const routingKey = ownershipRoutingKey(report.layer, report.subject.id, report.subject.sourcePin.repository, report.subject.sourcePin.path);
+  const mapping = mappings.find(entry => ownershipRoutingKey(
+    entry.layer, entry.subjectId, entry.subjectSource.repository, entry.subjectSource.path,
+  ) === routingKey);
   if (mapping) {
     if (targetRepository.toLowerCase() !== mapping.owner.repository.toLowerCase()) {
       throw new EvaluationFindingRoutingError('Report owner Issue contradicts the pinned owner repository.');

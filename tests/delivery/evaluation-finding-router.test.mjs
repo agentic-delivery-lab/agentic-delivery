@@ -572,3 +572,35 @@ routeTest('explicit schema dispatch preserves mixed pinned provenance and reject
   }
   assert.throws(() => route([current]), /immutable Architecture schema pin/, 'the legacy single-pin API retains its exact original contract');
 });
+
+routeTest('current producer schema routes each mapped observed subject with exact provenance and held authority', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'evaluation-current-owner-'));
+  try {
+    for (const capability of [false, true]) {
+      const input = mappedReport({ capability });
+      input.$schema = currentReportSchemaUrl;
+      input.subject.sourcePin.repository = input.subject.sourcePin.repository.toUpperCase();
+      const file = path.join(directory, 'report.json');
+      await writeFile(file, JSON.stringify(input));
+      const result = await routeEvaluationFindingReports([
+        '--architecture-root', architectureRoot, '--source-issue', sourceIssueUrl, '--report', file,
+      ]);
+      assert.equal(result.proposals.length, 1);
+      assert.equal(result.dispositions.length, 0);
+      const proposal = result.proposals[0];
+      assert.deepEqual(proposal.target, capability
+        ? { repository: 'agentic-delivery-lab/agentic-delivery-agent-customizations', repositoryId: 1380894656 }
+        : { repository: ownerRepository, repositoryId: 1358455028 });
+      assert.equal(result.schemaPin.commit, currentReportSchemaCommit);
+      assert.equal(proposal.reportReference.schema.url, currentReportSchemaUrl);
+      assert.equal(proposal.reportReference.schema.sourcePin.commit, currentReportSchemaCommit);
+      assert.deepEqual(proposal.sourceReport, input);
+      assert.equal(proposal.status, 'awaiting-human-prioritization');
+      assert.equal(proposal.requiresTargetVerification, true);
+      assert.equal(proposal.requiresHumanPrioritization, true);
+      assert.equal(proposal.empiricalClaimsVerified, false);
+      assert.equal(proposal.executionAuthorized, false);
+      assert.equal(result.mutationsRequested, false);
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
