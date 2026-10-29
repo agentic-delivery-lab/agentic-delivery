@@ -10,6 +10,16 @@ contract fixture against a draft Architecture release; it does not approve the
 contract or make it a default dependency of the participant registry or
 controller release.
 
+The command also supports the current producer's exact report-schema pin,
+`e1cb20f94ee398c8a26899cc6219b380975da3ca` (draft77). It retrieves both pinned
+schema occurrences and verifies their identical `2.0.0` bytes and SHA-256.
+Moving references, unknown commits and different bytes remain unsupported.
+Each report retains its own schema URL and source pin. A mixed-pin batch has
+`schemaPin: null` and lists both pins in `schemaPins`; a single-pin batch keeps
+its exact pin in `schemaPin`. The legacy single-pin library loader remains
+restricted to its original draft24 pin; the command uses the explicit plural
+loader. This compatibility does not change report classification or admission.
+
 The router validates the complete report, requires measured baseline and
 candidate values for measured claims, and rejects different declared metric,
 unit, or observation-window fields. For supported `absolute-difference`

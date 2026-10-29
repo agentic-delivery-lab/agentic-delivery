@@ -20,6 +20,20 @@ export const EVALUATION_REPORT_SCHEMA_PIN = Object.freeze({
   sha256: '02ae624c21234bb7494dfc3308fe5cd54c112909e215192e2a07307651ebf55d',
 });
 
+export const EVALUATION_REPORT_SCHEMA_PINS = Object.freeze([
+  EVALUATION_REPORT_SCHEMA_PIN,
+  Object.freeze({ ...EVALUATION_REPORT_SCHEMA_PIN,
+    version: '0.1.0-draft.77', commit: 'e1cb20f94ee398c8a26899cc6219b380975da3ca' }),
+]);
+
+function schemaUrl(pin) {
+  return `https://github.com/${pin.repository}/blob/${pin.commit}/${pin.path}`;
+}
+
+function schemaPinForReport(report, schemaContract) {
+  return schemaContract.pins.find(pin => schemaUrl(pin) === report.$schema);
+}
+
 export const EVALUATION_REPORT_SCHEMA_URL = `https://github.com/${EVALUATION_REPORT_SCHEMA_PIN.repository}/blob/${EVALUATION_REPORT_SCHEMA_PIN.commit}/${EVALUATION_REPORT_SCHEMA_PIN.path}`;
 
 // Offline source candidate from Architecture PR28; source acceptance and
@@ -66,6 +80,10 @@ function schemaValidationErrors(errors = []) {
 }
 
 export function compilePinnedEvaluationReportSchema(schemaSource) {
+  return compileEvaluationReportSchema(schemaSource, [EVALUATION_REPORT_SCHEMA_PIN]);
+}
+
+function compileEvaluationReportSchema(schemaSource, pins) {
   const source = Buffer.isBuffer(schemaSource) ? schemaSource.toString('utf8') : String(schemaSource ?? '');
   if (sha256(source) !== EVALUATION_REPORT_SCHEMA_PIN.sha256) {
     throw new EvaluationFindingRoutingError('Evaluation report schema SHA-256 does not match the pinned Architecture contract.');
@@ -95,6 +113,7 @@ export function compilePinnedEvaluationReportSchema(schemaSource) {
 
   const contract = Object.freeze({
     pin: EVALUATION_REPORT_SCHEMA_PIN,
+    pins: Object.freeze([...pins]),
     url: EVALUATION_REPORT_SCHEMA_URL,
     validate,
   });
@@ -118,6 +137,33 @@ export async function loadPinnedEvaluationReportSchema(architectureRoot) {
     throw new EvaluationFindingRoutingError(`Could not read the pinned Architecture evaluation schema: ${error.message}`);
   }
   return compilePinnedEvaluationReportSchema(schemaSource);
+}
+
+export async function loadPinnedEvaluationReportSchemas(architectureRoot) {
+  if (typeof architectureRoot !== 'string' || !architectureRoot) {
+    throw new EvaluationFindingRoutingError('An Architecture checkout containing the supported immutable schema commits is required.');
+  }
+  const sources = await Promise.all(EVALUATION_REPORT_SCHEMA_PINS.map(async pin => {
+    let result;
+    try {
+      result = await execFileAsync('git', [
+        '--no-lazy-fetch', '--no-replace-objects', '-c', 'core.fsmonitor=false',
+        '-C', architectureRoot, 'show', `${pin.commit}:${pin.path}`,
+      ], { encoding: 'utf8', windowsHide: true, maxBuffer: 2 * 1024 * 1024 });
+    } catch (error) {
+      throw new EvaluationFindingRoutingError(`Could not read pinned Architecture evaluation schema: ${error.message}`);
+    }
+    if (sha256(result.stdout) !== pin.sha256) {
+      throw new EvaluationFindingRoutingError('Evaluation report schema SHA-256 does not match its immutable Architecture pin.');
+    }
+    return result.stdout;
+  }));
+  // These two reviewed occurrences have identical 2.0.0 bytes. Any future
+  // different schema requires explicit version dispatch, never a URL alias.
+  if (sources.some(source => source !== sources[0])) {
+    throw new EvaluationFindingRoutingError('Supported report schema pins no longer contain identical contract bytes.');
+  }
+  return compileEvaluationReportSchema(sources[0], EVALUATION_REPORT_SCHEMA_PINS);
 }
 
 export function compilePinnedEvaluationOwnership(mappingSource, schemaSource) {
@@ -273,7 +319,7 @@ function collectSourcePins(report) {
 function validateReport(report, schemaContract) {
   const valid = schemaContract.validate(report);
   if (!valid) throw new EvaluationFindingRoutingError(`Evaluation report violates contract 2.0.0: ${schemaValidationErrors(schemaContract.validate.errors)}.`);
-  if (report.$schema !== EVALUATION_REPORT_SCHEMA_URL) {
+  if (!schemaPinForReport(report, schemaContract)) {
     throw new EvaluationFindingRoutingError('Evaluation report must reference the exact immutable Architecture schema pin.');
   }
   return compareMeasurements(report);
@@ -286,8 +332,8 @@ function buildReportReference(report, schemaContract, canonicalReport) {
     sha256: sha256(canonicalReport),
     schema: {
       contractVersion: report.contractVersion,
-      url: schemaContract.url,
-      sourcePin: { ...schemaContract.pin },
+      url: report.$schema,
+      sourcePin: { ...schemaPinForReport(report, schemaContract) },
     },
   };
 }
@@ -437,8 +483,12 @@ export function routeEvaluationReports({ reports, schemaContract, sourceIssueUrl
     }
   }
 
+  const usedSchemaPins = [...new Map([...uniqueReports.values()].map(({ report }) => (
+    [report.$schema, schemaPinForReport(report, schemaContract)]
+  ))).values()];
   return {
-    schemaPin: { ...schemaContract.pin },
+    schemaPin: usedSchemaPins.length === 1 ? { ...usedSchemaPins[0] } : null,
+    ...(usedSchemaPins.length > 1 ? { schemaPins: usedSchemaPins.map(pin => ({ ...pin })) } : {}),
     ...(ownershipContract ? { ownership: { mappingPin: { ...ownershipContract.mappingPin }, schemaPin: { ...ownershipContract.schemaPin } } } : {}),
     sourceIssueUrl: canonicalSourceIssue,
     proposals,

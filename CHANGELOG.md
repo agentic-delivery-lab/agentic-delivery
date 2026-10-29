@@ -585,6 +585,10 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- Accept the current evaluation producer's exact reviewed schema pin alongside
+  the historical pin after verifying identical contract bytes. Preserve each
+  report's schema provenance and synthetic holds; reject moving/unknown refs.
+
 - Release-chain JSON reports retain the validated GitHub App contract version
   from the pinned controller manifest.
 

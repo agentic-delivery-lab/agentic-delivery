@@ -535,3 +535,40 @@ routeTest('existing offline command loads the fixed mapping and emits a review p
     assert.equal(result.ownership.mappingPin.sha256, '81d549c1288505767af5a836f078434e94f7d46b29d810325b217b36bedb574b');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+const currentReportSchemaCommit = 'e1cb20f94ee398c8a26899cc6219b380975da3ca';
+const currentReportSchemaUrl = `https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/${currentReportSchemaCommit}/architecture/contracts/evaluation-report.schema.json`;
+
+routeTest('the offline command accepts the current producer schema pin and retains its exact provenance', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'evaluation-current-schema-'));
+  try {
+    const input = structuredClone(syntheticUnmeasuredReport);
+    input.$schema = currentReportSchemaUrl;
+    const file = path.join(directory, 'report.json'); await writeFile(file, JSON.stringify(input));
+    const result = await routeEvaluationFindingReports([
+      '--architecture-root', architectureRoot, '--source-issue', sourceIssueUrl, '--report', file,
+    ]);
+    assert.equal(result.proposals.length, 0);
+    assert.equal(result.dispositions[0].status, 'no-action');
+    assert.equal(result.dispositions[0].reportReference.schema.url, currentReportSchemaUrl);
+    assert.equal(result.dispositions[0].reportReference.schema.sourcePin.commit, currentReportSchemaCommit);
+    assert.equal(result.schemaPin.commit, currentReportSchemaCommit);
+    assert.equal(result.mutationsRequested, false);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+routeTest('explicit schema dispatch preserves mixed pinned provenance and rejects unknown immutable refs', async () => {
+  const { loadPinnedEvaluationReportSchemas } = await import('../../scripts/lib/evaluation-finding-router.mjs');
+  const contracts = await loadPinnedEvaluationReportSchemas(architectureRoot);
+  const old = structuredClone(syntheticUnmeasuredReport);
+  const current = structuredClone(old); current.$schema = currentReportSchemaUrl; current.reportId += ':current';
+  const result = routeEvaluationReports({ reports: [old, current], schemaContract: contracts, sourceIssueUrl });
+  assert.equal(result.schemaPin, null);
+  assert.equal(result.schemaPins.length, 2);
+  assert.deepEqual(result.dispositions.map(v => v.reportReference.schema.url), [old.$schema, current.$schema]);
+  for (const ref of ['main', 'a'.repeat(40)]) {
+    const unknown = structuredClone(current); unknown.$schema = current.$schema.replace(currentReportSchemaCommit, ref);
+    assert.throws(() => routeEvaluationReports({ reports: [unknown], schemaContract: contracts, sourceIssueUrl }), EvaluationFindingRoutingError);
+  }
+  assert.throws(() => route([current]), /immutable Architecture schema pin/, 'the legacy single-pin API retains its exact original contract');
+});

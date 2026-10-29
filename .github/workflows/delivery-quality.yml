@@ -131,7 +131,7 @@ jobs:
         with:
           repository: agentic-delivery-lab/agentic-delivery-architecture
           ref: 6cd215fd5af50fc042f010cbdc70495c1e71d91b
-          # Ownership and the original report schema have separate immutable pins.
+          # Ownership and supported report schemas have separate immutable pins.
           fetch-depth: 0
           path: node_modules/architecture-report-contract
           persist-credentials: false
@@ -277,7 +277,7 @@ jobs:
         with:
           repository: agentic-delivery-lab/agentic-delivery-architecture
           ref: 6cd215fd5af50fc042f010cbdc70495c1e71d91b
-          # Ownership and the original report schema have separate immutable pins.
+          # Ownership and supported report schemas have separate immutable pins.
           fetch-depth: 0
           path: node_modules/architecture-report-contract
           persist-credentials: false
