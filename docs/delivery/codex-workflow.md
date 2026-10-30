@@ -117,6 +117,16 @@ and the controller pin from the fixed bootstrap registry. The reusable workflow
 does not accept those policy values from its caller. Neither path falls back
 to a moving `main` ref.
 
+Before the controller checkout, the workflow translates the validated
+`read_only_run` output into the legacy `CONTROL_PLANE_MODE` signal. This
+dependency-free adapter runs from the exact workflow revision, has no App-key
+input, and rejects missing or malformed values. It emits `shadow` for every
+read-only run, including manual read-only execution by an active participant.
+Current controllers still receive `PARTICIPANT_MODE` and `READ_ONLY_RUN` and
+enforce their own policy. This compatibility step changes no enrollment,
+controller pin, installed permission or runtime-admission gate. It does not
+add organization Issue-field permissions to a legacy token request.
+
 The Vercel ingress mints a repository-scoped read token for origin actor and
 source checks, then a separate controller token narrowed to the controller
 repository with only Contents write for the `repository_dispatch` handoff.

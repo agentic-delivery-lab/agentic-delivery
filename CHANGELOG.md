@@ -591,6 +591,12 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- Preserve the validated read-only decision when the central workflow runs a
+  pinned legacy intake controller. Shadow participants and forced read-only
+  runs request issue-read access; missing or malformed compatibility input
+  stops before the controller checkout. Enrollment, controller pins and
+  installed permissions remain unchanged.
+
 - Accept the current evaluation producer's exact reviewed schema pin alongside
   the historical pin after verifying identical contract bytes. Preserve each
   report's schema provenance and synthetic holds; reject moving/unknown refs.

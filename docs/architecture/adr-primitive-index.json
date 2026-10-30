@@ -319,6 +319,7 @@
         "issue-60-webhook-delivery-archive",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
+        "legacy-intake-read-only-compatibility",
         "operation-active-time-allowance",
         "operation-attempt-receipts",
         "operation-budget-policy-identity",
@@ -399,6 +400,7 @@
         "issue-60-webhook-delivery-archive",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
+        "legacy-intake-read-only-compatibility",
         "operation-active-time-allowance",
         "operation-attempt-receipts",
         "operation-budget-policy-identity",
@@ -1117,6 +1119,19 @@
       ],
       "domains": [
         "agentic-delivery-governance"
+      ]
+    },
+    {
+      "id": "legacy-intake-read-only-compatibility",
+      "path": "scripts/lib/intake-controller-compatibility.mjs",
+      "location": "scripts/lib/intake-controller-compatibility.mjs",
+      "kind": "validator",
+      "enforcement": "deterministic",
+      "adrs": [
+        "ADR-0018"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
       ]
     },
     {

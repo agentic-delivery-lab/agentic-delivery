@@ -140,8 +140,7 @@ jobs:
           path: trusted-intake
           persist-credentials: false
 
-      - name: Check out the workflow revision for dispatch normalization
-        if: ${{ inputs.agent_invocation }}
+      - name: Check out the workflow revision for intake compatibility and dispatch normalization
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.sha }}
@@ -239,6 +238,14 @@ jobs:
         run: node scripts/lib/intake-policy.mjs
         working-directory: trusted-intake
 
+      - name: Preserve read-only policy for legacy intake controllers
+        id: intake-compatibility
+        if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
+        env:
+          READ_ONLY_RUN: ${{ steps.intake-policy.outputs.read_only_run }}
+        run: node scripts/lib/intake-controller-compatibility.mjs
+        working-directory: dispatch-boundary
+
       - name: Validate the selected controller commit
         if: ${{ !inputs.agent_invocation || steps.invocation.outputs.accepted == 'true' }}
         env:
@@ -295,6 +302,7 @@ jobs:
           ORIGIN_REPOSITORY_ID: ${{ steps.invocation.outputs.origin_repository_id || github.event.repository.id }}
           PARTICIPANT_MODE: ${{ steps.intake-policy.outputs.participant_mode }}
           READ_ONLY_RUN: ${{ steps.intake-policy.outputs.read_only_run }}
+          CONTROL_PLANE_MODE: ${{ steps.intake-compatibility.outputs.control_plane_mode }}
           FORCE_READ_ONLY: ${{ inputs.force_read_only || false }}
           CONTROL_PLANE_COMMIT: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}
         run: GITHUB_EVENT_PATH="$CONTROLLER_EVENT_PATH" GITHUB_EVENT_NAME="$CONTROLLER_EVENT_NAME" GITHUB_TRIGGERING_ACTOR="$CONTROLLER_TRIGGERING_ACTOR" node scripts/issue-intake.mjs
