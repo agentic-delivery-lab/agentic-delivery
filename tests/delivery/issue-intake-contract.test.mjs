@@ -265,7 +265,7 @@ test('issue events invoke intake and only an authorized route invokes reusable d
   assert.ok(intakeSteps.indexOf(invocation) < intakeSteps.indexOf(intakePolicy));
   assert.equal(routing.env.PARTICIPANT_MODE, '${{ steps.intake-policy.outputs.participant_mode }}');
   assert.equal(routing.env.READ_ONLY_RUN, '${{ steps.intake-policy.outputs.read_only_run }}');
-  assert.equal(routing.env.CONTROL_PLANE_MODE, undefined);
+  assert.equal(routing.env.CONTROL_PLANE_MODE, '${{ steps.intake-compatibility.outputs.control_plane_mode }}');
   const controllerCheckout = intakeSteps.find((step) => step.name === 'Check out the validated controller release');
   const controllerInstall = intakeSteps.find((step) => step.name === 'Install validated controller dependencies');
   assert.equal(trustedIntakeCheckout.with.path, 'trusted-intake');
