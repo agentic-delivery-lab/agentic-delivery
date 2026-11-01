@@ -273,6 +273,10 @@ absence. The option does not introduce another target or option. Preview still
 requests no writes. Each target normally needs four mutation calls; uncertain
 responses are read back rather than repeated. A failed intermediate step cannot
 produce a successful qualification receipt, even when compensation succeeds.
+Once intermediate restoration is requested, a later absent value can be a
+third-party deletion. The command no longer attributes that absence to its
+earlier clear. An ambiguous absence with a nonempty original option holds
+restoration and preserves the private snapshot for inspection.
 This is operator evidence, not App-principal write or runtime-admission proof.
 
 Apply requires each selected field to differ from its test option; an unchanged

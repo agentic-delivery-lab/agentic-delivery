@@ -73,6 +73,9 @@ export async function runIssueFieldCanary({target,read,write,saveEvidence,actorI
       const restore=restorationFields(cleared,written,fields);
       await saveEvidence({phase:'existing-options-restore-intent',target,restore});
       if(!equal(snapshot(await read(),target,fields),cleared))throw new Error('Canary changed before existing-option restoration.');
+      // Once restoration is requested, a later absence may be another actor's
+      // deletion. Never attribute it to our earlier clear, even on a lost reply.
+      clearingRequested=false;
       await write(restore);
       const readback=snapshot(await read(),target,fields);
       if(!equal(readback,written))throw new Error('Existing-option restoration readback differs.');

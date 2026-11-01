@@ -228,3 +228,33 @@ test('both fixed repository identities can prove existing options and original a
   assert.equal(io.calls.length,4);
  }
 });
+
+test('a third-party deletion after probe restoration is preserved even when the original option was nonempty',async()=>{
+ for(const timing of ['after-write','after-readback','lost-response']) {
+  const original=writes.map((f,i)=>({fieldId:f.fieldId,optionId:`prior-${i}`}));
+  const io=fixture(original);let count=0;
+  const removeFirst=async()=>io.setFields((await io.read()).fieldValues.filter(v=>v.fieldId!==writes[0].fieldId));
+  const write=async inputs=>{
+   await io.write(inputs);
+   if(++count===3 && timing!=='after-readback') {
+    await removeFirst();
+    if(timing==='lost-response')throw new Error('uncertain restoration');
+   }
+  };
+  const saveEvidence=async event=>{await io.saveEvidence(event);if(event.phase==='existing-options-restored' && timing==='after-readback')await removeFirst();};
+  await assert.rejects(runIssueFieldCanary({...io,write,saveEvidence,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/restoration held/);
+  assert.equal(io.calls.length,3);
+  assert.equal((await io.read()).fieldValues.some(v=>v.fieldId===writes[0].fieldId),false);
+ }
+});
+
+test('an uncertain probe restoration leaving absence holds instead of assuming the earlier clear is still current',async()=>{
+ const original=writes.map((f,i)=>({fieldId:f.fieldId,optionId:`prior-${i}`}));
+ const io=fixture(original);let requests=0;
+ const write=async inputs=>{if(++requests===3)throw new Error('unknown restoration outcome');await io.write(inputs);};
+ await assert.rejects(runIssueFieldCanary({...io,write,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/restoration held/);
+ assert.equal(requests,3);
+ assert.deepEqual((await io.read()).fieldValues,[]);
+ assert.deepEqual(io.events[0].originalValues.map(v=>v.optionId).sort(),original.map(v=>v.optionId).sort());
+ assert.equal(io.events.at(-1).phase,'restoration-held');
+});
