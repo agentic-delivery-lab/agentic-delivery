@@ -263,6 +263,18 @@ existing gh authentication without exporting its credential.
 node scripts/run-issue-field-canary.mjs --evidence-dir <private-directory> --bindings-file <private-bindings-file> --bindings-sha256 <reviewed-binding-file-digest> --apply --approved-commit <reviewed-40-character-commit>
 ```
 
+Add `--verify-existing-options` to qualify both existing-option restoration and
+the original state in one bounded sequence. After writing and independently
+reading Intake and Not ready, the command saves that complete nonempty vector,
+clears the two selected fields, independently verifies their absence, restores
+those exact options and independently compares the complete vector. It then
+restores and reads the original pre-operation vector, including original
+absence. The option does not introduce another target or option. Preview still
+requests no writes. Each target normally needs four mutation calls; uncertain
+responses are read back rather than repeated. A failed intermediate step cannot
+produce a successful qualification receipt, even when compensation succeeds.
+This is operator evidence, not App-principal write or runtime-admission proof.
+
 Apply requires each selected field to differ from its test option; an unchanged
 field cannot prove a successful write. The original snapshot is saved before the first write. Separate reads verify
 the test write and restoration. A lost write response triggers reconciliation,
