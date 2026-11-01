@@ -277,6 +277,11 @@ Once intermediate restoration is requested, a later absent value can be a
 third-party deletion. The command no longer attributes that absence to its
 earlier clear. An ambiguous absence with a nonempty original option holds
 restoration and preserves the private snapshot for inspection.
+The seed and clear readbacks must also preserve every unselected field. An
+observed unrelated-field change holds further writes, including compensation.
+Final compensation rechecks the complete current vector and original options
+after saving its intent. A changed value or removed option holds the operation;
+the saved original snapshot remains available for operator inspection.
 This is operator evidence, not App-principal write or runtime-admission proof.
 
 Apply requires each selected field to differ from its test option; an unchanged

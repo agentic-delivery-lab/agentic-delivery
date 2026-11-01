@@ -258,3 +258,44 @@ test('an uncertain probe restoration leaving absence holds instead of assuming t
  assert.deepEqual(io.events[0].originalValues.map(v=>v.optionId).sort(),original.map(v=>v.optionId).sort());
  assert.equal(io.events.at(-1).phase,'restoration-held');
 });
+
+test('observed unrelated changes during seed or clear stop all later canary writes',async()=>{
+ for(const phase of [1,2])for(const original of [[],writes.map((f,i)=>({fieldId:f.fieldId,optionId:`prior-${i}`}))]) {
+  const io=fixture(original);let count=0;
+  const write=async inputs=>{
+   await io.write(inputs);
+   if(++count===phase)io.setFields([...(await io.read()).fieldValues,{fieldId:'other-field',optionId:'human-option'}]);
+  };
+  await assert.rejects(runIssueFieldCanary({...io,write,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/restoration held/);
+  assert.equal(io.calls.length,phase);
+  assert.equal((await io.read()).fieldValues.find(v=>v.fieldId==='other-field').optionId,'human-option');
+ }
+});
+
+test('the complete vector is rechecked after final restore intent before compensation',async()=>{
+ for(const verifyExistingOptions of [false,true]) {
+  const io=fixture();
+  const saveEvidence=async event=>{
+   await io.saveEvidence(event);
+   if(event.phase==='restore-intent')io.setFields([{fieldId:writes[0].fieldId,optionId:'human-option'}]);
+  };
+  await assert.rejects(runIssueFieldCanary({...io,saveEvidence,target,actorId:'14937399',apply:true,verifyExistingOptions}),/restoration held/);
+  assert.equal(io.calls.length,verifyExistingOptions?3:1);
+  assert.deepEqual((await io.read()).fieldValues,[{fieldId:writes[0].fieldId,optionId:'human-option'}]);
+ }
+});
+
+test('each pending write refuses original options removed after its intent was saved',async()=>{
+ for(const [phase,expectedWrites] of [['existing-options-prepared',1],['existing-options-restore-intent',2],['restore-intent',3]]) {
+  const original=writes.map((f,i)=>({fieldId:f.fieldId,optionId:`prior-${i}`}));
+  const io=fixture(original);let removePrior=false;
+  const read=async()=>{
+   const value=await io.read();
+   if(removePrior)for(const f of value.fieldDefinitions)f.options=f.options.filter(o=>!o.id.startsWith('prior-'));
+   return value;
+  };
+  const saveEvidence=async event=>{await io.saveEvidence(event);if(event.phase===phase)removePrior=true;};
+  await assert.rejects(runIssueFieldCanary({...io,read,saveEvidence,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/restoration held/);
+  assert.equal(io.calls.length,expectedWrites);
+ }
+});
