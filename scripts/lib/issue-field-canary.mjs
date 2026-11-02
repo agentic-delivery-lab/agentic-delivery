@@ -29,8 +29,16 @@ function snapshot(value,target,definitions) {
   return fields;
 }
 function selected(values,fields) {return values.filter(v=>fields.some(f=>f.fieldId===v.fieldId));}
-export async function runIssueFieldCanary({target,read,write,saveEvidence,actorId,bindings,apply=false}={}) {
+function unselected(values,fields) {return values.filter(v=>!fields.some(f=>f.fieldId===v.fieldId));}
+function restorationFields(current,original,fields) {
+  return fields.filter(f=>(current.find(v=>v.fieldId===f.fieldId)?.optionId ?? null)!==(original.find(v=>v.fieldId===f.fieldId)?.optionId ?? null)).map(f=>{
+    const prior=original.find(v=>v.fieldId===f.fieldId);
+    return prior ? {fieldId:f.fieldId,singleSelectOptionId:prior.optionId} : {fieldId:f.fieldId,delete:true};
+  });
+}
+export async function runIssueFieldCanary({target,read,write,saveEvidence,actorId,bindings,apply=false,verifyExistingOptions=false}={}) {
   if(typeof apply!=='boolean')throw new Error('Canary apply must be boolean.');
+  if(typeof verifyExistingOptions!=='boolean')throw new Error('Canary existing-option verification must be boolean.');
   if(!FIELD_CANARY_TARGETS.some(t=>keys.every(k=>t[k]===target?.[k])))throw new Error('Unknown canary target.');
   if(apply && actorId!=='14937399')throw new Error('Canary mutation requires the delegated interactive operator.');
   if(typeof read!=='function' || typeof saveEvidence!=='function' || (apply && typeof write!=='function'))throw new Error('Missing canary adapter.');
@@ -39,46 +47,75 @@ export async function runIssueFieldCanary({target,read,write,saveEvidence,actorI
   for(const prior of selected(original,fields)) {
     if(!initial.fieldDefinitions.find(f=>f.id===prior.fieldId).options.some(o=>o.id===prior.optionId))throw new Error('Original canary field option cannot be restored.');
   }
-  await saveEvidence({phase:'prepared',target,actorId,originalValues:original,originalHash:hash(original),apply});
+  // Every later read must retain the options needed for compensation.
+  const readSnapshot=async()=>{
+    const value=await read();const current=snapshot(value,target,fields);
+    for(const prior of selected(original,fields)) {
+      if(!value.fieldDefinitions.find(f=>f.id===prior.fieldId).options.some(o=>o.id===prior.optionId))throw new Error('Original option is no longer available.');
+    }
+    return current;
+  };
+  await saveEvidence({phase:'prepared',target,actorId,originalValues:original,originalHash:hash(original),apply,verifyExistingOptions});
   if(!apply)return {mutationsRequested:false,originalHash:hash(original)};
   if(fields.some(f=>original.some(v=>v.fieldId===f.fieldId && v.optionId===f.singleSelectOptionId)))throw new Error('Each canary field must start with a different value to prove the test write.');
-  if(!equal(snapshot(await read(),target,fields),original))throw new Error('Canary changed before mutation; no write requested.');
+  if(!equal(await readSnapshot(),original))throw new Error('Canary changed before mutation; no write requested.');
   const testValues=fields.map(f=>({fieldId:f.fieldId,optionId:f.singleSelectOptionId})).sort((a,b)=>a.fieldId.localeCompare(b.fieldId,'en'));
   let testFailed=false;
+  let clearingRequested=false;
+  let existingOptionsRestored=false;
   try {
     await write(fields.map(f=>({fieldId:f.fieldId,singleSelectOptionId:f.singleSelectOptionId})));
-    const written=snapshot(await read(),target,fields);
+    const written=await readSnapshot();
     if(!equal(selected(written,fields),testValues))throw new Error('Canary write readback differs.');
+    if(!equal(unselected(written,fields),unselected(original,fields)))throw new Error('Unrelated canary fields changed during the test write.');
     await saveEvidence({phase:'write-verified',target,writtenHash:hash(written)});
+    if(verifyExistingOptions) {
+      // Use only the already-approved options. Prove their restoration before
+      // compensating the outer test back to the complete original vector.
+      const clear=fields.map(f=>({fieldId:f.fieldId,delete:true}));
+      await saveEvidence({phase:'existing-options-prepared',target,originalValues:written,originalHash:hash(written),clear});
+      if(!equal(await readSnapshot(),written))throw new Error('Canary changed before existing-option clear.');
+      clearingRequested=true;
+      await write(clear);
+      const cleared=await readSnapshot();
+      if(!equal(cleared,unselected(written,fields)))throw new Error('Existing-option clear readback differs.');
+      await saveEvidence({phase:'existing-options-cleared',target,clearedHash:hash(cleared)});
+      const restore=restorationFields(cleared,written,fields);
+      await saveEvidence({phase:'existing-options-restore-intent',target,restore});
+      if(!equal(await readSnapshot(),cleared))throw new Error('Canary changed before existing-option restoration.');
+      // Once restoration is requested, a later absence may be another actor's
+      // deletion. Never attribute it to our earlier clear, even on a lost reply.
+      clearingRequested=false;
+      await write(restore);
+      const readback=await readSnapshot();
+      if(!equal(readback,written))throw new Error('Existing-option restoration readback differs.');
+      await saveEvidence({phase:'existing-options-restored',target,restoredHash:hash(readback)});
+      existingOptionsRestored=true;
+    }
   } catch {testFailed=true;}
   // A rejected/lost response does not prove that the write was absent.
   // Re-read even after a failed write, and never overwrite a third-party value.
   let restored;
   let auditError=false;
   try {
-    const currentRead=await read();
-    const current=snapshot(currentRead,target,fields);
-    for(const prior of selected(original,fields)) {
-      if(!currentRead.fieldDefinitions.find(f=>f.id===prior.fieldId).options.some(o=>o.id===prior.optionId))throw new Error('Original option is no longer available.');
-    }
+    const current=await readSnapshot();
+    if(!equal(unselected(current,fields),unselected(original,fields)))throw new Error('Concurrent unrelated-field change.');
     for(const field of fields) {
       const value=current.find(v=>v.fieldId===field.fieldId)?.optionId ?? null;
       const prior=original.find(v=>v.fieldId===field.fieldId)?.optionId ?? null;
-      if(value!==prior && value!==field.singleSelectOptionId)throw new Error('Concurrent selected-field change.');
+      if(value!==prior && value!==field.singleSelectOptionId && !(clearingRequested && value===null))throw new Error('Concurrent selected-field change.');
     }
     if(!equal(selected(current,fields),selected(original,fields))) {
-      const restore=fields.filter(f=>(current.find(v=>v.fieldId===f.fieldId)?.optionId ?? null)!==(original.find(v=>v.fieldId===f.fieldId)?.optionId ?? null)).map(f=>{
-        const prior=original.find(v=>v.fieldId===f.fieldId);
-        return prior ? {fieldId:f.fieldId,singleSelectOptionId:prior.optionId} : {fieldId:f.fieldId,delete:true};
-      });
+      const restore=restorationFields(current,original,fields);
       try {await saveEvidence({phase:'restore-intent',target,restore});} catch {auditError=true;}
       // The original snapshot was saved before mutation. An audit outage
       // cannot prevent compensation after identity and value checks pass.
+      if(!equal(await readSnapshot(),current))throw new Error('Canary changed before final compensation.');
       try {await write(restore);} catch {
         // Do not repeat an uncertain restore. Fresh readback decides its state.
       }
     }
-    restored=snapshot(await read(),target,fields);
+    restored=await readSnapshot();
     if(!equal(restored,original))throw new Error('Original complete field state differs.');
     try {await saveEvidence({phase:'restored',target,restoredHash:hash(restored),testSucceeded:!testFailed});} catch {auditError=true;}
   } catch {
@@ -86,5 +123,5 @@ export async function runIssueFieldCanary({target,read,write,saveEvidence,actorI
     throw new Error('Canary restoration held; preserve the snapshot and inspect current state without retry.');
   }
   if(testFailed || auditError)throw new Error('Canary test failed; original values independently restored.');
-  return {mutationsRequested:true,restored:true,originalHash:hash(original),restoredHash:hash(restored)};
+  return {mutationsRequested:true,restored:true,originalHash:hash(original),restoredHash:hash(restored),existingOptionsRestored};
 }

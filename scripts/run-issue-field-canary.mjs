@@ -23,6 +23,7 @@ export function parseCanaryArguments(args) {
  for(let i=0;i<args.length;i++) {
   const flag=args[i];if(seen.has(flag))throw new Error('Duplicate canary argument.');seen.add(flag);
   if(flag==='--apply')parsed.apply=true;
+  else if(flag==='--verify-existing-options')parsed.verifyExistingOptions=true;
   else if(['--evidence-dir','--approved-commit','--bindings-file','--bindings-sha256'].includes(flag)) {
    const value=args[++i];if(!value||value.startsWith('--'))throw new Error('Missing canary argument value.');
    parsed[{'--evidence-dir':'evidenceDir','--approved-commit':'approvedCommit','--bindings-file':'bindingsFile','--bindings-sha256':'bindingsSha256'}[flag]]=value;
@@ -68,7 +69,7 @@ export async function runInteractiveCanaries(options) {
    const record={schemaVersion:1,operationId,sourceIssue:60,sourceCommit,bindingSha256,actorId:String(actor.id),observedAt:new Date().toISOString(),...event};
    writeFileSync(path.join(directory,`${operationId}-${String(++ordinal).padStart(3,'0')}.json`),JSON.stringify(record,null,2)+'\n',{mode:0o600,flag:'wx'});
   };
-  const result=await runIssueFieldCanary({target,read,write,saveEvidence,actorId:String(actor.id),bindings,apply:options.apply});
+  const result=await runIssueFieldCanary({target,read,write,saveEvidence,actorId:String(actor.id),bindings,apply:options.apply,verifyExistingOptions:options.verifyExistingOptions});
   results.push({repositoryId:target.repositoryId,issueNumber:target.issueNumber,...result});
  }
  return {schemaVersion:1,operationId,sourceCommit,bindingSha256,mode:options.apply?'operator-apply':'operator-preview',results};

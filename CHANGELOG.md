@@ -11,6 +11,10 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The fixed two-Issue operator canary can verify restoration of existing
+  approved field options as well as the original state. Intermediate snapshots,
+  separate readbacks and compensation preserve the interactive-only boundary.
+
 - The existing organization inventory command can collect an owner-triggered
   App coverage observation for the seven current factory repositories. Each
   token requests one native repository ID and metadata read access, with scope

@@ -124,3 +124,178 @@ test('falsy write rejections cannot become successful canary receipts',async()=>
   assert.equal(io.events.find(e=>e.phase==='restored').testSucceeded,false);
  }
 });
+
+test('existing-option probe clears and restores the approved values before restoring original absence',async()=>{
+ const io=fixture();
+ const result=await runIssueFieldCanary({...io,target,actorId:'14937399',apply:true,verifyExistingOptions:true});
+ assert.equal(result.existingOptionsRestored,true);
+ assert.equal(io.calls.length,4);
+ assert.ok(io.calls[1].every(f=>f.delete===true));
+ assert.deepEqual(io.calls[2],io.calls[0]);
+ assert.deepEqual((await io.read()).fieldValues,[]);
+ assert.deepEqual(io.events.filter(e=>e.phase.startsWith('existing-options')).map(e=>e.phase),
+  ['existing-options-prepared','existing-options-cleared','existing-options-restore-intent','existing-options-restored']);
+ const prepared=io.events.find(e=>e.phase==='existing-options-prepared');
+ const restored=io.events.find(e=>e.phase==='existing-options-restored');
+ assert.equal(restored.restoredHash,prepared.originalHash);
+ assert.equal(prepared.originalValues.length,2);
+});
+
+test('existing-option probe remains non-mutating in preview and rejects nonboolean input',async()=>{
+ const io=fixture();
+ await runIssueFieldCanary({...io,target,actorId:'14937399',verifyExistingOptions:true});
+ assert.equal(io.calls.length,0);
+ await assert.rejects(runIssueFieldCanary({...io,target,actorId:'14937399',apply:true,verifyExistingOptions:'false'}),/boolean/);
+ assert.equal(io.calls.length,0);
+});
+
+test('canary CLI explicitly selects the existing-option probe without changing its targets',()=>{
+ assert.equal(parseCanaryArguments(['--verify-existing-options','--evidence-dir','private','--bindings-file','pins']).verifyExistingOptions,true);
+});
+
+test('existing-option probe restores arbitrary prior options after clearing its approved values',async()=>{
+ const original=writes.map((f,i)=>({fieldId:f.fieldId,optionId:`prior-${i}`}));
+ const io=fixture(original);
+ const result=await runIssueFieldCanary({...io,target,actorId:'14937399',apply:true,verifyExistingOptions:true});
+ assert.equal(result.existingOptionsRestored,true);
+ assert.deepEqual((await io.read()).fieldValues,original);
+ assert.ok(io.calls[3].every(f=>f.singleSelectOptionId.startsWith('prior-')));
+});
+
+test('uncertain probe clear restores original values without repeating the clear',async()=>{
+ for(const original of [[],writes.map((f,i)=>({fieldId:f.fieldId,optionId:`prior-${i}`}))]) {
+  const io=fixture(original);let count=0;
+  const write=async inputs=>{await io.write(inputs);if(++count===2)throw new Error('lost clear response');};
+  await assert.rejects(runIssueFieldCanary({...io,write,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/independently restored/);
+  assert.equal(io.calls.length,original.length?3:2);
+  assert.deepEqual((await io.read()).fieldValues,original);
+  assert.equal(io.events.some(e=>e.phase==='existing-options-restored'),false);
+ }
+});
+
+test('lost probe restoration response is read before outer compensation and never retried',async()=>{
+ const io=fixture();let count=0;
+ const write=async inputs=>{await io.write(inputs);if(++count===3)throw new Error('lost option restoration response');};
+ await assert.rejects(runIssueFieldCanary({...io,write,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/independently restored/);
+ assert.equal(io.calls.length,4);
+ assert.equal(io.calls.filter(call=>call.every(f=>!f.delete)).length,2);
+ assert.deepEqual((await io.read()).fieldValues,[]);
+});
+
+test('probe preserves a third-party selected value after its clear and holds all later writes',async()=>{
+ const io=fixture();let count=0;
+ const write=async inputs=>{await io.write(inputs);if(++count===2)io.setFields([{fieldId:writes[0].fieldId,optionId:'human-option'}]);};
+ await assert.rejects(runIssueFieldCanary({...io,write,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/restoration held/);
+ assert.equal(io.calls.length,2);
+ assert.deepEqual((await io.read()).fieldValues,[{fieldId:writes[0].fieldId,optionId:'human-option'}]);
+});
+
+test('probe rechecks the complete vector immediately before restoring approved options',async()=>{
+ const io=fixture();
+ const saveEvidence=async event=>{
+  await io.saveEvidence(event);
+  if(event.phase==='existing-options-restore-intent')io.setFields([{fieldId:'other-field',optionId:'human-option'}]);
+ };
+ await assert.rejects(runIssueFieldCanary({...io,saveEvidence,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/restoration held/);
+ assert.equal(io.calls.length,2);
+ assert.deepEqual((await io.read()).fieldValues,[{fieldId:'other-field',optionId:'human-option'}]);
+});
+
+test('partial clear cannot produce a successful probe and restores the original vector',async()=>{
+ const io=fixture();let count=0;
+ const write=async inputs=>{await io.write(++count===2?inputs.slice(0,1):inputs);};
+ await assert.rejects(runIssueFieldCanary({...io,write,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/independently restored/);
+ assert.equal(io.calls.length,3);
+ assert.deepEqual((await io.read()).fieldValues,[]);
+ assert.equal(io.events.some(e=>e.phase==='existing-options-restored'),false);
+});
+
+test('probe audit failure after clearing still compensates the prior options',async()=>{
+ const original=writes.map((f,i)=>({fieldId:f.fieldId,optionId:`prior-${i}`}));
+ const io=fixture(original);
+ const saveEvidence=async event=>{if(event.phase==='existing-options-cleared')throw new Error('audit unavailable');await io.saveEvidence(event);};
+ await assert.rejects(runIssueFieldCanary({...io,saveEvidence,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/independently restored/);
+ assert.equal(io.calls.length,3);
+ assert.deepEqual((await io.read()).fieldValues,original);
+});
+
+test('both fixed repository identities can prove existing options and original absence',async()=>{
+ for(const selectedTarget of FIELD_CANARY_TARGETS) {
+  const io=fixture([],selectedTarget);
+  const result=await runIssueFieldCanary({...io,target:selectedTarget,actorId:'14937399',apply:true,verifyExistingOptions:true});
+  assert.equal(result.existingOptionsRestored,true);
+  assert.equal(result.originalHash,result.restoredHash);
+  assert.equal(io.calls.length,4);
+ }
+});
+
+test('a third-party deletion after probe restoration is preserved even when the original option was nonempty',async()=>{
+ for(const timing of ['after-write','after-readback','lost-response']) {
+  const original=writes.map((f,i)=>({fieldId:f.fieldId,optionId:`prior-${i}`}));
+  const io=fixture(original);let count=0;
+  const removeFirst=async()=>io.setFields((await io.read()).fieldValues.filter(v=>v.fieldId!==writes[0].fieldId));
+  const write=async inputs=>{
+   await io.write(inputs);
+   if(++count===3 && timing!=='after-readback') {
+    await removeFirst();
+    if(timing==='lost-response')throw new Error('uncertain restoration');
+   }
+  };
+  const saveEvidence=async event=>{await io.saveEvidence(event);if(event.phase==='existing-options-restored' && timing==='after-readback')await removeFirst();};
+  await assert.rejects(runIssueFieldCanary({...io,write,saveEvidence,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/restoration held/);
+  assert.equal(io.calls.length,3);
+  assert.equal((await io.read()).fieldValues.some(v=>v.fieldId===writes[0].fieldId),false);
+ }
+});
+
+test('an uncertain probe restoration leaving absence holds instead of assuming the earlier clear is still current',async()=>{
+ const original=writes.map((f,i)=>({fieldId:f.fieldId,optionId:`prior-${i}`}));
+ const io=fixture(original);let requests=0;
+ const write=async inputs=>{if(++requests===3)throw new Error('unknown restoration outcome');await io.write(inputs);};
+ await assert.rejects(runIssueFieldCanary({...io,write,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/restoration held/);
+ assert.equal(requests,3);
+ assert.deepEqual((await io.read()).fieldValues,[]);
+ assert.deepEqual(io.events[0].originalValues.map(v=>v.optionId).sort(),original.map(v=>v.optionId).sort());
+ assert.equal(io.events.at(-1).phase,'restoration-held');
+});
+
+test('observed unrelated changes during seed or clear stop all later canary writes',async()=>{
+ for(const phase of [1,2])for(const original of [[],writes.map((f,i)=>({fieldId:f.fieldId,optionId:`prior-${i}`}))]) {
+  const io=fixture(original);let count=0;
+  const write=async inputs=>{
+   await io.write(inputs);
+   if(++count===phase)io.setFields([...(await io.read()).fieldValues,{fieldId:'other-field',optionId:'human-option'}]);
+  };
+  await assert.rejects(runIssueFieldCanary({...io,write,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/restoration held/);
+  assert.equal(io.calls.length,phase);
+  assert.equal((await io.read()).fieldValues.find(v=>v.fieldId==='other-field').optionId,'human-option');
+ }
+});
+
+test('the complete vector is rechecked after final restore intent before compensation',async()=>{
+ for(const verifyExistingOptions of [false,true]) {
+  const io=fixture();
+  const saveEvidence=async event=>{
+   await io.saveEvidence(event);
+   if(event.phase==='restore-intent')io.setFields([{fieldId:writes[0].fieldId,optionId:'human-option'}]);
+  };
+  await assert.rejects(runIssueFieldCanary({...io,saveEvidence,target,actorId:'14937399',apply:true,verifyExistingOptions}),/restoration held/);
+  assert.equal(io.calls.length,verifyExistingOptions?3:1);
+  assert.deepEqual((await io.read()).fieldValues,[{fieldId:writes[0].fieldId,optionId:'human-option'}]);
+ }
+});
+
+test('each pending write refuses original options removed after its intent was saved',async()=>{
+ for(const [phase,expectedWrites] of [['existing-options-prepared',1],['existing-options-restore-intent',2],['restore-intent',3]]) {
+  const original=writes.map((f,i)=>({fieldId:f.fieldId,optionId:`prior-${i}`}));
+  const io=fixture(original);let removePrior=false;
+  const read=async()=>{
+   const value=await io.read();
+   if(removePrior)for(const f of value.fieldDefinitions)f.options=f.options.filter(o=>!o.id.startsWith('prior-'));
+   return value;
+  };
+  const saveEvidence=async event=>{await io.saveEvidence(event);if(event.phase===phase)removePrior=true;};
+  await assert.rejects(runIssueFieldCanary({...io,read,saveEvidence,target,actorId:'14937399',apply:true,verifyExistingOptions:true}),/restoration held/);
+  assert.equal(io.calls.length,expectedWrites);
+ }
+});
