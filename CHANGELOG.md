@@ -195,6 +195,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Update the pinned Codex CLI from 0.164.0 to 0.166.0 after verifying the official release asset digest; the pull request waits for no-generation runner capability checks before semantic review.
+
 - Release-chain validation reads factory projection metadata from the standard
   Agent Plugins 1.0 manifest extension while retaining historical flat records.
   Unknown formats and ambiguous source metadata are rejected. This does not
