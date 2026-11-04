@@ -27,6 +27,16 @@ test('versioned admission snapshots preserve provenance and represent unknown to
   assert.equal(receipt.consumption.modelTurns, 2);
 });
 
+test('context admission hold has fixed owner readmission guidance without fabricating runtime authority', () => {
+  const value = input();
+  const receipt = createOperationReceipt({ ...value, outcome: 'held', failureCode: 'STRATEGY_CONTEXT_HOLD' });
+  assert.equal(receipt.failureClass, 'policy');
+  assert.equal(receipt.stopReason, 'policy-readmission');
+  assert.match(receipt.recoveryAction, /source Issue identity and approved strategy context/);
+  assert.equal(receipt.authorityContext, null);
+  assert.deepEqual(receipt.consumption.modelTurns, value.state.modelTurnCount);
+});
+
 test('terminal publication requires confirmed shutdown, settlement and credential cleanup', () => {
   const value = { ...input(), stage: 'terminal', outcome: 'candidate-published', shutdown: { ownedExecutionStopped: true, activeTimeSettled: true, issuedTokenRevocationConfirmed: true } };
   assert.equal(createOperationReceipt(value).outcome, 'candidate-published');

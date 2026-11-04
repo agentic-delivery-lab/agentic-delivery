@@ -54,20 +54,45 @@ strategy does not approve each proposed goal or prove any measured outcome.
 
 Selection policy 1.0.0 produces stable JSON bounded to 48 KiB, with a SHA-256
 over the selected data. This byte bound makes no hard token or spend claim.
-Resume requires identical verified data; missing or changed data holds without
-mutating the operation UUID, counters, reservations, checkpoint or outbox.
+Resume requires identical verified data. Missing or changed data holds without
+replacing the operation UUID, resetting spent allowance or flushing its outbox.
+The pure comparison changes nothing; the controller still charges actual
+admission attempts and settles its normal active-time reservation.
 Provider errors are reduced to a fixed inspection message.
 
 ## Integration boundary
 
-This first increment is a private loader and its rejection tests. Controller
-phase prompts, saved-state migration and delivery-evidence versioning remain
-the next increment under the same source Issue. The module is not yet called
-by delivery. It performs no Project lookup, model startup or GitHub mutation.
+The controller verifies context after its existing actor, lifecycle, readiness
+and orchestration checks, before protected phase work or outbox publication.
+It rechecks native source identity before client startup, each model turn,
+protected GitHub writes and branch push. Verified context enters phase prompts
+as bounded reference data; it never changes developer instructions, model,
+provider, named permissions or credentials. No Project lookup is required.
+
+Duplicate-event recovery checks actor authority, native identity and the same
+saved context before flushing historical comments. It does not reauthorize a
+completed route against a later lifecycle stage or start another model turn.
+A fresh specialized run records its first authorized brief before its turn;
+it cannot mistake the missing initial digest for permission to start planning.
+
+State format 6 preserves the full verified context. Historical formats 2–5
+remain readable, but missing or changed context requires owner readmission.
+No operation, session or allowance is replaced to evade that hold. Evidence
+format 3 records native origin, immutable authority/tooling pins, selected IDs
+and the data digest. Historical evidence formats 1 and 2 remain readable;
+state 6 cannot publish older evidence without its context provenance.
+Workspace ADR observations remain a separate record.
+
+Attempt receipts retain their existing format and null runtime
+`authorityContext`; they do not fabricate complete durable/runtime admission.
+A context hold supplies fixed owner readmission guidance. Provider diagnostics
+and raw Issue/Project prose do not enter the authority provenance.
 
 The controller's existing unconditional Actions admission hold remains.
 Runtime ledger/profile/credential admission, participant activation and
 production delivery need their own evidence. Current runtime, bootstrap and
 reusable-workflow pins remain separate from this selected context source.
-Stock Codex remains unmodified. Before review publication, complete the
-controller integration and run the full acceptance matrix in Issue #106.
+Stock Codex remains unmodified. Separate AI review, exact-head hosted checks
+and the remaining acceptance matrix in Issue #106 are still required before
+review publication. No production state migration or activation is performed
+by this source change.

@@ -21,7 +21,9 @@ function diagnostic({outcome, state, shutdown, failureCode}) {
   } else if (outcome === 'awaiting-human') {
     failureClass = 'clarification'; stopReason = 'source-clarification-required';
   } else if (outcome === 'held') {
-    if (failureCode === 'OPERATION_ADMISSION_HOLD') {
+    if (failureCode === 'STRATEGY_CONTEXT_HOLD') {
+      return { failureClass: 'policy', stopReason: 'policy-readmission', recoveryAction: 'Interactive operator: reconcile the exact source Issue identity and approved strategy context without replacing the operation or resetting spent consumption.' };
+    } else if (failureCode === 'OPERATION_ADMISSION_HOLD') {
       failureClass = 'policy'; stopReason = 'policy-readmission';
     } else if (failureCode === 'VALIDATION_PROFILE_HOLD') {
       failureClass = 'profile'; stopReason = 'validation-profile-readmission';

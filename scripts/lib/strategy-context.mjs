@@ -6,6 +6,8 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
+import { readFileSync } from 'node:fs';
+import Ajv2020 from 'ajv/dist/2020.js';
 import { parseRepositoryYaml } from './yaml.mjs';
 import { validateArchitecturePin } from '../validate-architecture-pin.mjs';
 
@@ -17,6 +19,8 @@ const architecture = Object.freeze({ repository: 'agentic-delivery-lab/agentic-d
   contentSha256: 'b754a82b5fca30a933057602bba6ab4f204c2a937be3a3076d7610aacac826d2' });
 const requirementsTooling = Object.freeze({ commit: '2d20d40dcd1fb50d04310da2d222fb1a6fc1fa31',
   path: 'tools/validate-requirements.mjs', sha256: '284f4aa16981bf4bf324b4a0763bdba3ce67e920838325c29d061140f6d46ead' });
+const referenceSchema = JSON.parse(readFileSync(new URL('../../docs/architecture/delivery-evidence.schema.json', import.meta.url))).$defs.strategyContextReference;
+const validateReference = new Ajv2020({ strict: true }).compile(referenceSchema);
 const hash = data => createHash('sha256').update(data).digest('hex');
 const sorted = records => [...records].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 class StrategyContextHold extends Error {
@@ -69,6 +73,30 @@ export function strategyContextData(context) {
 }
 export function requireSameStrategyContext(saved, current) {
   requireValue(saved && strategyContextData(saved) === strategyContextData(current), 'Saved strategy context is missing or changed; preserve the operation and request readmission.');
+}
+
+export function strategyContextReference(context) {
+  strategyContextData(context);
+  const ids = records => records.map(r => r.id).sort();
+  const result = { schemaVersion: 1, selectionPolicy: context.selectionPolicy, sha256: context.sha256,
+    origin: structuredClone(context.origin), architecture: structuredClone(context.architecture),
+    requirements: { authority: structuredClone(context.requirements.authority), tooling: structuredClone(context.requirements.tooling) },
+    selected: { contexts: ids(context.contexts), goals: ids(context.goals), principles: ids(context.principles),
+      decisions: ids(context.decisions), requirements: ids(context.requirements.records), measures: ids(context.evaluation.measures) } };
+  requireValue(validateStrategyContextReference(result), 'Strategy context provenance is invalid.');
+  return result;
+}
+
+export function validateStrategyContextReference(value) {
+  return Boolean(validateReference(value)
+    && Object.entries(architecture).every(([key, expected]) => value.architecture[key] === expected)
+    && Object.entries(requirementsTooling).every(([key, expected]) => value.requirements.tooling[key] === expected)
+    && value.requirements.authority.repositoryId === 1416207421
+    && value.requirements.authority.repository === 'agentic-delivery-lab/agentic-delivery-requirements'
+    && value.requirements.authority.commit === '9ce017453a23240042f72214b09e3c6c5059854d'
+    && value.requirements.authority.sourceCommit === '059aad42e0e3e4b8e305f46a1d474a12ffdb8f33'
+    && value.requirements.authority.version === '1.0.0'
+    && value.requirements.authority.contentSha256 === 'eec84e8ff2b276ef322b9262ede31edad9f4c0f9f30a7527a9607dd9f411a1c4');
 }
 
 // Materialize the unchanged admitted selector and schemas, resolving packages

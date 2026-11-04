@@ -18,7 +18,7 @@
     "auditCheckpoint"
   ],
   "properties": {
-    "schemaVersion": { "enum": [1, 2] },
+    "schemaVersion": { "enum": [1, 2, 3] },
     "producer": { "const": "codex-delivery" },
     "repository": { "type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$" },
     "sourceIssue": {
@@ -224,6 +224,7 @@
         }
       }
     },
+    "strategyContext": { "$ref": "#/$defs/strategyContextReference" },
     "telemetry": {
       "type": "object",
       "additionalProperties": false,
@@ -249,7 +250,7 @@
       "if": {
         "properties": {
           "schemaVersion": {
-            "const": 2
+            "enum": [2, 3]
           }
         }
       },
@@ -281,10 +282,318 @@
       "then": {
         "properties": {
           "schemaVersion": {
-            "const": 2
+            "enum": [2, 3]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schemaVersion": {
+            "const": 3
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "strategyContext"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "strategyContext"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "auditCheckpoint": {
+            "properties": {
+              "stateVersion": {
+                "minimum": 6
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "schemaVersion": {
+            "const": 3
           }
         }
       }
     }
-  ]
+  ],
+  "$defs": {
+    "strategyContextReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "selectionPolicy",
+        "sha256",
+        "origin",
+        "architecture",
+        "requirements",
+        "selected"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "selectionPolicy": {
+          "const": "1.0.0"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "origin": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repository",
+            "repositoryId",
+            "issueNumber",
+            "issueNodeId"
+          ],
+          "properties": {
+            "repository": {
+              "type": "string",
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
+            },
+            "repositoryId": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "issueNumber": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "issueNodeId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_=-]{1,200}$"
+            }
+          }
+        },
+        "architecture": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repository",
+            "repositoryId",
+            "commit",
+            "sourceCommit",
+            "version",
+            "contentSha256",
+            "contractVersions"
+          ],
+          "properties": {
+            "repository": {
+              "type": "string",
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
+            },
+            "repositoryId": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "commit": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "sourceCommit": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "contentSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "contractVersions": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "architectureRelease",
+                "conformance",
+                "adrPrimitiveIndex",
+                "decisionInventory",
+                "architectureArtifacts",
+                "evaluationReport",
+                "requirementsReference",
+                "evaluationOwnership"
+              ],
+              "properties": {
+                "architectureRelease": {
+                  "const": "5.1.0"
+                },
+                "conformance": {
+                  "const": "1.0.0"
+                },
+                "adrPrimitiveIndex": {
+                  "const": "4.0.0"
+                },
+                "decisionInventory": {
+                  "const": "1.1.0"
+                },
+                "architectureArtifacts": {
+                  "const": "1.0.0"
+                },
+                "evaluationReport": {
+                  "const": "2.0.0"
+                },
+                "requirementsReference": {
+                  "const": "1.0.0"
+                },
+                "evaluationOwnership": {
+                  "const": "1.0.0"
+                }
+              }
+            }
+          }
+        },
+        "requirements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "authority",
+            "tooling"
+          ],
+          "properties": {
+            "authority": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "repository",
+                "repositoryId",
+                "commit",
+                "sourceCommit",
+                "version",
+                "contentSha256"
+              ],
+              "properties": {
+                "repository": {
+                  "type": "string",
+                  "pattern": "^[^/\\s]+/[^/\\s]+$"
+                },
+                "repositoryId": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "commit": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                },
+                "sourceCommit": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "contentSha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            },
+            "tooling": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "commit",
+                "path",
+                "sha256"
+              ],
+              "properties": {
+                "commit": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            }
+          }
+        },
+        "selected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "contexts",
+            "goals",
+            "principles",
+            "decisions",
+            "requirements",
+            "measures"
+          ],
+          "properties": {
+            "contexts": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": ".+"
+              }
+            },
+            "goals": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^SG-[0-9]+$"
+              }
+            },
+            "principles": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^AP-[0-9]+$"
+              }
+            },
+            "decisions": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(ADR|ADP|ADD)-[0-9]{4}$"
+              }
+            },
+            "requirements": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Z]+-[0-9]+$"
+              }
+            },
+            "measures": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^SM-[0-9]+$"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
