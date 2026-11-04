@@ -6,13 +6,23 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
-import { ArchitecturePinValidationError, validateArchitecturePin } from '../../scripts/validate-architecture-pin.mjs';
+import { ArchitecturePinValidationError, supportsArchitectureContracts, validateArchitecturePin } from '../../scripts/validate-architecture-pin.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const architectureRoot = process.env.ARCHITECTURE_PIN_TEST_ROOT ?? path.resolve(repositoryRoot, '../agentic-delivery-architecture');
 const currentArchitectureCommit = '59df514a3a6dc8a75b79b3fc75fe61aae4e6fdf3';
 const previousArchitectureCommit = '6392c3770219304a78393faac42276e12eb1525f';
 const execFileAsync = promisify(execFile);
+
+test('owner-approved Architecture 0.1.0 has a closed supported ownership contract set', async () => {
+  const { stdout } = await execFileAsync('git', ['-C', process.env.STRATEGY_ARCHITECTURE_TEST_ROOT ?? architectureRoot, 'show',
+    'ba804c044bd7dc0a7c5568062d43a1f0d9f3141b:architecture/generated/architecture-release.json']);
+  const { contractVersions } = JSON.parse(stdout);
+  assert.equal(supportsArchitectureContracts(contractVersions), true);
+  assert.equal(supportsArchitectureContracts({ ...contractVersions, evaluationOwnership: '2.0.0' }), false);
+  assert.equal(supportsArchitectureContracts({ ...contractVersions, unknown: '1.0.0' }), false);
+  assert.equal(supportsArchitectureContracts({ ...contractVersions, adrPrimitiveIndex: '3.0.0' }), false);
+});
 
 async function controllerRelease() {
   // Retain the exact historical reader case after the current graph advances.

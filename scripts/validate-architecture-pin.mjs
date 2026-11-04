@@ -26,6 +26,11 @@ const SUPPORTED_CONTRACT_SETS = [
     decisionInventory: '1.1.0', architectureArtifacts: '1.0.0',
     evaluationReport: '2.0.0', requirementsReference: '1.0.0',
   })),
+  {
+    architectureRelease: '5.1.0', conformance: '1.0.0', adrPrimitiveIndex: '4.0.0',
+    decisionInventory: '1.1.0', architectureArtifacts: '1.0.0',
+    evaluationReport: '2.0.0', requirementsReference: '1.0.0', evaluationOwnership: '1.0.0',
+  },
 ];
 export function supportsArchitectureContracts(versions) {
   return Boolean(versions && typeof versions === 'object' && !Array.isArray(versions)

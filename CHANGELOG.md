@@ -11,6 +11,11 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A private strategy-context loader verifies owner-approved Architecture 0.1.0,
+  native source-Issue identity and the selected approved Requirements baseline.
+  It produces bounded, deterministic data and rejects changed resume context.
+  Controller integration and runtime admission remain separate work under #106.
+
 - The fixed two-Issue operator canary can verify restoration of existing
   approved field options as well as the original state. Intermediate snapshots,
   separate readbacks and compensation preserve the interactive-only boundary.
