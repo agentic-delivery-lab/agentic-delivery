@@ -18,7 +18,9 @@ and releases use [Semantic Versioning](https://semver.org/).
   evidence format 3 retain historical readers and preserve spent allowances.
   Duplicate events recover historical outbox entries without rerouting completed
   work. Fresh specialized runs establish their initial brief without switching
-  to planning. Runtime admission and activation remain separate under #106.
+  to planning. Known pre-thread quota recovery preserves the specialized role
+  and operation; ambiguous or changed briefs hold instead of creating a new
+  session or switching to planning. Runtime admission remains separate.
 
 - The fixed two-Issue operator canary can verify restoration of existing
   approved field options as well as the original state. Intermediate snapshots,

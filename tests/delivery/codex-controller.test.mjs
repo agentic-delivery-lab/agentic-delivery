@@ -1,6 +1,6 @@
 import { resolveValidationProfile, validationProfileReference } from '../../scripts/lib/validation-profile.mjs';
 import assert from 'node:assert/strict';
-import { generateKeyPairSync } from 'node:crypto';
+import { createHash, generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -317,6 +317,67 @@ test('context and injected Issue text stay in prompt data without changing privi
   const state = await injected.state();
   assert.equal(state.evidence.strategyContext.sha256, state.strategyContext.sha256);
   assert.equal(state.evidence.strategyContext.origin.issueNodeId, 'I_7');
+});
+
+test('specialized pre-thread quota recovery never enters planning or replaces the operation', async (t) => {
+  for (const [phase, nativeType, stage] of [
+    ['research', 'Research', 'discovery'], ['requirements', 'Requirements', 'definition'],
+    ['architecture', 'Architecture Decision', 'decision'], ['validate', 'Validation', 'validation'],
+  ]) {
+    const f = await fixture(t); f.env.INTAKE_ROUTE = phase;
+    f.faults.sourceNativeType = nativeType;
+    f.faults.sourceFields = { lifecycle_stage: stage, readiness: 'working' };
+    f.faults.quota = true;
+    assert.equal((await f.run()).status, 'paused');
+    const before = await f.state();
+    assert.equal(before.phase, phase); assert.equal(before.sessionStarted, false);
+    assert.equal(before.modelTurnCount, 0); assert.equal(before.sourceDigest, undefined);
+    f.faults.quota = false; f.env.INTAKE_ROUTE = 'resume';
+    const observed = [];
+    f.dependencies.runTurn = async ({ phase: actual }) => {
+      observed.push(actual); return { status: 'paused', reason: 'Controlled stop after the specialized turn.' };
+    };
+    assert.equal((await f.resume()).status, 'paused');
+    const after = await f.state();
+    assert.deepEqual(observed, [phase], after.reason);
+    assert.equal(after.phase, phase); assert.equal(after.operationId, before.operationId);
+    assert.equal(f.calls.fieldWrites, 0); assert.equal(f.calls.prs.length, 0);
+    assert.equal(f.faults.sourceFields.lifecycle_stage, stage);
+    assert.deepEqual(f.calls.threads, [{ method: 'start' }]);
+    assert.equal(after.modelTurnCount, 1);
+  }
+});
+
+test('ambiguous or changed specialized brief cannot resume into planning', async (t) => {
+  for (const sourceDigest of [null, '0'.repeat(64)]) {
+    const f = await fixture(t); f.env.INTAKE_ROUTE = 'research';
+    f.faults.sourceNativeType = 'Research'; f.faults.sourceFields = { lifecycle_stage: 'discovery', readiness: 'working' };
+    f.faults.quota = true; await f.run();
+    const saved = await f.state(); saved.sourceDigest = sourceDigest;
+    await writeFile(path.join(f.issueRoot, 'state.json'), JSON.stringify(saved));
+    f.faults.quota = false; f.env.INTAKE_ROUTE = 'resume';
+    assert.equal((await f.resume()).status, 'paused');
+    const held = await f.state();
+    assert.equal(held.phase, 'research'); assert.equal(held.operationId, saved.operationId);
+    assert.equal(f.calls.turns.length, 0); assert.equal(f.calls.threads.length, 0);
+    assert.equal(f.calls.fieldWrites, 0);
+  }
+});
+
+test('a persisted specialized brief without a session ID does not prove thread startup was unattempted', async (t) => {
+  const f = await fixture(t); f.env.INTAKE_ROUTE = 'research';
+  f.faults.sourceNativeType = 'Research'; f.faults.sourceFields = { lifecycle_stage: 'discovery', readiness: 'working' };
+  f.faults.quota = true; await f.run();
+  const saved = await f.state();
+  saved.sourceDigest = createHash('sha256').update(JSON.stringify({ title: f.faults.sourceTitle, body: f.faults.sourceBody, comments: [] })).digest('hex');
+  await writeFile(path.join(f.issueRoot, 'state.json'), JSON.stringify(saved));
+  f.faults.quota = false; f.env.INTAKE_ROUTE = 'resume';
+  assert.equal((await f.resume()).status, 'paused');
+  const held = await f.state();
+  assert.equal(held.phase, 'research'); assert.equal(held.operationId, saved.operationId);
+  assert.match(held.reason, /session ID is missing/i);
+  assert.equal(f.calls.turns.length, 0); assert.equal(f.calls.threads.length, 0);
+  assert.equal(f.calls.fieldWrites, 0);
 });
 
 test('publishes one recorded branch and PR with a complete issue audit trail', async (t) => {

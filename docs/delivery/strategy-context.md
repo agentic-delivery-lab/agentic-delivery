@@ -72,8 +72,15 @@ provider, named permissions or credentials. No Project lookup is required.
 Duplicate-event recovery checks actor authority, native identity and the same
 saved context before flushing historical comments. It does not reauthorize a
 completed route against a later lifecycle stage or start another model turn.
-A fresh specialized run records its first authorized brief before its turn;
-it cannot mistake the missing initial digest for permission to start planning.
+A fresh specialized run records its first authorized brief before its turn.
+After a pre-thread quota stop, it may establish that initial snapshot only
+when the saved digest is absent, model consumption is known zero, and no
+session has started or been recorded. Each specialized phase persists its
+brief before calling `thread/start`; the absent digest identifies that
+pre-thread boundary. A present digest without a session ID cannot prove
+startup was unattempted, so it holds instead of creating a replacement.
+Changed or ambiguous specialized briefs hold their phase and operation for
+owner readmission; they cannot authorize a switch to planning.
 
 State format 6 preserves the full verified context. Historical formats 2–5
 remain readable, but missing or changed context requires owner readmission.

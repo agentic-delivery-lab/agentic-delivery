@@ -28,6 +28,7 @@ import { currentOperationPolicyReference, INITIAL_OPERATION_LIMITS, matchesCurre
 const executeFile = promisify(execFile);
 const controllerRoot = path.resolve(import.meta.dirname, '..');
 const STATE_VERSION = 6;
+const SPECIALIZED_PHASES = ['research', 'requirements', 'architecture', 'validate'];
 const MAX_VALIDATION_ATTEMPTS = INITIAL_OPERATION_LIMITS.validationAttempts;
 const MAX_MODEL_TURNS = INITIAL_OPERATION_LIMITS.modelTurns;
 const PROGRESS_COMMENT_INTERVAL_MS = 5 * 60_000;
@@ -592,6 +593,11 @@ export async function deliver(env = process.env, dependencies = {}) {
   let transitionState;
   const requireCurrentBrief = async (brief) => {
     if (state.sourceDigest !== digest(brief)) {
+      if (SPECIALIZED_PHASES.includes(state.phase)) {
+        throw Object.assign(new Error('The specialized source brief is missing or changed; preserve its phase and operation for owner readmission.'), {
+          code: 'STRATEGY_CONTEXT_HOLD',
+        });
+      }
       state.phase = 'plan';
       state.planDigest = null;
       state.planInvalidatedReason = 'The source issue or conversation changed.';
@@ -856,8 +862,15 @@ export async function deliver(env = process.env, dependencies = {}) {
       const token = options.publish ? await publicationToken() : originToken;
       return (await execute('git', ['-C', workspace, ...args], { env: gitEnv(token), timeout: Math.min(120_000, requireActiveTime()), maxBuffer: 8_000_000 })).stdout.trim();
     };
+    // Specialized phases persist the first brief before thread/start. Its
+    // absence with known zero turns/no session identifies a pre-thread stop.
+    // A present digest cannot prove an attempted thread/start did not happen.
+    const canBindInitialSpecializedBrief = SPECIALIZED_PHASES.includes(state.phase)
+      && state.sourceDigest === undefined && state.modelTurnCount === 0
+      && state.sessionStarted === false && state.sessionId === undefined;
     const canStartInitialSession = !stateWasSaved
-      || (priorStatus === 'paused' && state.phase === 'plan' && !state.plan && state.sessionStarted === false && !state.sessionId);
+      || (priorStatus === 'paused' && state.sessionStarted === false && !state.sessionId
+        && ((state.phase === 'plan' && !state.plan) || canBindInitialSpecializedBrief));
     if (stateWasSaved && state.legacySessionReconstruction && state.sessionId === undefined) await save();
     const eventKey = comment
       ? `comment:${comment.id}`
@@ -1144,7 +1157,7 @@ export async function deliver(env = process.env, dependencies = {}) {
       }
       const brief = await readBrief(comment?.id);
       if (['refine', 'plan'].includes(state.phase)
-        || (!stateWasSaved && ['research', 'requirements', 'architecture', 'validate'].includes(state.phase))) {
+        || (!stateWasSaved && SPECIALIZED_PHASES.includes(state.phase)) || canBindInitialSpecializedBrief) {
         state.sourceDigest = digest(brief); await save();
       }
       else await requireCurrentBrief(brief);
