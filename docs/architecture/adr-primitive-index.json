@@ -34,6 +34,7 @@
       "id": "ADR-0003",
       "file": "docs/decisions/0003-use-context-scoped-ubiquitous-language.md",
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ],
       "requiredEnforcement": [
@@ -51,6 +52,7 @@
       "id": "ADR-0004",
       "file": "docs/decisions/0004-use-trunk-based-delivery.md",
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ],
       "requiredEnforcement": [
@@ -121,6 +123,7 @@
       "id": "ADR-0009",
       "file": "docs/decisions/0009-run-codex-from-source-issues-with-a-budget-boundary.md",
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ],
       "requiredEnforcement": [
@@ -147,6 +150,7 @@
       "id": "ADR-0011",
       "file": "docs/decisions/0011-run-layered-harness-architecture-reviews.md",
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ],
       "requiredEnforcement": [
@@ -168,6 +172,7 @@
       "id": "ADR-0012",
       "file": "docs/decisions/0012-use-github-as-the-lifecycle-control-plane.md",
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ],
       "requiredEnforcement": [
@@ -200,6 +205,7 @@
       "id": "ADR-0013",
       "file": "docs/decisions/0013-derive-adr-traceability-from-agentic-primitives.md",
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ],
       "requiredEnforcement": [
@@ -220,7 +226,7 @@
       "id": "ADR-0015",
       "file": "docs/decisions/0015-isolate-resumable-runner-execution.md",
       "domains": [
-        "agentic-delivery-governance"
+        "agentic-delivery-control-plane"
       ],
       "requiredEnforcement": [
         "deterministic"
@@ -239,6 +245,7 @@
       "id": "ADR-0016",
       "file": "docs/decisions/0016-require-structured-pull-request-descriptions.md",
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ],
       "requiredEnforcement": [
@@ -257,7 +264,7 @@
       "id": "ADR-0017",
       "file": "docs/decisions/0017-use-an-explicit-agent-invocation-boundary.md",
       "domains": [
-        "agentic-delivery-governance"
+        "agentic-delivery-control-plane"
       ],
       "requiredEnforcement": [
         "deterministic"
@@ -363,14 +370,112 @@
         "operator-issue-field-canary",
         "organization-metadata-runbook"
       ]
+    },
+    {
+      "id": "ADR-0020",
+      "file": "docs/decisions/0020-centralize-organization-decision-records.md",
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "semantic"
+      ],
+      "primitives": [
+        "adr-structure-validator",
+        "repository-governance-instructions",
+        "semantic-architecture-review"
+      ]
+    },
+    {
+      "id": "ADR-0021",
+      "file": "docs/decisions/0021-define-architecture-artifact-contracts.md",
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "instructional",
+        "semantic"
+      ],
+      "primitives": [
+        "adr-structure-validator",
+        "repository-governance-instructions",
+        "semantic-architecture-review"
+      ]
+    },
+    {
+      "id": "ADR-0022",
+      "file": "docs/decisions/0022-use-neon-postgres-for-webhook-replay-state.md",
+      "domains": [
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "semantic"
+      ],
+      "primitives": [
+        "organization-webhook-ingress",
+        "semantic-architecture-review"
+      ]
+    },
+    {
+      "id": "ADR-0023",
+      "file": "docs/decisions/0023-use-projects-for-planning-and-issues-for-execution-authorization.md",
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "semantic"
+      ],
+      "primitives": [
+        "codex-delivery-controller",
+        "repository-governance-instructions",
+        "semantic-architecture-review"
+      ]
+    },
+    {
+      "id": "ADR-0024",
+      "file": "docs/decisions/0024-centralize-approved-requirements-in-requirements-authority.md",
+      "domains": [
+        "agentic-delivery-control-plane",
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "semantic"
+      ],
+      "primitives": [
+        "codex-delivery-controller",
+        "repository-governance-instructions",
+        "semantic-architecture-review"
+      ]
     }
   ],
   "domains": [
     {
       "id": "agentic-delivery-control-plane",
       "adrs": [
+        "ADR-0003",
+        "ADR-0004",
+        "ADR-0009",
+        "ADR-0011",
+        "ADR-0012",
+        "ADR-0013",
+        "ADR-0015",
+        "ADR-0016",
+        "ADR-0017",
         "ADR-0018",
-        "ADR-0019"
+        "ADR-0019",
+        "ADR-0020",
+        "ADR-0021",
+        "ADR-0022",
+        "ADR-0023",
+        "ADR-0024"
       ],
       "primitives": [
         "agent-invocation-boundary",
@@ -398,6 +503,7 @@
         "interactive-issue-field-canary-command",
         "issue-60-bounded-reconciliation-recovery",
         "issue-60-webhook-delivery-archive",
+        "issue-event-authorization",
         "issue-field-binding-log-masking",
         "issue-field-controller-boundary",
         "legacy-intake-read-only-compatibility",
@@ -406,6 +512,8 @@
         "operation-budget-policy-identity",
         "operation-resource-budget-store",
         "operator-issue-field-canary",
+        "orchestration-policy-catalog",
+        "orchestration-policy-validator",
         "organization-metadata-runbook",
         "organization-webhook-ingress",
         "owner-github-app-coverage-workflow",
@@ -439,11 +547,13 @@
         "ADR-0011",
         "ADR-0012",
         "ADR-0013",
-        "ADR-0015",
         "ADR-0016",
-        "ADR-0017",
         "ADR-0018",
-        "ADR-0019"
+        "ADR-0019",
+        "ADR-0020",
+        "ADR-0021",
+        "ADR-0023",
+        "ADR-0024"
       ],
       "primitives": [
         "adr-structure-validator",
@@ -509,7 +619,9 @@
       "kind": "validator",
       "enforcement": "deterministic",
       "adrs": [
-        "ADR-0001"
+        "ADR-0001",
+        "ADR-0020",
+        "ADR-0021"
       ],
       "domains": [
         "agentic-delivery-governance"
@@ -664,7 +776,9 @@
         "ADR-0009",
         "ADR-0012",
         "ADR-0015",
-        "ADR-0018"
+        "ADR-0018",
+        "ADR-0023",
+        "ADR-0024"
       ],
       "domains": [
         "agentic-delivery-control-plane",
@@ -1028,6 +1142,7 @@
         "ADR-0017"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },
@@ -1248,6 +1363,7 @@
         "ADR-0017"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },
@@ -1263,6 +1379,7 @@
         "ADR-0017"
       ],
       "domains": [
+        "agentic-delivery-control-plane",
         "agentic-delivery-governance"
       ]
     },
@@ -1294,7 +1411,8 @@
       "enforcement": "deterministic",
       "adrs": [
         "ADR-0017",
-        "ADR-0018"
+        "ADR-0018",
+        "ADR-0022"
       ],
       "domains": [
         "agentic-delivery-control-plane",
@@ -1507,7 +1625,11 @@
         "ADR-0015",
         "ADR-0016",
         "ADR-0017",
-        "ADR-0018"
+        "ADR-0018",
+        "ADR-0020",
+        "ADR-0021",
+        "ADR-0023",
+        "ADR-0024"
       ],
       "domains": [
         "agentic-delivery-control-plane",
@@ -1536,7 +1658,12 @@
       "enforcement": "semantic",
       "adrs": [
         "ADR-0011",
-        "ADR-0018"
+        "ADR-0018",
+        "ADR-0020",
+        "ADR-0021",
+        "ADR-0022",
+        "ADR-0023",
+        "ADR-0024"
       ],
       "domains": [
         "agentic-delivery-control-plane",

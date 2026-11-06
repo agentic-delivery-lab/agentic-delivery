@@ -1,60 +1,12 @@
----
-date: YYYY-MM-DD
-source-issue: https://github.com/owner/repository/issues/NNN
-decision-makers: Name(s)
-consulted: Name(s) or "None"
-informed: Name(s) or "None"
-domains:
-  - bounded-context-id
-required-enforcement:
-  - deterministic
-# supersedes:
-#   - ADR-NNNN
----
+# Architecture decision template — reference
 
-# Short, solution-focused title
+Use the shared template from the approved Architecture Authority source:
 
-## Context and Problem Statement
+[decisions/adr-template.md](https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/0423533176ad6239fe5d828736605b5a6360293c/decisions/adr-template.md).
 
-Explain the situation and the problem. Link the source issue or ADR tracking issue and any evidence a future reader needs.
+Canonical file SHA-256: `86de7c1408407c70ee72755620f122099ac55d11e6a258698a4a9fab6393c55a`.
 
-## Decision Drivers
-
-- Driver or constraint 1
-- Driver or constraint 2
-
-## Considered Options
-
-- Option 1
-- Option 2
-- Option 3, if useful
-
-## Decision Outcome
-
-Chosen option: **Option 1**, because [explain how it best meets the decision drivers].
-
-### Consequences
-
-- Good, because …
-- Bad, because …
-- Neutral, because …
-
-### Confirmation
-
-Explain how implementation or compliance with this decision will be reviewed or tested. Name observable checks and their owner when possible.
-
-## Pros and Cons of the Options
-
-### Option 1
-
-- Good, because …
-- Bad, because …
-
-### Option 2
-
-- Good, because …
-- Bad, because …
-
-## More Information
-
-Record related ADRs, implementation links, review decisions, revisit conditions and the date or signal that should trigger reconsideration.
+This consumer contains no formal decision template or independent numbering
+scheme. Formal changes require a separately identified Authority tracking
+Issue and its owning repository workflow. If the trusted template input is
+unavailable, hold; do not invent a local substitute.

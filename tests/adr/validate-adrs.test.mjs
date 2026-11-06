@@ -18,15 +18,32 @@ async function newFixture(t) {
   return fixture;
 }
 
-test('accepts the repository ADR set', async () => {
-  assert.equal(await validateAdrs(repositoryRoot), 17);
+test('accepts the selected Authority references, including historical number gaps', async () => {
+  assert.equal(await validateAdrs(repositoryRoot), 22);
 });
 
-test('accepts historical ADR number gaps after a record is removed', async (t) => {
+test('rejects unindexed formal records from any decision family', async (t) => {
+  for (const name of ['ADR-0025-local-policy.md', 'ADP-0002-local-policy.md', 'ADD-0002-local-policy.md']) {
+    const fixture = await newFixture(t);
+    await writeFile(path.join(fixture, 'docs/decisions', name), '# Unapproved local decision\n');
+    await assert.rejects(validateAdrs(fixture), /unindexed decision-directory entry/);
+  }
+});
+
+test('rejects added local decision prose in a consumer reference', async (t) => {
+  const fixture = await newFixture(t);
+  const record = path.join(fixture, 'docs/decisions/0001-use-madr-for-architecture-decisions.md');
+  const source = await readFile(record, 'utf8');
+  await writeFile(record, `${source}\n## Decision Outcome\nThis consumer's main branch owns the decision.\n`);
+
+  await assert.rejects(validateAdrs(fixture), /must remain a reference only/);
+});
+
+test('rejects a missing indexed consumer reference rather than deleting a canonical decision', async (t) => {
   const fixture = await newFixture(t);
   await unlink(path.join(fixture, 'docs/decisions/0008-use-pnpm-with-delayed-dependency-adoption.md'));
 
-  assert.equal(await validateAdrs(fixture), 16);
+  await assert.rejects(validateAdrs(fixture), /missing indexed reference/);
 });
 
 test('rejects ADRs that define status in frontmatter', async (t) => {
@@ -42,14 +59,50 @@ test('rejects ADRs that define status in frontmatter', async (t) => {
   });
 });
 
-test('rejects missing required headings, duplicate record numbers, zero record numbers and invalid source links', async (t) => {
+test('rejects a same-ID reference with a different repository, moving source or changed file hash', async (t) => {
+  for (const change of [
+    source => source.replace('"repositoryId":1380894616', '"repositoryId":1380894656'),
+    source => source.replace('"commit":"0423533176ad6239fe5d828736605b5a6360293c"', '"commit":"main"'),
+    source => source.replace(/"sha256":"[0-9a-f]{64}"/, `"sha256":"${'0'.repeat(64)}"`),
+  ]) {
+    const fixture = await newFixture(t);
+    const record = path.join(fixture, 'docs/decisions/0001-use-madr-for-architecture-decisions.md');
+    const source = await readFile(record, 'utf8');
+    const changed = change(source);
+    assert.notEqual(changed, source);
+    await writeFile(record, changed);
+    await assert.rejects(validateAdrs(fixture), /must remain a reference only/);
+  }
+});
+
+test('rejects a changed source-index selection or an injected approval flag', async (t) => {
+  for (const change of [
+    (index) => { index.architecture.sourceCommit = 'f'.repeat(40); },
+    (index) => { index.approved = true; },
+  ]) {
+    const fixture = await newFixture(t);
+    const file = path.join(fixture, 'docs/decisions/authority-reference-index.json');
+    const index = JSON.parse(await readFile(file, 'utf8'));
+    change(index);
+    await writeFile(file, `${JSON.stringify(index, null, 2)}\n`);
+    await assert.rejects(validateAdrs(fixture), /reference index does not match/);
+  }
+});
+
+test('rejects a local formal template substituted for the pinned template reference', async (t) => {
+  const fixture = await newFixture(t);
+  await writeFile(path.join(fixture, 'docs/decisions/adr-template.md'), '# New local ADR\n\n## Decision Outcome\n');
+  await assert.rejects(validateAdrs(fixture), /must remain a reference to the selected Authority template/);
+});
+
+test('rejects missing canonical links, duplicate numbers, reserved numbers and invalid source links', async (t) => {
   const cases = [
     async (fixture) => {
       const record = path.join(fixture, 'docs/decisions/0001-use-madr-for-architecture-decisions.md');
       const source = await readFile(record, 'utf8');
       const windowsSource = source.replace(/\r?\n/g, '\r\n');
-      await writeFile(record, windowsSource.replace(/^### Confirmation\r?\n/m, ''));
-      return /missing required heading: ### Confirmation/;
+      await writeFile(record, windowsSource.replace(/^Canonical decision:.*\r?\n/m, ''));
+      return /must remain a reference only/;
     },
     async (fixture) => {
       await cp(

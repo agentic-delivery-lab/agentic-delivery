@@ -206,6 +206,13 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Consumer decision files now reference the 22 applicable records from approved
+  Architecture 0.1.0 instead of duplicating formal decision text. Exact source
+  identities, metadata and hashes are validated; historical text remains in Git.
+  Formal changes require Authority tracking authorization and trusted inputs.
+  Harness loads canonical evidence for affected references and holds before a
+  model turn if that evidence is unavailable, mismatched or exceeds its limits.
+
 - Update the pinned Codex CLI from 0.164.0 to 0.166.0 after verifying the official release asset digest; the pull request waits for no-generation runner capability checks before semantic review.
 
 - Release-chain validation reads factory projection metadata from the standard

@@ -26,24 +26,22 @@ test('repository decision and runner contracts are present', async () => {
 
   const decisions = await text('docs/decisions/README.md');
   for (const phrase of [
-    'The template intentionally lives beside README.md and the numbered records',
-    'main', 'ADR tracking issue', 'Closes #', 'Approval alone does not close',
-    'adr:needed', 'adr:proposed', 'adr:removal', 'adr:rejected',
-    'Do not add an `adr:accepted` label',
-    'Issue #52 is not implementation',
-    'authorized successor tracking the ADR-0018 amendment',
+    'Architecture Authority owns all formal ADR, ADP and ADD decision text',
+    'consumer references and metadata projections', 'separately identified Architecture tracking Issue',
+    'Never infer identity from a shared number', 'Hold if those trusted',
+    'authority-reference-index.json', '0423533176ad6239fe5d828736605b5a6360293c',
   ]) assert.ok(decisions.includes(phrase), `missing decision contract: ${phrase}`);
-  assert.ok(decisions.includes('(0012-use-github-as-the-lifecycle-control-plane.md)'));
   const lifecycleDecision = await text('docs/decisions/0012-use-github-as-the-lifecycle-control-plane.md');
-  for (const phrase of ['Native organization issue types', 'Lifecycle Stage', 'Delivery Readiness', 'state:*', 'adr:needed', 'not planned', 'execution state']) {
-    assert.ok(lifecycleDecision.includes(phrase), `missing lifecycle decision contract: ${phrase}`);
-  }
+  assert.match(lifecycleDecision, /canonical-source:/);
+  assert.match(lifecycleDecision, /Authority reference/);
+  assert.match(lifecycleDecision, /decision text and its lifecycle/);
+  assert.doesNotMatch(lifecycleDecision, /## Decision Outcome/);
   for (const record of ['0013-derive-adr-traceability-from-agentic-primitives.md', '0015-isolate-resumable-runner-execution.md', '0016-require-structured-pull-request-descriptions.md', '0017-use-an-explicit-agent-invocation-boundary.md', '0018-organization-wide-agentic-delivery-control-plane-distribution-and-versioning.md']) {
     await assertFile(`docs/decisions/${record}`);
     assert.ok(decisions.includes(`(${record})`));
   }
   const agents = await text('AGENTS.md');
-  for (const phrase of ['Closes #', 'never create a pull request from `main`', 'is only the protected base']) {
+  for (const phrase of ['repository/Issue identity distinct', 'Never create a pull request from `main`', '`main` is the protected base']) {
     assert.ok(agents.includes(phrase), `missing agent contract: ${phrase}`);
   }
   const { forms } = await loadOrganizationIssueForms();

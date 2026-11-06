@@ -1,14 +1,14 @@
 # Repository instructions
 
-<!-- agentic-primitive: {"id":"repository-governance-instructions","kind":"instruction","enforcement":"instructional","adrs":["ADR-0001","ADR-0002","ADR-0003","ADR-0004","ADR-0007","ADR-0012","ADR-0013","ADR-0015","ADR-0016","ADR-0017","ADR-0018"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]} -->
+<!-- agentic-primitive: {"id":"repository-governance-instructions","kind":"instruction","enforcement":"instructional","adrs":["ADR-0001","ADR-0002","ADR-0003","ADR-0004","ADR-0007","ADR-0012","ADR-0013","ADR-0015","ADR-0016","ADR-0017","ADR-0018","ADR-0020","ADR-0021","ADR-0023","ADR-0024"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]} -->
 
 ## Architectural decisions
 
 - For a costly, cross-cutting, repository-wide, security-sensitive or otherwise significant choice, read [`docs/decisions/README.md`](docs/decisions/README.md) and use `$architecture-decision`.
-- Treat a linked GitHub Issue as the assignment brief. It is not automatically an ADR. Keep the source issue, any separate ADR tracking issue and the review pull request linked.
+- Treat the native originating GitHub Issue as the assignment brief, not decision authority. Keep its repository/Issue identity distinct from the linked Architecture Authority tracking Issue. They can be the same Issue only when the origin already belongs to Authority and tracks that decision work.
 - When no source issue is supplied, follow the guarded intake in the decisions index and skill. Search read-only, confirm a candidate or preview before creating one, never replace an inaccessible issue, and ask questions only through explicitly authorized issue communication.
-- Add or remove an ADR only on a feature branch. The feature branch must be the pull-request head; never create a pull request from `main`, which is only the protected base. The change is provisional there; only the merged contents of `main` are official. Do not merge a pull request or close its tracking issue without explicit human authorization.
-- When opening or updating an ADR pull request, include its ADR tracking issue with a closing reference such as `Closes #123`. The source issue may serve as the ADR tracking issue; otherwise use its linked sub-issue. GitHub closes that issue only after the PR is merged; approval alone does not close it. Use `Refs #123` when a broader source issue must remain open.
+- Prepare every formal ADR, ADP or ADD change in Architecture Authority on its owning feature branch. This repository keeps references and implementation notes only. Read the exact approved release and canonical template; hold when trusted inputs or the authorized Authority tracking Issue are unavailable. A consumer branch does not become a formal decision source.
+- Link an Authority decision PR to its repository-qualified tracking Issue; close only work that its merge actually completes and only with authorization. Reference a broader originating Issue by a non-closing full URL. Consumer implementation has its own branch/PR after the approved Architecture Release and retains its own source Issue. Do not merge, close work or alter protections without the user's authorization.
 
 ## Communication
 

@@ -11,7 +11,7 @@ Use this skill when a change affects the repository's branch workflow, commit hi
 
 Before making a domain-bearing change, read [`docs/domain/README.md`](../../../docs/domain/README.md) and [`docs/domain/ubiquitous-language.yml`](../../../docs/domain/ubiquitous-language.yml). Use the `agentic-delivery-governance` bounded context and its registered terms. A missing concept, conflicting meaning or changed definition is a domain-model change and must be updated in the same change set.
 
-For an architectural choice, read [`docs/decisions/README.md`](../../../docs/decisions/README.md) and use `$architecture-decision`. An architecture decision record is provisional on a feature branch and becomes an official decision only after its review pull request is merged into `main`.
+For an architectural choice, read [`docs/decisions/README.md`](../../../docs/decisions/README.md) and use the pinned `$architecture-decision` input. All formal decision text belongs to Architecture Authority. Its owning branch/PR and tracking Issue are separate from consumer implementation; consume the approved immutable Architecture Release before downstream work. The consumer's `main` does not approve formal decisions.
 
 ## Work from the trunk
 

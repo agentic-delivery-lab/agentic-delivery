@@ -1,4 +1,4 @@
-# agentic-primitive: {"id":"orchestration-policy-catalog","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012","ADR-0015","ADR-0017"],"domains":["agentic-delivery-governance"]}
+# agentic-primitive: {"id":"orchestration-policy-catalog","kind":"state-machine","enforcement":"deterministic","adrs":["ADR-0012","ADR-0015","ADR-0017"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 version: 1
 
 authority:

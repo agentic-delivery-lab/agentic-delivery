@@ -113,14 +113,14 @@ function childEnvironment() {
   return safe;
 }
 
-async function git(repositoryRoot, args) {
+async function git(repositoryRoot, args, { preserveBytes = false } = {}) {
   const { stdout } = await execFileAsync('git', ['-C', repositoryRoot, ...args], {
     encoding: 'utf8',
     windowsHide: true,
     maxBuffer: 8 * 1024 * 1024,
     env: childEnvironment(),
   });
-  return stdout.trim();
+  return preserveBytes ? stdout : stdout.trim();
 }
 
 export async function gitFiles(repositoryRoot, revision, prefix = '') {
@@ -128,8 +128,8 @@ export async function gitFiles(repositoryRoot, revision, prefix = '') {
   return output.split(/\r?\n/).filter(Boolean);
 }
 
-export async function gitShow(repositoryRoot, revision, file) {
-  return git(repositoryRoot, ['show', `${revision}:${file}`]);
+export async function gitShow(repositoryRoot, revision, file, { preserveBytes = false } = {}) {
+  return git(repositoryRoot, ['show', `${revision}:${file}`], { preserveBytes });
 }
 
 export async function changedFiles(repositoryRoot, base, head) {

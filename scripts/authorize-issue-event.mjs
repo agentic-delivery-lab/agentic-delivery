@@ -1,4 +1,4 @@
-// agentic-primitive: {"id":"issue-event-authorization","kind":"validator","enforcement":"deterministic","adrs":["ADR-0017"],"domains":["agentic-delivery-governance"]}
+// agentic-primitive: {"id":"issue-event-authorization","kind":"validator","enforcement":"deterministic","adrs":["ADR-0017"],"domains":["agentic-delivery-governance","agentic-delivery-control-plane"]}
 import { appendFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

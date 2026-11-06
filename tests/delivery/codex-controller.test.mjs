@@ -306,6 +306,17 @@ test('context provider diagnostics remain private and a Project-only event canno
   assert.equal(project.calls.fieldWrites, 0); assert.equal(project.calls.prs.length, 0);
 });
 
+test('consumer planning does not grant originating Issues formal decision authority', async (t) => {
+  const f = await fixture(t);
+  await f.run();
+  const plan = f.calls.prompts.find(({phase}) => phase === 'plan');
+  assert.ok(plan);
+  assert.match(plan.prompt, /separately authorized Architecture Authority tracking Issue/);
+  assert.match(plan.prompt, /native origin already belongs to Authority/);
+  assert.match(plan.prompt, /Hold with needs_input/);
+  assert.doesNotMatch(plan.prompt, /This existing source issue is also authorized for ADR tracking/);
+});
+
 test('context and injected Issue text stay in prompt data without changing privileged thread configuration', async (t) => {
   const baseline = await fixture(t); await baseline.run();
   const injected = await fixture(t);

@@ -1,7 +1,7 @@
 interface:
   display_name: "Architecture decisions"
-  short_description: "Track ADR changes by branch"
-  default_prompt: "Use $architecture-decision to manage this ADR decision or removal, link its issue and keep official context limited to main."
+  short_description: "Use the pinned Authority decision workflow"
+  default_prompt: "Use $architecture-decision with the trusted pinned canonical skill/template, preserve the originating Issue identity, and require the linked Authority tracking Issue. Keep formal decision text in Authority and hold when a prerequisite is unavailable."
 
 policy:
   allow_implicit_invocation: true

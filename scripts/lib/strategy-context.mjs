@@ -10,13 +10,10 @@ import { readFileSync } from 'node:fs';
 import Ajv2020 from 'ajv/dist/2020.js';
 import { parseRepositoryYaml } from './yaml.mjs';
 import { validateArchitecturePin } from '../validate-architecture-pin.mjs';
+import { APPROVED_ARCHITECTURE_SOURCE as architecture } from './approved-architecture-source.mjs';
 
 const execute = promisify(execFile);
 const controllerRoot = path.resolve(import.meta.dirname, '../..');
-const architecture = Object.freeze({ repository: 'agentic-delivery-lab/agentic-delivery-architecture', repositoryId: 1380894616,
-  commit: 'ba804c044bd7dc0a7c5568062d43a1f0d9f3141b', version: '0.1.0',
-  sourceCommit: '0423533176ad6239fe5d828736605b5a6360293c',
-  contentSha256: 'b754a82b5fca30a933057602bba6ab4f204c2a937be3a3076d7610aacac826d2' });
 const requirementsTooling = Object.freeze({ commit: '2d20d40dcd1fb50d04310da2d222fb1a6fc1fa31',
   path: 'tools/validate-requirements.mjs', sha256: '284f4aa16981bf4bf324b4a0763bdba3ce67e920838325c29d061140f6d46ead' });
 const referenceSchema = JSON.parse(readFileSync(new URL('../../docs/architecture/delivery-evidence.schema.json', import.meta.url))).$defs.strategyContextReference;

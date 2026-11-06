@@ -78,12 +78,12 @@ terms:
     definition: "The selected concepts, meanings, and relationships used to reason about agentic delivery in a bounded context."
   - context: "agentic-delivery-governance"
     term: "source issue"
-    definition: "The GitHub Issue that provides the assignment brief and audit trail for a change; it may also serve as the ADR tracking issue."
+    definition: "The native originating GitHub Issue that provides the assignment brief and audit trail for a change. It can also serve as formal decision tracking only when it already belongs to Architecture Authority and tracks that decision work."
     avoid:
       - "source ticket"
   - context: "agentic-delivery-governance"
     term: "ADR tracking issue"
-    definition: "The source issue or linked sub-issue that specifically tracks an architecture decision record change and is linked from its review pull request."
+    definition: "The native Architecture Authority Issue that tracks formal decision work and is linked to the originating source Issue and owning Authority review pull request. Same-number Issues in different repositories are distinct identities."
     avoid:
       - "ADR ticket"
   - context: "agentic-delivery-governance"
@@ -93,12 +93,12 @@ terms:
       - "architecture decision document"
   - context: "agentic-delivery-governance"
     term: "provisional decision"
-    definition: "An architecture decision record addition, change, or removal that exists only on a feature branch and is not yet official repository context."
+    definition: "A formal decision change on its owning Architecture Authority feature branch that has not completed that Authority review path. A consumer branch cannot establish canonical decision context."
     avoid:
       - "accepted decision"
   - context: "agentic-delivery-governance"
     term: "official decision"
-    definition: "An architecture decision record that is present on the main branch and therefore belongs to the repository's official context."
+    definition: "A formal decision merged into Architecture Authority main. Consumer use still requires the selected approved immutable Architecture Release; a local reference or consumer main branch is not decision approval."
     avoid:
       - "accepted ADR"
   - context: "agentic-delivery-governance"
@@ -265,7 +265,7 @@ terms:
     definition: "Machine-readable metadata embedded in an agentic primitive that names the governing ADRs and applicable bounded contexts."
   - context: "agentic-delivery-governance"
     term: "active ADR"
-    definition: "An architecture decision record present in the repository revision being evaluated; records on main are official and branch-only records are provisional."
+    definition: "An Authority decision selected by the immutable context being evaluated. Consumer reference metadata records applicability and provenance; its local branch presence does not create formal decision authority."
   - context: "agentic-delivery-governance"
     term: "traceability index"
     definition: "Generated machine-readable data that links active ADRs and domains to implementing primitives and provides the reverse lookup."

@@ -1,0 +1,489 @@
+{
+  "schemaVersion": 1,
+  "architecture": {
+    "repository": "agentic-delivery-lab/agentic-delivery-architecture",
+    "repositoryId": 1380894616,
+    "commit": "ba804c044bd7dc0a7c5568062d43a1f0d9f3141b",
+    "version": "0.1.0",
+    "sourceCommit": "0423533176ad6239fe5d828736605b5a6360293c",
+    "contentSha256": "b754a82b5fca30a933057602bba6ab4f204c2a937be3a3076d7610aacac826d2"
+  },
+  "integrity": {
+    "manifestPath": "architecture/generated/architecture-release.json",
+    "manifestSha256": "60fcde50625347826597acd55aae8cfef259a05ca793a7f36380fdc74a4e1acb",
+    "inventoryPath": "architecture/references/decision-inventory.yml",
+    "inventorySha256": "cd5df6c97365dd469c35fb47351d70e1a0bbd5bbc3adb99e09ec930660b825cb"
+  },
+  "contexts": [
+    "agentic-delivery-governance",
+    "agentic-delivery-control-plane"
+  ],
+  "records": [
+    {
+      "id": "ADR-0001",
+      "file": "docs/decisions/0001-use-madr-for-architecture-decisions.md",
+      "canonicalPath": "decisions/0001-use-madr-for-architecture-decisions.md",
+      "sha256": "0ba6a0fdbae483ad62eb5a3a7eebce8aba4be1603a9a8dc4c35af25ebac716a3",
+      "title": "Use MADR and GitHub Issues for architectural decisions",
+      "date": "2026-09-05",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/1",
+      "sourceDomains": [
+        "agentic-delivery-governance"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "instructional",
+        "deterministic"
+      ]
+    },
+    {
+      "id": "ADR-0002",
+      "file": "docs/decisions/0002-use-plain-language-for-human-agent-communication.md",
+      "canonicalPath": "decisions/0002-use-plain-language-for-human-agent-communication.md",
+      "sha256": "0a1e105b8decd7fde8ef6b7bc6d3598462416d4b35c019dfe72bb05449acdc8f",
+      "title": "Use plain language for human-agent communication",
+      "date": "2026-09-06",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/3",
+      "sourceDomains": [
+        "agentic-delivery-governance"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "instructional"
+      ]
+    },
+    {
+      "id": "ADR-0003",
+      "file": "docs/decisions/0003-use-context-scoped-ubiquitous-language.md",
+      "canonicalPath": "decisions/0003-use-context-scoped-ubiquitous-language.md",
+      "sha256": "8d3cb77668d2bc09a12ca6fd4e58307400d0190f7767d57494d943f7859e5197",
+      "title": "Use context-scoped ubiquitous language",
+      "date": "2026-09-06",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/5",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane",
+        "agentic-primitives",
+        "developer-distribution"
+      ],
+      "domains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "instructional",
+        "deterministic"
+      ]
+    },
+    {
+      "id": "ADR-0004",
+      "file": "docs/decisions/0004-use-trunk-based-delivery.md",
+      "canonicalPath": "decisions/0004-use-trunk-based-delivery.md",
+      "sha256": "25b9d0bec1b7e8bd8033851a8a7038ae686376b505f05c5f18d7a3271ac8a22f",
+      "title": "Use trunk-based delivery with short-lived feature branches",
+      "date": "2026-09-06",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/7",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane",
+        "agentic-primitives",
+        "developer-distribution"
+      ],
+      "domains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "instructional",
+        "deterministic"
+      ]
+    },
+    {
+      "id": "ADR-0005",
+      "file": "docs/decisions/0005-use-conventional-commits-with-gitmoji.md",
+      "canonicalPath": "decisions/0005-use-conventional-commits-with-gitmoji.md",
+      "sha256": "92b57bac30a25b34529bb18cf3d325a40bce78a7e09f3340ca9d4556815f1962",
+      "title": "Use Conventional Commits with Gitmoji",
+      "date": "2026-09-06",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/7",
+      "sourceDomains": [
+        "agentic-delivery-governance"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "ADR-0006",
+      "file": "docs/decisions/0006-curate-a-changelog.md",
+      "canonicalPath": "decisions/0006-curate-a-changelog.md",
+      "sha256": "960899e2bd61f7cf9bfd7e36b0b858eb347c050b5c174a4dc0acc502e0a0c8f1",
+      "title": "Curate a human-readable changelog",
+      "date": "2026-09-06",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/7",
+      "sourceDomains": [
+        "agentic-delivery-governance"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "instructional",
+        "deterministic"
+      ]
+    },
+    {
+      "id": "ADR-0007",
+      "file": "docs/decisions/0007-use-issue-linked-conventional-branch-names.md",
+      "canonicalPath": "decisions/0007-use-issue-linked-conventional-branch-names.md",
+      "sha256": "ba9b679714bc350aa8ebdddff0e73464857f283693cec3d2a23ad454db0a1870",
+      "title": "Use issue-linked Conventional branch names",
+      "date": "2026-09-06",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/11",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "developer-distribution"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "ADR-0008",
+      "file": "docs/decisions/0008-use-pnpm-with-delayed-dependency-adoption.md",
+      "canonicalPath": "decisions/0008-use-pnpm-with-delayed-dependency-adoption.md",
+      "sha256": "cec925f29d57d3657e5c5a612a3275981f25207191bf49f1252f005bf506012d",
+      "title": "Use pnpm with delayed dependency adoption and Node.js automation",
+      "date": "2026-09-06",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/12",
+      "sourceDomains": [
+        "agentic-delivery-governance"
+      ],
+      "domains": [
+        "agentic-delivery-governance"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "ADR-0009",
+      "file": "docs/decisions/0009-run-codex-from-source-issues-with-a-budget-boundary.md",
+      "canonicalPath": "decisions/0009-run-codex-from-source-issues-with-a-budget-boundary.md",
+      "sha256": "6e62d116ef30e150a19084aac07f2328942287587e690bc82d0815ece20842ec",
+      "title": "Run Codex from source issues with a budget boundary",
+      "date": "2026-09-09",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/21",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "domains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "instructional",
+        "deterministic"
+      ]
+    },
+    {
+      "id": "ADR-0011",
+      "file": "docs/decisions/0011-run-layered-harness-architecture-reviews.md",
+      "canonicalPath": "decisions/0011-run-layered-harness-architecture-reviews.md",
+      "sha256": "5b6046c431d7fdde2a707c77c1efb5c814d2244366134ae4003f0de7985c70b4",
+      "title": "Run layered harness architecture reviews on pull requests",
+      "date": "2026-09-10",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/25",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "domains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "semantic"
+      ]
+    },
+    {
+      "id": "ADR-0012",
+      "file": "docs/decisions/0012-use-github-as-the-lifecycle-control-plane.md",
+      "canonicalPath": "decisions/0012-use-github-as-the-lifecycle-control-plane.md",
+      "sha256": "703dddffaf03f1e0479833cb0011f9144bc5027e5b3f050340697e7961be8d35",
+      "title": "Use GitHub as the lifecycle control plane",
+      "date": "2026-09-10",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/29",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "domains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ],
+      "supersedes": [
+        "ADR-0010"
+      ]
+    },
+    {
+      "id": "ADR-0013",
+      "file": "docs/decisions/0013-derive-adr-traceability-from-agentic-primitives.md",
+      "canonicalPath": "decisions/0013-derive-adr-traceability-from-agentic-primitives.md",
+      "sha256": "b552206135222356051e2f631a879db398f707acf46d6f2d8102b6ec1263e012",
+      "title": "Derive ADR traceability from agentic primitives",
+      "date": "2026-09-10",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/29",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane",
+        "agentic-primitives",
+        "developer-distribution"
+      ],
+      "domains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "ADR-0015",
+      "file": "docs/decisions/0015-isolate-resumable-runner-execution.md",
+      "canonicalPath": "decisions/0015-isolate-resumable-runner-execution.md",
+      "sha256": "c2cb8a761dab03c629c7085520bd3b9da6b5b81ba02eb170a6430f51df00660c",
+      "title": "Isolate resumable runner execution by source issue",
+      "date": "2026-09-10",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/29",
+      "sourceDomains": [
+        "agentic-delivery-control-plane"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "ADR-0016",
+      "file": "docs/decisions/0016-require-structured-pull-request-descriptions.md",
+      "canonicalPath": "decisions/0016-require-structured-pull-request-descriptions.md",
+      "sha256": "eb5c0f4ab5674ee3189bb62dbc9d8ba33302201fa544961e31438d5074b73242",
+      "title": "Require structured pull-request descriptions",
+      "date": "2026-09-16",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/44",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane",
+        "agentic-primitives",
+        "developer-distribution"
+      ],
+      "domains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "instructional",
+        "deterministic"
+      ]
+    },
+    {
+      "id": "ADR-0017",
+      "file": "docs/decisions/0017-use-an-explicit-agent-invocation-boundary.md",
+      "canonicalPath": "decisions/0017-use-an-explicit-agent-invocation-boundary.md",
+      "sha256": "39f40b9d3adf08d2d2725ae22339b0567937666931086f42699693970d34befa",
+      "title": "Use an explicit agent-invocation boundary for conversation-driven delivery",
+      "date": "2026-09-19",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/46",
+      "sourceDomains": [
+        "agentic-delivery-control-plane"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "ADR-0018",
+      "file": "docs/decisions/0018-organization-wide-agentic-delivery-control-plane-distribution-and-versioning.md",
+      "canonicalPath": "decisions/0018-organization-wide-agentic-delivery-control-plane-distribution-and-versioning.md",
+      "sha256": "f3e3a9ecf493244268ff7113488d592e578a1d47c197c86496acb7ff4685d41d",
+      "title": "Organization-wide Agentic Delivery control-plane distribution and versioning",
+      "date": "2026-09-23",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/53",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane",
+        "agentic-primitives",
+        "developer-distribution"
+      ],
+      "domains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "semantic"
+      ],
+      "supersedes": [
+        "ADR-0014"
+      ]
+    },
+    {
+      "id": "ADR-0019",
+      "file": "docs/decisions/0019-canonicalize-delivery-state-field.md",
+      "canonicalPath": "decisions/0019-canonicalize-delivery-state-field.md",
+      "sha256": "62e0d463175955d70de1c363d6f0347707e10af3b581517172fd2feb6cc8da1c",
+      "title": "Canonicalize the orthogonal delivery-state field",
+      "date": "2026-09-20",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/52",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "domains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "semantic"
+      ]
+    },
+    {
+      "id": "ADR-0020",
+      "file": "docs/decisions/0020-centralize-organization-decision-records.md",
+      "canonicalPath": "decisions/0020-centralize-organization-decision-records.md",
+      "sha256": "9720741f55fbf3f8116fa339f8a6f3414ef85fbd4b2a5bc07817a75c8d0afb9d",
+      "title": "Centralize organization decision records in Architecture Authority",
+      "date": "2026-09-25",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery-architecture/issues/3",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane",
+        "agentic-primitives",
+        "developer-distribution"
+      ],
+      "domains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "semantic"
+      ]
+    },
+    {
+      "id": "ADR-0021",
+      "file": "docs/decisions/0021-define-architecture-artifact-contracts.md",
+      "canonicalPath": "decisions/0021-define-architecture-artifact-contracts.md",
+      "sha256": "fc65747ca8d65983b6b22940f242a8b0742c69693c9e1947b857b45c4deea402",
+      "title": "Define per-family Architecture artifact contracts",
+      "date": "2026-09-25",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery-architecture/issues/3",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane",
+        "agentic-primitives",
+        "developer-distribution"
+      ],
+      "domains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "instructional",
+        "semantic"
+      ]
+    },
+    {
+      "id": "ADR-0022",
+      "file": "docs/decisions/0022-use-neon-postgres-for-webhook-replay-state.md",
+      "canonicalPath": "decisions/0022-use-neon-postgres-for-webhook-replay-state.md",
+      "sha256": "2bb42965291df178aa53147c9d56e90b5a2857ff0425ab194f37af107a2eb296",
+      "title": "Use Neon Postgres for webhook replay state",
+      "date": "2026-09-29",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery/issues/60",
+      "sourceDomains": [
+        "agentic-delivery-control-plane"
+      ],
+      "domains": [
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "semantic"
+      ]
+    },
+    {
+      "id": "ADR-0023",
+      "file": "docs/decisions/0023-use-projects-for-planning-and-issues-for-execution-authorization.md",
+      "canonicalPath": "decisions/0023-use-projects-for-planning-and-issues-for-execution-authorization.md",
+      "sha256": "d1be64964fc8f8731f8c0e80c9b9b2b621c713b6bd337bd7ec5d918a930dbd55",
+      "title": "Use Projects for planning and Issues for execution authorization",
+      "date": "2026-10-09",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery-architecture/issues/11",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane",
+        "agentic-primitives",
+        "developer-distribution"
+      ],
+      "domains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "semantic"
+      ]
+    },
+    {
+      "id": "ADR-0024",
+      "file": "docs/decisions/0024-centralize-approved-requirements-in-requirements-authority.md",
+      "canonicalPath": "decisions/0024-centralize-approved-requirements-in-requirements-authority.md",
+      "sha256": "3543950b4b34c9e7919fbb7d6d196a165fa3beb5d57c08e3a9fcfee8e651b1ee",
+      "title": "Centralize approved requirements in Requirements Authority",
+      "date": "2026-10-13",
+      "sourceIssue": "https://github.com/agentic-delivery-lab/agentic-delivery-architecture/issues/11",
+      "sourceDomains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane",
+        "agentic-primitives",
+        "developer-distribution"
+      ],
+      "domains": [
+        "agentic-delivery-governance",
+        "agentic-delivery-control-plane"
+      ],
+      "requiredEnforcement": [
+        "deterministic",
+        "semantic"
+      ]
+    }
+  ],
+  "template": {
+    "path": "decisions/adr-template.md",
+    "sha256": "86de7c1408407c70ee72755620f122099ac55d11e6a258698a4a9fab6393c55a"
+  }
+}
