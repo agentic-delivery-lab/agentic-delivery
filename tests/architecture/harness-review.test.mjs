@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -996,6 +996,30 @@ test('the baseline report contains one required matrix row for every official AD
   for (let number = 1; number <= 10; number += 1) assert.match(report, new RegExp(`\\| ADR-${String(number).padStart(4, '0')}\\b`));
   for (const field of ['Architectural invariant', 'Expected reflection', 'Repository evidence', 'Runtime/history evidence', 'Contradictory evidence', 'Missing evidence', 'Enforcement level', 'Confidence', 'Conformance', 'ADR action']) assert.match(report, new RegExp(field));
   assert.match(report, /agentic-delivery-governance/);
+});
+
+test('Harness workflow selects the reviewed reference source independently of runtime pins', async (t) => {
+  const workflow = parseRepositoryYaml(await readFile(path.join(repositoryRoot, '.github/workflows/harness-architecture-review.yml'), 'utf8'));
+  const step = workflow.jobs.review.steps.find(step => step.id === 'architecture-pin');
+  const program = step.run.match(/node --input-type=module <<'NODE'[^\n]*\n([\s\S]+)\nNODE\s*$/)?.[1];
+  assert.ok(program);
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const run = promisify(execFile);
+  const { stdout } = await run(process.execPath, ['--input-type=module', '-e', program], { cwd: repositoryRoot });
+  const outputs = Object.fromEntries(stdout.trim().split('\n').map(line => { const split = line.indexOf('='); return [line.slice(0, split), line.slice(split + 1)]; }));
+  const index = JSON.parse(await readFile(path.join(repositoryRoot, 'docs/decisions/authority-reference-index.json'), 'utf8'));
+  assert.deepEqual(outputs, { commit: index.architecture.commit, digest: index.architecture.contentSha256, version: index.architecture.version });
+  const runtime = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
+  assert.notEqual(outputs.commit, runtime.dependencies.architecture.commit);
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'agentic-delivery-review-pin-'));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+  await symlink(path.join(repositoryRoot, 'scripts'), path.join(fixture, 'scripts'), process.platform === 'win32' ? 'junction' : 'dir');
+  await mkdir(path.join(fixture, 'docs/decisions'), { recursive: true });
+  for (const raw of [null, JSON.stringify({ ...index, architecture: { ...index.architecture, commit: 'main' } })]) {
+    if (raw) await writeFile(path.join(fixture, 'docs/decisions/authority-reference-index.json'), raw);
+    await assert.rejects(run(process.execPath, ['--input-type=module', '-e', program], { cwd: fixture }), error => error.code === 1 && error.stdout === '');
+  }
 });
 
 test('architecture-review workflow is pinned, read-only, resumable, and does not publish comments', async () => {

@@ -212,6 +212,8 @@ they do not authorize migration, alter that issue's scope, or close it.
   Formal changes require Authority tracking authorization and trusted inputs.
   Harness loads canonical evidence for affected references and holds before a
   model turn if that evidence is unavailable, mismatched or exceeds its limits.
+  The Harness workflow selects this approved review source separately from
+  the existing runtime, bootstrap and consumer-workflow pins.
 
 - Update the pinned Codex CLI from 0.164.0 to 0.166.0 after verifying the official release asset digest; the pull request waits for no-generation runner capability checks before semantic review.
 
