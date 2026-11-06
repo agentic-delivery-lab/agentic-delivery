@@ -1,3 +1,4 @@
+import { validateStrategyContextReference } from './strategy-context.mjs';
 // agentic-primitive: {"id":"harness-architecture-review","kind":"validator","enforcement":"deterministic","adrs":["ADR-0011","ADR-0013"],"domains":["agentic-delivery-governance"]}
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
@@ -112,14 +113,14 @@ function childEnvironment() {
   return safe;
 }
 
-async function git(repositoryRoot, args) {
+async function git(repositoryRoot, args, { preserveBytes = false } = {}) {
   const { stdout } = await execFileAsync('git', ['-C', repositoryRoot, ...args], {
     encoding: 'utf8',
     windowsHide: true,
     maxBuffer: 8 * 1024 * 1024,
     env: childEnvironment(),
   });
-  return stdout.trim();
+  return preserveBytes ? stdout : stdout.trim();
 }
 
 export async function gitFiles(repositoryRoot, revision, prefix = '') {
@@ -127,8 +128,8 @@ export async function gitFiles(repositoryRoot, revision, prefix = '') {
   return output.split(/\r?\n/).filter(Boolean);
 }
 
-export async function gitShow(repositoryRoot, revision, file) {
-  return git(repositoryRoot, ['show', `${revision}:${file}`]);
+export async function gitShow(repositoryRoot, revision, file, { preserveBytes = false } = {}) {
+  return git(repositoryRoot, ['show', `${revision}:${file}`], { preserveBytes });
 }
 
 export async function changedFiles(repositoryRoot, base, head) {
@@ -170,7 +171,7 @@ export function parseEvidenceMarker(body) {
   if (markers.length !== 1) return { __error: 'Multiple delivery evidence markers are ambiguous.' };
   const match = EVIDENCE_MARKER.exec(source);
   if (!match) return { __error: 'Delivery evidence marker is malformed.' };
-  if (![1, 2].includes(Number(match[1]))) return { __error: 'Delivery evidence version is unsupported.' };
+  if (![1, 2, 3].includes(Number(match[1]))) return { __error: 'Delivery evidence version is unsupported.' };
   try {
     const value = JSON.parse(match[2]);
     if (value?.schemaVersion !== Number(match[1])) return { __error: 'Evidence marker and payload version do not match.' };
@@ -194,13 +195,20 @@ export function validateEvidenceRecord(value, { repository, repositoryId, issueN
   const required = ['schemaVersion', 'producer', 'repository', 'sourceIssue', 'deliveryRun', 'revision', 'codexSession', 'modelTurns', 'architectureContext', 'validation', 'auditCheckpoint'];
   if (!value || typeof value !== 'object' || Array.isArray(value)) return { valid: false, errors: ['Evidence must be an object.'] };
   for (const key of required) if (value[key] === undefined) errors.push(`missing ${key}`);
-  const allowed = new Set([...required, 'telemetry', ...(value.schemaVersion === 2 ? ['operation'] : [])]);
+  const allowed = new Set([...required, 'telemetry', ...(value.schemaVersion >= 2 ? ['operation'] : []), ...(value.schemaVersion === 3 ? ['strategyContext'] : [])]);
   for (const key of Object.keys(value)) if (!allowed.has(key)) errors.push(`unexpected property ${key}`);
-  if (![1, 2].includes(value.schemaVersion)) errors.push('schemaVersion must be 1 or 2');
-  if (value.schemaVersion === 2 && !validateOperationEvidence(value.operation)) errors.push('operation evidence is missing or invalid');
-  if (value.auditCheckpoint?.stateVersion >= 5 && value.schemaVersion !== 2) errors.push('state version 5 requires operation evidence version 2');
+  if (![1, 2, 3].includes(value.schemaVersion)) errors.push('schemaVersion must be 1, 2 or 3');
+  if (value.schemaVersion >= 2 && !validateOperationEvidence(value.operation)) errors.push('operation evidence is missing or invalid');
+  if (value.auditCheckpoint?.stateVersion >= 5 && value.schemaVersion < 2) errors.push('state version 5 requires operation evidence version 2');
   if (value.operation?.activeTime?.reservation && value.operation.activeTime.reservation.owner !== `${value.deliveryRun?.id}:${value.deliveryRun?.attempt}`) errors.push('operation active-time owner does not match the delivery run');
-  if (value.schemaVersion === 2 && repositoryId !== undefined && value.operation?.repositoryId !== String(repositoryId)) errors.push('operation repository ID does not match the review origin');
+  if (value.schemaVersion >= 2 && repositoryId !== undefined && value.operation?.repositoryId !== String(repositoryId)) errors.push('operation repository ID does not match the review origin');
+  if (value.auditCheckpoint?.stateVersion >= 6 && value.schemaVersion !== 3) errors.push('state version 6 requires strategy context evidence version 3');
+  if (value.schemaVersion === 3) {
+    if (!validateStrategyContextReference(value.strategyContext)) errors.push('strategy context provenance is missing or invalid');
+    const origin = value.strategyContext?.origin;
+    if (origin?.repository !== value.repository || origin?.issueNumber !== value.sourceIssue?.number
+      || String(origin?.repositoryId) !== value.operation?.repositoryId) errors.push('strategy context origin does not match the evidence source');
+  }
   if (value.producer !== 'codex-delivery') errors.push('producer must be codex-delivery');
   if (typeof value.repository !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(value.repository)) errors.push('repository is invalid');
   if (repository && value.repository !== repository) errors.push('repository does not match the review repository');

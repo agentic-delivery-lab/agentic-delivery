@@ -4,6 +4,8 @@ import { test } from 'node:test';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { parseEvidenceMarker, validateEvidenceRecord } from '../../scripts/lib/architecture-review.mjs';
+import { contextFixture } from '../helpers/strategy-context.mjs';
+import { strategyContextReference } from '../../scripts/lib/strategy-context.mjs';
 
 const schema = JSON.parse(await readFile(new URL('../../docs/architecture/delivery-evidence.schema.json', import.meta.url), 'utf8'));
 const ajv = new Ajv2020({ strict: false });
@@ -34,6 +36,25 @@ test('version 2 carries operation provenance without claiming unknown tool use i
   assert.equal(parseEvidenceMarker(`<!-- codex-delivery-evidence:v2\n${JSON.stringify(value)}\n-->`).operation.id, value.operation.id);
 });
 
+test('version 3 binds authority context while retaining historical evidence readers', () => {
+  const value = evidence(); value.schemaVersion = 3; value.auditCheckpoint.stateVersion = 6;
+  value.strategyContext = strategyContextReference(contextFixture());
+  assert.equal(validate(value), true, JSON.stringify(validate.errors));
+  assert.equal(validateEvidenceRecord(value, { repository: 'fixture/repo', repositoryId: 101, issueNumber: 7 }).valid, true);
+  assert.equal(parseEvidenceMarker(`<!-- codex-delivery-evidence:v3\n${JSON.stringify(value)}\n-->`).schemaVersion, 3);
+  for (const mutation of [
+    v => delete v.strategyContext,
+    v => { v.strategyContext.origin.repositoryId = 102; },
+    v => { v.strategyContext.origin.issueNumber = 8; },
+    v => { v.strategyContext.origin.issueNodeId = ''; },
+    v => { v.strategyContext.approval = true; },
+    v => { v.schemaVersion = 2; },
+  ]) {
+    const changed = structuredClone(value); mutation(changed);
+    assert.equal(validateEvidenceRecord(changed, { repository: 'fixture/repo', repositoryId: 101, issueNumber: 7 }).valid, false);
+  }
+});
+
 test('missing or malformed operation evidence and a version downgrade fail both consumers', () => {
   for (const mutate of [
     (v) => delete v.operation,
@@ -58,7 +79,7 @@ test('historical version 1 remains readable, but marker and payload versions mus
 
 
 test('unsupported, malformed or duplicated evidence cannot disappear into a human-created PR classification', () => {
-  assert.match(parseEvidenceMarker('<!-- codex-delivery-evidence:v3\n{}\n-->').__error, /unsupported/);
+  assert.match(parseEvidenceMarker('<!-- codex-delivery-evidence:v4\n{}\n-->').__error, /unsupported/);
   assert.match(parseEvidenceMarker('<!-- codex-delivery-evidence:v2').__error, /malformed/);
   const marker = `<!-- codex-delivery-evidence:v2\n${JSON.stringify(evidence())}\n-->`;
   assert.match(parseEvidenceMarker(`${marker}\n${marker}`).__error, /Multiple/);

@@ -256,8 +256,9 @@ protocol JSON, and hidden runner details are not issue instructions.
 
 ## Continuation state and session correlation
 
-Persisted state version 5 stores the repository, source issue, stable operation
-UUID, proposed budget-policy fingerprint, validation-profile reference, resource reservations, delivery
+Persisted state version 6 stores the repository, source issue, stable operation
+UUID, proposed budget-policy fingerprint, validation-profile reference, verified
+strategy context, resource reservations, delivery
 phase, exact Codex session UUID, a waiting comment boundary, consumed comment
 IDs, and a separate execution record. The execution record contains the
 operation, Actions run ID/attempt/URL, recoverability, and redacted failure
@@ -273,7 +274,9 @@ Its policy fingerprint binds the declared initial bounds and the relevant
 controller, client, loop and active-time implementation. A changed fingerprint
 requires owner readmission while preserving spent allowance; a missing
 fingerprint or operation identity is held, never initialized on resume. Version
-3 and 4 readers reject the new state version. Rollback still requires a supported
+3, 4 and 5 readers reject state version 6. Missing or changed strategy context
+requires owner readmission; the reader preserves historical formats without
+creating context or replenishing allowance on their behalf. Rollback still requires a supported
 composition with equivalent resource enforcement. The fingerprint identifies a
 proposal and does not approve its bounds or prove all limits are enforced.
 
@@ -629,7 +632,10 @@ revocation holds the attempt and keeps its recovery tree and account lock.
 The hold persists across resumption before another token can be minted; a new
 provider instance cannot erase an earlier cleanup uncertainty.
 
-State version 5 publishes delivery evidence version 2. The record includes the
+State version 6 publishes delivery evidence version 3, adding the exact native
+source-Issue binding, immutable authority/tooling pins, selected context IDs
+and context-data digest. It retains historical evidence versions 1 and 2.
+The record includes the
 operation UUID, native repository ID, proposal-policy fingerprint, controller,
 model-turn and validation consumption, and the active-time reservation at the
 publication checkpoint. Tool consumption remains explicitly `null` as unknown
@@ -638,8 +644,8 @@ proposal-policy version is now `1.0.0-proposed.3`. Saved operations with the old
 fingerprint require readmission without resetting spent allowance. The policy status
 remains proposed. The checkpoint does not claim final shutdown, settled total
 time, merge acceptance or milestone completion. Historical version-1 evidence
-remains readable for older state, but version-5 evidence cannot downgrade to
-omit its operation record. Marker and payload versions must agree.
+remains readable for older state. State 5 cannot omit its operation record,
+and state 6 cannot omit its approved-context provenance. Marker and payload versions must agree.
 
 Codex startup and protocol failures publish only allowlisted error codes, HTTP
 status codes, and fixed diagnostic hints. For example, a recognized workspace

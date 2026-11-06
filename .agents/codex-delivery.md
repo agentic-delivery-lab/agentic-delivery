@@ -3,7 +3,7 @@
 This agentic primitive applies inside the automated source issue workflow.
 Read `AGENTS.md`, applicable skills, the domain register, and official ADRs
 before planning or changing files. The supplied source issue is the assignment
-brief and may serve as its ADR tracking issue. Communication on that issue is
+brief, with its exact native originating repository and Issue identity. Communication on that issue is
 authorized and mandatory; the controller publishes your messages and questions.
 
 ## Intake and planning
@@ -21,9 +21,12 @@ constraints, alternatives, acceptance criteria, affected bounded contexts,
 verification commands, and ordered implementation tasks. Do not force an idea
 into an implementation task before its intended outcome is understood.
 
-For significant decisions, use the architecture-decision skill. This existing
-source issue is authorized to track the ADR; do not invent another source
-issue. Ask focused questions using the user-input tool or a `needs_input`
+For significant decisions, use the pinned architecture-decision skill and an
+already-authorized Architecture Authority tracking Issue linked to the origin.
+The source Issue can serve both roles only when it already belongs to Authority
+and tracks the decision. If the tracking Issue or trusted canonical input is
+missing, return `needs_input`; do not create a replacement or infer permission
+to create another Issue. Ask focused questions using the user-input tool or a `needs_input`
 structured outcome. The controller pauses and posts them. Never invent an
 answer or interpret a lack of response as approval.
 
@@ -55,8 +58,11 @@ and remaining work. Do not include private chain-of-thought, credentials, or raw
 command output that might contain credentials.
 
 Use existing repository primitives and conventions. Update the changelog,
-domain register, documentation, and provisional ADR when the change requires
-them. Run relevant tests and report actual results. Use the final structured
+domain register and documentation when the change requires them. Formal
+decision changes use the owning Authority workflow; hold dependent consumer
+work until its approved merged Architecture Release is available. Do not
+update a provisional formal ADR in a consumer checkout. Run relevant tests
+and report actual results. Use the final structured
 outcome to record remaining tasks and questions. Return `continue` with the
 exact remaining implementation tasks when another model turn is needed. Return
 `complete` only when the changes are ready for the workflow to verify and both

@@ -197,14 +197,18 @@ test('repository uses the organization pull request template and required-check 
   assert.deepEqual(actors.events.issue_comment, ['created', 'edited']);
 });
 
-test('repository instructions and ADR-0007 point to pnpm commands', async () => {
+test('consumer delivery instructions use pnpm and reference Authority ADR-0007', async () => {
   const agents = await text('AGENTS.md');
   const skill = await text('.agents/skills/delivery-workflow/SKILL.md');
   const adr = await text('docs/decisions/0007-use-issue-linked-conventional-branch-names.md');
-  for (const source of [agents, skill, adr]) {
+  for (const source of [agents, skill]) {
     assert.ok(source.includes('pnpm'));
     assert.ok(!source.includes('npm run branch:start'));
   }
+  assert.match(adr, /canonical-source:/);
+  assert.match(adr, /0423533176ad6239fe5d828736605b5a6360293c/);
+  assert.match(adr, /Authority reference/);
+  assert.doesNotMatch(adr, /## Decision Outcome/);
   const decisions = await text('docs/decisions/README.md');
   assert.ok(decisions.includes('(0008-use-pnpm-with-delayed-dependency-adoption.md)'));
 

@@ -145,6 +145,24 @@ jobs:
           path: node_modules/architecture-pin-contract
           persist-credentials: false
 
+      - name: Check out the owner-approved strategy Architecture fixture
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-architecture
+          ref: ba804c044bd7dc0a7c5568062d43a1f0d9f3141b
+          fetch-depth: 0
+          path: node_modules/strategy-architecture-contract
+          persist-credentials: false
+
+      - name: Check out the admitted Requirements selector and baseline fixtures
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-requirements
+          ref: 2d20d40dcd1fb50d04310da2d222fb1a6fc1fa31
+          fetch-depth: 0
+          path: node_modules/strategy-requirements-contract
+          persist-credentials: false
+
       - name: Check out the current Customizations graph fixture
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -195,6 +213,8 @@ jobs:
         env:
           EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-report-contract
           ARCHITECTURE_PIN_TEST_ROOT: ${{ github.workspace }}/node_modules/architecture-pin-contract
+          STRATEGY_ARCHITECTURE_TEST_ROOT: ${{ github.workspace }}/node_modules/strategy-architecture-contract
+          STRATEGY_REQUIREMENTS_TEST_ROOT: ${{ github.workspace }}/node_modules/strategy-requirements-contract
           RELEASE_GRAPH_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-pin-contract
           RELEASE_GRAPH_PRIMITIVES_ROOT: ${{ github.workspace }}/node_modules/customizations-pin-contract
         run: pnpm test
@@ -291,6 +311,24 @@ jobs:
           path: node_modules/architecture-pin-contract
           persist-credentials: false
 
+      - name: Check out the owner-approved strategy Architecture fixture
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-architecture
+          ref: ba804c044bd7dc0a7c5568062d43a1f0d9f3141b
+          fetch-depth: 0
+          path: node_modules/strategy-architecture-contract
+          persist-credentials: false
+
+      - name: Check out the admitted Requirements selector and baseline fixtures
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-requirements
+          ref: 2d20d40dcd1fb50d04310da2d222fb1a6fc1fa31
+          fetch-depth: 0
+          path: node_modules/strategy-requirements-contract
+          persist-credentials: false
+
       - name: Check out the current Customizations graph fixture
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -304,6 +342,8 @@ jobs:
         env:
           EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-report-contract
           ARCHITECTURE_PIN_TEST_ROOT: ${{ github.workspace }}/node_modules/architecture-pin-contract
+          STRATEGY_ARCHITECTURE_TEST_ROOT: ${{ github.workspace }}/node_modules/strategy-architecture-contract
+          STRATEGY_REQUIREMENTS_TEST_ROOT: ${{ github.workspace }}/node_modules/strategy-requirements-contract
           RELEASE_GRAPH_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-pin-contract
           RELEASE_GRAPH_PRIMITIVES_ROOT: ${{ github.workspace }}/node_modules/customizations-pin-contract
         run: pnpm test

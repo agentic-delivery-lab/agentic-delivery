@@ -11,6 +11,17 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A private strategy-context loader verifies owner-approved Architecture 0.1.0,
+  native source-Issue identity and the selected approved Requirements baseline.
+  It produces bounded, deterministic data and rejects changed resume context.
+  Controller admission and prompts now use that context; state format 6 and
+  evidence format 3 retain historical readers and preserve spent allowances.
+  Duplicate events recover historical outbox entries without rerouting completed
+  work. Fresh specialized runs establish their initial brief without switching
+  to planning. Known pre-thread quota recovery preserves the specialized role
+  and operation; ambiguous or changed briefs hold instead of creating a new
+  session or switching to planning. Runtime admission remains separate.
+
 - The fixed two-Issue operator canary can verify restoration of existing
   approved field options as well as the original state. Intermediate snapshots,
   separate readbacks and compensation preserve the interactive-only boundary.
@@ -194,6 +205,15 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #107](https://github.com/agentic-delivery-lab/agentic-delivery/issues/107) adds an offline Project planning-context selector bound to a source repository and Issue, comparing repository names case-insensitively while retaining stable numeric and node identities. It uses a versioned policy with a separately supplied SHA-256 pin and explicit Project priority, collapses identical repeated items with case-normalized repository names, and resolves candidate errors independently of API order. It holds on unapproved, inaccessible, or ambiguous candidates without granting execution authority or enabling live Project access.
 
 ### Changed
+
+- Consumer decision files now reference the 22 applicable records from approved
+  Architecture 0.1.0 instead of duplicating formal decision text. Exact source
+  identities, metadata and hashes are validated; historical text remains in Git.
+  Formal changes require Authority tracking authorization and trusted inputs.
+  Harness loads canonical evidence for affected references and holds before a
+  model turn if that evidence is unavailable, mismatched or exceeds its limits.
+  The Harness workflow selects this approved review source separately from
+  the existing runtime, bootstrap and consumer-workflow pins.
 
 - Update the pinned Codex CLI from 0.164.0 to 0.166.0 after verifying the official release asset digest; the pull request waits for no-generation runner capability checks before semantic review.
 

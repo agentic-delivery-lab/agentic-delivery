@@ -1,23 +1,14 @@
-// agentic-primitive: {"id":"adr-structure-validator","kind":"validator","enforcement":"deterministic","adrs":["ADR-0001"],"domains":["agentic-delivery-governance"]}
-import { execFile } from 'node:child_process';
+// agentic-primitive: {"id":"adr-structure-validator","kind":"validator","enforcement":"deterministic","adrs":["ADR-0001","ADR-0020","ADR-0021"],"domains":["agentic-delivery-governance"]}
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseRepositoryYaml } from './lib/yaml.mjs';
-import { promisify } from 'node:util';
-
-const execFileAsync = promisify(execFile);
-
-const requiredHeadings = [
-  '## Context and Problem Statement',
-  '## Decision Drivers',
-  '## Considered Options',
-  '## Decision Outcome',
-  '### Consequences',
-  '### Confirmation',
-  '## More Information',
-];
+import { isDeepStrictEqual } from 'node:util';
+import {
+  decisionReferenceMetadata, normalizeDecisionReferenceLines, readDecisionReferenceIndex,
+  renderDecisionReference, renderDecisionTemplateReference,
+} from './lib/decision-references.mjs';
 
 export class AdrValidationError extends Error {
   constructor(message, exitCode = 1) {
@@ -76,35 +67,41 @@ export async function validateAdrs(repositoryRoot = process.cwd()) {
     }
   }
 
-  const records = (await readdir(decisionsDirectory, { withFileTypes: true }))
+  let referenceIndex;
+  try {
+    referenceIndex = await readDecisionReferenceIndex(root);
+    const template = await readFile(path.join(decisionsDirectory, 'adr-template.md'), 'utf8');
+    if (normalizeDecisionReferenceLines(template) !== renderDecisionTemplateReference(referenceIndex)) {
+      addError('adr-template.md must remain a reference to the selected Authority template');
+    }
+  } catch (error) {
+    throw new AdrValidationError(errorMessage(`approved Authority reference input is unavailable or changed: ${error.message}`), 1);
+  }
+
+  const entries = await readdir(decisionsDirectory, { withFileTypes: true });
+  const allowedFiles = new Set(['README.md', 'adr-template.md', 'authority-reference-index.json',
+    ...referenceIndex.records.map(record => path.basename(record.file))]);
+  for (const entry of entries) {
+    if (!entry.isFile() || !allowedFiles.has(entry.name)) {
+      addError(`unindexed decision-directory entry: ${entry.name}`);
+    }
+  }
+  const records = entries
     .filter((entry) => entry.isFile() && /^\d{4}-.*\.md$/.test(entry.name))
     .map(({ name }) => name)
     .sort()
     .map((name) => path.join(decisionsDirectory, name));
 
-  if (records.length === 0) addError('no numbered ADR records found');
+  if (records.length === 0) addError('no numbered Authority references found');
+  const present = new Set(records.map((record) => `docs/decisions/${path.basename(record)}`));
+  for (const record of referenceIndex.records) {
+    if (!present.has(record.file)) addError(`missing indexed reference: ${record.file}`);
+  }
 
-  // A removed ADR number is historical identity, not a reusable slot. When
-  // Git history is available, reject a current record whose number previously
-  // named a different file. Fixture roots without Git history remain valid.
-  try {
-    const { stdout } = await execFileAsync('git', ['-C', root, 'log', '--all', '--format=', '--name-only', '--', 'docs/decisions'], { encoding: 'utf8' });
-    const historicalNames = new Map();
-    for (const file of stdout.split(/\r?\n/).filter((value) => /^docs\/decisions\/\d{4}-[a-z0-9-]+\.md$/.test(value))) {
-      const number = file.slice('docs/decisions/'.length, 'docs/decisions/'.length + 4);
-      const names = historicalNames.get(number) ?? new Set();
-      names.add(path.basename(file));
-      historicalNames.set(number, names);
-    }
-    for (const record of records) {
-      const filename = path.basename(record);
-      const number = filename.slice(0, 4);
-      const priorNames = historicalNames.get(number);
-      if (priorNames && [...priorNames].some((name) => name !== filename)) {
-        addError(`${filename} reuses ADR-${number}, previously assigned to ${[...priorNames].filter((name) => name !== filename).join(', ')}`);
-      }
-    }
-  } catch { /* A non-Git fixture cannot prove historical reuse. */ }
+  // References do not allocate or reuse this repository's formal decision
+  // numbers. Identity is the selected Authority repository + source + record,
+  // checked against the exact index below. Former local proposals stay in Git
+  // history and cannot become canonical merely by sharing an integer.
 
   let previousNumber = 0;
   const recordNumbers = new Set();
@@ -148,7 +145,7 @@ export async function validateAdrs(repositoryRoot = process.cwd()) {
       metadata = {};
     }
     if (Object.hasOwn(metadata, 'status')) {
-      addError(`${filename} must not define status in frontmatter; the main branch defines official ADR state`);
+      addError(`${filename} must not define status in frontmatter; Authority owns decision lifecycle`);
     }
     if (typeof metadata?.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(metadata.date)) {
       addError(`${filename} has no ISO date in its frontmatter`);
@@ -169,10 +166,10 @@ export async function validateAdrs(repositoryRoot = process.cwd()) {
       addError(`${filename} has invalid supersedes metadata`);
     }
 
-    for (const heading of requiredHeadings) {
-      if (!source.split(/\r?\n/).includes(heading)) {
-        addError(`${filename} is missing required heading: ${heading}`);
-      }
+    const expected = referenceIndex.records.find((entry) => entry.file === `docs/decisions/${filename}`);
+    if (!expected || !isDeepStrictEqual(metadata, decisionReferenceMetadata(referenceIndex, expected))
+      || normalizeDecisionReferenceLines(source) !== renderDecisionReference(referenceIndex, expected)) {
+      addError(`${filename} must remain a reference only, with the exact selected Authority identity, source, hash and metadata projection`);
     }
     if (!/https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/\d+/.test(source)) {
       addError(`${filename} does not link its source issue`);
