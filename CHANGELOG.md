@@ -749,6 +749,10 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Security
 
+- Update the locked Ajv URI parser, `fast-uri`, from 3.1.7 to the stock upstream
+  3.1.9 release to address four URI-normalization advisories. Direct dependency
+  versions and the minimum release-age policy are unchanged.
+
 - [Issue #60](https://github.com/agentic-delivery-lab/agentic-delivery/issues/60) stores organization-specific issue-field and option IDs in an Actions repository secret, then masks each runtime ID separately in every consuming job before use.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) fails closed when the central GitHub App installation ID is absent instead of relying on a stale deployment default; tests must provide the verified installation explicitly.
 - [Issue #52](https://github.com/agentic-delivery-lab/agentic-delivery/issues/52) makes unscoped GitHub App installation tokens an explicit non-production test opt-in; every production token path must provide the originating or controller repository ID.
