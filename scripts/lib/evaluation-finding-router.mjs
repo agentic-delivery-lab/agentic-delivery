@@ -24,6 +24,8 @@ export const EVALUATION_REPORT_SCHEMA_PINS = Object.freeze([
   EVALUATION_REPORT_SCHEMA_PIN,
   Object.freeze({ ...EVALUATION_REPORT_SCHEMA_PIN,
     version: '0.1.0-draft.77', commit: 'e1cb20f94ee398c8a26899cc6219b380975da3ca' }),
+  Object.freeze({ ...EVALUATION_REPORT_SCHEMA_PIN,
+    version: '0.1.0', commit: '0423533176ad6239fe5d828736605b5a6360293c' }),
 ]);
 
 function schemaUrl(pin) {
@@ -158,7 +160,7 @@ export async function loadPinnedEvaluationReportSchemas(architectureRoot) {
     }
     return result.stdout;
   }));
-  // These two reviewed occurrences have identical 2.0.0 bytes. Any future
+  // These reviewed occurrences have identical 2.0.0 bytes. Any future
   // different schema requires explicit version dispatch, never a URL alias.
   if (sources.some(source => source !== sources[0])) {
     throw new EvaluationFindingRoutingError('Supported report schema pins no longer contain identical contract bytes.');

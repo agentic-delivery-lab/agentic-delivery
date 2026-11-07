@@ -539,6 +539,34 @@ routeTest('existing offline command loads the fixed mapping and emits a review p
 const currentReportSchemaCommit = 'e1cb20f94ee398c8a26899cc6219b380975da3ca';
 const currentReportSchemaUrl = `https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/${currentReportSchemaCommit}/architecture/contracts/evaluation-report.schema.json`;
 
+routeTest('approved Architecture 0.1.0 reports preserve synthetic holds and exact source provenance', async () => {
+  const approvedCommit = '0423533176ad6239fe5d828736605b5a6360293c';
+  const input = report({
+    $schema: `https://github.com/agentic-delivery-lab/agentic-delivery-architecture/blob/${approvedCommit}/architecture/contracts/evaluation-report.schema.json`,
+    classification: 'synthetic',
+  });
+  const directory = await mkdtemp(path.join(tmpdir(), 'evaluation-approved-schema-'));
+  try {
+    const file = path.join(directory, 'report.json');
+    await writeFile(file, JSON.stringify(input));
+    const result = await routeEvaluationFindingReports([
+      '--architecture-root', architectureRoot, '--source-issue', sourceIssueUrl, '--report', file,
+    ]);
+    assert.equal(result.proposals.length, 0);
+    assert.equal(result.dispositions.length, 1);
+    const disposition = result.dispositions[0];
+    assert.equal(disposition.status, 'awaiting-owner-verification');
+    assert.equal('target' in disposition, false);
+    assert.equal('candidateTarget' in disposition, false);
+    assert.equal(disposition.executionAuthorized, false);
+    assert.deepEqual(disposition.sourceReport, input);
+    assert.equal(disposition.reportReference.schema.url, input.$schema);
+    assert.equal(disposition.reportReference.schema.sourcePin.commit, approvedCommit);
+    assert.equal(result.schemaPin.commit, approvedCommit);
+    assert.equal(result.mutationsRequested, false);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 routeTest('the offline command accepts the current producer schema pin and retains its exact provenance', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'evaluation-current-schema-'));
   try {
