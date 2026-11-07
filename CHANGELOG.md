@@ -11,6 +11,11 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Offline evaluation routing accepts the exact approved Architecture 0.1.0
+  report-schema occurrence used by published Primitive 0.1.1. Historical pins
+  and per-occurrence hash checks remain intact; synthetic reports still hold
+  without an actionable target or execution authority.
+
 - A private strategy-context loader verifies owner-approved Architecture 0.1.0,
   native source-Issue identity and the selected approved Requirements baseline.
   It produces bounded, deterministic data and rejects changed resume context.
