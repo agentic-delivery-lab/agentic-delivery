@@ -211,6 +211,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Changed
 
+- Update the pinned Codex CLI from 0.166.0 to 0.167.0 after verifying the official release asset digest; the pull request waits for no-generation runner capability checks before semantic review.
+
 - Consumer decision files now reference the 22 applicable records from approved
   Architecture 0.1.0 instead of duplicating formal decision text. Exact source
   identities, metadata and hashes are validated; historical text remains in Git.
