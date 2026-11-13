@@ -11,6 +11,11 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Validate the exact skill and helper resource inventory in native factory
+  plugin packages. Bind files to their selected immutable source roles and hold
+  on altered, missing, extra or unsafe paths before producer tools run. Consumer
+  installation and runtime admission remain separate.
+
 - Offline evaluation routing accepts the exact approved Architecture 0.1.0
   report-schema occurrence used by published Primitive 0.1.1. Historical pins
   and per-occurrence hash checks remain intact; synthetic reports still hold

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
@@ -356,4 +356,90 @@ test('impact hash rejects before executing a tool shared with the selected Archi
     primitiveDependency: inputs.release.dependencies.primitives, architectureRelease, primitiveRelease }, errors);
   assert.ok(errors.some(error => error.includes('impact Architecture manifest hash')), errors.join('\n'));
   await assert.rejects(access(marker), { code: 'ENOENT' });
+});
+
+
+async function incompleteSkillPackage(input) {
+  const file = 'packages/agent-plugin/plugin.json';
+  const manifest = JSON.parse(await readFile(path.join(input.distributionRoot, file), 'utf8'));
+  manifest.description = 'Synthetic skill package; incomplete resources must hold.';
+  const factory = manifest.extensions['io.github.agentic-delivery-lab'];
+  const release = JSON.parse(await git(input.primitivesRoot, 'show', `${primitiveCommit}:manifests/primitive-release.json`));
+  Object.assign(factory, { schemaVersion: 2, status: 'draft', resourceInventory: 'resources.lock.json' });
+  factory.projections = { automations: 'automations/', skills: 'skills/' };
+  factory.generatedFrom.primitiveImplementationCommit = release.sourceCommit;
+  await json(input.distributionRoot, file, manifest);
+  await json(input.distributionRoot, 'packages/agent-plugin/resources.lock.json', { schemaVersion: 1, files: [] });
+}
+
+test('public v3 skill packages reject incomplete resource metadata at the pre-tool barrier', async (t) => {
+  const input = await publicFixture(t);
+  await incompleteSkillPackage(input);
+  await assert.rejects(validateDistributionReleaseChain(input), (error) => {
+    assert.match(error.message, /^Native graph metadata failed:/);
+    assert.match(error.message, /Skill resource projection failed.*header does not match selected producer/);
+    return true;
+  });
+});
+
+
+async function boundedPublicCheck(input) {
+  const program = `const {validateDistributionReleaseChain} = await import(process.argv[1]);
+    try { await validateDistributionReleaseChain(JSON.parse(process.argv[2]));
+      process.stdout.write(JSON.stringify({held:false})); }
+    catch (error) { process.stdout.write(JSON.stringify({held:true,message:error.message})); }`;
+  const roots = Object.fromEntries(['controlPlaneRoot', 'architectureRoot', 'primitivesRoot', 'distributionRoot']
+    .map(key => [key, input[key]]));
+  const result = await exec(process.execPath, ['--input-type=module', '-e', program,
+    new URL('../../scripts/validate-release-chain.mjs', import.meta.url).href, JSON.stringify(roots)],
+  { timeout: 10_000, maxBuffer: 1024 * 1024 });
+  return JSON.parse(result.stdout);
+}
+
+for (const relative of ['packages/agent-plugin/plugin.json', 'manifests/automation-projections.lock.json']) {
+  test(`public graph rejects FIFO metadata ${relative} before an unbounded read`, {
+    skip: process.platform === 'win32' ? 'POSIX FIFO fixture' : false,
+  }, async (t) => {
+    const input = await publicFixture(t); const file = path.join(input.distributionRoot, relative);
+    await rm(file); await exec('mkfifo', [file]);
+    const result = await boundedPublicCheck(input);
+    assert.equal(result.held, true); assert.match(result.message, /projection metadata failed/);
+    assert.ok(result.message.includes(relative));
+  });
+}
+
+
+for (const parent of [false, true]) {
+  test(`public metadata rejects a symlinked ${parent ? 'parent directory' : 'file'}`, async (t) => {
+    const input = await publicFixture(t);
+    const relative = parent ? 'packages/agent-plugin' : 'packages/agent-plugin/plugin.json';
+    const target = path.join(input.distributionRoot, relative);
+    const retained = `${target}-retained`;
+    const { rename } = await import('node:fs/promises');
+    await rename(target, retained);
+    try { await symlink(retained, target, parent ? 'dir' : 'file'); }
+    catch (error) {
+      if (process.platform === 'win32' && error.code === 'EPERM') {
+        t.skip('Windows fixture account cannot create symbolic links'); return;
+      }
+      throw error;
+    }
+    const result = await boundedPublicCheck(input);
+    assert.equal(result.held, true);
+    assert.match(result.message, /projection metadata failed.*packages\/agent-plugin\/plugin.json/);
+  });
+}
+
+test('v2 resource metadata holds before opening automation content', {
+  skip: process.platform === 'win32' ? 'POSIX FIFO fixture' : false,
+}, async (t) => {
+  const input = await publicFixture(t);
+  await incompleteSkillPackage(input);
+  const automation = path.join(input.distributionRoot,
+    'packages/agent-plugin/automations/prepare-validation-evidence.automation.md');
+  await rm(automation); await exec('mkfifo', [automation]);
+  const result = await boundedPublicCheck(input);
+  assert.equal(result.held, true);
+  assert.match(result.message, /^Native graph metadata failed:/);
+  assert.match(result.message, /header does not match selected producer/);
 });
