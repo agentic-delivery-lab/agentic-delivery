@@ -11,6 +11,8 @@ import { validatePrimitiveSelection, primitiveSelectionMatchesDependency } from 
 import { validateEventCatalog } from './lib/event-catalog.mjs';
 import { validateControllerRelease } from './lib/control-plane-contracts.mjs';
 import { supportsArchitectureContracts, validateArchitecturePin } from './validate-architecture-pin.mjs';
+import { readDistributionProjectionJson, validateDistributionSkillResources } from './lib/distribution-skill-resources.mjs';
+export { validateDistributionSkillResources };
 
 const execFileAsync = promisify(execFile);
 const SHA1 = /^[0-9a-f]{40}$/;
@@ -33,23 +35,34 @@ export class ReleaseChainValidationError extends Error {
 // Translate this factory's versioned projection metadata. This is not a
 // general Agent Plugins validator or proof that a client loaded the package.
 export function distributionPluginProjection(manifest) {
-  const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
-  const metadataKeys = new Set(['schemaVersion', 'id', 'version', 'status', 'generatedFrom', 'projections']);
+  const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const exact = (value, keys) => record(value) && Object.keys(value).length === keys.length
+    && keys.every(key => Object.hasOwn(value, key));
+  const metadataKeys = ['schemaVersion', 'id', 'version', 'status', 'generatedFrom', 'projections'];
   const unsupported = () => new ReleaseChainValidationError('Agent Plugin projection format or metadata contract version is unsupported');
   if (!record(manifest)) throw unsupported();
   if (Object.hasOwn(manifest, '$schema')) {
     const projection = manifest.extensions?.['io.github.agentic-delivery-lab'];
     if (manifest.$schema !== 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'
       || manifest.name !== 'agentic-delivery' || typeof manifest.version !== 'string' || !manifest.version.trim()
-      || ['schemaVersion', 'id', 'status', 'generatedFrom', 'projections'].some((key) => Object.hasOwn(manifest, key))
-      || !record(manifest.extensions) || !record(projection)
-      || Object.keys(projection).some((key) => !metadataKeys.has(key))
-      || projection.schemaVersion !== 1 || projection.id !== manifest.name || Object.hasOwn(projection, 'version')) {
-      throw unsupported();
-    }
+      || ['schemaVersion', 'id', 'status', 'generatedFrom', 'projections', 'resourceInventory'].some(key => Object.hasOwn(manifest, key))
+      || !record(manifest.extensions) || !record(projection) || projection.id !== manifest.name
+      || Object.hasOwn(projection, 'version') || ![1, 2].includes(projection.schemaVersion)) throw unsupported();
+    if (projection.schemaVersion === 1) {
+      if (Object.keys(projection).some(key => !metadataKeys.includes(key))) throw unsupported();
+    } else if (!exact(manifest, ['$schema', 'name', 'version', 'description', 'extensions'])
+      || typeof manifest.description !== 'string' || !manifest.description.trim()
+      || !exact(manifest.extensions, ['io.github.agentic-delivery-lab'])
+      || !exact(projection, ['schemaVersion', 'id', 'status', 'generatedFrom', 'projections', 'resourceInventory'])
+      || !['draft', 'released'].includes(projection.status) || projection.resourceInventory !== 'resources.lock.json'
+      || !exact(projection.projections, ['automations', 'skills'])
+      || projection.projections.automations !== 'automations/' || projection.projections.skills !== 'skills/'
+      || !exact(projection.generatedFrom, ['primitiveRepository', 'primitiveRelease', 'primitiveSourceCommit',
+        'primitiveImplementationCommit', 'primitiveContentSha256', 'architectureCommit', 'architectureContentSha256',
+        'controlPlaneCommit', 'automationSourceCommit'])) throw unsupported();
     return { ...projection, version: manifest.version };
   }
-  if (manifest.schemaVersion !== 1 || Object.keys(manifest).some((key) => !metadataKeys.has(key))) throw unsupported();
+  if (manifest.schemaVersion !== 1 || Object.keys(manifest).some(key => !metadataKeys.includes(key))) throw unsupported();
   return manifest;
 }
 
@@ -58,6 +71,13 @@ async function readJson(file) {
     return JSON.parse(await readFile(file, 'utf8'));
   } catch (error) {
     throw new ReleaseChainValidationError(`cannot read JSON ${file}: ${error.message}`);
+  }
+}
+
+async function readProjectionJson(root, relative) {
+  try { return await readDistributionProjectionJson(root, relative); }
+  catch (error) {
+    throw new ReleaseChainValidationError(`Distribution projection metadata failed (${relative}): ${error.message}`);
   }
 }
 
@@ -380,11 +400,14 @@ async function validateReleaseChainScope({
       : await readText(path.join(controlPlaneRoot, 'config/event-catalog.yml')),
     path.join(controlPlaneRoot, 'config/event-catalog.yml'),
   );
-  const bundle = await readJson(path.join(distributionRoot, 'manifests/workflow-bundle.json'));
-  const sourceLock = await readJson(path.join(distributionRoot, 'manifests/sources.lock.json'));
-  const automationLock = await readJson(path.join(distributionRoot, 'manifests/automation-projections.lock.json'));
-  const capabilities = await readJson(path.join(distributionRoot, 'manifests/capabilities.lock.json'));
-  const plugin = distributionPluginProjection(await readJson(path.join(distributionRoot, 'packages/agent-plugin/plugin.json')));
+  const bundle = await readProjectionJson(distributionRoot, 'manifests/workflow-bundle.json');
+  const sourceLock = await readProjectionJson(distributionRoot, 'manifests/sources.lock.json');
+  const automationLock = await readProjectionJson(distributionRoot, 'manifests/automation-projections.lock.json');
+  const capabilities = await readProjectionJson(distributionRoot, 'manifests/capabilities.lock.json');
+  const plugin = distributionPluginProjection(await readProjectionJson(distributionRoot, 'packages/agent-plugin/plugin.json'));
+  if (plugin.schemaVersion === 2 && !native) {
+    throw new ReleaseChainValidationError('Skill resource inventory requires the native identity-bound v3 graph');
+  }
   const issueIntakeWorkflow = await readText(path.join(controlPlaneRoot, '.github/workflows/issue-intake.yml'));
   const codexDeliveryWorkflow = await readText(path.join(controlPlaneRoot, '.github/workflows/codex-delivery.yml'));
 
@@ -512,7 +535,7 @@ async function validateReleaseChainScope({
     }
     for (const [label, document, version] of [
       ['Workflow bundle', bundle, 1], ['Source lock', sourceLock, 1],
-      ['Agent Plugin', plugin, 1], ['Automation projection', automationLock, 1],
+      ['Automation projection', automationLock, 1],
       ['Capabilities source', capabilities, 2],
     ]) equal(errors, `${label} contract version`, document.schemaVersion, version);
     equal(errors, 'Agent Plugin Primitive repository', plugin.generatedFrom?.primitiveRepository, primitiveDependency.repository);
@@ -537,6 +560,16 @@ async function validateReleaseChainScope({
   equal(errors, 'Automation projection source commit', automationLock.sourceCommit, controller.commit);
   equal(errors, 'Automation projection repository', automationLock.projectionRepository, 'agentic-delivery-lab/agentic-delivery-distribution');
   equal(errors, 'Agent Plugin automation source commit', plugin.generatedFrom?.automationSourceCommit, automationLock.sourceCommit);
+  let skillResources;
+  let automationSnapshots;
+  if (plugin.schemaVersion === 2) {
+    if (errors.length > 0) throw new ReleaseChainValidationError(`Native graph metadata failed:\n${errors.join('\n')}`);
+    try {
+      ({ automationSnapshots, ...skillResources } = await validateDistributionSkillResources({ distributionRoot, primitivesRoot,
+        primitiveReleaseCommit: primitiveDependency.commit, primitiveRelease, plugin, automationLock }));
+    } catch (error) { errors.push(`Skill resource projection failed: ${error.message}`); }
+    if (errors.length > 0) throw new ReleaseChainValidationError(`Native graph metadata failed:\n${errors.join('\n')}`);
+  }
   const automationIds = new Set();
   for (const [index, template] of (automationLock.templates ?? []).entries()) {
     const prefix = `Automation projection ${index}`;
@@ -553,7 +586,9 @@ async function validateReleaseChainScope({
     if (!SHA1.test(automationLock.sourceCommit ?? '')) continue;
     try {
       const source = await readTextAtCommitRaw(controlPlaneRoot, automationLock.sourceCommit, template.sourcePath);
-      const projection = await readText(path.join(distributionRoot, template.targetPath));
+      const projection = plugin.schemaVersion === 2
+        ? automationSnapshots.get(template.targetPath).toString('utf8')
+        : await readText(path.join(distributionRoot, template.targetPath));
       equal(errors, `${prefix} projection content`, projection, source);
       equal(errors, `${prefix} source digest`, sha256(source), template.contentSha256);
     } catch (error) {
@@ -665,7 +700,8 @@ async function validateReleaseChainScope({
     primitives: { version: primitiveDependency.version, commit: primitiveDependency.commit, contentSha256: primitiveDependency.contentSha256 },
     primitiveSelection: { version: primitiveSelection.source.version, commit: primitiveSelection.source.commit, contentSha256: primitiveSelection.source.contentSha256 },
     eventCatalog: { version: eventCatalog.version },
-    distribution: { bundleVersion: bundle.bundleVersion, workflowCommit: bundle.workflowSource.commit, automationProjectionRelease: automationLock.projectionRelease },
+    distribution: { bundleVersion: bundle.bundleVersion, workflowCommit: bundle.workflowSource.commit,
+      automationProjectionRelease: automationLock.projectionRelease, ...(skillResources ? { skillResources } : {}) },
     ...(includePrivatePublication ? { privatePublicationAgents } : { validationScope: 'public-distribution' }),
   };
 }

@@ -44,7 +44,7 @@ for (const [label, change] of [
   ['missing package version', (m) => { delete m.version; }],
   ['mismatched package identity', (m) => { m.name = 'another-package'; }],
   ['missing factory extension', (m) => { m.extensions = {}; }],
-  ['unknown factory metadata version', (m) => { m.extensions['io.github.agentic-delivery-lab'].schemaVersion = 2; }],
+  ['unknown factory metadata version', (m) => { m.extensions['io.github.agentic-delivery-lab'].schemaVersion = 3; }],
   ['unknown factory metadata field', (m) => { m.extensions['io.github.agentic-delivery-lab'].unknown = 'conflicting'; }],
   ['ambiguous nested version', (m) => { m.extensions['io.github.agentic-delivery-lab'].version = '0.1.0-draft.99'; }],
   ['ambiguous top-level source pins', (m) => { m.generatedFrom = legacy.generatedFrom; }],
@@ -72,3 +72,51 @@ test('legacy metadata rejects standard-only or unknown top-level fields', () => 
     assert.throws(() => releaseChain.distributionPluginProjection({ ...legacy, [key]: 'conflicting-package' }), /Agent Plugin.*(format|metadata)/i, key);
   }
 });
+
+
+function skillManifest() {
+  const manifest = standardManifest();
+  manifest.description = 'Delivery skills and manual review templates.';
+  const factory = manifest.extensions['io.github.agentic-delivery-lab'];
+  factory.schemaVersion = 2;
+  factory.resourceInventory = 'resources.lock.json';
+  factory.projections.skills = 'skills/';
+  factory.generatedFrom = {
+    primitiveRepository: 'agentic-delivery-lab/agentic-delivery-agent-customizations',
+    primitiveRelease: 'urn:agentic-delivery:primitive-release:0.2.0',
+    primitiveSourceCommit: 'a'.repeat(40),
+    primitiveImplementationCommit: 'b'.repeat(40),
+    primitiveContentSha256: 'c'.repeat(64),
+    architectureCommit: 'd'.repeat(40), architectureContentSha256: 'e'.repeat(64),
+    controlPlaneCommit: 'f'.repeat(40), automationSourceCommit: 'f'.repeat(40),
+  };
+  return manifest;
+}
+
+test('native skill package v2 keeps distinct implementation and released-manifest provenance', () => {
+  const manifest = skillManifest();
+  const factory = manifest.extensions['io.github.agentic-delivery-lab'];
+  const before = structuredClone(manifest);
+  assert.deepEqual(releaseChain.distributionPluginProjection(manifest), { ...factory, version: manifest.version });
+  assert.deepEqual(manifest, before);
+});
+
+
+for (const [label, mutate] of [
+  ['missing inventory', (m, f) => { delete f.resourceInventory; }],
+  ['inventory escape', (m, f) => { f.resourceInventory = '../resources.lock.json'; }],
+  ['unknown component', (m, f) => { f.projections.hooks = 'hooks/'; }],
+  ['missing skills', (m, f) => { delete f.projections.skills; }],
+  ['skills escape', (m, f) => { f.projections.skills = '../skills/'; }],
+  ['foreign extension', (m) => { m.extensions['example.org'] = {}; }],
+  ['unsupported root component', (m) => { m.hooks = {}; }],
+  ['unknown provenance field', (m, f) => { f.generatedFrom.approved = true; }],
+  ['missing implementation identity', (m, f) => { delete f.generatedFrom.primitiveImplementationCommit; }],
+  ['unknown resource field', (m, f) => { f.approved = true; }],
+  ['unsupported status', (m, f) => { f.status = 'withdrawn'; }],
+]) {
+  test(`skill package v2 rejects ${label}`, () => {
+    const manifest = skillManifest(); mutate(manifest, manifest.extensions['io.github.agentic-delivery-lab']);
+    assert.throws(() => releaseChain.distributionPluginProjection(manifest), /Agent Plugin.*(format|metadata)/i);
+  });
+}
