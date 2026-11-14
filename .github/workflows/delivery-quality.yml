@@ -172,6 +172,24 @@ jobs:
           path: node_modules/customizations-pin-contract
           persist-credentials: false
 
+      - name: Check out accepted Architecture resource graph fixture
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-architecture
+          ref: 039196a4c7c097097b5b92fe2e3203dd178c2266
+          fetch-depth: 0
+          path: node_modules/released-architecture-graph
+          persist-credentials: false
+
+      - name: Check out accepted Customizations resource graph fixture
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-agent-customizations
+          ref: 4ead1fea75312cf96ee0e6bf4eb70df0530ad059
+          fetch-depth: 0
+          path: node_modules/released-primitives-graph
+          persist-credentials: false
+
       - name: Exercise offline evaluation routing against the immutable contract
         env:
           EVALUATION_ROUTE_OUTPUT: ${{ runner.temp }}/evaluation-route.json
@@ -217,6 +235,8 @@ jobs:
           STRATEGY_REQUIREMENTS_TEST_ROOT: ${{ github.workspace }}/node_modules/strategy-requirements-contract
           RELEASE_GRAPH_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-pin-contract
           RELEASE_GRAPH_PRIMITIVES_ROOT: ${{ github.workspace }}/node_modules/customizations-pin-contract
+          RELEASED_GRAPH_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/released-architecture-graph
+          RELEASED_GRAPH_PRIMITIVES_ROOT: ${{ github.workspace }}/node_modules/released-primitives-graph
         run: pnpm test
 
       - name: Validate changelog structure
@@ -338,6 +358,24 @@ jobs:
           path: node_modules/customizations-pin-contract
           persist-credentials: false
 
+      - name: Check out accepted Architecture resource graph fixture
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-architecture
+          ref: 039196a4c7c097097b5b92fe2e3203dd178c2266
+          fetch-depth: 0
+          path: node_modules/released-architecture-graph
+          persist-credentials: false
+
+      - name: Check out accepted Customizations resource graph fixture
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: agentic-delivery-lab/agentic-delivery-agent-customizations
+          ref: 4ead1fea75312cf96ee0e6bf4eb70df0530ad059
+          fetch-depth: 0
+          path: node_modules/released-primitives-graph
+          persist-credentials: false
+
       - name: Run repository tests
         env:
           EVALUATION_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-report-contract
@@ -346,6 +384,8 @@ jobs:
           STRATEGY_REQUIREMENTS_TEST_ROOT: ${{ github.workspace }}/node_modules/strategy-requirements-contract
           RELEASE_GRAPH_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/architecture-pin-contract
           RELEASE_GRAPH_PRIMITIVES_ROOT: ${{ github.workspace }}/node_modules/customizations-pin-contract
+          RELEASED_GRAPH_ARCHITECTURE_ROOT: ${{ github.workspace }}/node_modules/released-architecture-graph
+          RELEASED_GRAPH_PRIMITIVES_ROOT: ${{ github.workspace }}/node_modules/released-primitives-graph
         run: pnpm test
 
   inspect-receipt-schema:
