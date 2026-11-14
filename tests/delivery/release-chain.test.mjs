@@ -74,13 +74,14 @@ test('local release graph reproduces all pinned digests and publication refs', a
   }
   const result = await validateReleaseChain({ controlPlaneRoot: repositoryRoot, ...siblingRoots });
   assert.equal(result.status, 'passed');
-  assert.equal(result.controller.version, '0.2.0-draft.67');
-  assert.equal(result.controller.commit, '98495275481aff381180771da6eba9da95bc7816');
+  assert.equal(result.controller.version, '0.2.0-draft.68');
+  assert.equal(result.controller.commit, 'f3b3bf1ab60f62ebafa44c38c7ce56e908900227');
   assert.match(result.controller.bootstrapCommit, /^[0-9a-f]{40}$/);
   assert.equal(result.controller.githubAppContractVersion, '2.0.0');
-  assert.equal(result.architecture.contentSha256, '02f150dfd46b8c304f61196ff65d7f8a05adc0cc151402573b10803491ac4550');
-  assert.equal(result.primitives.contentSha256, '4b6c07deb6f7be8f495244e3c50a528054528db1fdec5a5a14ea4cfdda5bb34e');
+  assert.equal(result.architecture.contentSha256, 'afac7167f6f9d9a9d21d6a9083dbc22b7c86e7979a02546731ef7de2572dcb18');
+  assert.equal(result.primitives.contentSha256, 'f0756d16a2fdac674e61abd75f13a9a6a7fb28caaba79774483ad4969dfed28f');
   assert.equal(result.distribution.automationProjectionRelease, 'urn:agentic-delivery:distribution:0.1.0-draft.26');
+  assert.equal(result.distribution.skillResources.resources, 17);
 });
 
 test('the pinned workflow source contains the validator and reusable workflow entry points', async (t) => {
@@ -116,11 +117,13 @@ test('a standard plugin preserves producer graph checks through its factory exte
     await cp(path.join(siblingRoots.distributionRoot, relative), destination, { recursive: true });
   }
   const pluginPath = path.join(temporaryRoot, 'packages/agent-plugin/plugin.json');
-  const { version, ...projection } = distributionPluginProjection(JSON.parse(await readFile(pluginPath, 'utf8')));
+  const original = JSON.parse(await readFile(pluginPath, 'utf8'));
+  const { version, ...projection } = distributionPluginProjection(original);
   const manifest = {
     $schema: 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json',
     name: 'agentic-delivery',
     version,
+    description: original.description,
     extensions: { 'io.github.agentic-delivery-lab': projection },
   };
   await writeFile(pluginPath, `${JSON.stringify(manifest, null, 2)}\n`);

@@ -82,11 +82,12 @@ jobs:
           const contracts = { architectureRelease: '5.1.0', conformance: '1.0.0',
             adrPrimitiveIndex: '4.0.0', decisionInventory: '1.1.0',
             architectureArtifacts: '1.0.0', evaluationReport: '2.0.0', requirementsReference: '1.0.0' };
+          const supportedContracts = [contracts, { ...contracts, evaluationOwnership: '1.0.0' }];
+          const supported = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
+            && supportedContracts.some(candidate => Object.keys(value).length === Object.keys(candidate).length
+              && Object.entries(candidate).every(([key, version]) => value[key] === version));
           if (release.schemaVersion !== 2 || release.sourceRepository !== architecture
-            || release.contractVersions === null || typeof release.contractVersions !== 'object'
-            || Array.isArray(release.contractVersions)
-            || Object.keys(release.contractVersions).length !== Object.keys(contracts).length
-            || Object.entries(contracts).some(([key, value]) => release.contractVersions?.[key] !== value)
+            || !supported(release.contractVersions)
             || requirements.schemaVersion !== 1
             || requirements.repository !== 'agentic-delivery-lab/agentic-delivery-requirements'
             || requirements.repositoryId !== 1416207421

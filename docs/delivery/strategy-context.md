@@ -23,6 +23,16 @@ canonical digest and prepared-source ancestry. A trusted native repository
 reader must confirm identity and current default ancestry. Git replacement
 objects and lazy fetch are disabled.
 
+The controller release candidate may separately select Architecture 0.1.1 for
+its producer and Distribution graph. That release selection does not retarget
+the strategy loader: its context provenance remains Architecture 0.1.0 as
+listed above. The context references and the release graph must therefore be
+reported with their own exact pins. A resumed operation must still reproduce
+its saved context; matching selected source bytes between releases does not
+permit replacing the saved pin or resetting its consumption. Runtime admission
+of this combination remains a separate decision and is not established by
+source-graph validation.
+
 Architecture's Requirements lock selects approved baseline 1.0.0 at
 `9ce017453a23240042f72214b09e3c6c5059854d`, not the newer baseline on main.
 The unchanged Requirements applicability selector comes from tooling commit

@@ -11,9 +11,11 @@ import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
 
 const exec = promisify(execFile);
 const root = path.resolve(import.meta.dirname, '../..');
-const architectureRoot = process.env.RELEASE_GRAPH_ARCHITECTURE_ROOT ?? process.env.ARCHITECTURE_PIN_TEST_ROOT
+const globalArchitectureRoot = process.env.RELEASE_GRAPH_ARCHITECTURE_ROOT ?? process.env.ARCHITECTURE_PIN_TEST_ROOT
   ?? path.resolve(root, '../agentic-delivery-architecture');
-const primitivesRoot = process.env.RELEASE_GRAPH_PRIMITIVES_ROOT ?? path.resolve(root, '../agentic-delivery-primitives');
+const globalPrimitivesRoot = process.env.RELEASE_GRAPH_PRIMITIVES_ROOT ?? path.resolve(root, '../agentic-delivery-primitives');
+const architectureRoot = globalArchitectureRoot;
+const primitivesRoot = globalPrimitivesRoot;
 const architectureCommit = '59df514a3a6dc8a75b79b3fc75fe61aae4e6fdf3';
 const primitiveCommit = '69beab027d8b28fc082fa6054f4def5ba0146e3c';
 const cpRepository = 'agentic-delivery-lab/agentic-delivery';
@@ -29,7 +31,11 @@ async function json(directory, file, value) {
 
 // Planned source compatibility only: real immutable producers and a synthetic
 // controller/projection combination. This is not adoption or hosting proof.
-async function fixture(t) {
+async function fixture(t, { accepted = false } = {}) {
+  const architectureRoot = accepted ? (process.env.RELEASED_GRAPH_ARCHITECTURE_ROOT ?? path.resolve(root, '../agentic-delivery-architecture')) : globalArchitectureRoot;
+  const primitivesRoot = accepted ? (process.env.RELEASED_GRAPH_PRIMITIVES_ROOT ?? path.resolve(root, '../agentic-delivery-primitives')) : globalPrimitivesRoot;
+  const architectureCommit = accepted ? '039196a4c7c097097b5b92fe2e3203dd178c2266' : '59df514a3a6dc8a75b79b3fc75fe61aae4e6fdf3';
+  const primitiveCommit = accepted ? '4ead1fea75312cf96ee0e6bf4eb70df0530ad059' : '69beab027d8b28fc082fa6054f4def5ba0146e3c';
   const container = `${root}.worktrees`;
   await mkdir(container, { recursive: true });
   const scratch = await mkdtemp(path.join(container, 'release-graph-v3-'));
@@ -138,16 +144,43 @@ test('planned v3 graph reproduces real current producers and canonical automatio
   assert.equal(result.privatePublicationAgents, 0);
 });
 
-async function publicFixture(t) {
-  const { privateRoot, ...inputs } = await fixture(t);
+async function publicFixture(t, { accepted = false } = {}) {
+  const { privateRoot, ...inputs } = await fixture(t, { accepted });
   // Delete only this fixture's owned synthetic data. Public validation must
   // succeed without a private publication tree, including on hosted runners.
   await rm(privateRoot, { recursive: true, force: true });
   const pluginPath = path.join(inputs.distributionRoot, 'packages/agent-plugin/plugin.json');
   const projection = JSON.parse(await readFile(pluginPath, 'utf8'));
+  if (accepted) {
+    const manifestCommit = inputs.release.dependencies.primitives.commit;
+    const released = JSON.parse(await git(inputs.primitivesRoot, 'show', `${manifestCommit}:manifests/primitive-release.json`));
+    const paths = ['architecture-decision', 'delivery-workflow', 'plain-language-communication', 'ubiquitous-language']
+      .flatMap(name => [`skills/${name}/SKILL.md`, `skills/${name}/agents/openai.yaml`]);
+    paths.push('references/architecture-authority.md', 'references/consumer-tools.md',
+      'validators/workspace-lifecycle/README.md', 'validators/workspace-lifecycle/workspace_guard.py',
+      'scripts/start-issue-branch.mjs', 'validators/repository-delivery/validate-branch-name.mjs',
+      'validators/repository-delivery/validate-source-issue.mjs', 'schemas/primitive-release.schema.json',
+      'manifests/primitive-release.json');
+    const lock = { schemaVersion: 1, primitiveRepository, primitiveRepositoryId: 1380894656,
+      primitiveRelease: released.releaseId, releaseManifestCommit: manifestCommit,
+      implementationCommit: released.sourceCommit, contentSha256: released.contentSha256, files: [] };
+    for (const sourcePath of paths) {
+      const sourceCommit = sourcePath === 'manifests/primitive-release.json' ? manifestCommit : released.sourceCommit;
+      const bytes = Buffer.from(await git(inputs.primitivesRoot, 'show', `${sourceCommit}:${sourcePath}`));
+      const targetPath = `packages/agent-plugin/${sourcePath}`;
+      await mkdir(path.dirname(path.join(inputs.distributionRoot, targetPath)), { recursive: true });
+      await writeFile(path.join(inputs.distributionRoot, targetPath), bytes);
+      lock.files.push({ sourcePath, targetPath, sourceCommit, contentSha256: hash(bytes), mode: '100644' });
+    }
+    await json(inputs.distributionRoot, 'packages/agent-plugin/resources.lock.json', lock);
+    Object.assign(projection, { schemaVersion: 2, id: 'agentic-delivery', status: 'draft', resourceInventory: 'resources.lock.json',
+      projections: { automations: 'automations/', skills: 'skills/' } });
+    projection.generatedFrom.primitiveImplementationCommit = released.sourceCommit;
+  }
   await json(inputs.distributionRoot, 'packages/agent-plugin/plugin.json', {
     $schema: 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json',
     name: 'agentic-delivery', version: '0.1.0-synthetic',
+    ...(accepted ? { description: 'Synthetic released-source resource projection.' } : {}),
     extensions: { 'io.github.agentic-delivery-lab': { ...projection, id: 'agentic-delivery' } },
   });
   return inputs;
@@ -160,6 +193,17 @@ test('public planned graph reproduces pinned producers without private publicati
   assert.equal(Object.hasOwn(result, 'privatePublicationAgents'), false);
   assert.equal(result.architecture.commit, architectureCommit);
   assert.equal(result.primitives.commit, primitiveCommit);
+});
+
+test('public v2 graph reproduces all resources from the accepted producer pair', async (t) => {
+  const inputs = await publicFixture(t, { accepted: true });
+  const result = await validateDistributionReleaseChain(inputs);
+  assert.equal(result.architecture.commit, '039196a4c7c097097b5b92fe2e3203dd178c2266');
+  assert.equal(result.primitives.commit, '4ead1fea75312cf96ee0e6bf4eb70df0530ad059');
+  assert.equal(result.distribution.skillResources.resources, 17);
+  const extra = path.join(inputs.distributionRoot, 'packages/agent-plugin/unlisted.txt');
+  await writeFile(extra, 'unlisted');
+  await assert.rejects(validateDistributionReleaseChain(inputs), /unlisted package resource/);
 });
 
 test('public planned graph rejects wrong source ID and digest without private publication', async (t) => {

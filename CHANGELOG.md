@@ -11,6 +11,9 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Prepare the capability selection for accepted Primitive 0.2.0. A compatible
+  controller release and consumer adoption remain separate.
+
 - Validate the exact skill and helper resource inventory in native factory
   plugin packages. Bind files to their selected immutable source roles and hold
   on altered, missing, extra or unsafe paths before producer tools run. Consumer
@@ -628,6 +631,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 - [Issue #48](https://github.com/agentic-delivery-lab/agentic-delivery/issues/48) aligns the invocation identity with the registered `Agentic Delivery Lab Invoker 7F3A` GitHub App name, slug, mention, and bot login across the actor catalog, code, tests, and agentic documentation.
 
 ### Fixed
+
+- [Issue #105](https://github.com/agentic-delivery-lab/agentic-delivery/issues/105) allows the reusable Architecture workflow to validate the supported 0.1.1 release contract while retaining the earlier contract set.
 
 - Preserve the validated read-only decision when the central workflow runs a
   pinned legacy intake controller. Shadow participants and forced read-only

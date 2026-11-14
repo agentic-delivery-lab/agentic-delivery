@@ -8,10 +8,10 @@ contractVersion: 1.1.0
 source:
   repository: agentic-delivery-lab/agentic-delivery-agent-customizations
   repositoryId: "1380894656"
-  releaseId: urn:agentic-delivery:primitive-release:0.1.0-draft.15
-  version: 0.1.0-draft.15
-  commit: 69beab027d8b28fc082fa6054f4def5ba0146e3c
-  contentSha256: 4b6c07deb6f7be8f495244e3c50a528054528db1fdec5a5a14ea4cfdda5bb34e
+  releaseId: urn:agentic-delivery:primitive-release:0.2.0
+  version: 0.2.0
+  commit: 4ead1fea75312cf96ee0e6bf4eb70df0530ad059
+  contentSha256: f0756d16a2fdac674e61abd75f13a9a6a7fb28caaba79774483ad4969dfed28f
   capabilityPolicyVersion: 0.1.0
 
 profiles:

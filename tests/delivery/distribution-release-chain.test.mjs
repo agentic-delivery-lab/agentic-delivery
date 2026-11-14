@@ -38,8 +38,8 @@ test('public Distribution graph validates without reading private publication', 
   assert.equal(result.status, 'passed');
   assert.equal(result.validationScope, 'public-distribution');
   assert.equal(Object.hasOwn(result, 'privatePublicationAgents'), false);
-  assert.equal(result.controller.commit, '98495275481aff381180771da6eba9da95bc7816');
-  assert.equal(result.architecture.contentSha256, '02f150dfd46b8c304f61196ff65d7f8a05adc0cc151402573b10803491ac4550');
+  assert.equal(result.controller.commit, 'f3b3bf1ab60f62ebafa44c38c7ce56e908900227');
+  assert.equal(result.architecture.contentSha256, 'afac7167f6f9d9a9d21d6a9083dbc22b7c86e7979a02546731ef7de2572dcb18');
 });
 
 for (const [label, mutate, expected] of [
