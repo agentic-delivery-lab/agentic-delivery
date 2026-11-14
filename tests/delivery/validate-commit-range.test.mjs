@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -26,7 +26,7 @@ async function fixtureRepository(t) {
   await cp(path.join(repositoryRoot, 'package.json'), path.join(root, 'package.json'));
   await cp(path.join(repositoryRoot, 'pnpm-lock.yaml'), path.join(root, 'pnpm-lock.yaml'));
   await cp(path.join(repositoryRoot, 'pnpm-workspace.yaml'), path.join(root, 'pnpm-workspace.yaml'));
-  await execFileAsync('ln', ['-s', path.join(repositoryRoot, 'node_modules'), path.join(root, 'node_modules')]);
+  await symlink(path.join(repositoryRoot, 'node_modules'), path.join(root, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
   await git(root, ['init', '--quiet', '-b', 'main']);
   await git(root, ['config', 'user.name', 'Delivery test']);
   await git(root, ['config', 'user.email', 'delivery-test@example.invalid']);

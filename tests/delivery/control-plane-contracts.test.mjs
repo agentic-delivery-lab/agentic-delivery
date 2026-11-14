@@ -119,8 +119,8 @@ test('the checked-in controller release pins every enrolled participant and requ
   assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
   assert.equal(release.schemaVersion, 3);
   assert.equal(release.$schema, '../schemas/controller-release.v3.schema.json');
-  assert.equal(release.version, '0.2.0-draft.67');
-  assert.equal(release.commit, '98495275481aff381180771da6eba9da95bc7816');
+  assert.equal(release.version, '0.2.0-draft.68');
+  assert.equal(release.commit, 'f3b3bf1ab60f62ebafa44c38c7ce56e908900227');
   assert.match(release.bootstrapCommit, /^[0-9a-f]{40}$/);
   assert.equal(release.githubAppContractVersion, '2.0.0');
   assert.equal(release.compatibility.githubAppContractVersion, '2.0.0');
@@ -241,9 +241,9 @@ test('the current controller release pins immutable Architecture and Primitive c
     assert.match(dependency.commit, /^[0-9a-f]{40}$/);
     assert.match(dependency.contentSha256, /^[0-9a-f]{64}$/);
   }
-  assert.equal(release.dependencies.architecture.version, '0.1.0-draft.78');
+  assert.equal(release.dependencies.architecture.version, '0.1.1');
   assert.equal(release.dependencies.architecture.repositoryId, 1380894616);
-  assert.equal(release.dependencies.primitives.version, '0.1.0-draft.15');
+  assert.equal(release.dependencies.primitives.version, '0.2.0');
   assert.equal(release.dependencies.primitives.repositoryId, 1380894656);
 });
 
@@ -342,4 +342,17 @@ test('malformed identity or source data fails closed', () => {
     assert.ok(result.errors.some((error) => error.startsWith(phrase)), phrase);
   }
   assert.throws(() => assertEventEnvelope({}), /Invalid event envelope/);
+});
+
+test('candidate binds accepted producer releases and preserves the prior controller pin', async () => {
+  const release = JSON.parse(await readFile(path.join(repositoryRoot, 'config/controller-release.json'), 'utf8'));
+  const { stdout } = await execFileAsync('git', ['-C', repositoryRoot, 'show', 'cbf920074addeea8e833729f5ded84bcaa30326d:config/controller-release.json']);
+  const previous = JSON.parse(stdout);
+  assert.equal(release.commit, 'f3b3bf1ab60f62ebafa44c38c7ce56e908900227');
+  assert.equal(release.dependencies.architecture.commit, '039196a4c7c097097b5b92fe2e3203dd178c2266');
+  assert.equal(release.dependencies.primitives.commit, '4ead1fea75312cf96ee0e6bf4eb70df0530ad059');
+  assert.deepEqual(release.compatibility.controllers.slice(1), previous.compatibility.controllers);
+  assert.equal(controllerPinMatchesRelease(release, { controller: { version: previous.version, commit: previous.commit },
+    contracts: previous.contracts, dependencies: previous.dependencies }), true);
+  assert.deepEqual(validateControllerRelease(release), { valid: true, errors: [] });
 });

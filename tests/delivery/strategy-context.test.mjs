@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { parseRepositoryYaml } from '../../scripts/lib/yaml.mjs';
-import { loadStrategyContext, assertSourceIssueIdentity, requireSameStrategyContext, strategyContextData } from '../../scripts/lib/strategy-context.mjs';
+import { loadStrategyContext, assertSourceIssueIdentity, requireSameStrategyContext, strategyContextData, strategyContextReference, validateStrategyContextReference } from '../../scripts/lib/strategy-context.mjs';
+import { contextFixture } from '../helpers/strategy-context.mjs';
 
 const architectureCommit = 'ba804c044bd7dc0a7c5568062d43a1f0d9f3141b';
 const requirementsCommit = '2d20d40dcd1fb50d04310da2d222fb1a6fc1fa31';
@@ -33,6 +34,8 @@ test('each hosted test job supplies distinct immutable historical, strategy and 
       ['ARCHITECTURE_PIN_TEST_ROOT', '59df514a3a6dc8a75b79b3fc75fe61aae4e6fdf3', 'agentic-delivery-lab/agentic-delivery-architecture'],
       ['STRATEGY_ARCHITECTURE_TEST_ROOT', architectureCommit, 'agentic-delivery-lab/agentic-delivery-architecture'],
       ['STRATEGY_REQUIREMENTS_TEST_ROOT', requirementsCommit, 'agentic-delivery-lab/agentic-delivery-requirements'],
+      ['RELEASED_GRAPH_ARCHITECTURE_ROOT', '039196a4c7c097097b5b92fe2e3203dd178c2266', 'agentic-delivery-lab/agentic-delivery-architecture'],
+      ['RELEASED_GRAPH_PRIMITIVES_ROOT', '4ead1fea75312cf96ee0e6bf4eb70df0530ad059', 'agentic-delivery-lab/agentic-delivery-agent-customizations'],
     ]) {
       const location = run.env[variable]?.replace('${{ github.workspace }}/', '');
       const checkout = steps.find(s => s.with?.path === location);
@@ -159,4 +162,17 @@ test('Issue/Project text and per-run pin proposals cannot change the selected au
   }));
   assert.deepEqual(injected, trusted);
   assert.ok(!strategyContextData(injected).includes('SYSTEM:'));
+});
+
+test('candidate release graph cannot silently retarget a saved strategy context', () => {
+  const context = contextFixture();
+  const reference = strategyContextReference(context);
+  assert.equal(validateStrategyContextReference(reference), true);
+  const candidateGraphArchitecture = { ...reference.architecture,
+    commit: '039196a4c7c097097b5b92fe2e3203dd178c2266', version: '0.1.1',
+    sourceCommit: '9ab0595c5bb9ca6c58b17fa12c343aaccde0afa5',
+    contentSha256: 'afac7167f6f9d9a9d21d6a9083dbc22b7c86e7979a02546731ef7de2572dcb18' };
+  assert.equal(validateStrategyContextReference({ ...reference, architecture: candidateGraphArchitecture }), false);
+  assert.throws(() => requireSameStrategyContext(context, contextFixture(undefined, { architecture: candidateGraphArchitecture })),
+    { code: 'STRATEGY_CONTEXT_HOLD' });
 });

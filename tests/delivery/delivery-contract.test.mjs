@@ -80,8 +80,8 @@ test('delivery tooling uses pnpm and portable ESM entry points', async () => {
   assert.ok(intake.includes('ref: ${{ steps.invocation.outputs.controller_commit || steps.participant.outputs.controller_commit }}'));
   assert.ok(intake.includes('Validate the selected controller commit'));
   const release = JSON.parse(await text('config/controller-release.json'));
-  assert.equal(release.version, '0.2.0-draft.67');
-  assert.equal(release.commit, '98495275481aff381180771da6eba9da95bc7816');
+  assert.equal(release.version, '0.2.0-draft.68');
+  assert.equal(release.commit, 'f3b3bf1ab60f62ebafa44c38c7ce56e908900227');
   assert.match(release.bootstrapCommit, /^[0-9a-f]{40}$/);
   assert.ok(intake.includes(`ref: ${release.bootstrapCommit}`));
   assert.ok(!delivery.includes('types: [opened]'));

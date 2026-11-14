@@ -11,6 +11,9 @@ and releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Prepare the capability selection for accepted Primitive 0.2.0. A compatible
+  controller release and consumer adoption remain separate.
+
 - Validate the exact skill and helper resource inventory in native factory
   plugin packages. Bind files to their selected immutable source roles and hold
   on altered, missing, extra or unsafe paths before producer tools run. Consumer
