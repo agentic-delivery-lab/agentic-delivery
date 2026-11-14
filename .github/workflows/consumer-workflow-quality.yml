@@ -30,3 +30,12 @@ jobs:
     with:
       architecture_commit: 59df514a3a6dc8a75b79b3fc75fe61aae4e6fdf3
       affected_identifiers: '["urn:agentic-delivery:architecture:authority"]'
+
+  consumer-architecture-released:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/agentic-delivery-architecture-review.yml
+    with:
+      architecture_commit: 039196a4c7c097097b5b92fe2e3203dd178c2266
+      affected_identifiers: '["urn:agentic-delivery:architecture:authority"]'

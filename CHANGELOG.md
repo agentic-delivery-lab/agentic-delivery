@@ -632,6 +632,8 @@ they do not authorize migration, alter that issue's scope, or close it.
 
 ### Fixed
 
+- [Issue #105](https://github.com/agentic-delivery-lab/agentic-delivery/issues/105) allows the reusable Architecture workflow to validate the supported 0.1.1 release contract while retaining the earlier contract set.
+
 - Preserve the validated read-only decision when the central workflow runs a
   pinned legacy intake controller. Shadow participants and forced read-only
   runs request issue-read access; missing or malformed compatibility input

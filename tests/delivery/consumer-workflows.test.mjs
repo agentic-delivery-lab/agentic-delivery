@@ -57,6 +57,46 @@ test('the reusable Architecture workflow derives its pinned validation source in
   assert.ok(JSON.parse(outputs.source_commits).primitives.includes('e4933566fbf5b0f593830f8933f18fbd21024fa7'));
 });
 
+test('the reusable Architecture workflow accepts the selected 0.1.1 release contracts', async (t) => {
+  const { program } = await architectureInputFixture();
+  const architectureRoot = process.env.RELEASED_GRAPH_ARCHITECTURE_ROOT
+    ?? path.resolve(repositoryRoot, '../agentic-delivery-architecture');
+  const commit = '039196a4c7c097097b5b92fe2e3203dd178c2266';
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'consumer-released-metadata-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  for (const file of ['architecture/generated/architecture-release.json',
+    'architecture/references/requirements.lock.json', 'architecture/references/primitive-catalog.lock.yml',
+    'architecture/references/decision-inventory.yml', 'tools/lib/yaml.mjs']) {
+    const { stdout } = await execFileAsync('git', ['--no-replace-objects', '--no-lazy-fetch', '-C', architectureRoot,
+      'show', `${commit}:${file}`], { encoding: 'buffer', timeout: 10_000 });
+    const target = path.join(directory, file);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, stdout);
+  }
+  await symlink(path.join(repositoryRoot, 'node_modules'), path.join(directory, 'node_modules'),
+    process.platform === 'win32' ? 'junction' : 'dir');
+  const { stdout } = await execFileAsync(process.execPath, ['--input-type=module', '-e', program], {
+    cwd: directory, env: { ...process.env, ARCHITECTURE_COMMIT: commit }, timeout: 10_000,
+  });
+  const outputs = Object.fromEntries(stdout.trim().split('\n').map(line => {
+    const index = line.indexOf('='); return [line.slice(0, index), line.slice(index + 1)];
+  }));
+  assert.equal(outputs.requirements_commit, '9ce017453a23240042f72214b09e3c6c5059854d');
+  assert.ok(JSON.parse(outputs.source_commits).architecture.includes('9ab0595c5bb9ca6c58b17fa12c343aaccde0afa5'));
+  const releasePath = path.join(directory, 'architecture/generated/architecture-release.json');
+  const release = JSON.parse(await readFile(releasePath, 'utf8'));
+  for (const change of [
+    value => { value.contractVersions.evaluationOwnership = '2.0.0'; },
+    value => { value.contractVersions.unrecognized = '1.0.0'; },
+  ]) {
+    const altered = structuredClone(release); change(altered);
+    await writeFile(releasePath, JSON.stringify(altered));
+    await assert.rejects(execFileAsync(process.execPath, ['--input-type=module', '-e', program], {
+      cwd: directory, env: { ...process.env, ARCHITECTURE_COMMIT: commit }, timeout: 10_000,
+    }), error => error.stdout === '' && /Unsupported or mismatched Architecture validation source contract/.test(error.stderr));
+  }
+});
+
 test('Architecture source input failures expose no checkout outputs', async (t) => {
   const { root, program } = await architectureInputFixture();
   const files = { release: 'architecture/generated/architecture-release.json',
@@ -219,6 +259,19 @@ test('each reusable workflow selects the validated producer package manager', as
     assert.ok(steps.indexOf(checkout) < steps.indexOf(setup), 'Pinned producer checkout must precede toolchain selection.');
     assert.equal(setup.with['package-json-file'], `${checkout.with.path}/package.json`,
       `${filename} must select the producer toolchain rather than the consumer package or an absent workspace root.`);
+  }
+});
+
+test('hosted consumer checks exercise both the historical and selected Architecture releases', async () => {
+  const workflow = parseRepositoryYaml(await readFile(path.join(repositoryRoot,
+    '.github/workflows/consumer-workflow-quality.yml'), 'utf8'));
+  assert.deepEqual(workflow.permissions, { contents: 'read' });
+  for (const [job, commit] of [
+    ['consumer-architecture', '59df514a3a6dc8a75b79b3fc75fe61aae4e6fdf3'],
+    ['consumer-architecture-released', '039196a4c7c097097b5b92fe2e3203dd178c2266'],
+  ]) {
+    assert.equal(workflow.jobs[job].uses, './.github/workflows/agentic-delivery-architecture-review.yml');
+    assert.equal(workflow.jobs[job].with.architecture_commit, commit);
   }
 });
 
