@@ -9,10 +9,10 @@ import { promisify } from 'node:util';
 
 // Reviewed official Linux package, including its sandbox and search helpers.
 export const RELEASE = Object.freeze({
-  version: '0.167.0',
-  url: 'https://github.com/openai/codex/releases/download/rust-v0.167.0/codex-package-x86_64-unknown-linux-musl.tar.gz',
-  sha256: '3bbf75e83de6b58aed28f2cf6e33ad423ec31fd4700a1457b94be557ea5a7c6e',
-  packageTreeSha256: '5deaad602638511f6dc86b82132919c0a468a204a73af1b4449789319fa119f5',
+  version: '0.169.0',
+  url: 'https://github.com/openai/codex/releases/download/rust-v0.169.0/codex-package-x86_64-unknown-linux-musl.tar.gz',
+  sha256: '3b8ed091149cc63a59046b9f094bcfa21cdb4dda15ede441ce369bcee4a71ba0',
+  packageTreeSha256: '0f37866116c47819339dee6cabbce6cfc3cc74acc01e46a890d6cb3f34dcd6d4',
 });
 
 export function verifyArchive(bytes, expected = RELEASE.sha256) {
